@@ -45,7 +45,13 @@ for (const [w, h, maps] of [[1024, 554, MAP_IDS], [1280, 720, ['vizinhanca-cheer
     ok(r.n > 300, `${w}x${h} ${m}: Docão visível na vitrine (${r.n} px de pele)`);
     if (m === 'vizinhanca-cheers') await page.screenshot({ path: `${SHOTS}/22-vitrine-${m}-${w}.png` });
     if (w === 1024 && m === 'vizinhanca-cheers') { // trocar de skin atualiza a vitrine e o Docão continua visível
-      await page.click('#skinNext'); await page.waitForTimeout(500);
+      // Figurino fica na mala: abre, troca, fecha, e a vitrine externa mostra a skin nova.
+      await page.locator('button.wardrobe-sign').click();
+      await page.waitForFunction(() => document.getElementById('menu').dataset.crateState === 'inside' && document.getElementById('menu').dataset.view === 'operator', null, { timeout: 8000 });
+      await page.click('#skinNext'); await page.waitForTimeout(400);
+      await page.click('#menuBack');
+      await page.waitForFunction(() => !document.getElementById('menu').dataset.crateState && document.getElementById('menu').dataset.view === 'match', null, { timeout: 8000 });
+      await page.waitForTimeout(500);
       const r2 = await pigPixels(page);
       ok(r2.p && r2.p.skin === 'nomade-do-deserto' && r2.n > 300, `${w}x${h} ${m}: trocar skin atualiza a vitrine (${r2.p && r2.p.skin}, ${r2.n} px)`);
     }
