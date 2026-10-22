@@ -2277,7 +2277,7 @@ crateLetters.onload = () => {
   });
   cratePaint.needsUpdate = true; crateInscription.visible = true;
 };
-crateLetters.src = './assets/menu/lettering-arsenal.png';
+crateLetters.src = './assets/menu/lettering-arsenal.webp';
 const crateLabelPoint = new V3(), crateBasePoint = new V3(), crateLabelLeft = new V3(), crateLabelRight = new V3();
 const stageShadow = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.4), new THREE.MeshBasicMaterial({
   map: canvasTex(128, 128, (ctx) => {
@@ -2293,10 +2293,11 @@ const wardrobeShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.05, .65), stageS
 wardrobeShadow.rotation.x = -Math.PI / 2; wardrobeShadow.position.set(1.45, -.98, .38); menuStage.add(wardrobeShadow);
 const crateEndPosition = new V3(), crateEndLook = new V3(), crateLookMatrix = new THREE.Matrix4(), crateEndQuaternion = new THREE.Quaternion();
 const crateEase = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 function updateCrateJourney(dt) {
   const trip = crateJourney;
   if (trip.phase === 'closed') { menuActorRoot.position.set(0, 0, 0); stageShadow.material.opacity = 1; return; }
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reducedMotion = prefersReducedMotion.matches;
   const direction = trip.target ? 1 : -1;
   trip.progress = reducedMotion ? trip.target : clamp(trip.progress + direction * dt / 1.85, 0, 1);
   const p = trip.progress, dressing = trip.view === 'operator';
@@ -2339,13 +2340,16 @@ wardrobePreviewLight.position.set(-3, 7, 5); wardrobePreviewScene.add(wardrobePr
 const wardrobePreviewCamera = new THREE.PerspectiveCamera(38, 1, .1, 20);
 wardrobePreviewCamera.position.set(0, 1.05, 4.5); wardrobePreviewCamera.lookAt(0, 1.05, 0);
 const wardrobePreviewPosition = new V3(), wardrobePreviewRotation = new THREE.Quaternion();
-const wardrobePreviewRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-wardrobePreviewRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-wardrobePreviewRenderer.domElement.setAttribute('aria-hidden', 'true');
-$('wardrobePreview').appendChild(wardrobePreviewRenderer.domElement);
+let wardrobePreviewRenderer = null;
 let wardrobePreviewWidth = 0, wardrobePreviewHeight = 0;
 function renderWardrobePreview() {
   if (crateJourney.phase !== 'inside' || crateJourney.view !== 'operator') return;
+  if (!wardrobePreviewRenderer) {
+    wardrobePreviewRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    wardrobePreviewRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    wardrobePreviewRenderer.domElement.setAttribute('aria-hidden', 'true');
+    $('wardrobePreview').appendChild(wardrobePreviewRenderer.domElement);
+  }
   const rect = $('wardrobePreview').getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   wardrobePreviewPosition.copy(showcase.position); wardrobePreviewRotation.copy(showcase.quaternion);
@@ -2947,7 +2951,7 @@ function refreshMenuMode() {
   $('menuTeam').classList.toggle('hidden', v !== 'dom');
   $('botCount').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode);
   $('timeSel').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode);
-  const playTitle = v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.png" alt="Jogar">';
+  const playTitle = v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
   const playHint = v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : 'SOLO · CONTRA BOTS';
   $('playBtn').innerHTML = `<span class="play-title">${playTitle}</span><small>${playHint}</small>`;
   $('menuRules').textContent = MENU_RULES[v];

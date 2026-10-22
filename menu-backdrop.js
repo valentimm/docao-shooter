@@ -1,7 +1,7 @@
 // A ilustração é projetada no cenário em duas profundidades. No enquadramento
 // inicial ela permanece igual; no mergulho o assoalho e a paisagem têm paralaxe.
 export function makeMenuBackdrop(THREE, scene, camera) {
-  const texture = new THREE.TextureLoader().load('./assets/menu/fazendinha-entardecer.png');
+  const texture = new THREE.TextureLoader().load('./assets/menu/fazendinha-entardecer.webp');
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   const backdropMaterial = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, depthWrite: false, side: THREE.DoubleSide });

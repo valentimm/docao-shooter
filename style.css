@@ -399,7 +399,7 @@ body:has(#menu:not(.hidden)) #streakBar { display: none !important; }
 #menu .menu-header{padding:0 12px 24px}
 /* Volume nas placas, texto sem perspectiva ou filtros de rasterização. */
 
-#menu .menu-content{padding:24px 30px 6px;border-width:11px;border-color:#2c4032;box-shadow:5px 7px #31241b, inset 0 0 28px #a37e3822;background:radial-gradient(ellipse at 10% 5%,#fff6da66,transparent 65%),url('./assets/menu/paper-grain.svg')}
+#menu .menu-content{padding:24px 30px 6px;border-width:11px;border-color:#2c4032;box-shadow:5px 7px #31241b, inset 0 0 28px #a37e3822;background:radial-gradient(ellipse at 10% 5%,#fff6da66,transparent 65%),#f1dfb6}
 #menu .menu-content::before{width:74px;height:20px;left:calc(50% - 37px);transform:translateY(-44px) rotate(-3deg);border-radius:5px;box-shadow:0 3px 3px #0006}
 #menu .menu-content::after{content:'';position:absolute;top:208px;left:7px;right:7px;bottom:7px;box-shadow:inset 0 0 1px 1px #f1dfb64d;pointer-events:none;border-radius:2px}
 #menu .section-heading{border-bottom:3px solid #a4312a;padding-bottom:16px;margin-bottom:16px}
@@ -421,7 +421,7 @@ body:has(#menu:not(.hidden)) #streakBar { display: none !important; }
 #menu .match-options label:first-child{flex:1.6}
 #menu .match-options label{margin-block:4px 8px}
 #menu .match-options select{padding:8px 5px;font-size:13px;min-height:36px}
-#menu .menu-footer{border-width:11px;border-color:#2c4032;padding:10px 30px 22px;background:url('./assets/menu/paper-grain.svg');box-shadow:5px 7px #31241b}
+#menu .menu-footer{border-width:11px;border-color:#2c4032;padding:10px 30px 22px;background:#f1dfb6;box-shadow:5px 7px #31241b}
 #menu .playrow button:first-child{font-size:clamp(34px,4.6vw,62px);letter-spacing:3px;padding:12px 35px 13px;box-shadow:none;clip-path:polygon(0 3%,25% 0,56% 2%,85% 0,100% 3%,99.6% 55%,100% 97%,69% 99%,40% 97%,0 100%);background:radial-gradient(ellipse at top left,#bc3e3099,transparent 60%),#a52e26;text-shadow:2px 2px #6b2b2044}
 #menu .playrow button:first-child:hover{background-color:#b5382b}
 #menu .playrow button:first-child::after{font-size:45px;right:18px;top:24%;text-shadow:none}
@@ -736,24 +736,19 @@ body:has(#menu:not(.hidden)) #streakBar { display: none !important; }
  #menu .chapa-flame .flame-body,#menu .chapa-flame .flame-heart{animation:none;transform:none}
 }
 
-/* Moldura em nove partes: as quinas mantêm o desenho em qualquer tamanho. */
-#menu .ticket-board{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;border:11px solid transparent;background:#f6e4bd;box-shadow:4px 6px 0 #30241988}
-#menu .ticket-board::after{content:'';position:absolute;inset:-16px;border:16px solid transparent;border-image:url('./assets/menu/clipboard-frame.svg') 26 stretch;pointer-events:none;z-index:2}
-#menu .ticket-board .menu-content{border:0;border-radius:0;box-shadow:inset 0 3px 0 #fff2cf;position:static}
-#menu .ticket-board .menu-footer{border:0;border-radius:0;box-shadow:inset 0 -3px 0 #ddc18a}
+/* Moldura de madeira: tábuas claras por dentro e contorno irregular com lascas. */
+#menu .ticket-board{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;border:11px solid transparent;background:#efd6a1 url('./assets/menu/clipboard-wood.svg') center top/100% auto repeat-y;background-clip:padding-box;box-shadow:none}
+#menu .ticket-board::after{content:'';position:absolute;inset:-16px;border:0;pointer-events:none;z-index:2;background:url('./assets/menu/clipboard-wood-irregular.svg') center/100% 100% no-repeat;filter:drop-shadow(3px 5px 0 #30241966)}
+#menu .ticket-board .menu-content{border:0;border-radius:0;box-shadow:none;position:static;background:transparent;scrollbar-width:none}
+#menu .ticket-board .menu-content::-webkit-scrollbar{display:none;width:0;height:0}
+#menu .ticket-board .menu-footer{border:0;border-radius:0;box-shadow:none;background:transparent}
 #menu .ticket-board .menu-content::before{top:-24px;left:calc(50% - 43px);transform:rotate(-2deg);z-index:3}
-#menu .ticket-board .ticket-back{border-radius:0;background:#344c32;margin-top:2px;position:relative;z-index:1}
+#menu .ticket-board .ticket-back{border-radius:0;background:#70482d;color:#fff0cc;margin-top:2px;position:relative;z-index:1}
 @media(max-width:720px){
  #menu .ticket-board{border-width:6px}
- #menu .ticket-board::after{inset:-10px;border-width:10px}
+ #menu .ticket-board::after{inset:-10px}
  #menu .ticket-board .menu-content::before{top:-18px;left:calc(50% - 32px)}
 }
-
-/* Painel de madeira cartoon: tábuas claras por dentro, encaixes escuros na borda. */
-#menu .ticket-board{background:#efd6a1 url('./assets/menu/clipboard-wood.svg') center top/100% auto repeat-y}
-#menu .ticket-board::after{border-image-source:url('./assets/menu/clipboard-wood-frame.svg')}
-#menu .ticket-board .menu-content,#menu .ticket-board .menu-footer{background:transparent;box-shadow:none}
-#menu .ticket-board .ticket-back{background:#70482d;color:#fff0cc}
 #menu-match .section-heading{padding-bottom:12px;margin-bottom:12px}
 #menu-match>label.name-ticket{display:block;margin:12px 0 16px}
 #menu .name-ticket .field-caption{display:table;max-width:none;line-height:1.2;margin-left:5px;padding:5px 8px;color:#fff0cc;background:#34402e;border-radius:3px 3px 0 0;transform:rotate(-1.5deg);font:900 11px/1.2 'Trebuchet MS',sans-serif;letter-spacing:.7px}
@@ -769,13 +764,6 @@ body:has(#menu:not(.hidden)) #streakBar { display: none !important; }
  #menu #nameInput{font-size:13px}
 }
 
-/* Rolagem discreta dentro da moldura, sem barra visual sobre a madeira. */
-#menu .ticket-board .menu-content{scrollbar-width:none}
-#menu .ticket-board .menu-content::-webkit-scrollbar{display:none;width:0;height:0}
-
-/* Contorno desenhado inteiro para manter as lascas ao longo das quatro bordas. */
-#menu .ticket-board{background-clip:padding-box;box-shadow:none}
-#menu .ticket-board::after{border:0;border-image:none;background:url('./assets/menu/clipboard-wood-irregular.svg') center/100% 100% no-repeat;filter:drop-shadow(3px 5px 0 #30241966)}
 /* Ações compactas compartilham o rodapé da placa. */
 #menu .playrow{flex-direction:row;align-items:stretch;gap:12px}
 #menu .playrow>button{width:0;min-width:0;flex:1}
@@ -796,7 +784,6 @@ body:has(#menu:not(.hidden)) #streakBar { display: none !important; }
  #menu .playrow button small{font-size:8px}
 }
 @media(max-width:720px){
- #menu .ticket-board::after{border:0}
  #menu .playrow{gap:8px}
  #menu .playrow button:first-child{padding:8px 22px 7px 8px}
  #menu .play-title .menu-lettering{width:103px;height:30px}
@@ -835,7 +822,6 @@ body:has(#menu:not(.hidden)) #streakBar { display: none !important; }
 #menu .showcase-actions .arsenal-crate,#menu .showcase-actions .wardrobe-sign{isolation:isolate;background:none;border-color:transparent;box-shadow:none}
 #menu .showcase-actions .plaque-surface{position:absolute;inset:-4px;z-index:-1;pointer-events:none;padding:0;display:block;background-position:center;background-repeat:no-repeat;background-size:100% 100%;filter:drop-shadow(4px 5px 0 #30241966)}
 #menu .arsenal-crate .plaque-surface{background-image:url('./assets/menu/arsenal-plaque.svg')}
-#menu .wardrobe-sign .plaque-surface{background-image:url('./assets/menu/wardrobe-plaque.svg')}
 #menu .wardrobe-sign::after{display:none}
 #menu .arsenal-crate::before{transform:rotate(-1.3deg);clip-path:polygon(0 0,100% 2%,95% 48%,100% 100%,6% 99%,0 57%)}
 #menu .arsenal-crate::after{transform:rotate(1deg);clip-path:polygon(2% 1%,96% 0,100% 44%,95% 100%,0 99%,3% 53%)}

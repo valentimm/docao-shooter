@@ -79,7 +79,7 @@ export function makeWardrobeCase(THREE, canvasTex) {
     });
     paint.needsUpdate = true; inscription.visible = true;
   };
-  image.src = './assets/menu/lettering-trocar-visual-creme.png';
+  image.src = './assets/menu/lettering-trocar-visual-creme.webp';
   group.userData.door = door;
   return group;
 }

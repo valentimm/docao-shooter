@@ -1,6 +1,6 @@
 # Fundo do menu
 
-Arquivo: `fazendinha-entardecer.png`. Gerado com a ferramenta nativa de imagens (image_gen). A interface é HTML/CSS e o personagem e o palco são renderizados em Three.js.
+Arquivo: `fazendinha-entardecer.webp`. Gerado com a ferramenta nativa de imagens (image_gen). A interface é HTML/CSS e o personagem e o palco são renderizados em Three.js.
 
 ## Prompt usado
 

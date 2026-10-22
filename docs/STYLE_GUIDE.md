@@ -1,12 +1,12 @@
 # Direção visual do menu
 
-Referência aprovada: `logo-madeira-cartoon.png`. Usar essa linguagem nos próximos visuais do menu.
+Referência aprovada: `logo-madeira-cartoon.webp`. Usar essa linguagem nos próximos visuais do menu. Os rasters do menu estão em WebP, no tamanho em que a interface os mostra.
 
 - Formas robustas e ligeiramente irregulares, com personalidade de fazendinha.
 - Contornos escuros, limpos e legíveis em tamanhos pequenos.
 - Volume gráfico discreto, com uma face principal, uma luz e uma sombra.
 - Materiais sugeridos por poucos traços amplos; evitar veios realistas, arranhões finos, ferrugem fotográfica, brilhos metálicos e ruído de textura.
-- Manter o desenho largo e brincalhão das letras da logo. Os PNGs de lettering são artes, não uma fonte instalável.
+- Manter o desenho largo e brincalhão das letras da logo. Os letterings são artes, não uma fonte instalável.
 - Botões continuam com nomes acessíveis em texto; imagens e ícones são o acabamento visual.
 
 ## Cores
@@ -18,16 +18,16 @@ Referência aprovada: `logo-madeira-cartoon.png`. Usar essa linguagem nos próxi
 
 ## Ativos
 
-- Logo: `logo-madeira-cartoon.png`.
-- Arsenal: `lettering-arsenal.png`.
-- Trocar Visual: `lettering-trocar-visual-creme.png`.
+- Logo: `logo-madeira-cartoon.webp`.
+- Arsenal: `lettering-arsenal.webp`.
+- Trocar Visual: `lettering-trocar-visual-creme.webp`.
 - Ícones das placas: SVG no `index.html`, com faces e contornos editáveis em código.
 
 ## Comanda
 
 - Fundo de tábuas claras, com poucos traços amplos, e moldura de madeira marrom escura com encaixes e pregos. Sem textura fotográfica.
 - Prendedor e seta de jogar são SVGs com volumes em poucos tons.
-- Título e ações usam `lettering-bora-pra-chapa.png`, `lettering-jogar.png` e `lettering-juntar-porcada-creme.png`. Prompts em `COMANDA_CARTOON.md`.
+- Título e ações usam `lettering-bora-pra-chapa.webp`, `lettering-jogar.webp` e `lettering-juntar-porcada-creme.webp`. Prompts em `COMANDA_CARTOON.md`.
 - Campos, nomes de mapa e instruções continuam em texto para permitir edição e leitura clara. O nome usa a mesma etiqueta, tipografia e acabamento dos seletores.
 - A rolagem do painel permanece funcional, sem uma barra visível sobre a moldura.
 
