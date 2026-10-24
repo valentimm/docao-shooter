@@ -1171,12 +1171,36 @@ function flipHotmilkZ(part, cz) {
   });
 }
 
+// ---------- Fazendona (Modo Infecção 🧟): a Arena da Fazendinha esticada 1,6× no chão (mesma altura) pra caber até 50 ----------
+// Corredores, casas e portas ficam 60% mais largos/compridos; escadas e rampas ficam mais suaves; os spawns
+// do mapa servem de base e o servidor ainda espalha a turma por pontos da malha de navegação.
+export function scaleMap(src, k, extra) {
+  const sx = (v) => Math.round(v * k * 100) / 100;
+  const box = (o) => ({ ...o, b: [sx(o.b[0]), o.b[1], sx(o.b[2]), sx(o.b[3]), o.b[4], sx(o.b[5])], ramp: o.ramp ? { ...o.ramp } : undefined });
+  const m = { ...src, ...extra, size: [sx(src.size[0]), sx(src.size[1])], boxes: src.boxes.map(box), waypoints: (src.waypoints || []).map(([x, y, z]) => [sx(x), y, sx(z)]),
+    props: (src.props || []).map((p) => ({ ...p, x: sx(p.x), z: sx(p.z) })), spawns: src.spawns.map(([x, z, y]) => (y == null ? [sx(x), sx(z)] : [sx(x), sx(z), y])),
+    pickups: src.pickups.map(([t, x, z, y]) => (y == null ? [t, sx(x), sx(z)] : [t, sx(x), sx(z), y])), showcase: src.showcase ? [sx(src.showcase[0]), src.showcase[1], sx(src.showcase[2])] : undefined };
+  for (const b of m.boxes) if (!b.ramp) delete b.ramp;
+  delete m.test; delete m.bomb; delete m.view; return m;
+}
+{
+  const src = MAPS.find((m) => m.id === 'arena'), k = 1.6;
+  const m = scaleMap(src, k, { id: 'fazendona', name: 'Fazendona (Infecção)', infOnly: true, wallH: 4.5, desc: '🧟 Feita pro modo Infecção: a Arena da Fazendinha 1,6× maior no chão, com corredores largos pra até 50 Docões.' });
+  m.palette = { ...src.palette, fog: [src.palette.fog[0], 70, 190] };
+  // mais spawns espalhados (os 12 da arena esticados + 12 no meio dos corredores)
+  m.spawns.push([-30, -38], [30, 38], [-30, 38], [30, -38], [0, -30], [0, 30], [-36, 0], [36, 0], [-12, -40], [12, 40], [-44, -24], [44, 24]);
+  m.pickups.push(['ammo', -36, 30], ['ammo', 36, -30], ['ammo', 0, -42], ['ammo', 0, 42], ['health', -40, -40], ['health', 40, 40]);
+  MAPS.push(m);
+}
+
 export const getMap = (id) => MAPS.find((m) => m.id === id) || MAPS[0];
 // mapas jogáveis nas listas/rodízio (o Estande só abre no modo Treino)
 // Modo Invasão: o Rodízio do Docão e a Fazenda Mal-Assombrada só abrem na Invasão (os outros modos continuam com os mapas de sempre)
 const INV_ONLY = new Set(['rodizio', 'fazenda-assombrada']);
-export const PLAY_MAPS = MAPS.filter((m) => !m.training && !m.invasionOnly && !INV_ONLY.has(m.id));
+export const PLAY_MAPS = MAPS.filter((m) => !m.training && !m.invasionOnly && !m.infOnly && !INV_ONLY.has(m.id));
 // mapas da Invasão: os dois feitos pra ela primeiro, depois os de sempre (com decoração de Halloween só nesse modo)
 // mapas do Modo Bomba: só os com sites/spawns feitos à mão (o Rodízio, que na Invasão é exclusivo, vale aqui: foi feito pra Bomba); Pátio Ferrugem é pequeno demais e o Estande é do Treino
 export const BOMB_MAPS = MAPS.filter((m) => m.bomb && !m.training && !m.invasionOnly);
 export const INV_MAPS = [...MAPS.filter((m) => INV_ONLY.has(m.id)), ...PLAY_MAPS];
+// mapas do Modo Infecção (até 50): a Fazendona primeiro, depois os maiores de sempre (o Rodízio, que é da Invasão/Bomba, também serve)
+export const INF_MAPS = ['fazendona', 'hotmilk', 'rodizio', 'torres-do-barril', 'celeiro-industrial', 'duas-pocilgas'].map((id) => MAPS.find((m) => m.id === id)).filter(Boolean);

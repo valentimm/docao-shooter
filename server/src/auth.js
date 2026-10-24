@@ -14,8 +14,8 @@ const SESSION_TTL = 30 * 24 * 3600; // s
 const MAX_SESSIONS = 8;
 const LOGIN_WINDOW = 600, LOGIN_MAX_PAIR = 5, LOGIN_MAX_IP = 30; // 5 erros por (IP+apelido) e 30 por IP a cada 10 min
 const REG_WINDOW = 3600;
-export const RANK_MODES = ['all', 'dm', 'dom', 'bomb', 'inv'];
-const STAT_MODES = ['dm', 'dom', 'bomb', 'inv'];
+export const RANK_MODES = ['all', 'dm', 'dom', 'bomb', 'inv', 'inf'];
+const STAT_MODES = ['dm', 'dom', 'bomb', 'inv', 'inf'];
 const enc = new TextEncoder();
 const now = () => Math.floor(Date.now() / 1000);
 const b64 = (u8) => { let s = ''; for (const b of u8) s += String.fromCharCode(b); return btoa(s); };

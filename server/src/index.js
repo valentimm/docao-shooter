@@ -136,7 +136,7 @@ export class Room extends DurableObject {
     if (url.pathname === '/init') {
       if (this.game) return new Response('exists', { status: 409 });
       const b = await req.json();
-      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: typeof b.map === 'string' ? b.map : 'arena', max: b.max, fillBots: b.fillBots !== false, mode: b.mode === 'dom' || b.mode === 'treino' || b.mode === 'inv' || b.mode === 'bomb' ? b.mode : 'dm', time: b.time, weapons: b.weapons, powers: b.powers });
+      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: typeof b.map === 'string' ? b.map : 'arena', max: b.max, fillBots: b.fillBots !== false, mode: b.mode === 'dom' || b.mode === 'treino' || b.mode === 'inv' || b.mode === 'bomb' || b.mode === 'inf' ? b.mode : 'dm', time: b.time, weapons: b.weapons, powers: b.powers });
       this.persist(); await this.ctx.storage.setAlarm(Date.now() + EMPTY_TTL); // ninguém entrou? some
       return new Response('ok');
     }

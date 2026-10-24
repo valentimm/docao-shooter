@@ -25,7 +25,8 @@ import { mountStreakUi, setStreakCount, setStreakCycle, setStreakReady, openStri
 import { makeTablet, poseTablet, makeLaptop, poseLaptop, makeRadio, poseRadio } from './fp-gear.js';
 import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
-import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, getMap, BOMB_MAP } from './maps.js';
+import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, INF_MAPS, getMap, BOMB_MAP } from './maps.js';
+import { INF, isInfection, SURV, ZOMB, INF_TEAM_NAMES, INF_TEAM_COLORS, INF_TEAM_HEX, unpackInf, stepKnife as stepZKnife, knifeCd } from './shared/infection.js';
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit } from './shared/invasion.js';
 import { createInvMusic } from './invasion-music.js';
 import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook } from './invasion-gfx.js';
@@ -356,7 +357,7 @@ document.querySelectorAll('[data-reduced-anim]').forEach((el) => {
 let mode = 'dm', teamScore = [0, 0], zone = null, zoneT = 0; // modo de jogo: 'dm' (mata-mata) | 'dom' (Dominação) | 'explore' (mapa vazio) | 'treino' | 'bomb' (Bomba, protótipo)
 let botDiff = 'ceva'; // dificuldade dos bots (shared/bot-difficulty.js); a preferência entra mais abaixo, quando o menu existe
 let bombS = null, bombL = null; // Modo Bomba: estado da rodada (shared/bomb.js) e layout do mapa (sites A/B, lados)
-const MODE_OK = (m) => (m === 'dom' || m === 'bomb' || m === 'explore' || m === TRAIN.mode || m === INV.mode ? m : 'dm');
+const MODE_OK = (m) => (m === 'dom' || m === 'bomb' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === INF.mode ? m : 'dm');
 let spawnHold = 'primary'; // arma na mão ao nascer: primary | secondary | melee (salva no navegador)
 try { spawnHold = normHand(localStorage.getItem('docao.hand')); } catch (e) { /* sem storage */ }
 let selectedDance = 'moonwalk';
@@ -365,7 +366,7 @@ try { selectedDance = normDance(localStorage.getItem('docao.dance')); } catch (e
 const myDance = () => { if (!isPaidDance(selectedDance)) return selectedDance; const d = PAID_DANCE_LIST.find((x) => x.id === selectedDance); return d && getAccount() && getItems().includes(d.item) ? selectedDance : 'moonwalk'; };
 let matchLimits = { weapons: null, powers: null }; // cópia dos limites no instante em que a partida solo começa
 let rulesLive = false;
-const teamMode = () => mode === 'dom' || mode === 'bomb'; // modos com times
+const teamMode = () => mode === 'dom' || mode === 'bomb' || mode === INF.mode; // modos com times (Infecção: Sobreviventes × Zumbis)
 const training = () => isTraining(mode); // Estande do Docão: bots viram alvos
 const exploreMode = () => mode === 'explore';
 const invMode = () => isInvasion(mode); // Invasão 🎃: co-op contra zumbis (shared/invasion.js)
@@ -658,7 +659,7 @@ const victory = { on: false, model: null, clock: 0 };
 function playerWonMatch(src) {
   if (src.mode === 'explore' || src.mode === 'treino') return false;
   if (src.mode === 'inv') return !!src.invWon;
-  if (src.mode === 'dom') return src.teamW >= 0 && player && player.team === src.teamW;
+  if (src.mode === 'dom' || src.mode === INF.mode) return src.teamW >= 0 && player && player.team === src.teamW;
   return !!(src.rows && src.rows[0] && src.rows[0].isPlayer);
 }
 function beginVictory() {
@@ -2827,7 +2828,7 @@ function paintSaberHud(p, w) {
 }
 function updateHud(dt) {
   const p = player, w = gunOf(p, p.weapon);
-  $('hpfill').style.width = Math.max(0, p.hp) + '%'; $('hptext').textContent = Math.max(0, Math.ceil(p.hp));
+  $('hpfill').style.width = Math.min(100, Math.max(0, p.hp) * 100 / Math.max(100, p.maxHp || 100)) + '%'; $('hptext').textContent = Math.max(0, Math.ceil(p.hp)); // Infecção: zumbi tem 300+ de vida (barra pela vida máxima)
   $('hpfill').style.background = p.hp > 35 ? '' : 'linear-gradient(#ff7b7b,#e63946)';
   { const box = $('shieldbox'), has = !!(p.slots && isShieldW(p.slots[0]) && !p.shieldBroken && p.shieldHp > 0);
     if (box) { box.classList.toggle('hidden', !has); if (has) { const k = p.shieldHp / SHIELD.hp; $('shieldfill').style.width = (k * 100).toFixed(1) + '%'; $('shieldtext').textContent = Math.ceil(p.shieldHp); box.classList.toggle('dent', k <= 0.66); box.classList.toggle('crack', k <= 0.33); const cd = Math.max(0, (p.shieldDashAt || 0) - gameTime); $('shieldcd').textContent = shieldRaised(p) ? (cd > 0.05 ? `investida ${cd.toFixed(1)}s` : 'botão direito: investida') : 'tampa nas costas'; } }
@@ -2855,8 +2856,8 @@ function updateHud(dt) {
   const left = Math.max(0, matchLimit() - gameTime); $('timer').textContent = exploreMode() ? '∞' : Number.isFinite(left) ? `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'Treino ∞';
   $('score').textContent = exploreMode() ? `Exploração · ${currentMap ? currentMap.name : ''}` : `Abates: ${p.kills} · Mortes: ${p.deaths} · K/D: ${(p.kills / Math.max(1, p.deaths)).toFixed(2)} · Pontos: ${feedbackPoints()}`;
   const lead = entities.filter((e) => !e.zt).reduce((a, b) => (b.kills > a.kills ? b : a));
-  $('leader').textContent = invMode() ? '' : exploreMode() ? 'Mapa vazio · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${lead.name} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
-  updateLeaderboard(dt); tickFeedback(dt);
+  $('leader').textContent = invMode() || infMode() ? '' : exploreMode() ? 'Mapa vazio · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${lead.name} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
+  infUpdateHud(dt); updateLeaderboard(dt); tickFeedback(dt);
   hurtLevel = Math.max(0, hurtLevel - dt * 2.5);
   { const left = p.alive ? eggSplatUntil - gameTime : 0, el = $('eggsplat'); if (el) { el.style.opacity = left > 0 ? Math.min(1, left / 0.5).toFixed(2) : '0'; if (left > 0) drawEggSplat(); } } // sujeira de ovo na tela: 2 s escorrendo, some no último meio segundo
   updateHitDirs();
@@ -4096,7 +4097,7 @@ function updatePlayer(dt) {
     if (emote.on) stopEmote();
     saberSfx.hum(false);
     if (p.charging) { p.charging = false; arcLine.visible = arcMark.visible = false; }
-    deathFx(p); if (!invSpectate()) deathCam(p, dt);
+    deathFx(p); if (!invSpectate() && !infSpectate()) deathCam(p, dt);
     // humano não renasce sozinho: espera RESPAWN_TIME e o clique em RENASCER (ou Espaço/Enter) — ver requestRespawn()
     updateAds(dt, false);
     return;
@@ -4114,11 +4115,11 @@ function updatePlayer(dt) {
   if (!guiding && (keys.KeyW || keys.ArrowUp)) wish.add(fwd); if (!guiding && (keys.KeyS || keys.ArrowDown)) wish.sub(fwd);
   if (!guiding && (keys.KeyD || keys.ArrowRight)) wish.add(right); if (!guiding && (keys.KeyA || keys.ArrowLeft)) wish.sub(right);
   p.useHold = !!(keys[BOMB.KEY] && p.alive && !emote.on); if (bombLock(p)) wish.set(0, 0, 0); // Bomba: parado na preparação e enquanto planta/desarma
-  if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // faca corre; sabre anda normal; agachado anda mais devagar
+  if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (isZombie(p) ? INF.Z_SPEED : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // faca corre; sabre anda normal; agachado anda mais devagar
   if (p.shieldDashUntil > gameTime && !bombLock(p)) wish.copy(fwd).multiplyScalar(SHIELD.charge.speed); // investida curta, na direção da mira
   const acc = p.onGround ? 14 : 4;
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
-  if (!guiding && jumpPressed && p.onGround && !bombLock(p)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
+  if (!guiding && jumpPressed && p.onGround && !bombLock(p)) { p.vel.y = JUMP * (isZombie(p) ? INF.Z_JUMP : 1); p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
   moveEntity(p, dt);
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
@@ -5231,7 +5232,7 @@ function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de muniçã
 // seletor: mapa salvo no navegador ('random' = aleatório a cada partida)
 const invMenu = () => $('modeSel').value === INV.mode; // Invasão tem lista de mapas própria (Rodízio + Fazenda + os normais)
 const bombMenu = () => $('modeSel').value === 'bomb';
-const menuPool = (md) => (md === 'bomb' ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : PLAY_MAPS); // lista de mapas de cada modo (Bomba: só os com sites feitos à mão)
+const menuPool = (md) => (md === 'bomb' ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : isInfection(md) ? INF_MAPS : PLAY_MAPS); // lista de mapas de cada modo (Bomba: só os com sites feitos à mão)
 const mapKey = () => (bombMenu() ? 'docao.bombMap' : invMenu() ? 'docao.invMap' : 'docao.map');
 const mapPool = () => menuPool($('modeSel').value);
 function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } return v === 'random' || mapPool().some((m) => m.id === v) ? v : bombMenu() ? BOMB_MAP : invMenu() ? INV.DEFAULT_MAP : MAPS[0].id; }
@@ -5384,6 +5385,7 @@ function setTeamWinner(w) {
   el.textContent = w < 0 ? `Empate! ${teamScore[0]} × ${teamScore[1]}` : `Time ${TEAM_NAMES[w]} venceu! ${teamScore[0]} × ${teamScore[1]}${player && player.team === w ? ' 🏆' : ''}`;
 }
 function refreshModeHud() {
+  { const ih = $('infhud'); if (ih) ih.classList.toggle('hidden', !infMode()); document.body.classList.toggle('infmode', infMode()); }
   $('domhud').classList.toggle('hidden', mode !== 'dom'); $('bombhud').classList.toggle('hidden', mode !== 'bomb'); document.body.classList.toggle('bombmode', mode === 'bomb');
   if (teamMode() && player) { $('myTeam').textContent = `Você: Time ${TEAM_NAMES[player.team] || '?'}`; $('myTeam').style.color = TEAM_COLORS[player.team] || '#fff'; }
   $('winner').dataset.tone = '';
@@ -5584,7 +5586,7 @@ document.addEventListener('keydown', (e) => {
       else if (e.code === 'KeyB' && !e.repeat && player.alive && !invMode() && !invPick) startEmote(); // Invasão: B é só o painel de armas (invKey), nunca dança
       if (exploreMode() && player.alive && !emote.on && !e.repeat && (e.code === 'Comma' || e.code === 'Period' || e.code === 'BracketLeft' || e.code === 'BracketRight')) cycleExplorePrimary(e.code === 'Period' || e.code === 'BracketRight' ? 1 : -1);
     }
-    if (!emote.on && e.code === 'KeyQ' && !e.repeat) startCharge();
+    if (!emote.on && e.code === 'KeyQ' && !e.repeat) { if (isZombie(player)) infThrowKnife(); else startCharge(); } // Infecção: o zumbi arremessa a faquinha
     if (e.code === 'Tab') $('tabboard').classList.remove('hidden');
     if (e.code === 'Escape' || e.code === 'KeyP') pause();
     if (e.code === 'Backquote') { e.preventDefault(); softPause(); }
@@ -5795,7 +5797,7 @@ function matchLimit() {
 function updateLeaderboard(dt) {
   lbT -= dt; if (lbT > 0) return; lbT = 0.25;
   const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths).slice(0, 10);
-  const head = invMode() ? `<div class="lbh"><span>Invasão 🎃</span><span>abates</span></div>` : exploreMode() ? `<div class="lbh"><span>Exploração</span><span>só você</span></div>` : teamMode() ? `<div class="lbh"><span class="r">Vermelho ${teamScore[0]}</span><span>/${mode === 'bomb' ? BOMB.WIN : DOM.WIN_CAPS}</span><span class="b">${teamScore[1]} Azul</span></div>` : `<div class="lbh"><span>Placar</span><span>abates</span></div>`;
+  const head = invMode() ? `<div class="lbh"><span>Invasão 🎃</span><span>abates</span></div>` : infMode() ? `<div class="lbh"><span style="color:${INF_TEAM_COLORS[0]}">🐷 ${infS ? infS.surv : 0}</span><span>×</span><span style="color:${INF_TEAM_COLORS[1]}">${infS ? infS.zomb : 0} 🧟</span></div>` : exploreMode() ? `<div class="lbh"><span>Exploração</span><span>só você</span></div>` : teamMode() ? `<div class="lbh"><span class="r">Vermelho ${teamScore[0]}</span><span>/${mode === 'bomb' ? BOMB.WIN : DOM.WIN_CAPS}</span><span class="b">${teamScore[1]} Azul</span></div>` : `<div class="lbh"><span>Placar</span><span>abates</span></div>`;
   $('lb').innerHTML = head + rows.map((e, i) => { const pid = online ? (e.isPlayer ? online.myId : (e.netId || 0)) : 0; return `<div class="row${e.isPlayer ? ' me' : ''}${e.alive ? '' : ' dead'}${pid && voiceTalking(pid) ? ' talking' : ''}${pid && voiceMuted(pid) ? ' vmuted' : ''}"${pid ? ` data-pid="${pid}"` : ''}><span>${i + 1}</span><span class="dot" style="background:${teamMode() && e.team >= 0 ? TEAM_COLORS[e.team] : e.shirt}"></span><span class="n">${escapeHtml(e.name)}</span><span class="k">${scoreOf(e)}</span></div>`; }).join('');
 }
 // botões de time (Vermelho / Azul / Automático)
@@ -6292,7 +6294,7 @@ function buildDeathMelee() {
 // botão RENASCER: só libera depois de RESPAWN_TIME; online pede ao servidor ({t:'rs'}), que é quem decide
 let rsSent = false;
 const invMeOut = () => { const v = invMode() && invView(); const s = v && v.lives.get(online ? online.myId : player && player.id); return !!(s && s.out); };
-const respawnReady = (p) => !!p && !p.alive && Number.isFinite(p.respawnAt) && gameTime >= p.respawnAt && !invMeOut();
+const respawnReady = (p) => !!p && !p.alive && Number.isFinite(p.respawnAt) && gameTime >= p.respawnAt && !invMeOut() && !infMeOut();
 function deathLine(p) {
   if (!p) return '';
   if (p.killW === W_BOMB) return 'Você explodiu com o botijão';
@@ -6307,8 +6309,8 @@ function updateRespawnBtn(p) {
   const left = Number.isFinite(p.respawnAt) ? Math.max(0, p.respawnAt - gameTime) : RESPAWN_TIME;
   const nome = (classes[classIndex] && classes[classIndex].name) || 'a classe';
   const ultima = classIndex === spawnedClass;
-  const txt = invMeOut() ? 'Sem vidas' : rsSent ? 'Nascendo...' : ok ? `Nasce com ${nome}` : Number.isFinite(p.respawnAt) ? `Nascer em ${left.toFixed(1).replace('.', ',')}s` : 'Aguarde...';
-  const sub = invMeOut() ? 'Espere a ressurreição' : `Espaço · classe ${nome}${ultima ? ', a última' : ''}`;
+  const txt = infMeOut() ? 'Fora até o fim da rodada' : invMeOut() ? 'Sem vidas' : rsSent ? 'Nascendo...' : ok ? `Nasce com ${nome}` : Number.isFinite(p.respawnAt) ? `Nascer em ${left.toFixed(1).replace('.', ',')}s` : 'Aguarde...';
+  const sub = infMeOut() ? 'Zumbi abatido · assistindo os outros zumbis' : invMeOut() ? 'Espere a ressurreição' : `Espaço · classe ${nome}${ultima ? ', a última' : ''}`;
   const main = b && b.querySelector('b'), small = b && b.querySelector('small');
   if (b) { if (b.disabled === ok) b.disabled = !ok; b.classList.toggle('ready', ok); }
   if (main) { if (main.textContent !== txt) main.textContent = txt; }
@@ -6456,10 +6458,16 @@ function onNetMessage(m) {
 }
 // ---------- lobby ----------
 function fillMapSelect(sel, value, md) { // Invasão: lista própria (Rodízio, Fazenda Mal-Assombrada + mapas normais)
-  const iv = isInvasion(md), L = menuPool(md), key = md === 'bomb' ? 'bomb' : iv ? 'inv' : 'play';
+  const iv = isInvasion(md), inf = isInfection(md), L = menuPool(md), key = md === 'bomb' ? 'bomb' : iv ? 'inv' : inf ? 'inf' : 'play';
   if (!sel.options.length || sel.dataset.pool !== key) { sel.innerHTML = ''; sel.dataset.pool = key; for (const m of L) sel.add(new Option(m.name, m.id)); sel.add(new Option('Aleatório', 'random')); }
-  if (value && [...sel.options].some((o) => o.value === value)) sel.value = value; else if (value) sel.value = md === 'bomb' ? BOMB_MAP : iv ? INV.DEFAULT_MAP : L[0].id; // Bomba: mapa sem sites → Rodízio
+  if (value && [...sel.options].some((o) => o.value === value)) sel.value = value; else if (value) sel.value = md === 'bomb' ? BOMB_MAP : iv ? INV.DEFAULT_MAP : inf ? INF.DEFAULT_MAP : L[0].id; // Bomba: mapa sem sites → Rodízio
   if (md === 'bomb' && value === 'random') sel.value = BOMB_MAP;
+}
+// Máx. jogadores: até 10 nos modos de sempre; na Infecção até 50
+function syncMaxSelect(sel, md, cur) {
+  const list = isInfection(md) ? INF.MAX_CHOICES : [2, 3, 4, 5, 6, 7, 8, 9, 10], key = isInfection(md) ? 'inf' : 'std';
+  if (sel.dataset.pool !== key) { const keep = +sel.value; sel.innerHTML = ''; sel.dataset.pool = key; for (const n of list) sel.add(new Option(String(n), String(n))); sel.value = String(list.includes(keep) ? keep : isInfection(md) ? INF.DEFAULT_MAX : 6); }
+  if (cur != null) { if (![...sel.options].some((o) => +o.value === +cur)) sel.add(new Option(String(cur), String(cur))); sel.value = String(cur); }
 }
 function renderLobby() {
   const o = online, L = o.lobby; if (!L) return;
@@ -6472,7 +6480,7 @@ function renderLobby() {
   const counts = [0, 0]; for (const p of rows) if (p.team === 0 || p.team === 1) counts[p.team]++;
   $('lobbyTeam').classList.toggle('hidden', !dom);
   if (dom) { const me = rows.find((p) => p.id === o.myId); teamButtons($('lobbyTeamBtns'), me ? me.pref : -1, (t) => o.net.send({ t: 'team', team: t }), counts); }
-  $('lobbyInfo').textContent = (cfg.mode === 'bomb' ? 'BOMBA (protótipo) · ' : isInvasion(cfg.mode) ? 'INVASÃO 🎃 (co-op) · ' : dom ? 'DOMINAÇÃO · ' : isTraining(cfg.mode) ? 'TREINO (Estande do Docão) · ' : 'MATA-MATA · ') + $('lobbyInfo').textContent;
+  $('lobbyInfo').textContent = (cfg.mode === 'bomb' ? 'BOMBA (protótipo) · ' : isInvasion(cfg.mode) ? 'INVASÃO 🎃 (co-op) · ' : isInfection(cfg.mode) ? `INFECÇÃO 🧟 (zumbis × sobreviventes${cfg.fillBots ? `, até ${INF.BOT_FILL_MAX} bots` : ''}) · ` : dom ? 'DOMINAÇÃO · ' : isTraining(cfg.mode) ? 'TREINO (Estande do Docão) · ' : 'MATA-MATA · ') + $('lobbyInfo').textContent;
   $('lobbyPlayers').innerHTML = `<table><tr><th style="text-align:left">Jogadores (${rows.length}/${cfg.max})</th><th>Ping</th></tr>${rows.map((p) =>
     `<tr data-pid="${p.bot ? '' : p.id}" class="${p.id === o.myId ? 'me' : ''}${!p.bot && voiceTalking(p.id) ? ' talking' : ''}${!p.bot && voiceMuted(p.id) ? ' vmuted' : ''}"><td style="text-align:left"><span class="dot" style="background:${(getSkin(p.skin).shirt || {}).color || '#d8261c'}"></span>${escapeHtml(p.name)}${p.id === L.hostId ? '<span class="host">★ anfitrião</span>' : ''}${dom && p.team >= 0 ? `<span class="tm${p.team}">${TEAM_NAMES[p.team]}${p.pref < 0 ? ' (auto)' : ''}</span>` : ''}</td><td>${p.id === o.myId ? o.net.ping : p.ping} ms</td></tr>`).join('')}</table>`;
   chatSetRoom(cfg.chat !== false); chatSetTeam(!!dom); voiceRefresh();
@@ -6480,7 +6488,7 @@ function renderLobby() {
     $('lobbyName').disabled = $('lobbyNameBtn').disabled = inGame;
     $('lobbyNameMsg').textContent = me && me.name !== myName() ? `Na sala você aparece como “${me.name}”${inGame ? '' : ' (nome repetido ou ajustado)'}` : inGame ? 'Partida em andamento: o nome muda na próxima partida' : ''; }
   $('hostCtl').classList.toggle('hidden', !isHost); $('lobbyWait').classList.toggle('hidden', isHost || L.state !== 'lobby');
-  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, cfg.mode); $('lobbyMax').value = String(cfg.max); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = cfg.mode || 'dm'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
+  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, cfg.mode); syncMaxSelect($('lobbyMax'), cfg.mode, cfg.max); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = cfg.mode || 'dm'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
   syncLobbyLimits(cfg, isHost); syncLoadoutUi();
   if (state === 'over') { const h = o.myId === o.hostId; $('againBtn').classList.toggle('hidden', !h); $('nextMapBtn').classList.toggle('hidden', !h); $('overWait').classList.toggle('hidden', h); }
 }
@@ -6498,13 +6506,13 @@ const sendCfg = (lim) => {
 };
 ['lobbyMap', 'lobbyMax', 'lobbyBots', 'lobbyTime', 'lobbyChatOn'].forEach((id) => ($(id).onchange = sendCfg));
 $('lobbyDiff').onchange = () => { saveBotDiff($('lobbyDiff').value); sendCfg(); };
-$('lobbyMode').onchange = () => { fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' ? BOMB_MAP : $('lobbyMap').value, $('lobbyMode').value); sendCfg(limitsFor($('lobbyMode').value)); };
+$('lobbyMode').onchange = () => { fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' ? BOMB_MAP : $('lobbyMap').value, $('lobbyMode').value); syncMaxSelect($('lobbyMax'), $('lobbyMode').value); sendCfg(limitsFor($('lobbyMode').value)); };
 $('startOnline').onclick = () => { if (online) { initAudio(); online.net.send({ t: 'start', map: $('lobbyMap').value }); } };
 $('leaveLobby').onclick = () => leaveOnline();
 // ---------- menu online ----------
 function onlineTab(create) { $('tabCreate').classList.toggle('active', create); $('tabJoin').classList.toggle('active', !create); $('paneCreate').classList.toggle('hidden', !create); $('paneJoin').classList.toggle('hidden', create); }
-$('roomMode').onchange = () => { fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' ? BOMB_MAP : $('roomMap').value, $('roomMode').value); syncRoomLimits(); };
-$('onlineBtn').onclick = () => { if (invMenu()) $('roomMode').value = INV.mode; else if (bombMenu()) $('roomMode').value = 'bomb'; fillMapSelect($('roomMap'), selectedMap, $('roomMode').value); syncRoomLimits(); $('onlineErr').textContent = ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
+$('roomMode').onchange = () => { fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' ? BOMB_MAP : $('roomMap').value, $('roomMode').value); syncMaxSelect($('roomMax'), $('roomMode').value); syncRoomLimits(); };
+$('onlineBtn').onclick = () => { if (invMenu()) $('roomMode').value = INV.mode; else if (bombMenu()) $('roomMode').value = 'bomb'; fillMapSelect($('roomMap'), selectedMap, $('roomMode').value); syncMaxSelect($('roomMax'), $('roomMode').value); syncRoomLimits(); $('onlineErr').textContent = ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
 $('onlineClose').onclick = () => { $('onlineModal').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('tabCreate').onclick = () => onlineTab(true); $('tabJoin').onclick = () => { onlineTab(false); $('joinCode').focus(); };
 $('createBtn').onclick = async () => {
@@ -6550,7 +6558,7 @@ function startOnlineMatch(m) {
     return;
   }
   clearMatchEnding(); resetAds(); loadMap(m.map, isInvasion(m.mode)); clearBots(); gameTime = m.T; o.mapId = m.map; o.inMatch = true; o.ents.clear(); o.tmap = [];
-  mode = MODE_OK(m.mode); inv = null; invNet = m.iv ? parseState(m.iv) : null; window.__capLog = []; o.limit = m.limit > 0 ? m.limit : 0; endBomb();
+  mode = MODE_OK(m.mode); infReset(); setTeamLook(infMode()); infS = infMode() ? unpackInf(m.inf) : null; inv = null; invNet = m.iv ? parseState(m.iv) : null; window.__capLog = []; o.limit = m.limit > 0 ? m.limit : 0; endBomb();
   matchLimits = { weapons: (o.cfg && o.cfg.weapons) || null, powers: o.cfg && o.cfg.powers != null ? o.cfg.powers : null }; rulesLive = true;
   zone = m.zone ? newZoneState({ x: m.zone[0], y: m.zone[1], z: m.zone[2] }) : null; teamScore = m.zone ? [m.zone[8], m.zone[9]] : [0, 0];
   const me = m.ents.find((x) => x.id === o.myId) || { name: profile().name, skin: selectedSkin };
@@ -6561,17 +6569,18 @@ function startOnlineMatch(m) {
   for (const info of m.ents) remoteEnt(info);
   invApplyLook(invMode()); if (invMode()) for (const [id, ki, pos] of m.drops || []) invAddDrop(id, DROP_KEYS[ki], pos);
   if (mode === 'bomb' && m.bomb) setupBomb({ sites: m.bomb.sites.map(([x, y, z], i) => ({ x, y, z, name: SITE_NAMES[i] })), atk: m.bomb.atk, def: m.bomb.def, pts: m.bomb.pts ? m.bomb.pts.map(([x, y, z]) => ({ x, y, z })) : undefined }, unpackBomb(m.bomb.s)); else if (mode === 'bomb') mode = 'dm';
+  if (infMode()) for (const e of entities) if (e.team === ZOMB) infApplyZombie(e, e.hp > 100 ? e.hp : INF.Z_HP, true);
   refreshModeHud(); $('teamPick').classList.add('hidden');
   if (teamMode() && me.pend) showTeamPick(m.ents);
   pickups.forEach((p, i) => { p.active = !!(m.pk ? m.pk[i] : 1); p.mesh.visible = p.active; });
-  showcase.visible = false; $('killfeed').innerHTML = ''; flashMsg(invMode() ? `Invasão 🎃 · ${currentMap.name} · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : `Mapa: ${currentMap.name}`);
+  showcase.visible = false; $('killfeed').innerHTML = ''; flashMsg(invMode() ? `Invasão 🎃 · ${currentMap.name} · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : infMode() ? `Infecção 🧟 · ${currentMap.name} · espalhe-se: o surto escolhe o zumbi em ${INF.OUTBREAK} s` : `Mapa: ${currentMap.name}`);
   ['menu', 'gameover', 'pause', 'lobby', 'onlineModal'].forEach((id) => $(id).classList.add('hidden')); $('hud').classList.remove('hidden'); $('socialHud').classList.remove('hidden'); $('voiceHud').classList.remove('hidden'); $('overChat').classList.add('hidden');
   $('netbar').classList.remove('hidden'); $('netRoom').textContent = 'Sala ' + o.code;
   camera.clearViewOffset(); state = 'playing'; if ($('teamPick').classList.contains('hidden')) lockPointer(); // escolhendo time: mouse livre pros botões
 }
 function netTick(dt) {
   const o = online; if (!o || !o.inMatch || !player) return;
-  o.sendAcc += dt; if (o.sendAcc < 1 / SEND_HZ) return; o.sendAcc = 0;
+  o.sendAcc += dt; if (o.sendAcc < 1 / (infMode() ? Math.min(SEND_HZ, INF.SEND_HZ) : SEND_HZ)) return; o.sendAcc = 0; // Infecção: 15/s (até 50 na sala; cada mensagem é cobrada)
   const p = player, msg = { t: 'u', sq: p.sq, y: +p.yaw.toFixed(3), pi: +p.pitch.toFixed(3), c: +p.crouch.toFixed(3), g: p.onGround ? 1 : 0, w: p.weapon, pg: o.net.ping, dn: emote.on ? myDance() : '' };
   if (p.alive) { msg.p = v3a(p.pos); msg.v = v3a(p.vel); }
   if (bombS && p.useHold) msg.bk = 1; // Bomba: segurando E
@@ -6597,6 +6606,7 @@ function applySnapshot(s) {
   o.tmap.push({ t: now, T: s.T }); if (o.tmap.length > 40) o.tmap.shift();
   if (s.d && zone) { const d = s.d; Object.assign(zone, { x: d[0], y: d[1], z: d[2], progress: d[3], team: d[4], contested: !!d[5], counts: [d[6], d[7]] }); teamScore = [d[8], d[9]]; }
   if (s.iv) invNet = parseState(s.iv);
+  if (s.f && infMode()) infS = unpackInf(s.f);
   if (s.b && bombS) { unpackBomb(s.b, bombS); teamScore = bombS.score; }
   for (const ev of s.ev) netEvent(ev);
   for (const row of s.e) {
@@ -6622,7 +6632,11 @@ function applySnapshot(s) {
 const entOf = (id) => (online ? online.ents.get(id) : null);
 function remoteMuzzle(e) { return center(e, 1.3).add(new V3(Math.sin(e.yaw) * 1.0, -0.25, Math.cos(e.yaw) * 1.0)); }
 const NET_SHOOTER = { sh: 1, ml: 1, dl: 2, el: 2, cl: 1, rk: 2, sk: 2 }; // índice do id de quem disparou em cada evento
-function netEvent(ev) {
+function netEvent(ev) { // Infecção: eventos próprios + ajustes depois do abate/renascimento/troca de time
+  const k = ev[0]; if (INF_EV.has(k)) { infEvent(ev); return; }
+  const pre = infMode() && k === 'k' ? (entOf(ev[2]) || {}).team : null; netEventBase(ev); if (infMode()) infPostEvent(ev, pre);
+}
+function netEventBase(ev) {
   const o = online, k = ev[0];
   { const si = NET_SHOOTER[k]; const se = si && entOf(ev[si]); if (se && se.model) setExpression(se.model, 'angry', 0.5); } // cara de brava de quem atirou/golpeou
   if (INV_EVENTS.has(k)) { invEvent(ev); return; } // Invasão
@@ -6784,6 +6798,7 @@ function netEvent(ev) {
 function personalEvent(ev) {
   const p = player; if (!p) return;
   if (ev[0] === 'pos') { p.pos.set(ev[1][0], ev[1][1], ev[1][2]); p.vel.set(0, 0, 0); }
+  else if (ev[0] === 'zkr') { p.zkReady = gameTime + (+ev[1] || 0); } // Infecção: recarga da faquinha (servidor)
   else if (ev[0] === 'pxw') { pauseSwapLast = performance.now() - (PX_COOLDOWN - (ev[1] | 0)) * 1000; flashMsg(`Espera ${ev[1]} s pra trocar de arma de novo`); } // servidor recusou a troca que derruba
   else if (ev[0] === 'inv') invSetInv(ev[1] || []); // Invasão: inventário de poderes
   else if (ev[0] === 'pkb') { const had = p.pokeballs || 0; p.pokeballs = ev[1]; if (ev[1] > had) { flashMsg(`Pokébola na mão (${ev[1]}) · Q joga`); sfx.pickup(); } }
@@ -6808,10 +6823,11 @@ function onlineEnd(m) {
   const w = m.board[0];
   invClosePick();
   if (isInvasion(m.mode)) { $('winner').dataset.tone = m.inv && m.inv.won ? 'won' : 'lost'; $('winner').textContent = invEndText(); }
+  else if (isInfection(m.mode)) { const iw = m.winTeam ?? -1; $('winner').dataset.tone = iw === ZOMB ? 'blue' : 'red'; $('winner').textContent = iw === ZOMB ? `🧟 Os zumbis venceram!${player.team === ZOMB ? ' 🏆' : ''}` : iw === SURV ? `🐷 Os sobreviventes venceram!${player.team === SURV ? ' 🏆' : ''}` : 'Empate!'; infReset(); }
   else if (m.mode === 'dom' || m.mode === 'bomb') { teamScore = m.ts || teamScore; setTeamWinner(m.winTeam ?? -1); }
   else $('winner').textContent = w && w[0] === o.myId ? 'Você venceu! 🏆' : `${w ? w[1] : '???'} venceu!`;
   const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths);
-  const teamGame = m.mode === 'dom' || m.mode === 'bomb', winTeam = m.winTeam ?? -1;
+  const teamGame = m.mode === 'dom' || m.mode === 'bomb' || isInfection(m.mode), winTeam = m.winTeam ?? -1;
   const tied = !isInvasion(m.mode) && !teamGame && m.board.length > 1 && m.board[0][2] === m.board[1][2] && m.board[0][3] === m.board[1][3];
   if (tied) $('winner').textContent = 'Empate!';
   const outcome = isInvasion(m.mode) ? (m.inv && m.inv.won ? 'win' : 'loss') : teamGame ? (winTeam < 0 ? 'draw' : player.team === winTeam ? 'win' : 'loss') : tied ? 'draw' : w && w[0] === o.myId ? 'win' : 'loss';
@@ -7096,6 +7112,108 @@ function invHud(v, me, dt) {
   $('fogVeil').style.opacity = outside ? (0.55 + Math.sin(gameTime * 4) * 0.1).toFixed(2) : '0';
   if (invPick) invUpdatePick(v);
 }
+// ---------- Modo Infecção 🧟 (zumbis × sobreviventes; regras em shared/infection.js, autoridade no servidor) ----------
+let infS = null; const infKnives = [];
+const infMode = () => mode === INF.mode;
+const isZombie = (e) => infMode() && !!e && e.team === ZOMB;
+const INF_EV = new Set(['if', 'ib', 'iw', 'zk', 'zkx']);
+const TEAM_BASE = { names: [...TEAM_NAMES], colors: [...TEAM_COLORS], hex: [...TEAM_HEX], dark: [...TEAM_DARK] };
+// na Infecção os "times" viram Sobreviventes (amarelo) × Zumbis (verde); nos outros modos volta Vermelho × Azul
+function setTeamLook(inf) {
+  const src = inf ? { names: INF_TEAM_NAMES, colors: INF_TEAM_COLORS, hex: INF_TEAM_HEX, dark: [0x7a5a00, 0x1d6a12] } : TEAM_BASE;
+  for (let i = 0; i < 2; i++) { TEAM_NAMES[i] = src.names[i]; TEAM_COLORS[i] = src.colors[i]; TEAM_HEX[i] = src.hex[i]; TEAM_DARK[i] = src.dark[i]; }
+  outlineTeamCache.clear();
+}
+// pele esverdeada do zumbi (materiais clonados por boneco: os do cache são compartilhados)
+function zombieTint(e, on) {
+  if (!e.model) return; const green = new THREE.Color(0x6fbf4a);
+  e.model.group.traverse((o) => {
+    if (!o.material || o.userData.isOutline || o.isSprite) return;
+    if (on && !o.userData.zMat) { const base = o.material; o.userData.zBase = base; o.material = [].concat(base).map((m) => { const c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; if (m.customProgramCacheKey) { const ck = m.customProgramCacheKey(); c.customProgramCacheKey = () => ck; } if (c.color) c.color.lerp(green, 0.5); return c; }); if (!Array.isArray(base)) o.material = o.material[0]; o.userData.zMat = true; }
+    else if (!on && o.userData.zMat) { o.material = o.userData.zBase; o.userData.zMat = false; }
+  });
+}
+function infApplyZombie(e, hp, quiet = false) {
+  e.team = ZOMB; e.slots = [KNIFE, KNIFE, KNIFE]; e.primary = e.secondary = e.melee = KNIFE; e.nades = 0; e.smokeNades = 0; e.stunNades = 0; e.pokeballs = 0;
+  if (hp) { e.hp = hp; e.maxHp = Math.max(hp, INF.Z_HP); }
+  e.reloadEnd = 0; e.charging = false; setWeapon(e, KNIFE); applyTeam(e, ZOMB); zombieTint(e, true);
+  if (e === player) { document.body.classList.add('infzombie'); arcLine.visible = arcMark.visible = false; if (!quiet) { flashMsg(`🧟 Você virou ZUMBI! Faca infecta · Q arremessa a faquinha (${knifeCd(e.zAlpha)} s)`); sfx.oink(1, 0.6); } }
+}
+function infReset() { for (const k of infKnives) scene.remove(k.mesh); infKnives.length = 0; document.body.classList.remove('infzombie'); for (const e of entities) if (e.model) zombieTint(e, false); }
+function infEvent(ev) {
+  const k = ev[0], o = online;
+  if (k === 'ib') { // surto: [ids dos alfas, vida]
+    for (const id of ev[1]) { const e = entOf(id); if (e) { e.zAlpha = true; infApplyZombie(e, ev[2], false); if (e === player) player.zkReady = gameTime + 1; } }
+    const names = ev[1].map((id) => (entOf(id) || {}).name).filter(Boolean);
+    if (!ev[1].includes(o.myId)) flashMsg(`🧟 SURTO! ${names.join(', ')} ${names.length > 1 ? 'viraram zumbis alfa' : 'virou zumbi alfa'} · fuja ou atire!`);
+    sfx.die(0.6);
+  } else if (k === 'if') { // infecção: [vítima, zumbi, 0 golpe / 1 faquinha, abates do zumbi, mortes da vítima, vida da vítima, vida do zumbi]
+    const t = entOf(ev[1]), a = entOf(ev[2]); if (!t) return;
+    if (a) { a.kills = ev[4]; if (ev[7]) { a.hp = ev[7]; a.maxHp = Math.max(a.maxHp || 0, ev[7]); } }
+    t.deaths = ev[5]; t.invulnUntil = gameTime + INF.INFECT_INVULN; infApplyZombie(t, ev[6], false); if (t === player) player.zkReady = gameTime + 2;
+    { const nm = (e) => `<b class="${e.isPlayer ? 'me' : ''}">${escapeHtml(e.name)}</b>`, how = ev[3] ? 'acertou a faquinha em' : 'infectou'; addFeedLine(a ? `${nm(a)} 🧟 ${how} ${nm(t)}` : `${nm(t)} virou zumbi 🧟`, a ? `${a.name} ${how} ${t.name}` : `${t.name} virou zumbi`); }
+    if (a === player) { sfx.kill(); feedbackAward && feedbackAward(100); }
+    if (t !== player) sfx.oink(distVol(t.pos) * 0.8, 0.7);
+  } else if (k === 'iw') { // vitória decidida (a tela de fim vem logo depois)
+    flashMsg(ev[1] === ZOMB ? '🧟 Os zumbis infectaram todo mundo!' : '🐷 Os sobreviventes seguraram!');
+    for (const x of infKnives) scene.remove(x.mesh); infKnives.length = 0;
+  } else if (k === 'zk') { // faquinha de alguém: [id, dono, posição, velocidade]
+    if (ev[2] === o.myId) return; const owner = entOf(ev[2]); infSpawnKnife(ev[1], a3v(ev[3]), a3v(ev[4]), ev[2]);
+    if (owner) sfx.toss(distVol(owner.pos));
+  } else if (k === 'zkx') { // faquinha parou: [id, ponto, quem acertou, dono]
+    let i = infKnives.findIndex((x) => x.pid === ev[1]); if (i < 0 && ev[4] === o.myId) i = infKnives.findIndex((x) => x.mine);
+    if (i >= 0) { scene.remove(infKnives[i].mesh); infKnives.splice(i, 1); }
+    const p = a3v(ev[2]); puff(p, ev[3] ? 0x6ee05a : 0xffffff); sfx.knifeHit(distVol(p) * 0.8);
+  }
+}
+function infSpawnKnife(pid, pos, vel, ownerId, mine = false) {
+  const mesh = makeKnife(1.8); mesh.position.copy(pos); scene.add(mesh);
+  infKnives.push({ pid, mine, ownerId, pos: { x: pos.x, y: pos.y, z: pos.z }, vel: { x: vel.x, y: vel.y, z: vel.z }, t: 0, mesh });
+}
+function infTickKnives(dt) {
+  for (let i = infKnives.length - 1; i >= 0; i--) {
+    const k = infKnives[i]; if (k.stuck) { k.stuckT -= dt; if (k.stuckT <= 0) { scene.remove(k.mesh); infKnives.splice(i, 1); } continue; }
+    const r = stepZKnife(k, dt, PHYS.rayWorld, () => -1, []);
+    k.mesh.position.set(k.pos.x, k.pos.y, k.pos.z);
+    const L = Math.hypot(k.vel.x, k.vel.z) || 1; k.mesh.rotation.set(0, Math.atan2(-k.vel.x, -k.vel.z), 0); k.mesh.rotateX(-k.t * 22); // gira de ponta a ponta
+    if (r) { if (r.wall) k.mesh.position.set(r.wall.x, r.wall.y, r.wall.z); k.stuck = true; k.stuckT = 0.6; void L; }
+  }
+}
+// Q do zumbi: arremessa na hora (sem carregar), na direção da mira, com recarga
+function infThrowKnife() {
+  const p = player; if (!p || !p.alive || !isZombie(p) || emote.on || !infS || infS.phase !== 'live') return;
+  if (gameTime < (p.zkReady || 0)) { flashMsg(`Faquinha recarregando · ${Math.ceil(p.zkReady - gameTime)} s`); return; }
+  const dir = new V3(0, 0, -1).applyQuaternion(camera.quaternion).normalize(), o = camera.position.clone().addScaledVector(dir, 0.4); o.y -= 0.12;
+  p.zkReady = gameTime + knifeCd(p.zAlpha);
+  netEv(['zk', v3a(o), v3a(dir)]);
+  infSpawnKnife(0, o, new V3(dir.x * INF.KNIFE.speed, dir.y * INF.KNIFE.speed + 1, dir.z * INF.KNIFE.speed), online && online.myId, true);
+  sfx.toss(1); fp.actionT = 0.25;
+}
+const infMeOut = () => !!(infMode() && player && !player.alive && player.infOut);
+function infSpectate() {
+  if (!infMeOut() || gameTime - player.deathAt < 2.5) return false;
+  const mates = entities.filter((e) => e !== player && e.alive && e.team === ZOMB), t = mates[0] || entities.find((e) => e !== player && e.alive); if (!t) return false;
+  const back = new V3(-Math.sin(t.yaw), 0, -Math.cos(t.yaw)); const cam = t.pos.clone().addScaledVector(back, 4.5); cam.y += 3;
+  camera.position.lerp(cam, 0.15); camera.lookAt(t.pos.x, t.pos.y + 1.4, t.pos.z); return true;
+}
+function infPostEvent(ev, pre) {
+  const k = ev[0];
+  if (k === 'k') { const t = entOf(ev[2]); if (!t) return; if (pre === ZOMB) { t.infOut = true; t.respawnAt = Infinity; if (t === player) flashMsg('Zumbi abatido · você fica de fora até o fim da rodada'); } else if (infS && infS.phase !== 'wait') { t.respawnAt = gameTime + INF.SUICIDE_RESPAWN; if (t === player) flashMsg('Caiu sozinho · volta como zumbi em 3 s'); } }
+  else if (k === 'sp') { const e = entOf(ev[1]); if (e && e.team === ZOMB) infApplyZombie(e, INF.Z_HP, true); else if (e) { zombieTint(e, false); if (e === player) document.body.classList.remove('infzombie'); } }
+  else if (k === 'tm') { const e = entOf(ev[1]); if (e && ev[2] === SURV) zombieTint(e, false); }
+}
+function infUpdateHud(dt) {
+  const el = $('infhud'); if (!el) return; const on = infMode() && !!infS; el.classList.toggle('hidden', !on); if (!on) return;
+  infTickKnives(dt);
+  const fmt = (s) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
+  $('infSurv').textContent = infS.surv; $('infZomb').textContent = infS.zomb;
+  $('infClock').textContent = infS.phase === 'wait' ? `SURTO EM ${Math.ceil(Math.max(0, infS.outbreakAt - gameTime))} s` : infS.phase === 'live' ? fmt(infS.endAt - gameTime) : infS.winner === ZOMB ? 'ZUMBIS VENCERAM' : 'SOBREVIVENTES VENCERAM';
+  const me = player, z = isZombie(me), kk = $('infKnife');
+  kk.classList.toggle('hidden', !(z && me.alive));
+  if (z && me.alive) { const left = Math.max(0, (me.zkReady || 0) - gameTime); kk.textContent = left > 0.05 ? `🔪 Q ${left.toFixed(1).replace('.', ',')} s` : '🔪 Q pronta'; kk.classList.toggle('ready', left <= 0.05); }
+  $('infRole').textContent = !me ? '' : z ? (me.zAlpha ? '🧟 ZUMBI ALFA · infecte todo mundo' : '🧟 ZUMBI · infecte todo mundo') : infS.phase === 'wait' ? '🐷 Espalhe-se! Alguém vai virar zumbi' : '🐷 SOBREVIVENTE · mate os zumbis ou segure até o fim';
+  $('infRole').style.color = z ? INF_TEAM_COLORS[1] : INF_TEAM_COLORS[0];
+}
 // espectador (sem vidas): câmera atrás de um aliado vivo
 function invSpectate() {
   if (!invMode() || !player || player.alive || !invMeOut()) return false;
@@ -7364,6 +7482,7 @@ window.__docao = { get state() { return state; }, toMenu: () => toMenu(), benchO
   },
   setSecondary, REV, REV2,
   // Invasão 🎃
+  get infS() { return infS; }, get infKnives() { return infKnives.length; }, infThrowKnife: () => infThrowKnife(), isZombie: (e) => isZombie(e || player),
   get inv() { return inv; }, get invView() { return invView(); }, get invInv() { return invGfx.inv.slice(); }, get invSel() { return invGfx.sel; }, get invDrops() { return [...invGfx.drops.keys()]; }, get invPick() { return invPick; },
   invUse: () => invUsePower(), invCycle: () => invCycle(), invOpenPick: () => invOpenPick(), invEquipNow, INV, POWERS, ZOMBIES, INV_MAPS, makeZombieEnt, get invHal() { return invGfx.hal; }, get invMusic() { return invMusic && { on: invMusic.on, level: invMusic.level }; },
   invGive: (list) => { if (inv && player) { player.inv = list.slice(0, INV.INV_MAX); invSetInv(player.inv.map((k) => POWER_KEYS.indexOf(k))); } else if (online) online.net.send({ t: 'testInv', give: list }); },

@@ -9,7 +9,7 @@ import { TIERS } from './shared/challenges.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const RANK_MODES = [['all', 'Geral'], ['dm', 'Mata-mata'], ['dom', 'Dominação'], ['bomb', 'Bomba'], ['inv', 'Invasão']];
+const RANK_MODES = [['all', 'Geral'], ['dm', 'Mata-mata'], ['dom', 'Dominação'], ['bomb', 'Bomba'], ['inv', 'Invasão'], ['inf', 'Infecção']];
 let reg = false, rankMode = 'all', rankSort = 'kills', busy = false;
 
 // ---------- painel "Desafios do dia" no menu principal (só leitura: vem no mesmo /api/me da conta; nada é gravado) ----------

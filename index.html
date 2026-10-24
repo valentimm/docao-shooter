@@ -30,6 +30,7 @@
     <div id="trainInfo" class="hidden"></div>
   </div>
   <div id="tl"><div id="lb"></div><div id="netbar" class="hidden"><span id="netRoom"></span> · <span id="netPing">-- ms</span><span id="netStatus"></span></div></div>
+  <div id="infhud" class="hidden"><div id="infScore"><span class="is">🐷 <b id="infSurv">0</b></span><span id="infClock">SURTO EM 15 s</span><span class="iz"><b id="infZomb">0</b> 🧟</span></div><div id="infRole"></div><div id="infKnife" class="hidden">🔪 Q pronta</div></div>
   <div id="domhud" class="hidden"><div id="domScore"><span class="tr">VERMELHO <b id="ts0">0</b></span><span class="vs">×</span><span class="tb"><b id="ts1">0</b> AZUL</span></div>
     <div id="zoneBar"><div id="zoneFill"></div><span id="zoneText">Zona neutra</span></div><div id="myTeam"></div></div>
   <div id="zoneMark" class="hidden"><div class="zarrow">▲</div><div class="zlbl">ZONA <span id="zoneDist"></span></div></div>
@@ -324,7 +325,7 @@
     <div class="otabs"><button id="tabCreate" class="otab active">Criar sala</button><button id="tabJoin" class="otab">Entrar na sala</button></div>
     <div id="paneCreate">
       <label>Mapa<select id="roomMap"></select></label>
-      <label>Modo<select id="roomMode"><option value="dm">Mata-mata</option><option value="dom">Dominação (times)</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option></select></label>
+      <label>Modo<select id="roomMode"><option value="dm">Mata-mata</option><option value="dom">Dominação (times)</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="inf">Infecção 🧟 (zumbis × sobreviventes, até 50)</option></select></label>
       <div class="row">
         <label>Máx. jogadores<select id="roomMax"><option>2</option><option>3</option><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
         <label>Completar com bots<select id="roomBots"><option value="1" selected>Sim</option><option value="0">Não</option></select></label>
@@ -453,7 +454,7 @@
         <label>Máx.<select id="lobbyMax"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
         <label>Bots<select id="lobbyBots"><option value="1">Sim</option><option value="0">Não</option></select></label>
         <label>Dificuldade<select id="lobbyDiff" aria-label="Dificuldade dos bots da sala"><option value="leitao">Leitão · fácil</option><option value="ceva">Ceva · normal</option><option value="javali">Javali · difícil</option><option value="cachaco">Cachaço · pesadelo</option></select></label>
-        <label>Modo<select id="lobbyMode"><option value="dm">Mata-mata</option><option value="dom">Dominação</option><option value="treino">Treino (Estande)</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba (protótipo)</option></select></label>
+        <label>Modo<select id="lobbyMode"><option value="dm">Mata-mata</option><option value="dom">Dominação</option><option value="treino">Treino (Estande)</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba (protótipo)</option><option value="inf">Infecção 🧟</option></select></label>
         <label>Tempo<select id="lobbyTime"><option value="0">Padrão</option><option value="3">3 min</option><option value="5">5 min</option><option value="7">7 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option></select></label>
         <label>Chat<select id="lobbyChatOn"><option value="1">Sim</option><option value="0">Não</option></select></label>
       </div>
