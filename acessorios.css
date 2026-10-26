@@ -78,6 +78,20 @@
   -webkit-text-stroke:0;text-shadow:none;letter-spacing:.2px
 }
 .cls-headline p{margin:3px 0 0;color:#e8bc67;font:700 13px/1.3 "Trebuchet MS",Arial,sans-serif}
+.cls-clockbox{position:relative;z-index:1;display:flex;flex-direction:column;align-items:stretch;gap:4px;width:min(280px,36vw);flex:none}
+.death-gun-hint{
+  margin:0;padding:3px 8px;text-align:center;color:#fff6e8;
+  background:#3e281a;border:2px solid #e8bc67;border-radius:4px;
+  font:800 13px/1.2 "Trebuchet MS",Arial,sans-serif;letter-spacing:.2px
+}
+.cls-clockbox .cls-clock{width:100%}
+/* Ficha aberta na kill cam: o título desce, senão o atalho cobre quem matou. */
+#hud #deathpick .cls-top:has(.death-gun-hint:not(.hidden)){
+  flex-direction:column;align-items:center;min-height:0;gap:8px
+}
+#hud #deathpick .cls-top:has(.death-gun-hint:not(.hidden)) .cls-headline{
+  position:static;left:auto;top:auto;transform:none;width:auto;max-width:100%
+}
 .cls-clock{
   position:relative;top:auto;left:auto;transform:none;z-index:1;
   width:min(280px,36vw);height:28px;flex:none;border-radius:4px;overflow:hidden;
@@ -391,7 +405,9 @@ body.killcam #hud #deathpick .cls-headline{
 body.killcam #hud #deathpick .cls-headline h2{
   font-size:16px !important;line-height:1.2 !important;text-shadow:0 2px 0 #000
 }
-body.killcam #hud #deathpick .cls-clock{width:min(240px,70vw) !important;margin-left:auto}
+body.killcam #hud #deathpick .cls-clockbox{width:min(240px,70vw) !important;align-items:stretch}
+body.killcam #hud #deathpick .cls-clock{width:100% !important;margin-left:0}
+body.killcam #hud #deathpick .death-gun-hint{display:block}
 body.killcam #hud #deathpick #respawnBtn{
   pointer-events:auto !important;width:min(280px,86vw) !important;min-width:0 !important;margin:8px 0 0 auto !important
 }

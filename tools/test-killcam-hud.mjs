@@ -73,7 +73,44 @@ ok(cam.score !== 'none' && cam.chat !== 'none' && cam.feed !== 'none' && cam.top
 ok(cam.slots === 'hidden', 'o HUD de arma do canto some enquanto morto');
 ok(cam.who.startsWith('Você foi pururucado por') && cam.respawn > 40, `aviso e Renascer continuam (${cam.who}, ${cam.respawn}px)`);
 ok(cam.dist != null && cam.dist < 12, `câmera perto de quem matou (${cam.dist} m)`);
+const hint0 = await G(() => {
+  const hint = document.getElementById('deathGunHint');
+  const clock = document.getElementById('classClock');
+  const hr = hint.getBoundingClientRect(), cr = clock.getBoundingClientRect();
+  return { txt: hint.textContent, hidden: hint.classList.contains('hidden'), above: hr.bottom <= cr.top + 2 && hr.height > 8 };
+});
+ok(hint0.txt === 'B — armas' && !hint0.hidden && hint0.above, `atalho escrito em cima do tempo (${hint0.txt}, acima ${hint0.above})`);
 await page.screenshot({ path: `${SHOTS}/killcam-sem-menu.png` });
+
+await page.keyboard.press('b');
+ok(await page.waitForFunction(() => getComputedStyle(document.getElementById('deathList')).display !== 'none' && document.body.classList.contains('dead'), null, { timeout: 4000 }).then(() => true, () => false), 'B abre a ficha de armas na kill cam');
+const aberta = await G(() => {
+  const tela = document.getElementById('deathpick');
+  const r = tela.getBoundingClientRect();
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  const hint = document.getElementById('deathGunHint');
+  const clock = document.getElementById('classClock');
+  const hr = hint.getBoundingClientRect(), wr = document.getElementById('deathWho').getBoundingClientRect();
+  const cruza = !(hr.right <= wr.left + 1 || wr.right <= hr.left + 1 || hr.bottom <= wr.top + 1 || wr.bottom <= hr.top + 1);
+  return {
+    cobre: r.width > 1000 && r.height > 500 && r.left <= cx && r.top <= cy && r.right >= cx && r.bottom >= cy,
+    lista: getComputedStyle(document.getElementById('deathList')).display,
+    hint: hint.textContent,
+    above: hr.bottom <= clock.getBoundingClientRect().top + 2,
+    killcam: document.body.classList.contains('killcam'),
+    cruza,
+  };
+});
+console.log(JSON.stringify(aberta));
+ok(aberta.cobre && aberta.lista !== 'none' && !aberta.killcam, 'ficha cobre a tela enquanto está aberta');
+ok(aberta.hint === 'B ou Esc — fecha' && aberta.above && !aberta.cruza, `atalho de fechar fica em cima do tempo, sem cobrir o nome (${aberta.hint})`);
+await page.screenshot({ path: `${SHOTS}/killcam-ficha-aberta.png` });
+await page.keyboard.press('Escape');
+ok(await page.waitForFunction(() => getComputedStyle(document.getElementById('deathList')).display === 'none' && document.body.classList.contains('killcam') && document.getElementById('pause').classList.contains('hidden'), null, { timeout: 4000 }).then(() => true, () => false), 'Esc fecha a ficha e a kill cam volta limpa, sem pausar');
+await page.keyboard.press('b');
+ok(await page.waitForFunction(() => getComputedStyle(document.getElementById('deathList')).display !== 'none', null, { timeout: 4000 }).then(() => true, () => false), 'B abre de novo');
+await page.keyboard.press('b');
+ok(await page.waitForFunction(() => getComputedStyle(document.getElementById('deathList')).display === 'none' && document.getElementById('deathGunHint').textContent === 'B — armas', null, { timeout: 4000 }).then(() => true, () => false), 'B de novo fecha e o atalho volta a dizer armas');
 
 await G(() => { window.__docao.player.respawnAt = 0; });
 await page.keyboard.press('Space');
