@@ -365,3 +365,37 @@ body.cls-on #invPowers,body.cls-on #inspect,body.bombpick #bombBanner,body.invpi
   #hud #deathpick.cls-screen #respawnBtn{width:100%;min-width:0;margin:8px 0 0}
   #hud #deathpick.cls-screen #respawnBtn small{white-space:normal}
 }
+
+/* Kill cam: a ficha de armas é tela cheia e tapava quem matou.
+   No canto ficam só o nome de quem matou e o Renascer. Placar e chat não entram aqui. */
+body.killcam #hud #deathpick.cls-screen{
+  position:fixed !important;inset:auto !important;left:auto !important;right:12px !important;top:auto !important;bottom:12px !important;
+  transform:none !important;width:max-content !important;max-width:min(340px,92vw) !important;height:auto !important;max-height:none !important;
+  margin:0 !important;padding:0 !important;background:transparent !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;
+  opacity:1 !important;overflow:visible !important;z-index:8 !important;pointer-events:none !important;display:flex !important;text-align:right !important
+}
+body.killcam #hud #deathpick .cls-pig,
+body.killcam #hud #deathpick #deathList,
+body.killcam #hud #deathpick #classGun,
+body.killcam #hud #deathpick #deathArms,
+body.killcam #hud #deathpick .cls-headline p{display:none !important}
+body.killcam #hud #deathpick .cls-sheet{
+  display:flex !important;flex:none !important;grid-template-columns:none !important;width:auto !important;min-height:0 !important;margin:0 !important;
+  padding:0 !important;gap:0 !important;background:transparent !important;border:0 !important;box-shadow:none !important
+}
+body.killcam #hud #deathpick .cls-main{display:flex !important;min-width:0 !important;background:transparent !important}
+body.killcam #hud #deathpick .cls-top{min-height:0 !important;flex-direction:column !important;align-items:flex-end !important;gap:6px !important}
+body.killcam #hud #deathpick .cls-headline{
+  position:static !important;left:auto !important;top:auto !important;transform:none !important;width:auto !important;max-width:320px !important;text-align:right !important
+}
+body.killcam #hud #deathpick .cls-headline h2{
+  font-size:16px !important;line-height:1.2 !important;text-shadow:0 2px 0 #000
+}
+body.killcam #hud #deathpick .cls-clock{width:min(240px,70vw) !important;margin-left:auto}
+body.killcam #hud #deathpick #respawnBtn{
+  pointer-events:auto !important;width:min(280px,86vw) !important;min-width:0 !important;margin:8px 0 0 auto !important
+}
+body.killcam #bottomleft,
+body.killcam #bottomright,
+body.killcam #inspect{visibility:hidden}
+body.killcam #stamp{opacity:.55;zoom:.55;top:9%}

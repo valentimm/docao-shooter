@@ -103,12 +103,22 @@ const morte = await G((nome) => {
     hud: stamp.display === 'none' && feed.display === 'none' && msg.display === 'none',
     slot: slot ? slot.textContent : '',
     slotAlto: slot ? slot.getBoundingClientRect().height : 0,
+    killcam: document.body.classList.contains('killcam'),
+    armas: ['deathList', 'classGun', 'deathArms'].some((id) => getComputedStyle(document.getElementById(id)).display !== 'none'),
+    centroLivre: (() => {
+      const cx = innerWidth / 2, cy = innerHeight / 2, r = tela.getBoundingClientRect();
+      const tapa = r.width > 8 && r.height > 8 && r.left <= cx && r.right >= cx && r.top <= cy && r.bottom >= cy;
+      return !tapa;
+    })(),
+    score: getComputedStyle(document.getElementById('score')).display !== 'none',
+    chat: getComputedStyle(document.getElementById('socialHud')).display !== 'none',
+    feed: getComputedStyle(document.getElementById('killfeed')).display !== 'none',
   };
 }, matador);
 ok(morte.rows === 5 && morte.foto && /Renasce em/.test(morte.clock) && morte.nome === 'Arame', `ficha da morte: ${morte.rows} classes, foto ${morte.foto}, "${morte.clock}", ${morte.nome}`);
 ok(morte.who === `Você foi pururucado por ${matador}` && !/^\?|por \?\?\?/.test(morte.who), `o cabeçalho diz quem matou: "${morte.who}"`);
-ok(morte.opaco && morte.cobre && morte.hud, `fundo opaco cobre a tela e o HUD some (opaco ${morte.opaco}, cobre ${morte.cobre}, hud ${morte.hud})`);
-ok(morte.slot && morte.slotAlto > 0 && morte.slotAlto < 28, `o slot cabe numa linha ("${morte.slot}", ${morte.slotAlto.toFixed(0)}px)`);
+ok(morte.killcam && !morte.cobre && !morte.armas && morte.centroLivre && morte.score && morte.chat && morte.feed, `kill cam sem menu de armas (killcam ${morte.killcam}, cobre ${morte.cobre}, armas ${morte.armas}, centro ${morte.centroLivre}, score ${morte.score}, chat ${morte.chat}, feed ${morte.feed})`);
+ok(!morte.armas, `a ficha de arma não aparece na kill cam ("${morte.slot}", ${morte.slotAlto.toFixed(0)}px)`);
 const grade = await G(() => {
   const list = getComputedStyle(document.getElementById('deathList'));
   const rows = [...document.querySelectorAll('#deathList .clsrow')];
@@ -128,9 +138,7 @@ const grade = await G(() => {
     peso: who.fontWeight,
   };
 });
-ok(grade.col && grade.pilha, `lista da morte é uma coluna (${grade.pilha ? '5 linhas' : 'grade'})`);
-ok(grade.fundo === 'rgb(62, 40, 26)', `classe 5 no mesmo marrom das outras (${grade.fundo})`);
-ok(grade.foto >= 100 && grade.folga >= 0, `foto grande (${grade.foto}px) e o botão Nascer fica abaixo das barras (${grade.folga}px)`);
+ok(!grade.col && grade.foto === 0, `lista e foto da arma ficam fora da kill cam (foto ${grade.foto}px, fundo ${grade.fundo})`);
 ok(/Arial Black|Impact/i.test(grade.fonte) && Number(grade.peso) >= 800, `título em negrito (${grade.fonte}, ${grade.peso})`);
 await page.screenshot({ path: `${SHOTS}/morte-desktop.png` });
 await page.keyboard.press('Digit2');
@@ -213,14 +221,12 @@ await G(() => { const g = window.__docao; const bot = g.entities.find((e) => e !
 ok(await until(() => !document.getElementById('deathpick').classList.contains('hidden'), 20000), 'morte na tela estreita');
 ok(await G(() => {
   const list = getComputedStyle(document.getElementById('deathList'));
-  const rows = [...document.querySelectorAll('#deathList .clsrow')];
-  const lefts = rows.map((r) => Math.round(r.getBoundingClientRect().left));
-  const foto = document.querySelector('#classGun .wthumb.is-big').getBoundingClientRect().height;
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  const tela = document.getElementById('deathpick').getBoundingClientRect();
+  const tapa = tela.width > 8 && tela.height > 8 && tela.left <= cx && tela.right >= cx && tela.top <= cy && tela.bottom >= cy;
   const btn = document.getElementById('respawnBtn').getBoundingClientRect();
-  const bars = document.querySelector('#classGun .gbars').getBoundingClientRect();
-  const faixa = list.flexDirection === 'row' && lefts.every((x, i) => i === 0 || x > lefts[i - 1] + 40);
-  return faixa && foto >= 80 && btn.top >= bars.bottom - 2 && btn.width > 300;
-}), 'na estreita a lista é faixa, a foto cabe e o Nascer fica embaixo');
+  return document.body.classList.contains('killcam') && list.display === 'none' && !tapa && btn.width > 80 && btn.height > 20;
+}), 'na estreita a kill cam continua sem o menu de armas e o Renascer fica no canto');
 await page.screenshot({ path: `${SHOTS}/morte-estreita.png` });
 
 console.log('\nERROS:', errors.length ? errors.slice(0, 8) : 'nenhum');

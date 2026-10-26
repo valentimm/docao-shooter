@@ -2880,7 +2880,23 @@ function updateHud(dt) {
   const smokeN = $('smokeN'), stunN = $('stunN');
   if (smokeN) { smokeN.textContent = p.smokeNades || 0; smokeN.parentElement.classList.toggle('out', !(p.smokeNades > 0)); }
   if (stunN) { stunN.textContent = p.stunNades || 0; stunN.parentElement.classList.toggle('out', !(p.stunNades > 0)); }
-  { const dh = p.alive || gameTime - p.deathAt < DEATHCAM_HOLD; document.body.classList.toggle('deadgray', !p.alive); const wasDead = document.body.classList.contains('dead'); const dp = $('deathpick'); dp.classList.toggle('hidden', dh); dp.classList.toggle('x1', x1Mode()); document.body.classList.toggle('dead', !dh); if (wasDead === dh) placeSocialHud(); if (!p.alive) updateRespawnBtn(p); } crossEl.style.visibility = p.alive && !(predator && predator.phase === 'fly') ? '' : 'hidden';
+  {
+    // A ficha de armas é tela cheia. Na kill cam (câmera no assassino) ela tampava quem matou.
+    // Enquanto essa câmera está no ar, o menu de armas fica fora: só o aviso e o Renascer, no canto.
+    // Placar, chat e killfeed continuam. Sem assassino na tela, a ficha volta como antes.
+    const watchingKiller = !!(deathCamState.on && deathCamState.killer);
+    const pastHold = !p.alive && gameTime - p.deathAt >= DEATHCAM_HOLD;
+    const cover = pastHold && !watchingKiller;
+    document.body.classList.toggle('deadgray', !p.alive);
+    document.body.classList.toggle('killcam', watchingKiller);
+    const wasDead = document.body.classList.contains('dead');
+    const dp = $('deathpick');
+    dp.classList.toggle('hidden', !pastHold);
+    dp.classList.toggle('x1', x1Mode());
+    document.body.classList.toggle('dead', cover);
+    if (wasDead === !cover) placeSocialHud();
+    if (!p.alive) updateRespawnBtn(p);
+  } crossEl.style.visibility = p.alive && !(predator && predator.phase === 'fly') ? '' : 'hidden';
   const dry = w.akimbo ? drumsEmpty(p, p.weapon) : p.mag[p.weapon] === 0;
   $('reloadmsg').textContent = w.shield || w.melee ? '' : p.reloadEnd > gameTime ? (w.shellReload ? 'Recarregando... (atire para interromper)' : 'Recarregando...') : (dry ? (p.reserve[p.weapon] ? 'Aperte R' : 'Sem munição! Pegue uma caixa') : '');
   paintSaberHud(p, w);
@@ -2901,7 +2917,7 @@ function updateHud(dt) {
   if (!p.alive) {
     const line = deathLine(p);
     const who = $('deathWho'); if (who && who.textContent !== line) who.textContent = line;
-    if (document.body.classList.contains('dead')) { if (cm.textContent) cm.textContent = ''; }
+    if (document.body.classList.contains('dead') || document.body.classList.contains('killcam')) { if (cm.textContent) cm.textContent = ''; }
     else if (cm.textContent !== line) cm.textContent = line;
   }
   else if (msgTimer > 0) { msgTimer -= dt; if (cm.textContent.startsWith('Você foi ') || cm.textContent.startsWith('Você se ') || cm.textContent.startsWith('Você explodiu') || cm.textContent.startsWith('Você se amassou')) cm.textContent = ''; } // mensagem (ex.: "Mapa: …") tem prioridade; tira o aviso de morte que sobrou de antes de nascer
@@ -5478,7 +5494,7 @@ const PX_COOLDOWN = 10; // s, igual ao servidor
 buildPauseGuns();
 function releaseLook() { mouseDown = false; rightDown = false; keys.Space = keys.ShiftLeft = keys.ShiftRight = false; resetAds(); if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } if (pickingStrike) { pickingStrike = false; closeStrikeMap(); } }
 function tuckDeathMenu() { const el = $('deathpick'); if (el) el.classList.add('hidden'); }
-function pause() { if (state !== 'playing') return; softPauseOn = false; state = 'paused'; releaseLook(); closePauseClass(); tuckDeathMenu(); if (player && player.alive) document.body.classList.remove('dead', 'deadgray', 'cls-on'); $('pauseInvite').classList.toggle('hidden', !online); $('pauseVoice').classList.toggle('hidden', !online); const note = $('pauseClassNote'); if (note) note.textContent = x1Mode() ? 'No X1 a arma é sortida e igual pra todo mundo. Não dá pra trocar.' : invMode() ? 'Na Invasão a classe entra no painel B, entre as waves.' : training() ? 'No estande a classe entra agora e o pente não enche sozinho.' : 'A classe escolhida entra na próxima vida. Não derruba.'; const swap = $('pauseClassBtn'); if (swap) swap.classList.toggle('hidden', invMode() || x1Mode()); buildPauseGuns(); $('pauseDance').classList.toggle('hidden', invMode()); $('pause').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); }
+function pause() { if (state !== 'playing') return; softPauseOn = false; state = 'paused'; releaseLook(); closePauseClass(); tuckDeathMenu(); if (player && player.alive) document.body.classList.remove('dead', 'deadgray', 'cls-on', 'killcam'); $('pauseInvite').classList.toggle('hidden', !online); $('pauseVoice').classList.toggle('hidden', !online); const note = $('pauseClassNote'); if (note) note.textContent = x1Mode() ? 'No X1 a arma é sortida e igual pra todo mundo. Não dá pra trocar.' : invMode() ? 'Na Invasão a classe entra no painel B, entre as waves.' : training() ? 'No estande a classe entra agora e o pente não enche sozinho.' : 'A classe escolhida entra na próxima vida. Não derruba.'; const swap = $('pauseClassBtn'); if (swap) swap.classList.toggle('hidden', invMode() || x1Mode()); buildPauseGuns(); $('pauseDance').classList.toggle('hidden', invMode()); $('pause').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); }
 // ` solta o mouse como o Esc, sem a pausa na chapa: o HUD fica como estava. Clique ou ` de novo volta a mirar.
 function softPause() { if (state !== 'playing') return; state = 'paused'; softPauseOn = true; releaseLook(); if (document.pointerLockElement) document.exitPointerLock(); }
 function resume() { closePauseClass(); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); lockPointer(); }
@@ -5488,7 +5504,7 @@ function toMenu() {
   endVictory(); stopEmote(); document.body.classList.remove('deadgray');
   zone = null; mode = 'dm'; endBomb(); $('domhud').classList.add('hidden'); $('zoneMark').classList.add('hidden'); $('teamPick').classList.add('hidden');
   state = 'menu'; rulesLive = false; clearBots(); inv = null; invNet = null; if (selectedMap !== 'random') loadMap(selectedMap); invApplyLook(false); showcase.visible = true; pickups.forEach((p) => (p.mesh.visible = false)); camera.clearViewOffset();
-  closePauseClass(); ['pause', 'pauseClass', 'gameover', 'hud'].forEach((id) => { const el = $(id); if (el) el.classList.add('hidden'); }); document.body.classList.remove('cls-on', 'dead'); $('menu').classList.remove('hidden');
+  closePauseClass(); ['pause', 'pauseClass', 'gameover', 'hud'].forEach((id) => { const el = $(id); if (el) el.classList.add('hidden'); }); document.body.classList.remove('cls-on', 'dead', 'killcam'); $('menu').classList.remove('hidden');
   if (document.pointerLockElement) document.exitPointerLock();
 }
 // pede o pointer lock DENTRO do gesto do usuário (clique/tecla). Se o navegador recusar, mostra o aviso e o próximo clique no jogo tenta de novo.
@@ -6403,7 +6419,7 @@ $('respawnBtn').onclick = (ev) => { ev.stopPropagation(); requestRespawn(); };
 function onPlayerDeath(opts) { clearHitMarks(); if (player) { player.mgWant = false; player.mgSpin = 0; player.mgFiring = false; } rsSent = false; resetRewards(true); if (!(opts && opts.keepAim) && document.pointerLockElement) { deathUnlock = true; document.exitPointerLock(); } mouseDown = false; rightDown = false; if (player) player.bowDraw = player.eggDraw = 0; }
 let lastRespawnMs = -1e9;
 function onPlayerRespawn() { if (player) resetRecoil(player); clearHitMarks(); rsSent = false; lastRespawnMs = performance.now(); if (gunner) endGunner(false); if (predator) clearPredator(); closeBench(); // nada de mira guiada nem bancada sobrando da vida anterior (travava o andar)
-  deathCamState.on = false; deathCamState.killer = null; tuckDeathMenu(); document.body.classList.remove('deadgray', 'dead'); if (!bombPick && !invPick && !pauseClassOpen()) document.body.classList.remove('cls-on'); if (ghost) ghost.model.group.visible = false;
+  deathCamState.on = false; deathCamState.killer = null; tuckDeathMenu(); document.body.classList.remove('deadgray', 'dead', 'killcam'); if (!bombPick && !invPick && !pauseClassOpen()) document.body.classList.remove('cls-on'); if (ghost) ghost.model.group.visible = false;
   // o pointer lock é assíncrono: só avisa se ainda estiver sem mouse depois de um tempinho (o clique em RENASCER já pediu o lock)
   setTimeout(() => { if (!document.pointerLockElement && deathUnlock && state === 'playing' && player && player.alive) flashMsg(RELOCK_MSG); }, 600); }
 
