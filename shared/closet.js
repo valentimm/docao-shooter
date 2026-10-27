@@ -94,6 +94,21 @@ ITEMS.push(
       { type: 'squareGlasses', color: '#121214' },
       { type: 'pearl', color: '#d5dbe3', pearl: '#f7f3ea' },
     ] } },
+  // DocHiro: gorro azul, fone preto, moletom marinho com C! e barba rala (conceito do Guilherme Hiroshi). Mesmo preço da Barriguinha.
+  { id: 'c12', name: 'DocHiro', emoji: '🎧', price: 1000, line: 'Gorro azul-claro, fone preto, moletom marinho e barba rala', costume: {
+    shirt: { color: '#1a1f2e', trim: '#15151a', sleeves: 'long', sleeveColor: '#1a1f2e',
+      details: [{ type: 'hoodie', color: '#15151a', zip: '#a8acb2' }],
+      logo: { text: 'C!', color: '#f4f4f4', outline: '#d8261c', size: 0.12, x: -0.28, y: 0.58 } },
+    pants: '#15151a',
+    parts: [
+      { type: 'roundCap', color: '#7EB8D8', band: '#6aa8cc', knot: '#7EB8D8' },
+      { type: 'headphones', color: '#15151a', accent: '#1c1c22' },
+      { type: 'beard', color: '#2a1a10' },
+      { type: 'hoodDown', color: '#1a1f2e', inner: '#12151c' },
+      { type: 'hoodStrings', color: '#f4f4f4' },
+      { type: 'longPants', color: '#15151a' },
+      { type: 'shoes', color: '#b8b4c8', sole: '#f4f4f4', strap: '#f7f6fa' },
+    ] } },
 );
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
