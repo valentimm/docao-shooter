@@ -3285,7 +3285,14 @@ function applyHeldKnife(id) {
   const mesh = piv && piv.children.find((c) => c.userData.knifeSkin && !c.userData.knifeGold);
   if (!mesh) return;
   const look = knifeLook(id);
+  const before = `${mesh.userData.knifeKind}|${mesh.userData.knifeFinish}`;
   applyKnifeSkin(mesh, look.kind, look.finish);
+  if (`${mesh.userData.knifeKind}|${mesh.userData.knifeFinish}` === before) return;
+  const gun = fp.guns[KNIFE];
+  if (weaponThumbs.length && gun) {
+    try { weaponThumbs[KNIFE] = renderWeaponThumb(gun); } catch (e) { /* miniatura segue a de fábrica */ }
+    paintWeaponThumbs();
+  }
 }
 function applyWorldKnife(e, id) {
   if (!(e && e.model && e.model.guns && e.model.guns[KNIFE])) return;
@@ -6753,8 +6760,8 @@ $('lobbyNameBtn').onclick = () => sendName();
 // ---------- conta (opcional): apelido fixo + skin guardada ----------
 function applyAccount(a) {
   for (const id of NAME_FIELDS) { const el = $(id); el.readOnly = !!a; el.title = a ? 'Apelido fixo da sua conta' : ''; el.classList.toggle('locked', !!a); }
-  if (a) { saveName(a.nick); if (a.skin && skinOk(a.skin) && a.skin !== selectedSkin) setPreview(a.skin); else if (!a.skin) saveAcctSkin(selectedSkin); applyHeldSniper(a.sniper); applyHeldGuns(a.guns); }
-  else { if (selectedSkin.startsWith('x1.')) setPreview(DEFAULT_SKIN); /* visual personalizado é só de conta */ let n = ''; try { n = localStorage.getItem('docao.name') || ''; } catch (e) { /* sem storage */ } for (const id of NAME_FIELDS) $(id).value = cleanName(n || 'Docão'); }
+  if (a) { saveName(a.nick); if (a.skin && skinOk(a.skin) && a.skin !== selectedSkin) setPreview(a.skin); else if (!a.skin) saveAcctSkin(selectedSkin); applyHeldKnife(a.knife); applyHeldSniper(a.sniper); applyHeldGuns(a.guns); }
+  else { if (selectedSkin.startsWith('x1.')) setPreview(DEFAULT_SKIN); /* visual personalizado é só de conta */ applyHeldKnife(''); let n = ''; try { n = localStorage.getItem('docao.name') || ''; } catch (e) { /* sem storage */ } for (const id of NAME_FIELDS) $(id).value = cleanName(n || 'Docão'); }
 }
 onAccount(applyAccount); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
 const roomLink = (code) => { const u = new URL(location.href); u.search = ''; const sv = new URLSearchParams(location.search).get('server'); if (sv) u.searchParams.set('server', sv); u.searchParams.set('sala', code); return u.toString(); };

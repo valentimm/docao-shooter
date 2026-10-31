@@ -1098,7 +1098,65 @@ function flipHotmilkZ(part, cz) {
 }
 
 
-// ---------- 9) Estande do Docão (modo Treino: alvos que não atacam, só renascem) ----------
+// ---------- 9) Galpão do Assalto ----------
+// Planta no jeito do galpão de assalto: pátio na frente, portão largo, beco de um lado só,
+// porta dos fundos e jirau na parede oeste com duto que desce no quarto do fundo.
+{
+  const red = '#b23a32', red2 = '#8e302a', wood = '#c4a574', wood2 = '#9c6b3a', stair = '#8d5a32', dirt = '#6b4630';
+  const boxes = [];
+  boxes.push(...building(-18, -6, 12, 14, {
+    col: { wall: red, wall2: red2, inner: '#e4d2b0', floor: wood, roof: '#6a2c28', roof2: '#5a2420', stair, trim: '#f3e2c4' },
+    floors: 2, H: 3.5, roof: false, parapet: 0,
+    ops: [
+      { s: 'n', a: -1, b: 7, k: 'wide' },
+      { s: 'n', a: -14, b: -9, k: 'win' }, { s: 'n', a: 8.4, b: 11, k: 'win' },
+      { s: 'n', a: -15, b: -10.5, f: 1, k: 'win' }, { s: 'n', a: -10, b: -6, f: 1, k: 'win' },
+      { s: 'e', a: -1.2, b: 1.2 }, { s: 'e', a: 10.2, b: 12.6 },
+      { s: 's', a: 5.4, b: 8.0 },
+    ],
+    stairs: [
+      { f: 0, r: [-15.4, -4.8, -8.2, -2.6], axis: 'x', dir: 1 },
+      { f: 0, r: [-15.6, 9.8, -9.4, 12.0], axis: 'x', dir: 1 },
+    ],
+    floorHoles: { 1: [[-3.6, -5.5, 11.5, 5.8]] },
+    inner: [
+      { axis: 'x', s0: -17.5, s1: 11.5, line: 6.4, ops: [{ a: -3.4, b: -1.0 }, { a: 6.2, b: 8.8 }] },
+      { axis: 'z', s0: 6.7, s1: 13.5, line: 1.6, ops: [{ a: 8.8, b: 11.4 }] },
+    ],
+  }));
+  boxes.push(B(-18, -6, 12, 14, 0.4, '#6a2c28', 6.55)); // telhado do galpão, sem escada até ele
+  boxes.push(B(-22, -20, -17.6, 18, 6, dirt)); // barranco: o flanco é só o beco leste
+  boxes.push(B(1.2, 0.4, 3.6, 2.6, 1.15, wood2), B(7.2, -2.2, 9.4, -0.4, 1.2, wood));
+  boxes.push(B(-16.6, 7.2, -14.6, 9.0, 1.05, wood2));
+  boxes.push(B(-2.2, -9.4, 1.4, -7.5, 1.15, wood2), crate(-14, -11, 1.7, 1.35), crate(9.2, -12, 1.6, 1.45, '#e0b15a'));
+  boxes.push(crate(19.2, -3.5, 1.5, 1.15), crate(19.4, 7.2, 1.45, 1.1, wood), crate(3.2, 17.2, 1.5, 1.1, wood2));
+  const props = [
+    { t: 'sign', x: 3, y: 5.15, z: -6.4, w: 6.2, h: 1.35, rot: Math.PI, text: 'GALPÃO', bg: '#7a1f17', fg: '#ffe7b0' },
+    { t: 'logoSign', x: -12, y: 5.3, z: -6.4, rot: Math.PI },
+    { t: 'truck', x: -9, z: -14, c: '#c44536' },
+    { t: 'hay', x: -16.2, z: -16.2 }, { t: 'hay', x: 16, z: -16.5 },
+    { t: 'keg', x: -6, z: -8.6 }, { t: 'keg', x: 10.5, z: -8.2 }, { t: 'keg', x: 16.2, z: 16.4 },
+    { t: 'tree', x: 19.5, z: -17.2 }, { t: 'tree', x: 8, z: 17.6 },
+  ];
+  MAPS.push({
+    id: 'galpao-assalto', name: 'Galpão do Assalto', desc: 'Galpão vermelho: portão na frente do pátio, beco lateral, porta dos fundos e jirau com duto até o quarto do fundo.',
+    size: [22, 20], wallH: 4, wallColor: ['#8a5a3a', '#7a4e32'],
+    palette: DAY({ ground: '#c6a56a', tiles: ['#d4b67e', '#b89558', 48, 12] }),
+    ...fin(boxes), props,
+    spawns: [[-4, -16], [6, -16.2], [-16.6, -12.8], [14, -15], [1, -12], [17, -2], [16.6, 8], [10, 16.8], [5, -1], [-10, 0], [-8, 8.2], [-13.2, 8], [-6, 12.7], [-12, 0, 3.5]],
+    pickups: [['health', -7, 8.4], ['health', 0, -15.2], ['health', 16.4, 2],
+      ['ammo', 6, 1.2], ['ammo', -12, 3.2, 3.5], ['ammo', 16.2, 12.5], ['ammo', -14, -8],
+      ['grenade', 2, -8.4], ['grenade', 7, 11.2], ['grenade', -12, 8, 3.5]],
+    showcase: [2, 0, -12], view: [2, 0, -15, Math.PI, -0.1],
+    test: {
+      stairs: { from: [-16.2, 0, -3.7], to: [-7.4, 3.5, -3.7], level: 3.5 },
+      roof: { from: [-16.2, 0, -3.7], via: [[-7.4, -3.7], [-7.2, 8]], to: [-7.2, 3.5, 12.5], level: 3.5 },
+      under: { from: [4.2, 0, 10.2], to: [9.2, 0, 10.2], ceil: 3.2 },
+    },
+  });
+}
+
+// ---------- 10) Estande do Docão (modo Treino: alvos que não atacam, só renascem) ----------
 // Linha de tiro em z = 22 (os jogadores atiram pra -z). Raias separadas por muretas baixas:
 //  A (oeste) distâncias 10/20/30/50 m · B alvos andando · C explosivos e arco · D faca e sabre (perto da linha).
 //  Atrás da linha: área de renascimento (leste) e arena pequena de X1 (oeste).

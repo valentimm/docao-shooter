@@ -7,14 +7,14 @@ import * as THREE from 'three';
 import { makeDocao, makeKnife, poseButterfly } from './docao.js';
 import { poseVictory, resetVictoryPose, ALL_DANCES, isPaidDance, normDance } from './victory-dance.js';
 import './costumes.js';
-import { getAccount, getItems, getEarn, getChal, onAccount, refreshStats, equipLook, buyItem, equipKnife, equipSniper, equipGun, openBox } from './account.js';
+import { getAccount, getItems, getEarn, getChal, onAccount, refreshStats, equipLook, buyItem, equipKnife, equipSniper, equipGun, openBox, spinWheel } from './account.js';
 import { CHAL_PER_DAY, TIERS } from './shared/challenges.js';
 import { COLORS, SLOTS, ITEMS, SHOP_TEAMS, CURRENCY, COIN_ICON, SHOP_NAME, SHOP_EMOJI, SHOP_BUTTON, DEFAULT_LOOK, COSTUME_SLOT, DANCE_SLOT, KNIFE_SLOT, KNIFE_MODELS, KNIFE_COLORS, GUN_GROUPS, encodeLook, parseLook, itemById, itemForDance, isFreeItem, teamItems } from './shared/closet.js';
-import { BOX_NAME, BOX_EMOJI, BOX_LINE, ODDS, dupeCoins, lootItems } from './shared/lootbox.js';
+import { BOX_NAME, BOX_EMOJI, lootItems } from './shared/lootbox.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let look = { ...DEFAULT_LOOK, items: {} }, tab = 'look', trial = null, busy = false, three = null, raf = 0, pendingBuy = null;
+let look = { ...DEFAULT_LOOK, items: {} }, tab = 'look', trial = null, busy = false, three = null, raf = 0, pendingBuy = null, pendingWheel = null, wheelPick = [];
 
 const currentCode = () => { const items = { ...look.items }; if (trial && trial.slot !== DANCE_SLOT && trial.slot !== KNIFE_SLOT && !(itemById(trial.id) && itemById(trial.id).sniper)) { if (trial.slot !== COSTUME_SLOT) delete items[COSTUME_SLOT]; items[trial.slot] = trial.id; } return encodeLook({ shirt: look.shirt, pants: look.pants, items }); };
 const previewKnife = () => {
@@ -139,16 +139,25 @@ let chalTimer = 0, chalRefreshing = false;
 function renderBox() {
   const box = $('closetBox'); if (!box) return;
   const a = getAccount(), n = a ? a.boxes | 0 : 0, owned = new Set(getItems());
-  const odds = ODDS.map((o) => `<li><b>${(o.bp / 100).toLocaleString('pt-BR')}%</b> peso ${o.weight} · repetida vira ${COIN_ICON} ${dupeCoins(o.weight)}</li>`).join('');
+  wheelPick = wheelPick.filter((id) => owned.has(id)).slice(0, 3);
   const weights = [...new Set(lootItems().map((i) => i.weight))].sort((x, y) => x - y);
   const catalog = weights.map((w) => {
     const list = lootItems().filter((i) => i.weight === w).map((i) => `<span class="loot-chip${owned.has(i.id) ? ' mine' : ''}">${i.emoji} ${esc(i.name)}</span>`).join('');
     return `<div class="closet-sec"><h4>Peso ${w}</h4><div class="loot-catalog">${list}</div></div>`;
   }).join('');
+  const mine = lootItems().filter((i) => owned.has(i.id)).sort((x, y) => x.weight - y.weight || x.name.localeCompare(y.name, 'pt'));
+  const slots = [0, 1, 2].map((i) => {
+    const it = itemById(wheelPick[i]);
+    return `<button type="button" class="wheel-slot${it ? ' fill' : ''}" data-wheel-slot="${i}">${it ? `${it.emoji}<br>${esc(it.name)}` : 'vazia'}</button>`;
+  }).join('');
+  const picks = mine.map((i) => `<button type="button" class="loot-chip${wheelPick.includes(i.id) ? ' pick' : ''}" data-wheel-pick="${i.id}">${i.emoji} ${esc(i.name)}</button>`).join('');
+  const wheel = `<div class="wheel-box"><div class="chal-head"><b>🎡 Roleta</b></div><div class="wheel-slots">${slots}</div>`
+    + (mine.length < 3 ? '<p class="closet-note">Precisa de 3 skins na mochila.</p>' : `<div class="loot-catalog">${picks}</div>`)
+    + `<p id="closetWheelReel" class="wheel-reel" hidden></p>`
+    + `<button type="button" id="closetSpin" class="ticket-btn"${wheelPick.length === 3 ? '' : ' disabled'}>${wheelPick.length === 3 ? 'GIRAR A ROLETA' : 'ESCOLHA 3 SKINS'}</button></div>`;
   box.innerHTML = `<div class="chal-head"><b>${BOX_EMOJI} ${esc(BOX_NAME)}</b> <span>${n} fechado${n === 1 ? '' : 's'}</span></div>`
-    + `<p class="closet-note">${esc(BOX_LINE)}</p>`
     + `<button type="button" id="closetOpenBox" class="ticket-btn"${n ? '' : ' disabled'}>${n ? 'ABRIR UM CAIXOTE' : 'SEM CAIXOTE AGORA'}</button>`
-    + `<ul class="loot-odds">${odds}</ul>${catalog}`;
+    + wheel + catalog;
 }
 function renderChal() {
   const c = getChal(), box = $('closetChal');
@@ -186,7 +195,8 @@ function askBuy(it) {
   $('closetBuyAsk').classList.remove('hidden');
   $('closetBuyNo').focus();
 }
-function closeCloset() { clearInterval(chalTimer); closeAsk(); $('closetModal').classList.add('hidden'); trial = null; stopDance(); stopThree(); }
+function closeWheelAsk() { pendingWheel = null; $('closetBuyAsk').classList.add('hidden'); }
+function closeCloset() { clearInterval(chalTimer); closeAsk(); pendingWheel = null; $('closetModal').classList.add('hidden'); trial = null; stopDance(); stopThree(); }
 async function finishBuy(it) {
   busy = true; msg('Comprando…'); const r = await buyItem(it.id); busy = false;
   if (r.error) msg(r.error); else {
@@ -205,6 +215,11 @@ async function onClick(e) {
   if (pendingBuy) {
     if (t.id === 'closetBuyAsk' || t.closest('#closetBuyNo')) { closeAsk(); return; }
     if (t.closest('#closetBuyYes')) { const it = pendingBuy; closeAsk(); await finishBuy(it); return; }
+    return;
+  }
+  if (pendingWheel) {
+    if (t.id === 'closetBuyAsk' || t.closest('#closetBuyNo')) { closeWheelAsk(); return; }
+    if (t.closest('#closetBuyYes')) { const ids = pendingWheel; closeWheelAsk(); await finishWheel(ids); return; }
     return;
   }
   const sw = t.closest('[data-shirt],[data-pants]');
@@ -235,6 +250,15 @@ async function onClick(e) {
     return;
   }
   if (t.closest('#closetOpenBox')) { await finishOpen(); return; }
+  const wp = t.closest('[data-wheel-pick]');
+  if (wp) {
+    const id = wp.dataset.wheelPick, at = wheelPick.indexOf(id);
+    if (at >= 0) wheelPick.splice(at, 1); else if (wheelPick.length < 3) wheelPick.push(id);
+    renderBox(); return;
+  }
+  const ws = t.closest('[data-wheel-slot]');
+  if (ws && wheelPick[+ws.dataset.wheelSlot]) { wheelPick.splice(+ws.dataset.wheelSlot, 1); renderBox(); return; }
+  if (t.closest('#closetSpin')) { askWheel(); return; }
   const kb = t.closest('[data-knife]');
   if (kb) {
     const id = kb.dataset.knife;
@@ -287,6 +311,39 @@ async function finishOpen() {
   if (r.error) { msg(r.error); return; }
   msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
   render(); showReveal(r);
+}
+function askWheel() {
+  if (wheelPick.length !== 3) return;
+  const names = wheelPick.map((id) => { const it = itemById(id); return it ? `${it.emoji} ${it.name}` : id; });
+  pendingWheel = wheelPick.slice();
+  $('closetBuyAskText').textContent = `Girar a roleta com ${names.join(', ')}? Elas saem da mochila.`;
+  $('closetBuyAsk').classList.remove('hidden');
+  $('closetBuyNo').focus();
+}
+async function finishWheel(ids) {
+  const prev = getAccount() || {}, prevKnife = prev.knife || '', prevSniper = prev.sniper || '', prevGuns = { ...(prev.guns || {}) };
+  busy = true; msg('Girando…');
+  const reel = document.getElementById('closetWheelReel'), pool = lootItems();
+  let spinning = true;
+  const ticks = (async () => {
+    let n = 0;
+    while (spinning && reel) {
+      const it = pool[n % pool.length];
+      reel.hidden = false; reel.textContent = `${it.emoji} ${it.name}`;
+      n += 1; await new Promise((res) => setTimeout(res, 60));
+    }
+  })();
+  const r = await spinWheel(ids);
+  spinning = false; await ticks; busy = false;
+  if (r.error) { if (reel) reel.hidden = true; msg(r.error); return; }
+  wheelPick = [];
+  const nowA = getAccount() || {};
+  if (prevKnife && prevKnife !== (nowA.knife || '')) document.dispatchEvent(new CustomEvent('docao-knife-pick', { detail: '' }));
+  if (prevSniper && prevSniper !== (nowA.sniper || '')) document.dispatchEvent(new CustomEvent('docao-sniper-pick', { detail: '' }));
+  for (const [key, gid] of Object.entries(prevGuns)) if (gid && gid !== ((nowA.guns || {})[key] || '')) document.dispatchEvent(new CustomEvent('docao-gun-pick', { detail: { key, id: '' } }));
+  msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
+  render(); showReveal(r);
+  if (!r.dupe && r.item) $('closetRevealText').textContent = `A roleta parou em ${r.item.emoji} ${r.item.name}. Peso ${r.item.weight}. Já está na mochila.`;
 }
 let wardrobeDirty = false, wardrobeCustom = false, wardrobeSniper = '', wardrobeGuns = {};
 const wardrobeNote = (t, ok = false) => { const m = $('wardrobeOwnedMsg'); if (!m) return; m.textContent = t || ''; m.style.color = ok ? '#d5c597' : '#ffb4a8'; };
@@ -388,7 +445,7 @@ export function initCloset() {
   $('closetLogin').onclick = () => { closeCloset(); $('acctBtn').click(); };
   $('closetTabLook').onclick = () => setTab('look'); $('closetTabShop').onclick = () => setTab('shop'); $('closetTabChal').onclick = () => setTab('chal'); $('closetTabBox').onclick = () => setTab('box');
   $('closetModal').addEventListener('click', onClick);
-  $('closetModal').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { if (!$('closetReveal').classList.contains('hidden')) { $('closetReveal').classList.add('hidden'); return; } if (pendingBuy) closeAsk(); else closeCloset(); } });
+  $('closetModal').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { if (!$('closetReveal').classList.contains('hidden')) { $('closetReveal').classList.add('hidden'); return; } if (pendingBuy) closeAsk(); else if (pendingWheel) closeWheelAsk(); else closeCloset(); } });
   $('closetModal').addEventListener('mousedown', (e) => e.stopPropagation());
   const ownedBox = $('wardrobeOwned'); if (ownedBox) ownedBox.addEventListener('click', onWardrobeClick);
   document.addEventListener('docao-skin-catalog', () => { wardrobeDirty = false; wardrobeCustom = false; refreshWardrobeLook(); });

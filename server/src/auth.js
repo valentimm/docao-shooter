@@ -8,7 +8,7 @@
 import { cleanNick, nickKey, nickError, passError } from '../../shared/nick.js';
 import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
-import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, openBox } from './shop.js';
+import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, openBox, spinWheel } from './shop.js';
 
 const ITERS = 100000; // teto do WebCrypto do Workers
 const SESSION_TTL = 30 * 24 * 3600; // s
@@ -112,7 +112,7 @@ async function myStats(env, id) {
 // devolve Response ou null (rota não é de conta). json(obj, status, extraHeaders)
 export async function handleAccountRoute(req, env, url, json) {
   const p = url.pathname, m = req.method;
-  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/rank')) return null;
+  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/wheel' || p === '/api/rank')) return null;
   if (!env.DB) return json({ error: 'Contas indisponíveis no momento. Você pode jogar como convidado.' }, 503);
   const ip = req.headers.get('CF-Connecting-IP') || 'local';
   try {
@@ -197,6 +197,12 @@ export async function handleAccountRoute(req, env, url, json) {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
       const r = await openBox(env, a.id);
       return r.status === 200 ? json({ ok: true, dupe: r.dupe, item: r.item, coins: r.coins, gain: r.gain, boxes: r.boxes }) : json({ error: r.error }, r.status);
+    }
+    if (p === '/api/lootbox/wheel' && m === 'POST') {
+      const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const b = await readJson(req); if (!b || !Array.isArray(b.items)) return json({ error: 'Pedido inválido' }, 400);
+      const r = await spinWheel(env, a.id, b.items);
+      return r.status === 200 ? json({ ok: true, dupe: r.dupe, item: r.item, coins: r.coins, gain: r.gain, spent: r.spent, knife: r.knife, sniper: r.sniper, guns: r.guns }) : json({ error: r.error }, r.status);
     }
     if (p === '/api/shop/buy' && m === 'POST') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
