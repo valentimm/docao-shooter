@@ -7,7 +7,7 @@
 import { SKINS, skinOk } from '../../skins.js';
 import { ITEMS, itemById, parseLook, lookItemIds, isFreeItem, knifeKind, sniperKind, gunKey, parseGuns, GUN_EQUIP_KEYS, EARN } from '../../shared/closet.js';
 import { spDay, parseChal, applyChal, chalView } from '../../shared/challenges.js';
-import { rollBox, dupeCoins, BOX_NAME } from '../../shared/lootbox.js';
+import { rollBox, dupeCoins, BOX_NAME, wheelInputs, rollWheel } from '../../shared/lootbox.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 export const dayNow = () => Math.floor(now() / 86400);
@@ -163,6 +163,67 @@ export async function openBox(env, id) {
   }
   const row = await env.DB.prepare('SELECT coins, boxes FROM accounts WHERE id = ?').bind(id).first();
   return { status: 200, dupe, item: dropView(it), coins: (row && row.coins) | 0, gain, boxes: (row && row.boxes) | 0 };
+}
+
+// A skin equipada só sai se ela foi uma das três e não voltou como prêmio.
+function wheelEquip(current, spent, prizeId, dupe) {
+  if (!current || !spent.includes(current)) return current || null;
+  return !dupe && current === prizeId ? current : null;
+}
+
+// Gasta 3 skins e entrega uma de peso >= o maior das três. Repetida (que não foi gasta) vira Docoins.
+export async function spinWheel(env, id, ids) {
+  const picked = wheelInputs(ids);
+  if (!picked) return { status: 400, error: 'Escolha 3 skins diferentes da mochila' };
+  const spent = picked.map((it) => it.id);
+  const inv = await env.DB.prepare('SELECT item FROM inventory WHERE account_id = ?').bind(id).all();
+  const owned = new Set((inv.results || []).map((x) => x.item));
+  if (!spent.every((sid) => owned.has(sid))) return { status: 409, error: 'Uma dessas skins não está na mochila' };
+  const it = rollWheel(picked, cryptoRand);
+  if (!it) return { status: 500, error: 'A roleta veio vazia' };
+  const dupe = owned.has(it.id) && !spent.includes(it.id);
+  const gain = dupe ? dupeCoins(it.weight) : 0;
+  const acc = await env.DB.prepare('SELECT knife, sniper, guns FROM accounts WHERE id = ?').bind(id).first();
+  const guns = parseGuns(acc && acc.guns);
+  for (const k of GUN_EQUIP_KEYS) if (!wheelEquip(guns[k], spent, it.id, dupe)) delete guns[k];
+  const gunsJson = Object.keys(guns).length ? JSON.stringify(guns) : null;
+  const knife = wheelEquip(acc && acc.knife, spent, it.id, dupe);
+  const sniper = wheelEquip(acc && acc.sniper, spent, it.id, dupe);
+  const del = env.DB.prepare(
+    `DELETE FROM inventory WHERE account_id = ?1 AND item IN (?2, ?3, ?4)
+     AND (SELECT COUNT(*) FROM inventory WHERE account_id = ?1 AND item IN (?2, ?3, ?4)) = 3`
+  ).bind(id, spent[0], spent[1], spent[2]);
+  let wrote;
+  try {
+    wrote = dupe
+      ? await env.DB.batch([del, env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1 AND changes() = 3').bind(id, gain)])
+      : await env.DB.batch([del, env.DB.prepare('INSERT INTO inventory (account_id, item, acquired_at) SELECT ?1, ?2, ?3 WHERE changes() = 3').bind(id, it.id, now())]);
+  } catch (e) {
+    return { status: 409, error: 'Não deu pra girar. Tente de novo.' };
+  }
+  const deleted = (wrote[0].meta && wrote[0].meta.changes) | 0;
+  const applied = (wrote[1].meta && wrote[1].meta.changes) | 0;
+  if (deleted !== 3) return { status: 409, error: 'Uma dessas skins não está na mochila' };
+  if (!dupe && !applied) {
+    try { await env.DB.prepare('INSERT INTO inventory (account_id, item, acquired_at) VALUES (?1, ?2, ?3)').bind(id, it.id, now()).run(); } catch (e) { /* já entrou */ }
+  } else if (dupe && !applied && gain) {
+    await env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1').bind(id, gain).run();
+  }
+  const gone = spent.filter((sid) => dupe || sid !== it.id);
+  await env.DB.prepare(
+    `UPDATE accounts SET knife = ?2, sniper = ?3, guns = ?4
+     WHERE id = ?1
+       AND EXISTS (SELECT 1 FROM inventory WHERE account_id = ?1 AND item = ?5)
+       AND (?6 = '' OR NOT EXISTS (SELECT 1 FROM inventory WHERE account_id = ?1 AND item = ?6))
+       AND (?7 = '' OR NOT EXISTS (SELECT 1 FROM inventory WHERE account_id = ?1 AND item = ?7))
+       AND (?8 = '' OR NOT EXISTS (SELECT 1 FROM inventory WHERE account_id = ?1 AND item = ?8))`
+  ).bind(id, knife, sniper, gunsJson, it.id, gone[0] || '', gone[1] || '', gone[2] || '').run();
+  const done = await env.DB.prepare('SELECT coins, boxes, knife, sniper, guns FROM accounts WHERE id = ?').bind(id).first() || {};
+  return {
+    status: 200, dupe, item: dropView(it), spent, gain: dupe ? gain : 0,
+    coins: (done.coins) | 0, boxes: (done.boxes) | 0,
+    knife: done.knife || null, sniper: done.sniper || null, guns: parseGuns(done.guns),
+  };
 }
 
 // Equipa pistola, P90, carabina ou fuzil. '' tira a pintura. A Torresmo e a faca têm as rotas delas.
