@@ -23,6 +23,8 @@ await page.screenshot({ path: '/tmp/hide-prep.png' });
 await G(() => { window.__hide.S.phaseEnd = 0; }); await wait(400);
 s = await st(); ok(s.phase === 'live', 'caçada liberada');
 await page.screenshot({ path: '/tmp/hide-live.png' });
+await G(() => { window.__hide.S.whistleAt = 0.001; }); await wait(400);
+ok(await G(() => window.__hideWhistles >= 1 && /APITO/.test(document.getElementById('centermsg').textContent)), 'apito obrigatório dispara na caçada com aviso APITO!');
 await G(() => { for (const e of window.__hide.entities) if (e.hider) { e.alive = false; e.respawnAt = Infinity; } }); await wait(400);
 s = await st(); ok(s.phase === 'end' && s.score.reduce((a, b) => a + b) === 1, 'rodada fecha com ponto dos Caçadores');
 const before = s.ents.map((e) => e.hider);

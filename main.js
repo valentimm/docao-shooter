@@ -7863,7 +7863,8 @@ function updateHideOffline(dt) {
   h.classList.remove('hidden'); h.style.display = state === 'playing' ? '' : 'none';
   const role = player ? ROLE_NAMES[player.hider ? 1 : 0] : '';
   const fase = hideS.phase === 'prep' ? 'Escondendo' : hideS.phase === 'live' ? 'Caçada' : hideS.phase === 'end' ? 'Fim da rodada' : '';
-  h.innerHTML = `Rodada ${hideS.round} · <b>${role}</b> · ${fase} ${fmtT(left)} · 🙈 ${hidersAlive(hideS, entities)} vivos · <span style="color:${TEAM_COLORS[0]}">${hideS.score[0]}</span> × <span style="color:${TEAM_COLORS[1]}">${hideS.score[1]}</span>${player && player.hider && player.prop ? ` · ${PROP_NAMES[player.prop]} (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira)` : ''}`;
+  const wl = hideS.phase === 'live' && hideS.whistleAt ? hideS.whistleAt - gameTime : 99;
+  h.innerHTML = `Rodada ${hideS.round} · <b>${role}</b> · ${fase} ${fmtT(left)} · 🙈 ${hidersAlive(hideS, entities)} vivos · ${wl <= HIDE.WHISTLE_WARN ? `<b style="color:#ffd27a">📯 apito em ${Math.ceil(wl)}</b> · ` : hideS.phase === 'live' ? `📯 ${Math.ceil(wl)} s · ` : ''} <span style="color:${TEAM_COLORS[0]}">${hideS.score[0]}</span> × <span style="color:${TEAM_COLORS[1]}">${hideS.score[1]}</span>${player && player.hider && player.prop ? ` · ${PROP_NAMES[player.prop]} (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira)` : ''}`;
 }
 function hideNewRound() { // papéis já trocaram em startHideRound: limpa projéteis e todo mundo renasce
   clearTacticals(); for (const n of grenades) scene.remove(n.mesh); grenades.length = 0; for (const r of rockets) scene.remove(r.mesh); rockets.length = 0;
@@ -7872,6 +7873,11 @@ function hideNewRound() { // papéis já trocaram em startHideRound: limpa proj�
 function onHideEvent(ev) {
   const k = ev[0], me = player && player.hider;
   if (k === 'round') bombBanner(`Rodada ${ev[1]} · ${me ? 'VOCÊ SE ESCONDE' : 'VOCÊ CAÇA'}`, me ? `Vire um objeto (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira) e se esconda em ${HIDE.PREP} s` : `Time ${TEAM_NAMES[ev[2]]} está se escondendo · aguarde ${HIDE.PREP} s`, TEAM_COLORS[player ? player.team : 0], 4);
+  else if (k === 'whistle') { // apito obrigatório: cada Escondido vivo apita de onde está
+    window.__hideWhistles = (window.__hideWhistles || 0) + 1;
+    for (const e of entities) if (e.hider && e.alive) { const v = e === player ? 1 : distVol(e.pos); tone('sine', 1500, 2300, 0.18, 0.22 * v); tone('sine', 2300, 1700, 0.2, 0.22 * v, 0.2); hideSeen(e); }
+    flashMsg(me ? '📯 APITO! Você apitou — os Caçadores ouviram' : '📯 APITO! Escute de onde veio');
+  }
   else if (k === 'go') { flashMsg(me ? 'Os Caçadores foram soltos! Fique quietinho 🤫' : 'VALENDO! Ache os objetos-Docão 🔫'); sfx.pickup(); }
   else if (k === 'win') { const mine = player && player.team === ev[1]; bombBanner(`${TEAM_NAMES[ev[1]]} venceu a rodada!`, `${ev[2] === 'time' ? 'O tempo acabou e sobrou Escondido ⏱️' : 'Todos os Escondidos foram achados 🔎'} · Vermelho ${ev[3]} × ${ev[4]} Azul`, TEAM_COLORS[ev[1]], HIDE.END - 0.3); (mine ? sfx.kill : sfx.die)(0.7); }
 }

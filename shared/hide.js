@@ -7,9 +7,11 @@
 //   • Caçadores: Docões armados normais. Na preparação (PREP s) ficam presos no spawn e com a tela preta.
 //   • Rodada: PREP s escondendo → ROUND s de caçada.
 //     Todos os Escondidos mortos → ponto dos Caçadores. Tempo acabou com 1+ Escondido vivo → ponto dos Escondidos.
+//   • APITO OBRIGATÓRIO: na caçada, WHISTLE_FIRST s depois do início e então a cada WHISTLE s, todo Escondido vivo apita
+//     (som de onde ele está + aviso "APITO!"). Não dá pra cancelar. Na preparação não apita. Evento: ['whistle'].
 //   • Primeiro time a WIN pontos vence (melhor de 5). END s de faixa entre rodadas.
 // ============================================================
-export const HIDE = { mode: 'hide', WIN: 3, PREP: 25, ROUND: 150, END: 5, SPEED: 0.75, SPOT_R: 9, KEY: 'KeyE', KEY_LABEL: 'E', ROT_KEY: 'KeyR', ROT_LABEL: 'R' };
+export const HIDE = { mode: 'hide', WIN: 3, PREP: 25, ROUND: 150, END: 5, SPEED: 0.75, SPOT_R: 9, WHISTLE: 25, WHISTLE_FIRST: 20, WHISTLE_WARN: 5, KEY: 'KeyE', KEY_LABEL: 'E', ROT_KEY: 'KeyR', ROT_LABEL: 'R' };
 export const isHide = (m) => m === HIDE.mode;
 export const ROLE_NAMES = ['Caçadores', 'Escondidos'];
 // objetos que dá pra virar (o cliente tem mesh simples pra cada um, no formato dos props de maps.js)
@@ -35,10 +37,11 @@ export function stepHide(S, ents, t, rnd) {
   const ev = [];
   if (!S || S.phase === 'over') return ev;
   const hT = hiderTeam(S.round), cT = 1 - hT;
-  if (S.phase === 'prep' && t >= S.phaseEnd) { S.phase = 'live'; S.phaseEnd = t + HIDE.ROUND; ev.push(['go']); }
+  if (S.phase === 'prep' && t >= S.phaseEnd) { S.phase = 'live'; S.phaseEnd = t + HIDE.ROUND; S.whistleAt = t + HIDE.WHISTLE_FIRST; ev.push(['go']); }
   if (S.phase === 'live' || S.phase === 'prep') {
     const anyHider = ents.some((e) => e.hider);
     const win = (team, why) => { S.score[team]++; S.phase = 'end'; S.phaseEnd = t + HIDE.END; ev.push(['win', team, why, S.score[0], S.score[1]]); };
+    if (S.phase === 'live' && S.whistleAt && t >= S.whistleAt && t < S.phaseEnd) { S.whistleAt += HIDE.WHISTLE; ev.push(['whistle']); } // obrigatório
     if (anyHider && hidersAlive(S, ents) === 0) win(cT, 'caught');
     else if (S.phase === 'live' && t >= S.phaseEnd) win(hT, 'time');
   } else if (S.phase === 'end' && t >= S.phaseEnd) {
