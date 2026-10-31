@@ -10,7 +10,7 @@ import './costumes.js';
 import { getAccount, getItems, getEarn, getChal, onAccount, refreshStats, equipLook, buyItem, equipKnife, equipSniper, equipGun, openBox } from './account.js';
 import { CHAL_PER_DAY, TIERS } from './shared/challenges.js';
 import { COLORS, SLOTS, ITEMS, SHOP_TEAMS, CURRENCY, COIN_ICON, SHOP_NAME, SHOP_EMOJI, SHOP_BUTTON, DEFAULT_LOOK, COSTUME_SLOT, DANCE_SLOT, KNIFE_SLOT, KNIFE_MODELS, KNIFE_COLORS, GUN_GROUPS, encodeLook, parseLook, itemById, itemForDance, isFreeItem, teamItems } from './shared/closet.js';
-import { BOX_NAME, BOX_EMOJI, BOX_LINE, ODDS, dupeCoins, lootItems } from './shared/lootbox.js';
+import { BOX_NAME, BOX_EMOJI, lootItems } from './shared/lootbox.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -139,16 +139,14 @@ let chalTimer = 0, chalRefreshing = false;
 function renderBox() {
   const box = $('closetBox'); if (!box) return;
   const a = getAccount(), n = a ? a.boxes | 0 : 0, owned = new Set(getItems());
-  const odds = ODDS.map((o) => `<li><b>${(o.bp / 100).toLocaleString('pt-BR')}%</b> peso ${o.weight} · repetida vira ${COIN_ICON} ${dupeCoins(o.weight)}</li>`).join('');
   const weights = [...new Set(lootItems().map((i) => i.weight))].sort((x, y) => x - y);
   const catalog = weights.map((w) => {
     const list = lootItems().filter((i) => i.weight === w).map((i) => `<span class="loot-chip${owned.has(i.id) ? ' mine' : ''}">${i.emoji} ${esc(i.name)}</span>`).join('');
     return `<div class="closet-sec"><h4>Peso ${w}</h4><div class="loot-catalog">${list}</div></div>`;
   }).join('');
   box.innerHTML = `<div class="chal-head"><b>${BOX_EMOJI} ${esc(BOX_NAME)}</b> <span>${n} fechado${n === 1 ? '' : 's'}</span></div>`
-    + `<p class="closet-note">${esc(BOX_LINE)}</p>`
     + `<button type="button" id="closetOpenBox" class="ticket-btn"${n ? '' : ' disabled'}>${n ? 'ABRIR UM CAIXOTE' : 'SEM CAIXOTE AGORA'}</button>`
-    + `<ul class="loot-odds">${odds}</ul>${catalog}`;
+    + catalog;
 }
 function renderChal() {
   const c = getChal(), box = $('closetChal');

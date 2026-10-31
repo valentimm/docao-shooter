@@ -1835,7 +1835,6 @@ body.deadgray #game{filter:grayscale(.68) brightness(.72) contrast(1.06);transit
 .closet-card b{display:block;font:900 13px var(--font)}
 .closet-card .price{margin:4px 0;color:var(--red);font-weight:900}
 .closet-card .price.free{color:#1d6b3a}
-.loot-odds{margin:8px 0 10px;padding-left:18px;font:700 13px var(--font);color:var(--ink)}
 .loot-catalog{display:flex;flex-wrap:wrap;gap:6px}
 .loot-chip{padding:4px 6px;border:2px solid #9f8b66;border-radius:3px;background:#fff5d3;font:700 12px var(--font);color:var(--ink)}
 .loot-chip.mine{border-color:#1d6b3a;background:#e7f3d9}

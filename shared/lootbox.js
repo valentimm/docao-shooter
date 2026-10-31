@@ -8,7 +8,6 @@ import { ITEMS } from './closet.js';
 export const BOX_ID = 'safra1';
 export const BOX_NAME = 'Caixote da Primeira Safra';
 export const BOX_EMOJI = '🌽';
-export const BOX_LINE = 'Primeira temporada da granja. Um caixote ao entrar no dia e mais um a cada desafio diário feito.';
 // bp = pontos em 10.000 (72,5% = 7250). A soma é 10.000.
 export const ODDS = [
   { weight: 500, bp: 7250 },
