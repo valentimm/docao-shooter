@@ -56,6 +56,7 @@ import { EGG, eggSpeed, eggDmg, stepEgg } from './shared/egg.js';
 import { killIcon, weaponSvg } from './killfeed-icons.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, GRAV, JUMP, SPEED, BOT_SPEED, STEP, RADIUS, HEIGHT, EYE, WEAPONS, PRIMARIES, BOT_PRIMARIES, SECONDARIES, MELEES, CATEGORIES, PISTOL, KNIFE, SABER, UZI, P90, NAIL, SEMI, CROSS, BOW, FAMAS, DISC_W, SABER2, CORN_W, EGG_W, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, LMG, COMMANDO, REV, REV2, TAMPA, MELEE, SABER_COLORS, W_NADE, NADE, WEAPON_SHORT, BOT_DEFS, BOT_RANGE, TAG_COLORS, RED_DOT, applyFlinch, decayFlinch, GOLD_KNIFE, isKnife } from './shared/rules.js';
 import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, resetArmsRace, equipArmsRace, armsRaceKill } from './shared/arms-race.js';
+import { HIDE, isHide, HIDE_PROPS, PROP_NAMES, ROLE_NAMES, hiderTeam, newHideState, startHideRound, stepHide, hideFrozen, hidersAlive, nextProp } from './shared/hide.js';
 import { X1, isX1, rollX1Weapon, x1SpawnSide } from './shared/x1.js';
 import { normBotDiff, botDiffMeta, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot, scopeDelay } from './shared/bot-difficulty.js';
 import { SHIELD, isShieldW, shieldRaised, shieldOnBack, resetShield, shieldStage, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from './shared/shield.js';
@@ -360,8 +361,9 @@ document.querySelectorAll('[data-reduced-anim]').forEach((el) => {
 });
 let mode = 'dm', teamScore = [0, 0], zone = null, zoneT = 0; // modo de jogo: 'dm' (mata-mata) | 'dom' (Dominação) | 'explore' (mapa vazio) | 'treino' | 'bomb' (Bomba, protótipo)
 let botDiff = 'ceva'; // dificuldade dos bots (shared/bot-difficulty.js); a preferência entra mais abaixo, quando o menu existe
+let hideS = null, hideBlindEl = null; // Docão Escondido (shared/hide.js): estado da rodada · tela preta dos Caçadores na preparação
 let bombS = null, bombL = null; // Modo Bomba: estado da rodada (shared/bomb.js) e layout do mapa (sites A/B, lados)
-const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || m === 'explore' || m === TRAIN.mode || m === INV.mode || isX1(m) ? m : 'dm');
+const MODE_OK = (m) => (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'bomb' || m === 'explore' || m === TRAIN.mode || m === INV.mode || isX1(m) ? m : 'dm');
 const armsMode = () => isArmsRace(mode);
 const respawnDelay = () => armsMode() ? ARMS_RACE.respawnTime : RESPAWN_TIME;
 let armsWinner = null;
@@ -375,7 +377,8 @@ try { selectedDance = normDance(localStorage.getItem('docao.dance')); } catch (e
 const myDance = () => { if (!isPaidDance(selectedDance)) return selectedDance; const d = PAID_DANCE_LIST.find((x) => x.id === selectedDance); return d && getAccount() && getItems().includes(d.item) ? selectedDance : 'moonwalk'; };
 let matchLimits = { weapons: null, powers: null }; // cópia dos limites no instante em que a partida solo começa
 let rulesLive = false;
-const teamMode = () => mode === 'dom' || armsMode() || mode === 'bomb'; // modos com times
+const hideMode = () => isHide(mode);
+const teamMode = () => mode === 'dom' || armsMode() || mode === 'bomb' || hideMode(); // modos com times
 const training = () => isTraining(mode); // Estande do Docão: bots viram alvos
 const exploreMode = () => mode === 'explore';
 const invMode = () => isInvasion(mode); // Invasão 🎃: co-op contra zumbis (shared/invasion.js)
@@ -480,6 +483,7 @@ function respawn(e) {
   e.mgSpin = 0; e.mgHeat = 0; e.mgHot = false; e.mgWant = false; e.mgFiring = false; // minigun: renasce fria e parada
   if (armsMode()) equipArmsLocal(e);
   else if (x1Mode()) equipX1Local(e, x1Gun);
+  else if (hideS && e.hider) { e.slots = [KNIFE]; e.primary = e.secondary = e.melee = KNIFE; e.nades = e.smokeNades = e.stunNades = 0; setWeapon(e, KNIFE); }
   else {
     const hand = !e.isPlayer ? e.primary : spawnHold === 'melee' ? e.melee : spawnHold === 'secondary' ? e.secondary : e.primary;
     setWeapon(e, e.slots.includes(hand) ? hand : e.primary);
@@ -487,6 +491,7 @@ function respawn(e) {
   e.yaw = Math.atan2(-e.pos.x, -e.pos.z) + Math.PI; e.bonk = false; // olha pro centro
   if (e.model) { e.model.group.visible = true; e.model.group.scale.set(1, 1, 1); e.target = null; e.wp = null; e.path = null; e.yaw = Math.atan2(-e.pos.x, -e.pos.z); }
   else { e.pitch = 0; e.flinch = null; eggSplatUntil = 0; $('stamp').classList.remove('show'); onPlayerRespawn(); }
+  if (hideS && e.hider && !e.isPlayer) hidePlaceBot(e);
   if (e.dummy) { e.invulnUntil = gameTime; e.slots = [0, PISTOL, KNIFE]; placeDummy(e); setWeapon(e, PISTOL); }
 }
 // Treino: posição do alvo (parado ou no trilho), sempre de frente pra linha de tiro
@@ -1457,6 +1462,7 @@ function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx
   if (a && a !== t && !friends(a, t)) a.kills++;
   addKillFeed(a, t, wIdx, head, back, label, fx);
   sfx.die(t.isPlayer ? 1 : distVol(t.pos));
+  if (hideS && t.hider) { t.respawnAt = Infinity; if (t.model) t.model.group.visible = true; } // Docão Escondido: achado = fora da rodada (e o Docão aparece no lugar do objeto)
   if (t.isPlayer && invMode() && inv && !inv.onPlayerDeath(t)) t.respawnAt = Infinity; // Invasão: sem vidas = assiste até alguém usar a Ressurreição
   if (a && a.isPlayer && a !== t) { sfx.kill(); if (!noReward) { notePlayerKill(t, head, fx); noteWeaponKill(a, wIdx); } }
   if (t.isPlayer) { if (a && a !== t) revengeName = a.name; showStamp(wIdx); onPlayerDeath(); }
@@ -2960,7 +2966,7 @@ function updateHud(dt) {
   const lead = entities.filter((e) => !e.zt).reduce((a, b) => (b.kills > a.kills ? b : a));
   const killGoal = x1Mode() ? X1.KILLS : KILL_LIMIT;
   const x1Name = x1Mode() && WEAPONS[x1Gun] ? ` · ${WEAPONS[x1Gun].short}` : '';
-  $('leader').textContent = armsMode() ? `Corrida Armada · Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.primary === GOLD_KNIFE ? '1 abate para vencer' : `${p.armsKills}/2 abates`}` : invMode() ? '' : exploreMode() ? 'Mapa vazio · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : x1Mode() ? (lead.kills ? `X1 · ${lead.name} ${lead.kills}/${killGoal}${x1Name}` : `X1 · primeiro a ${killGoal}${x1Name}`) : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${lead.name} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
+  $('leader').textContent = armsMode() ? `Corrida Armada · Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.primary === GOLD_KNIFE ? '1 abate para vencer' : `${p.armsKills}/2 abates`}` : invMode() ? '' : exploreMode() ? 'Mapa vazio · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : hideMode() ? `Docão Escondido (protótipo) · primeiro time a ${HIDE.WIN} rodadas vence` : x1Mode() ? (lead.kills ? `X1 · ${lead.name} ${lead.kills}/${killGoal}${x1Name}` : `X1 · primeiro a ${killGoal}${x1Name}`) : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${lead.name} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
   updateLeaderboard(dt); tickFeedback(dt);
   hurtLevel = Math.max(0, hurtLevel - dt * 2.5);
   { const left = p.alive ? eggSplatUntil - gameTime : 0, el = $('eggsplat'); if (el) { el.style.opacity = left > 0 ? Math.min(1, left / 0.5).toFixed(2) : '0'; if (left > 0) drawEggSplat(); } } // sujeira de ovo na tela: 2 s escorrendo, some no último meio segundo
@@ -4401,6 +4407,7 @@ function updatePlayer(dt) {
   if (!guiding && (keys.KeyD || keys.ArrowRight)) wish.add(right); if (!guiding && (keys.KeyA || keys.ArrowLeft)) wish.sub(right);
   p.useHold = !!(keys[BOMB.KEY] && p.alive && !emote.on); if (bombLock(p)) wish.set(0, 0, 0); // Bomba: parado na preparação e enquanto planta/desarma
   if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // faca corre; sabre anda normal; agachado anda mais devagar
+  if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
   if (p.shieldDashUntil > gameTime && !bombLock(p)) wish.copy(fwd).multiplyScalar(SHIELD.charge.speed); // investida curta, na direção da mira
   const acc = p.onGround ? 14 : 4;
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
@@ -4411,6 +4418,7 @@ function updatePlayer(dt) {
   stepRecoil(p, dt, gameTime);
   stepFlinch(dt);
   camera.position.set(p.pos.x, p.pos.y + eyeHeight(p) + bob, p.pos.z); camera.rotation.set(p.pitch, p.yaw, 0);
+  if (hideS && p.hider) hideThirdPerson(p); // Escondido: câmera em 3ª pessoa pra ver o próprio disfarce
   if (p.alive && p.stunUntil > gameTime) { camera.rotation.x += rand(-1, 1) * 0.012; camera.rotation.y += rand(-1, 1) * 0.012; } // levou choque: mira tremendo
   if (shake > 0) {
     if (!guiding) { camera.position.add(new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(shake * 0.25)); camera.rotation.z += rand(-1, 1) * shake * 0.05; }
@@ -4519,6 +4527,7 @@ function updateBot(b, dt) {
   }
   if (b.remote) { interpRemote(b); animateBot(b, dt); return; } // online: posição vem do servidor
   if (b.dummy) { placeDummy(b); const sp = b.travelV / Math.max(dt, 1e-3); b.vel.x = sp; animateBot(b, dt); b.vel.x = 0; return; } // Treino: não pensa nem atira
+  if (hideS && (b.hider || hideFrozen(hideS, b))) { b.vel.set(0, 0, 0); b.target = null; m.group.position.copy(b.pos); m.group.rotation.y = b.yaw; if (!b.hider) animateBot(b, dt); return; } // Docão Escondido: objeto não pensa; Caçador espera a preparação
   if (!online && bombFrozen(bombS)) { b.vel.set(0, 0, 0); b.useHold = false; animateBot(b, dt); return; } // Bomba: preparação
   if (b.frozen) { m.group.position.copy(b.pos); m.group.rotation.y = b.yaw; if (b.frozen === 'anim') animateBot(b, dt); return; } // usado só em testes ('anim': parado mas animando)
   finishReload(b);
@@ -4531,6 +4540,7 @@ function updateBot(b, dt) {
     for (const o of entities) {
       if (o === b || !o.alive || friends(o, b)) continue;
       const d = o.pos.distanceTo(b.pos);
+      if (hideS && o.hider && d > HIDE.SPOT_R && o !== b.lastAttacker && !(o.hideSeenUntil > gameTime)) continue; // objeto parado de longe não chama atenção
       const score = considerTarget(mind, d, { attacker: o === b.lastAttacker, player: !!o.isPlayer, hp: o.hp });
       if (score != null && score < bs && losClear(eye, center(o, 1.2)) && !smoked(eye, center(o, 1.2))) { best = o; bs = score; }
     }
@@ -5674,13 +5684,14 @@ function startGame(mapId) {
   if (training()) (currentMap.dummies || []).forEach((d, i) => { const b = makeEntity(d.name, false, SKINS[Math.floor(Math.random() * SKINS.length)].id, TAG_COLORS[i % TAG_COLORS.length]); b.dummy = d; entities.push(b); });
   else { const n = x1Mode() ? 1 : exploreMode() || invMode() ? 0 : (parseInt($('botCount').value, 10) || 5);
     for (let i = 0; i < n; i++) { const b = makeEntity(BOT_DEFS[i].name, false, SKINS[Math.floor(Math.random() * SKINS.length)].id, TAG_COLORS[i % TAG_COLORS.length]); b.nextSecondary = pickBotSecondary(null); entities.push(b); } }
-  endBomb(); entities.forEach((e, i) => (e.id = i + 1));
+  endBomb(); endHide(); entities.forEach((e, i) => (e.id = i + 1));
   if (teamMode()) { // seu time (escolhido no menu ou automático); bots completam os dois lados
     applyTeam(player, menuTeam >= 0 ? menuTeam : Math.random() < 0.5 ? 0 : 1);
     for (const b of entities) if (!b.isPlayer) { const c = [0, 0]; for (const x of entities) if (x.team === 0 || x.team === 1) c[x.team]++; applyTeam(b, smallerTeam(c)); }
     if (mode === 'dom') zone = newZoneState(pickZone(nav));
   } else for (const e of entities) applyTeam(e, -1);
   const bombEv = mode === 'bomb' ? startBombOffline() : [];
+  const hideEv = hideMode() ? startHideOffline() : [];
   for (const e of entities) e.caps = 0;
   for (const e of entities) { e.alive = false; }
   if (x1Mode()) { x1Gun = rollX1Weapon(-1, x1WeaponOk); entities.forEach((e, i) => { e.x1Side = i % 2; }); }
@@ -5690,8 +5701,9 @@ function startGame(mapId) {
   showcase.visible = false;
   $('killfeed').innerHTML = '';
   const diffWord = botDiffMeta(botDiff).label;
-  flashMsg(armsMode() ? `Corrida Armada · time ${TEAM_NAMES[player.team]} · 2 abates por etapa · V rouba etapa` : mode === 'bomb' ? `Bomba · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : invMode() ? `Invasão 🎃 · horda ${diffWord} · ${currentMap.name} · ${INV.WAVES} waves · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun].short}` : exploreMode() ? `Exploração · ${currentMap.name} · , . ou [ ] trocam a primária` : teamMode() ? `Dominação · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : training() ? 'Estande do Docão · B/N/M trocam a arma' : `Mapa: ${currentMap.name} · bots ${diffWord}`); refreshModeHud();
+  flashMsg(armsMode() ? `Corrida Armada · time ${TEAM_NAMES[player.team]} · 2 abates por etapa · V rouba etapa` : mode === 'bomb' ? `Bomba · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : hideMode() ? `Docão Escondido (protótipo) · time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : invMode() ? `Invasão 🎃 · horda ${diffWord} · ${currentMap.name} · ${INV.WAVES} waves · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun].short}` : exploreMode() ? `Exploração · ${currentMap.name} · , . ou [ ] trocam a primária` : teamMode() ? `Dominação · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : training() ? 'Estande do Docão · B/N/M trocam a arma' : `Mapa: ${currentMap.name} · bots ${diffWord}`); refreshModeHud();
   for (const ev of bombEv) onBombEvent(ev);
+  for (const ev of hideEv) onHideEvent(ev);
   $('menu').classList.add('hidden'); $('gameover').classList.add('hidden'); $('pause').classList.add('hidden'); $('hud').classList.remove('hidden'); $('socialHud').classList.remove('hidden'); $('voiceHud').classList.add('hidden'); chatSetRoom(true); // offline: o chat fica (pros códigos), sem voz $('overChat').classList.add('hidden');
   applyHeldKnife(getAccount() && getAccount().knife);
   applyHeldSniper(getAccount() && getAccount().sniper);
@@ -5902,6 +5914,10 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyB') { if (bombPick) closeBombPick(); else openBombPick(); return; }
     if (bombPick && e.code === 'KeyG') { deathUnlock = true; if (document.pointerLockElement) document.exitPointerLock(); return; } // solta o mouse pra clicar
   }
+  if (state === 'playing' && hideS && player && player.alive && player.hider && !e.repeat && (e.code === HIDE.KEY || e.code === HIDE.ROT_KEY)) { // Escondido: E troca o objeto · R gira
+    if (e.code === HIDE.KEY) { player.prop = nextProp(player.prop); flashMsg(`Agora você é: ${PROP_NAMES[player.prop]}`); } else player.propRot = ((player.propRot || 0) + Math.PI / 4) % (Math.PI * 2);
+    hideSeen(player); return;
+  }
   if (tryOpenChat(e)) { e.preventDefault(); return; }
   if (e.code === 'KeyH' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && state === 'playing') { // H: liga/desliga as vozes da granada no meio da partida (mesma preferência do menu)
     setNadeVoice(!grenadeVoiceEnabled()); flashMsg(grenadeVoiceEnabled() ? '🔊 Vozes da granada: ligadas' : '🔇 Vozes da granada: desligadas'); return;
@@ -5971,8 +5987,8 @@ function loop() {
     if (online) netTick(dt);
     for (const e of entities) if (!e.isPlayer) updateBot(e, dt);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
-    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt);
-    if (!online && !exploreMode() && gameTime >= matchLimit()) endGame();
+    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt);
+    if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
   } else if (state === 'menu') {
     menuT += dt * 0.25; danceT += dt;
     const sp = showcase.position; camera.position.set(sp.x + Math.sin(showCamYaw) * 3.5, showBaseY + 1.25, sp.z + Math.cos(showCamYaw) * 3.5); camera.lookAt(sp.x, showBaseY + 1.0, sp.z);
@@ -6048,7 +6064,7 @@ function loop() {
   }
   poseGunnerRig(dt); if (gunner || ac130) fp.root.visible = false;
   mgWhirr.set(state === 'playing' && player && player.alive && player.weapon === MINIGUN && !gunner ? player.mgSpin || 0 : 0, !!(player && player.mgFiring)); // giro da minigun (zera fora do jogo: nunca fica zumbindo)
-  if (state !== 'menu' && (state !== 'over' || (matchEnding && matchEnding.firstPerson && !victory.on)) && !emote.on && player && player.alive && !camO) { renderer.clearDepth(); renderer.render(fpScene, fpCam); } // no fim suave a arma continua na mão
+  if (state !== 'menu' && (state !== 'over' || (matchEnding && matchEnding.firstPerson && !victory.on)) && !emote.on && player && player.alive && !camO && !(hideS && player.hider)) { renderer.clearDepth(); renderer.render(fpScene, fpCam); } // no fim suave a arma continua na mão
 }
 mountUav();
 mountStreakUi();
@@ -6162,7 +6178,7 @@ function matchLimit() {
 function updateLeaderboard(dt) {
   lbT -= dt; if (lbT > 0) return; lbT = 0.25;
   const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths).slice(0, 10);
-  const head = armsMode() ? `<div class="lbh"><span>Corrida Armada</span><span>progresso</span></div>` : invMode() ? `<div class="lbh"><span>Invasão 🎃</span><span>abates</span></div>` : exploreMode() ? `<div class="lbh"><span>Exploração</span><span>só você</span></div>` : teamMode() ? `<div class="lbh"><span class="r">Vermelho ${teamScore[0]}</span><span>/${mode === 'bomb' ? BOMB.WIN : DOM.WIN_CAPS}</span><span class="b">${teamScore[1]} Azul</span></div>` : `<div class="lbh"><span>Placar</span><span>abates</span></div>`;
+  const head = armsMode() ? `<div class="lbh"><span>Corrida Armada</span><span>progresso</span></div>` : invMode() ? `<div class="lbh"><span>Invasão 🎃</span><span>abates</span></div>` : exploreMode() ? `<div class="lbh"><span>Exploração</span><span>só você</span></div>` : teamMode() ? `<div class="lbh"><span class="r">Vermelho ${teamScore[0]}</span><span>/${hideMode() ? HIDE.WIN : mode === 'bomb' ? BOMB.WIN : DOM.WIN_CAPS}</span><span class="b">${teamScore[1]} Azul</span></div>` : `<div class="lbh"><span>Placar</span><span>abates</span></div>`;
   $('lb').innerHTML = head + rows.map((e, i) => { const pid = online ? (e.isPlayer ? online.myId : (e.netId || 0)) : 0; return `<div class="row${e.isPlayer ? ' me' : ''}${e.alive ? '' : ' dead'}${pid && voiceTalking(pid) ? ' talking' : ''}${pid && voiceMuted(pid) ? ' vmuted' : ''}"${pid ? ` data-pid="${pid}"` : ''}><span>${i + 1}</span><span class="dot" style="background:${teamMode() && e.team >= 0 ? TEAM_COLORS[e.team] : e.shirt}"></span><span class="n">${escapeHtml(e.name)}</span><span class="k">${scoreOf(e)}</span></div>`; }).join('');
 }
 // botões de time (Vermelho / Azul / Automático)
@@ -6184,6 +6200,7 @@ const MENU_RULES = {
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. Munição não acaba e a partida não termina.',
+  hide: `🫥 COMO JOGAR · Docão Escondido (protótipo, estilo Prop Hunt)\n🙈 Escondidos: você vira um objeto do mapa. ${HIDE.KEY_LABEL} troca o objeto, ${HIDE.ROT_LABEL} gira. Fique parado e sobreviva até o tempo acabar.\n🔫 Caçadores: ${HIDE.PREP} s presos e cegos no spawn, depois ${Math.round(HIDE.ROUND / 60 * 10) / 10} min pra achar e abater todos os objetos-Docão.\n🔁 Os papéis trocam toda rodada · primeiro time a ${HIDE.WIN} vence.`,
   x1: 'X1 · duelo. Mapa pequeno sorteado, cada um nasce de um lado. Primeiro a 10 abates. Só munição no chão, sem vida. A arma é a mesma pros dois e troca quando alguém cai.',
 };
 function readLimitStore() {
@@ -6619,11 +6636,11 @@ function paintLoadoutDock() {
 }
 function syncLoadoutUi() { paintLoadoutDock(); fillLoadoutRow('lobbyLoadoutRow', 'lobby', false); buildDeathPrimaries(); buildDeathSec(); buildDeathMelee(); }
 function refreshMenuMode() {
-  const v = ['dom', ARMS_RACE.mode, 'bomb', 'explore', TRAIN.mode, INV.mode, X1.mode].includes($('modeSel').value) ? $('modeSel').value : 'dm';
+  const v = [HIDE.mode, 'dom', ARMS_RACE.mode, 'bomb', 'explore', TRAIN.mode, INV.mode, X1.mode].includes($('modeSel').value) ? $('modeSel').value : 'dm';
   $('menuTrain').classList.toggle('hidden', v !== TRAIN.mode);
-  $('menuTeam').classList.toggle('hidden', v !== 'dom' && !isArmsRace(v) && v !== 'bomb'); // Dominação e Bomba: escolhe o time
+  $('menuTeam').classList.toggle('hidden', v !== 'dom' && !isArmsRace(v) && v !== 'bomb' && v !== HIDE.mode); // Dominação, Bomba e Docão Escondido: escolhe o time
   $('botCount').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || v === INV.mode || v === X1.mode);
-  $('timeSel').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || v === INV.mode || isArmsRace(v));
+  $('timeSel').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || v === INV.mode || isArmsRace(v) || v === HIDE.mode);
   const showDiff = v !== 'explore' && v !== TRAIN.mode;
   $('botDiffLabel').classList.toggle('hidden', !showDiff);
   $('botDiffNote').classList.toggle('hidden', !showDiff);
@@ -6652,7 +6669,7 @@ $('botDiff').onchange = () => saveBotDiff($('botDiff').value);
 $('roomDiff').onchange = () => saveBotDiff($('roomDiff').value);
 try { const d = localStorage.getItem('docao.botDiff'); if (d) saveBotDiff(d); } catch (e) { /* */ }
 $('modeSel').onchange = () => { try { localStorage.setItem('docao.mode', $('modeSel').value); } catch (e) { /* */ } refreshMenuMode(); syncMapForMode(); };
-try { const m = localStorage.getItem('docao.mode'); if (m === 'dom' || isArmsRace(m) || m === 'dm' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'bomb' || m === X1.mode) $('modeSel').value = m; } catch (e) { /* */ }
+try { const m = localStorage.getItem('docao.mode'); if (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'dm' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'bomb' || m === X1.mode) $('modeSel').value = m; } catch (e) { /* */ }
 if (invMenu() || bombMenu() || x1Menu()) syncMapForMode();
 $('timeSel').onchange = () => { try { localStorage.setItem('docao.time', $('timeSel').value); } catch (e) { /* */ } };
 try { $('timeSel').value = String(normTime(localStorage.getItem('docao.time'))); } catch (e) { /* */ }
@@ -6952,7 +6969,7 @@ function startOnlineMatch(m) {
     return;
   }
   clearMatchEnding(); resetAds(); loadMap(m.map, isInvasion(m.mode)); clearBots(); gameTime = m.T; o.mapId = m.map; o.inMatch = true; o.ents.clear(); o.tmap = [];
-  mode = MODE_OK(m.mode); armsWinner = null; if (x1Mode()) x1Gun = m.gun ?? 0; inv = null; invNet = m.iv ? parseState(m.iv) : null; window.__capLog = []; o.limit = m.limit > 0 ? m.limit : 0; endBomb();
+  endHide(); mode = MODE_OK(m.mode); armsWinner = null; if (x1Mode()) x1Gun = m.gun ?? 0; inv = null; invNet = m.iv ? parseState(m.iv) : null; window.__capLog = []; o.limit = m.limit > 0 ? m.limit : 0; endBomb();
   matchLimits = { weapons: (o.cfg && o.cfg.weapons) || null, powers: o.cfg && o.cfg.powers != null ? o.cfg.powers : null }; rulesLive = true;
   zone = m.zone ? newZoneState({ x: m.zone[0], y: m.zone[1], z: m.zone[2] }) : null; teamScore = m.zone ? [m.zone[8], m.zone[9]] : [0, 0];
   const me = m.ents.find((x) => x.id === o.myId) || { name: profile().name, skin: selectedSkin };
@@ -7786,3 +7803,75 @@ window.__docao = { get state() { return state; }, toMenu: () => toMenu(), benchO
   bomb: bombTest,
   makeKnife, poseButterfly,
 };
+
+// ============================================================
+//  Docão Escondido (estilo Prop Hunt) — PROTÓTIPO offline. Regras em shared/hide.js; aqui: objetos, câmera, bots e HUD.
+// ============================================================
+const HIDE_MAT = {}; const hmat = (c) => (HIDE_MAT[c] ||= new THREE.MeshLambertMaterial({ color: c }));
+function hidePropMesh(t) { // formas simples no estilo dos props de world.js (barril, feno, copão, banco, árvore, caixote)
+  const g = new THREE.Group(), add = (geo, c, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, hmat(c)); m.position.set(x, y, z); g.add(m); return m; };
+  if (t === 'keg') { add(new THREE.CylinderGeometry(0.55, 0.55, 1.2, 18), '#8a5a2b', 0, 0.6); add(new THREE.CylinderGeometry(0.57, 0.57, 0.08, 18), '#3a3a3a', 0, 0.25); add(new THREE.CylinderGeometry(0.57, 0.57, 0.08, 18), '#3a3a3a', 0, 0.95); }
+  else if (t === 'hay') add(new THREE.BoxGeometry(1.6, 1.1, 1), '#f2c94c', 0, 0.55);
+  else if (t === 'cup') { add(new THREE.CylinderGeometry(0.6, 0.42, 1.5, 20), '#d8261c', 0, 0.75); add(new THREE.CylinderGeometry(0.61, 0.61, 0.15, 20), '#ffffff', 0, 1.4); }
+  else if (t === 'bench') { add(new THREE.BoxGeometry(1.8, 0.12, 0.6), '#9b6a3a', 0, 0.5); add(new THREE.BoxGeometry(1.8, 0.5, 0.1), '#9b6a3a', 0, 0.85, 0.28); add(new THREE.BoxGeometry(0.1, 0.5, 0.5), '#444', -0.8, 0.25); add(new THREE.BoxGeometry(0.1, 0.5, 0.5), '#444', 0.8, 0.25); }
+  else if (t === 'tree') { add(new THREE.CylinderGeometry(0.18, 0.25, 1, 10), '#6b4423', 0, 0.5); add(new THREE.ConeGeometry(0.9, 1.6, 12), '#2f8f3a', 0, 1.7); }
+  else add(new THREE.BoxGeometry(1.1, 1.1, 1.1), '#b8864b', 0, 0.55); // caixote
+  return g;
+}
+function hideSyncProp(e) {
+  const want = !!(hideS && e.hider && e.alive && e.prop);
+  if (e.propMesh && (!want || e.propMeshT !== e.prop)) { scene.remove(e.propMesh); e.propMesh = null; }
+  if (want && !e.propMesh) { e.propMesh = hidePropMesh(e.prop); e.propMeshT = e.prop; scene.add(e.propMesh); }
+  if (e.propMesh) { e.propMesh.position.copy(e.pos); e.propMesh.rotation.y = e.yaw + (e.propRot || 0); }
+  if (e.model && want) e.model.group.visible = false; // o Docão some; só o objeto fica
+}
+function hideSeen(e) { e.hideSeenUntil = gameTime + 2.5; } // trocou/girou o objeto: Caçador bot nota de mais longe por um tempinho
+function hidePlaceBot(b) { // Escondido bot: escolhe um canto do mapa longe do spawn e vira objeto parado
+  let best = null, bd = -1;
+  for (let i = 0; i < 12; i++) { const n = nav && nav.randomNode(); if (!n) break; const d = Math.min(...SPAWNS.map((s) => Math.hypot(s.x - n.x, s.z - n.z))); if (d > bd) { bd = d; best = n; } }
+  if (best) b.pos.set(best.x, best.y, best.z);
+  b.yaw = Math.random() * Math.PI * 2; b.propRot = ((Math.random() * 8) | 0) * Math.PI / 4;
+}
+function hideThirdPerson(p) {
+  const back = new V3(Math.sin(p.yaw), 0, Math.cos(p.yaw)).multiplyScalar(3.6);
+  camera.position.set(p.pos.x + back.x, p.pos.y + 2.2, p.pos.z + back.z);
+  if (!losClear(new V3(p.pos.x, p.pos.y + 1.6, p.pos.z), camera.position)) camera.position.set(p.pos.x + back.x * 0.35, p.pos.y + 1.9, p.pos.z + back.z * 0.35); // parede atrás: chega mais perto
+}
+function endHide() {
+  for (const e of entities) if (e.propMesh) { scene.remove(e.propMesh); e.propMesh = null; }
+  for (const e of entities) { e.hider = false; e.prop = null; }
+  hideS = null; if (hideBlindEl) hideBlindEl.style.display = 'none'; const h = document.getElementById('hidehud'); if (h) h.classList.add('hidden');
+}
+function startHideOffline() {
+  hideS = newHideState(); teamScore = hideS.score;
+  return startHideRound(hideS, gameTime, entities);
+}
+function updateHideOffline(dt) {
+  if (!hideS || online) return;
+  window.__hide = { S: hideS, entities, player };
+  if (bombGfx.bannerT > 0) { bombGfx.bannerT -= dt; if (bombGfx.bannerT <= 0) $('bombBanner').classList.add('hidden'); } // a faixa central é a mesma da Bomba
+  for (const ev of stepHide(hideS, entities, gameTime)) { if (ev[0] === 'round') hideNewRound(); onHideEvent(ev); if (ev[0] === 'over') { endGame(); return; } }
+  for (const e of entities) { hideSyncProp(e); if (hideFrozen(hideS, e)) e.nextFire = Math.max(e.nextFire, gameTime + 0.2); }
+  if (player && player.hider && player.alive && Math.hypot(player.vel.x, player.vel.z) > 0.5) hideSeen(player); // andando chama atenção
+  if (!hideBlindEl) { hideBlindEl = document.createElement('div'); hideBlindEl.style.cssText = 'position:fixed;inset:0;background:#000;z-index:5;display:none;pointer-events:none;color:#fff;font:900 34px var(--font, Arial);text-align:center;padding-top:30vh'; document.body.appendChild(hideBlindEl); }
+  const blind = player && hideFrozen(hideS, player);
+  hideBlindEl.style.display = blind ? 'block' : 'none';
+  const left = Math.max(0, hideS.phaseEnd - gameTime);
+  if (blind) hideBlindEl.textContent = `Os Docões estão se escondendo… ${Math.ceil(left)} s`;
+  let h = document.getElementById('hidehud');
+  if (!h) { h = document.createElement('div'); h.id = 'hidehud'; h.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(0,0,0,.55);color:#fff;padding:6px 14px;border-radius:10px;font:700 16px Arial;pointer-events:none;text-align:center'; document.body.appendChild(h); }
+  h.classList.remove('hidden'); h.style.display = state === 'playing' ? '' : 'none';
+  const role = player ? ROLE_NAMES[player.hider ? 1 : 0] : '';
+  const fase = hideS.phase === 'prep' ? 'Escondendo' : hideS.phase === 'live' ? 'Caçada' : hideS.phase === 'end' ? 'Fim da rodada' : '';
+  h.innerHTML = `Rodada ${hideS.round} · <b>${role}</b> · ${fase} ${fmtT(left)} · 🙈 ${hidersAlive(hideS, entities)} vivos · <span style="color:${TEAM_COLORS[0]}">${hideS.score[0]}</span> × <span style="color:${TEAM_COLORS[1]}">${hideS.score[1]}</span>${player && player.hider && player.prop ? ` · ${PROP_NAMES[player.prop]} (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira)` : ''}`;
+}
+function hideNewRound() { // papéis já trocaram em startHideRound: limpa projéteis e todo mundo renasce
+  clearTacticals(); for (const n of grenades) scene.remove(n.mesh); grenades.length = 0; for (const r of rockets) scene.remove(r.mesh); rockets.length = 0;
+  for (const e of entities) respawn(e);
+}
+function onHideEvent(ev) {
+  const k = ev[0], me = player && player.hider;
+  if (k === 'round') bombBanner(`Rodada ${ev[1]} · ${me ? 'VOCÊ SE ESCONDE' : 'VOCÊ CAÇA'}`, me ? `Vire um objeto (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira) e se esconda em ${HIDE.PREP} s` : `Time ${TEAM_NAMES[ev[2]]} está se escondendo · aguarde ${HIDE.PREP} s`, TEAM_COLORS[player ? player.team : 0], 4);
+  else if (k === 'go') { flashMsg(me ? 'Os Caçadores foram soltos! Fique quietinho 🤫' : 'VALENDO! Ache os objetos-Docão 🔫'); sfx.pickup(); }
+  else if (k === 'win') { const mine = player && player.team === ev[1]; bombBanner(`${TEAM_NAMES[ev[1]]} venceu a rodada!`, `${ev[2] === 'time' ? 'O tempo acabou e sobrou Escondido ⏱️' : 'Todos os Escondidos foram achados 🔎'} · Vermelho ${ev[3]} × ${ev[4]} Azul`, TEAM_COLORS[ev[1]], HIDE.END - 0.3); (mine ? sfx.kill : sfx.die)(0.7); }
+}
