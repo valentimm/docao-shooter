@@ -127,7 +127,7 @@ export function drawFur(x, W, H, seed = 7, k = 1) {
   x.lineCap = 'round';
   for (let i = 0; i < 2200 * k; i++) { // fios
     const px = R() * W, py = R() * H, len = 3 + R() * 6, a = Math.PI / 2 + (R() - 0.5) * 0.6;
-    x.strokeStyle = R() < 0.5 ? 'rgba(255,240,200,0.10)' : 'rgba(110,40,0,0.10)'; x.lineWidth = 1 + R();
+    x.strokeStyle = R() < 0.5 ? 'rgba(255,240,200,0.07)' : 'rgba(150,60,0,0.05)'; x.lineWidth = 1 + R();
     x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len); x.stroke();
   }
 }
@@ -145,7 +145,7 @@ export function grainTex(kind = 'fur') {
   const key = 'grain:' + kind; if (texCache.has(key)) return texCache.get(key);
   const t = canvasTex(256, 256, (x, W, H) => {
     x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
-    if (kind === 'fur') { const R = rng(11); for (let i = 0; i < 900; i++) { const px = R() * W, py = R() * H; x.strokeStyle = R() < 0.6 ? 'rgba(120,70,30,0.10)' : 'rgba(255,255,255,0.5)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - 0.5) * 2, py + 4 + R() * 4); x.stroke(); } }
+    if (kind === 'fur') { const R = rng(11); for (let i = 0; i < 900; i++) { const px = R() * W, py = R() * H; x.strokeStyle = R() < 0.6 ? 'rgba(150,90,40,0.06)' : 'rgba(255,255,255,0.5)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - 0.5) * 2, py + 4 + R() * 4); x.stroke(); } }
     else drawWeave(x, W, H, 3, 0.07);
   });
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(kind === 'fur' ? 2 : 6, kind === 'fur' ? 2 : 3); texCache.set(key, t); return t;
@@ -156,7 +156,8 @@ function headTexture(tone, beard = null, paint = null, angry = false) { // angry
   const W = 1024, H = 512;
   const t = canvasTex(W, H, (x) => {
     x.fillStyle = tone; x.fillRect(0, 0, W, H);
-    drawFur(x, W, H, 7);
+    { const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(255,240,190,0.22)'); g.addColorStop(0.45, 'rgba(255,240,190,0)'); g.addColorStop(1, 'rgba(190,70,0,0.16)'); x.fillStyle = g; x.fillRect(0, 0, W, H); }
+    drawFur(x, W, H, 7, 0.35);
     const P = (theta, y) => [(0.5 + theta / TAU) * W, (1 - (y - HEAD.y0) / (HEAD.y1 - HEAD.y0)) * H];
     const pxH = (y) => W / (TAU * headR(y)), pxV = H / (HEAD.y1 - HEAD.y0);
     // bochechas (blush) suaves
@@ -355,7 +356,7 @@ export function makeDocao(skinOrId, opts = {}) {
   const legs = [];
   for (const s of [-1, 1]) {
     const leg = new THREE.Group(); leg.position.set(s * 0.2, 0.4, 0); g.add(leg);
-    mesh(new THREE.CapsuleGeometry(0.13, 0.2, 6, 16), skinM, leg, 0.012, true).position.y = -0.2;
+    mesh(new THREE.CapsuleGeometry(0.15, 0.16, 6, 16), skinM, leg, 0.012, true).position.y = -0.19;
     const hoof = mesh(new THREE.SphereGeometry(0.155, 20, 12), hoofM, leg, 0.012, true); hoof.position.set(0, -0.36, 0.04); hoof.scale.set(1, 0.6, 1.25);
     const cleft = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.07, 0.1), dark); cleft.position.set(0, -0.36, 0.22); leg.add(cleft);
     legs.push(leg);
@@ -365,11 +366,11 @@ export function makeDocao(skinOrId, opts = {}) {
   const torso = mesh(getTorsoGeo(), shirtM, g, 0.014, true); torso.scale.z = 0.85;
   const collar = mesh(new THREE.TorusGeometry(0.27, 0.045, 10, 32), trimM, g, 0.01); collar.rotation.x = Math.PI / 2; collar.position.y = 1.1; collar.scale.y = 0.85;
   // rabinho enrolado
-  var tail = mesh(new THREE.TorusGeometry(0.08, 0.032, 10, 24, Math.PI * 1.7), skinM, g, 0.01); tail.position.set(0, 0.6, -0.44); tail.rotation.y = Math.PI / 2;
+  var tail = mesh(new THREE.TorusGeometry(0.08, 0.032, 10, 24, Math.PI * 1.7), skinM, g, 0.01); tail.position.set(0, 0.5, -0.4); tail.scale.setScalar(1.25); tail.rotation.y = Math.PI / 2;
 
   // cabeça
   const head = new THREE.Group(); g.add(head);
-  const skull = mesh(getHeadGeo(), faceM, head, 0.016, true); skull.scale.z = 1; // lathe já usa HEAD.zs abaixo
+  const skull = mesh(getHeadGeo(), faceM, head, 0.012, true); skull.scale.z = 1; // lathe já usa HEAD.zs abaixo
   skull.scale.set(1, 1, HEAD.zs);
   // tufinho no topo
   const tuft = [];
