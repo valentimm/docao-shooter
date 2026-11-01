@@ -19,7 +19,7 @@ export const PALETTE = {
 
 // ---------- materiais ----------
 const gradTex = (() => {
-  const t = new THREE.DataTexture(new Uint8Array([95, 160, 210]), 3, 1, THREE.RedFormat);
+  const t = new THREE.DataTexture(new Uint8Array([88, 138, 186, 228]), 4, 1, THREE.RedFormat);
   t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
 })();
 export function toon(color, extra = {}) {
@@ -68,7 +68,7 @@ let headGeo = null;
 function getHeadGeo() {
   if (headGeo) return headGeo;
   const pts = []; for (let i = 0; i <= HEAD.n; i++) { const y = HEAD.y0 + (HEAD.y1 - HEAD.y0) * i / HEAD.n; pts.push(new V2(headR(y), y)); }
-  headGeo = new THREE.LatheGeometry(pts, 56, Math.PI, TAU); return headGeo;
+  headGeo = new THREE.LatheGeometry(pts, 72, Math.PI, TAU); return headGeo;
 }
 // ponto/normal na superfície da cabeça (θ = ângulo a partir da frente, + para a direita do personagem = +x)
 export function headPoint(theta, y, out = 0) {
@@ -82,7 +82,7 @@ export function headNormal(theta, y) {
 // ---------- geometria: tronco (camiseta) ----------
 export const TORSO_PTS = new THREE.SplineCurve([new V2(0.01, 0.4), new V2(0.36, 0.42), new V2(0.47, 0.56), new V2(0.5, 0.72), new V2(0.48, 0.9), new V2(0.42, 1.03), new V2(0.28, 1.12), new V2(0.01, 1.15)]).getSpacedPoints(36);
 let torsoGeo = null;
-const getTorsoGeo = () => torsoGeo || (torsoGeo = new THREE.LatheGeometry(TORSO_PTS, 48, Math.PI, TAU));
+const getTorsoGeo = () => torsoGeo || (torsoGeo = new THREE.LatheGeometry(TORSO_PTS, 64, Math.PI, TAU));
 export function torsoR(y) { let best = TORSO_PTS[0], bd = 9; for (const p of TORSO_PTS) if (Math.abs(p.y - y) < bd && p.x > 0.05) { bd = Math.abs(p.y - y); best = p; } return best.x; }
 function torsoV(y) { let best = 0, bd = 9; TORSO_PTS.forEach((p, i) => { if (i > 2 && i < 33 && Math.abs(p.y - y) < bd) { bd = Math.abs(p.y - y); best = i; } }); return best / (TORSO_PTS.length - 1); }
 
@@ -115,11 +115,48 @@ export function drawLogo(x, cx, cy, h, color, outlineColor = null) {
   x.strokeStyle = x.fillStyle = color; x.lineWidth = h * 0.26; paths(); x.stroke(); bang(0);
 }
 const texCache = new Map();
+// ---------- detalhe de superfície (gfx v1): pelo, tecido e costura — tudo procedural e determinístico ----------
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+// pelo curtinho: riscos finos claros/escuros + manchinhas suaves (usado por cima do tom base)
+export function drawFur(x, W, H, seed = 7, k = 1) {
+  const R = rng(seed);
+  for (let i = 0; i < 26 * k; i++) { // manchas grandes bem sutis (variação de cor)
+    const cx = R() * W, cy = R() * H, r = (0.04 + R() * 0.08) * W; const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+    const c = R() < 0.5 ? '255,235,190' : '150,60,0'; g.addColorStop(0, `rgba(${c},0.09)`); g.addColorStop(1, `rgba(${c},0)`); x.fillStyle = g; x.fillRect(cx - r, cy - r, r * 2, r * 2);
+  }
+  x.lineCap = 'round';
+  for (let i = 0; i < 2200 * k; i++) { // fios
+    const px = R() * W, py = R() * H, len = 3 + R() * 6, a = Math.PI / 2 + (R() - 0.5) * 0.6;
+    x.strokeStyle = R() < 0.5 ? 'rgba(255,240,200,0.10)' : 'rgba(110,40,0,0.10)'; x.lineWidth = 1 + R();
+    x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len); x.stroke();
+  }
+}
+// trama de tecido: linhas cruzadas bem leves
+export function drawWeave(x, W, H, step = 4, a = 0.05) {
+  x.fillStyle = `rgba(0,0,0,${a})`; for (let y = 0; y < H; y += step) x.fillRect(0, y, W, 1);
+  x.fillStyle = `rgba(255,255,255,${a * 0.7})`; for (let i = 0; i < W; i += step) x.fillRect(i, 0, 1, H);
+}
+// costura tracejada horizontal
+export function drawStitch(x, x0, x1, y, color = 'rgba(255,255,255,0.45)', w = 3, dash = [10, 7]) {
+  x.save(); x.setLineDash(dash); x.strokeStyle = color; x.lineWidth = w; x.beginPath(); x.moveTo(x0, y); x.lineTo(x1, y); x.stroke(); x.restore();
+}
+// mapas tileáveis em cinza claro (multiplicam a cor do material): pele e tecido
+export function grainTex(kind = 'fur') {
+  const key = 'grain:' + kind; if (texCache.has(key)) return texCache.get(key);
+  const t = canvasTex(256, 256, (x, W, H) => {
+    x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
+    if (kind === 'fur') { const R = rng(11); for (let i = 0; i < 900; i++) { const px = R() * W, py = R() * H; x.strokeStyle = R() < 0.6 ? 'rgba(120,70,30,0.10)' : 'rgba(255,255,255,0.5)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - 0.5) * 2, py + 4 + R() * 4); x.stroke(); } }
+    else drawWeave(x, W, H, 3, 0.07);
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(kind === 'fur' ? 2 : 6, kind === 'fur' ? 2 : 3); texCache.set(key, t); return t;
+}
+
 function headTexture(tone, beard = null, paint = null, angry = false) { // angry: cara de bravo (dentes cerrados, sem blush)
   const key = 'head' + tone + beard + paint + (angry ? ':angry' : ''); if (texCache.has(key)) return texCache.get(key);
   const W = 1024, H = 512;
   const t = canvasTex(W, H, (x) => {
     x.fillStyle = tone; x.fillRect(0, 0, W, H);
+    drawFur(x, W, H, 7);
     const P = (theta, y) => [(0.5 + theta / TAU) * W, (1 - (y - HEAD.y0) / (HEAD.y1 - HEAD.y0)) * H];
     const pxH = (y) => W / (TAU * headR(y)), pxV = H / (HEAD.y1 - HEAD.y0);
     // bochechas (blush) suaves
@@ -185,7 +222,9 @@ function shirtTexture(shirt) {
         if (pat.type === 'hoops') x.fillRect(0, i * H / n, W, H / n + 1); else x.fillRect(i * W / n, 0, W / n + 1, H);
       }
     }
+    drawWeave(x, W, H, 4, 0.045);
     const PT = (th, y) => [(0.5 + th / TAU) * W, (1 - torsoV(y)) * H];
+    { const hy = PT(0, 0.47)[1], cy = PT(0, 1.06)[1]; drawStitch(x, 0, W, hy); drawStitch(x, 0, W, hy + 10, 'rgba(0,0,0,0.18)', 2); drawStitch(x, 0, W, cy); }
     for (const d of shirt.details || []) { const fn = SHIRT_DETAILS[d.type]; if (fn) fn(x, d, PT, W, H); else console.warn('Detalhe de camiseta desconhecido:', d.type); }
     const logo = shirt.logo;
     if (logo) {
@@ -302,11 +341,11 @@ export function makeDocao(skinOrId, opts = {}) {
   const tone = safeTone(skin.body && skin.body.tone);
   const shirt = skin.shirt || {}; const trim = shirt.trim || '#1d1410';
   const beardPart = (skin.parts || []).find((p) => p.type === 'beard'); const beard = beardPart && beardPart.stubble !== false ? (beardPart.color || '#3a2412') : null; // stubble:false = só o bigode 3D, sem barba no queixo
-  const skinM = toonWarm(tone, 0.42, {}, '#e0500a'), facePaint = skin.face && skin.face.paint, faceM = toonWarm('#ffffff', 0.3, { map: headTexture(tone, beard, facePaint), emissiveMap: headTexture(tone, beard, facePaint) }, '#ff9a80');
-  const snoutM = toonWarm(PALETTE.snout, 0.25), earInM = toonWarm(PALETTE.earInner, 0.2), hoofM = toon(PALETTE.hoof);
+  const skinM = toonWarm(tone, 0.42, { map: grainTex('fur') }, '#e0500a'), facePaint = skin.face && skin.face.paint, faceM = toonWarm('#ffffff', 0.3, { map: headTexture(tone, beard, facePaint), emissiveMap: headTexture(tone, beard, facePaint) }, '#ff9a80');
+  const snoutM = toonWarm(PALETTE.snout, 0.25, { map: grainTex('fur') }), earInM = toonWarm(PALETTE.earInner, 0.2), hoofM = toon(PALETTE.hoof);
   const shirtM = toonWarm('#ffffff', 0.14, { map: shirtTexture(shirt), emissiveMap: shirtTexture(shirt) });
   const sleeveM = toonWarm(sleeveColor(shirt), 0.12); const sleeves = shirt.sleeves || 'short';
-  const trimM = toon(trim), pantsM = toon(skin.pants || '#1d1410');
+  const trimM = toon(trim), pantsM = toon(skin.pants || '#1d1410', { map: grainTex('cloth') });
   const dark = basic(PALETTE.nostril), white = basic(PALETTE.eyeWhite);
 
   const g = new THREE.Group();
@@ -316,8 +355,8 @@ export function makeDocao(skinOrId, opts = {}) {
   const legs = [];
   for (const s of [-1, 1]) {
     const leg = new THREE.Group(); leg.position.set(s * 0.2, 0.4, 0); g.add(leg);
-    mesh(new THREE.CapsuleGeometry(0.13, 0.2, 4, 12), skinM, leg, 0.012, true).position.y = -0.2;
-    const hoof = mesh(new THREE.SphereGeometry(0.155, 16, 10), hoofM, leg, 0.012, true); hoof.position.set(0, -0.36, 0.04); hoof.scale.set(1, 0.6, 1.25);
+    mesh(new THREE.CapsuleGeometry(0.13, 0.2, 6, 16), skinM, leg, 0.012, true).position.y = -0.2;
+    const hoof = mesh(new THREE.SphereGeometry(0.155, 20, 12), hoofM, leg, 0.012, true); hoof.position.set(0, -0.36, 0.04); hoof.scale.set(1, 0.6, 1.25);
     const cleft = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.07, 0.1), dark); cleft.position.set(0, -0.36, 0.22); leg.add(cleft);
     legs.push(leg);
   }
@@ -326,7 +365,7 @@ export function makeDocao(skinOrId, opts = {}) {
   const torso = mesh(getTorsoGeo(), shirtM, g, 0.014, true); torso.scale.z = 0.85;
   const collar = mesh(new THREE.TorusGeometry(0.27, 0.045, 10, 32), trimM, g, 0.01); collar.rotation.x = Math.PI / 2; collar.position.y = 1.1; collar.scale.y = 0.85;
   // rabinho enrolado
-  var tail = mesh(new THREE.TorusGeometry(0.08, 0.032, 8, 16, Math.PI * 1.7), skinM, g, 0.01); tail.position.set(0, 0.6, -0.44); tail.rotation.y = Math.PI / 2;
+  var tail = mesh(new THREE.TorusGeometry(0.08, 0.032, 10, 24, Math.PI * 1.7), skinM, g, 0.01); tail.position.set(0, 0.6, -0.44); tail.rotation.y = Math.PI / 2;
 
   // cabeça
   const head = new THREE.Group(); g.add(head);
