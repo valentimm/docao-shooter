@@ -89,7 +89,9 @@ export async function recordStats(env, items) {
   const c = (n) => Math.max(0, Math.min(5000, n | 0));
   const st = items.filter((i) => i && STAT_MODES.includes(i.mode) && i.acct > 0).map((i) => env.DB.prepare('INSERT INTO stats (account_id, mode, kills, deaths, wins, matches) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(account_id, mode) DO UPDATE SET kills = kills + ?3, deaths = deaths + ?4, wins = wins + ?5, matches = matches + ?6').bind(i.acct, i.mode, c(i.k), c(i.d), c(i.w), c(i.m)));
   const ok = items.filter((i) => i && i.acct > 0 && STAT_MODES.includes(i.mode));
-  const ch = await chalUpdates(env, ok).catch((e) => { console.error('desafios', e && e.message); return new Map(); }); // só lê se a sala contou algo
+  // desafios valem em QUALQUER sala online (Corrida Armada, X1...): antes só os 4 modos do ranking chegavam aqui e o resto sumia
+  const chOk = items.filter((i) => i && i.acct > 0 && typeof i.mode === 'string' && i.mode !== 'treino');
+  const ch = await chalUpdates(env, chOk).catch((e) => { console.error('desafios', e && e.message); return new Map(); }); // só lê se a sala contou algo
   const coins = new Map(); for (const i of ok) if (i.c > 0) coins.set(i.acct, (coins.get(i.acct) || 0) + i.c);
   const cs = [...new Set([...coins.keys(), ...ch.keys()])].map((a) => coinCreditStmt(env, a, coins.get(a) || 0, ch.get(a) || null)).filter(Boolean);
   if (st.length || cs.length) await env.DB.batch([...st, ...cs]);
