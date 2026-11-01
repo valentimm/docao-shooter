@@ -625,7 +625,7 @@ export function makeDocao(skinOrId, opts = {}) {
   g.traverse((o) => { if (o.isMesh && !o.userData.isOutline && o.parent === g) o.castShadow = true; });
   for (const b of brows) b.userData.base = { p: b.position.clone(), q: b.quaternion.clone() };
   const face = { eyes, brows, faceM, tex: [tone, beard, facePaint], neutralMap: faceM.map, angryMap: null, t: 0, target: 0, hold: 0 };
-  return { group: g, legs, arms, guns, head, snout, jaw, point, skin, face, backLid, flashMats: [skinM, faceM, shirtM, snoutM] };
+  return { group: g, legs, arms, guns, head, snout, jaw, point, skin, face, backLid, torso, tail, tuft, life: { ph: Math.random() * 10, blinkAt: 1 + Math.random() * 3, blink: 0 }, flashMats: [skinM, faceM, shirtM, snoutM] };
 }
 
 // Pose cartunesca: abaixa o corpo e dobra as pernas, mantendo os cascos no chão.
@@ -1074,4 +1074,26 @@ export function makeNukeRider() {
   root.rotation.x = -0.12;
   root.userData.model = model;
   return root;
+}
+
+// ---------- vida (gfx v1): respira, pisca, balança a cabeça e o rabinho; squash no passo ----------
+// Chamar todo frame DEPOIS de updateExpression. speed em m/s; walk = fase do passo (rad).
+export function animateLife(m, dt, time, speed = 0, walk = 0) {
+  const L = m.life; if (!L) return; const t = time + L.ph, mv = Math.min(1, speed / 4);
+  if (!L.base) L.base = { hy: m.head.position.y, hr: m.head.rotation.clone(), ts: m.torso.scale.clone(), tr: m.tail && m.tail.rotation.clone() };
+  const B = L.base;
+  // respiração (some com a corrida)
+  const br = Math.sin(t * 2.2) * (1 - mv);
+  m.torso.scale.set(B.ts.x * (1 + 0.018 * br), B.ts.y * (1 + 0.012 * br), B.ts.z * (1 + 0.018 * br));
+  // cabeça: bob + tilt preguiçoso parado; balanço no passo andando
+  m.head.position.y = B.hy + 0.012 * br + Math.abs(Math.sin(walk)) * 0.035 * mv;
+  m.head.rotation.z = B.hr.z + Math.sin(t * 0.7) * 0.05 * (1 - mv) + Math.sin(walk) * 0.06 * mv;
+  m.head.rotation.x = B.hr.x + Math.sin(t * 0.45) * 0.03 * (1 - mv);
+  // rabinho abana
+  if (m.tail) m.tail.rotation.x = B.tr.x + Math.sin(t * (6 + 6 * mv)) * 0.35;
+  // piscar (multiplica o aperto da expressão)
+  L.blinkAt -= dt; if (L.blinkAt <= 0) { L.blink = 0.14; L.blinkAt = 2 + Math.random() * 3.5; if (Math.random() < 0.2) L.blinkAt = 0.22; }
+  let k = 1; if (L.blink > 0) { L.blink -= dt; k = Math.max(0.08, Math.abs(L.blink / 0.07 - 1)); }
+  const f = m.face, ft = f ? f.t * f.t * (3 - 2 * f.t) : 0;
+  if (f) for (const e of f.eyes) e.scale.y = (1 - 0.42 * ft) * k;
 }
