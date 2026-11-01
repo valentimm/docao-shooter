@@ -682,6 +682,7 @@ export const MAPS = [];
       { t: 'banner', x: 0, y: 5.5, z: -58.45, c: '#2f80ed', rot: 0 }, { t: 'banner', x: 12, y: 5.5, z: 59.95, c: '#e63946', rot: Math.PI }],
     spawns: [...spA.slice(0, 5), ...spD.slice(0, 5), [-40, 40], [40, 40], [0, 10 + 8], [-32, -10], [32, -10], [-40, -36], [42, -39], [0, -40]],
     bomb: { sites: [[-30, 0, -42], [30, 0, -42]], atk: spA, def: spD },
+    hideProps: ['keg', 'hay', 'tree', 'jar', 'crate'], // Docão Escondido: objetos que existem aqui (caixotes são caixas do mapa)
     pickups: [['health', -36, 52], ['health', 36, 52], ['health', 0, 20], ['health', -20, -4, H], ['health', -30, -56], ['health', 31, -52.5, 1.2],
       ['ammo', 0, 56], ['ammo', -40, 0], ['ammo', 40, 0], ['ammo', 0, -44], ['ammo', -16, 55, H], ['ammo', 20, 30, H],
       ['grenade', -33, 31], ['grenade', 35, 30], ['grenade', 0, -18], ['grenade', -40, -50.5, H], ['grenade', 0, 66], ['grenade', 0, -66]],

@@ -4,6 +4,16 @@ Jogue em **https://docao.mvalentim.dev**
 
 ---
 
+## v1.33 — Docão Escondido V2 🔒🐷
+
+🗺️ **Mapa grande.** O Docão Escondido agora roda sempre no **Rodízio do Docão** (o maior mapa), com muito mais lugar pra se esconder.
+
+🛢️ **Só objetos do mapa.** Você só vira coisa que existe no cenário: barril, fardo de feno, árvore, jarro e caixote — igualzinho aos do mapa. Copão e banco saíram (não tem no Rodízio).
+
+🔒 **Travar posição.** **L** trava o Docão no lugar: não anda mais e o objeto não gira, só a câmera mexe pra você espiar. **L** de novo destrava.
+
+---
+
 ## v1.32 — Docão Escondido 📯🐷
 
 📯 **DOCÃO ESCONDIDO (Prop Hunt).** Modo novo no menu offline: Escondidos viram barril, feno, copão, banco, árvore ou caixote; Caçadores caçam. Preparação 25 s (caçador cego no spawn), caçada 150 s. **E** troca o objeto, **R** gira. **Apito obrigatório** 20 s após a caçada começar e depois a cada 25 s — o Escondido apita sozinho, com aviso na tela. Melhor de 5 (primeiro a 3), papéis trocam a cada rodada. Protótipo offline (ainda sem sala online).

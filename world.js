@@ -232,6 +232,13 @@ function buildProp(p, ctx) {
 }
 
 // ---------- mundo ----------
+// Docão Escondido: a mesma malha do prop do mapa, solta (sem colisão), pra o Escondido virar o objeto igualzinho ao do cenário
+export function buildPropMesh(p) {
+  const group = new THREE.Group(), noop = () => {};
+  const add = (x0, y0, z0, x1, y1, z1, color) => { const m = new THREE.Mesh(boxGeo(x0, y0, z0, x1, y1, z1), toon(color)); m.castShadow = true; group.add(m); };
+  buildProp({ x: 0, z: 0, ...p }, { group, solid: noop, add });
+  return group;
+}
 export function buildWorld(map) {
   const group = new THREE.Group(); group.name = 'world:' + map.id;
   const solids = [], meshes = [], byColor = new Map(), edges = [], proxies = [];

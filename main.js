@@ -31,7 +31,7 @@ import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, P
 import { createInvMusic } from './invasion-music.js';
 import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook } from './invasion-gfx.js';
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
-import { buildWorld, disposeWorld, applyPalette, renderThumb } from './world.js';
+import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh } from './world.js';
 import { buildNav } from './nav.js';
 import { initBacon, spawnBacon, updateBacon, clearBacon, popModel, baconStats, activeBacons, edibleBacons, eatBacon, BACON } from './bacon.js';
 import { Net, createRoom, roomInfo } from './net.js';
@@ -56,7 +56,7 @@ import { EGG, eggSpeed, eggDmg, stepEgg } from './shared/egg.js';
 import { killIcon, weaponSvg } from './killfeed-icons.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, GRAV, JUMP, SPEED, BOT_SPEED, STEP, RADIUS, HEIGHT, EYE, WEAPONS, PRIMARIES, BOT_PRIMARIES, SECONDARIES, MELEES, CATEGORIES, PISTOL, KNIFE, SABER, UZI, P90, NAIL, SEMI, CROSS, BOW, FAMAS, DISC_W, SABER2, CORN_W, EGG_W, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, LMG, COMMANDO, REV, REV2, TAMPA, MELEE, SABER_COLORS, W_NADE, NADE, WEAPON_SHORT, BOT_DEFS, BOT_RANGE, TAG_COLORS, RED_DOT, applyFlinch, decayFlinch, GOLD_KNIFE, isKnife } from './shared/rules.js';
 import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, resetArmsRace, equipArmsRace, armsRaceKill } from './shared/arms-race.js';
-import { HIDE, isHide, HIDE_PROPS, PROP_NAMES, ROLE_NAMES, hiderTeam, newHideState, startHideRound, stepHide, hideFrozen, hidersAlive, nextProp } from './shared/hide.js';
+import { HIDE, isHide, HIDE_PROPS, PROP_NAMES, ROLE_NAMES, hiderTeam, newHideState, startHideRound, stepHide, hideFrozen, hidersAlive, nextProp, propsForMap } from './shared/hide.js';
 import { X1, isX1, rollX1Weapon, x1SpawnSide } from './shared/x1.js';
 import { normBotDiff, botDiffMeta, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot, scopeDelay } from './shared/bot-difficulty.js';
 import { SHIELD, isShieldW, shieldRaised, shieldOnBack, resetShield, shieldStage, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from './shared/shield.js';
@@ -4407,11 +4407,11 @@ function updatePlayer(dt) {
   if (!guiding && (keys.KeyD || keys.ArrowRight)) wish.add(right); if (!guiding && (keys.KeyA || keys.ArrowLeft)) wish.sub(right);
   p.useHold = !!(keys[BOMB.KEY] && p.alive && !emote.on); if (bombLock(p)) wish.set(0, 0, 0); // Bomba: parado na preparação e enquanto planta/desarma
   if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // faca corre; sabre anda normal; agachado anda mais devagar
-  if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
+  if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(p.propLock ? 0 : HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
   if (p.shieldDashUntil > gameTime && !bombLock(p)) wish.copy(fwd).multiplyScalar(SHIELD.charge.speed); // investida curta, na direção da mira
   const acc = p.onGround ? 14 : 4;
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
-  if (!guiding && jumpPressed && p.onGround && !bombLock(p)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
+  if (!guiding && jumpPressed && p.onGround && !bombLock(p) && !(hideS && p.propLock)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
   moveEntity(p, dt);
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
@@ -5668,7 +5668,7 @@ function startGame(mapId) {
   endVictory(); stopEmote();
   resetAds(); stopInspect(true); // inspeção velha não sobrevive ao 'Jogar de novo'
   initAudio();
-  loadMap($('modeSel').value === TRAIN.mode ? TRAIN.map : $('modeSel').value === X1.mode ? resolveX1Map(mapId) : typeof mapId === 'string' ? mapId : pickMapForMatch(), invMenu());
+  loadMap($('modeSel').value === TRAIN.mode ? TRAIN.map : $('modeSel').value === HIDE.mode ? HIDE.MAP : $('modeSel').value === X1.mode ? resolveX1Map(mapId) : typeof mapId === 'string' ? mapId : pickMapForMatch(), invMenu());
   const name = myName(); saveName(name);
   sens = parseFloat($('sens').value) || 1.4; sensAds = parseFloat($('sensAds').value) || 1;
   try { localStorage.setItem('docao.sens', String(sens)); localStorage.setItem('docao.sensAds', String(sensAds)); } catch (e) { /* sem storage */ }
@@ -5914,8 +5914,9 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyB') { if (bombPick) closeBombPick(); else openBombPick(); return; }
     if (bombPick && e.code === 'KeyG') { deathUnlock = true; if (document.pointerLockElement) document.exitPointerLock(); return; } // solta o mouse pra clicar
   }
-  if (state === 'playing' && hideS && player && player.alive && player.hider && !e.repeat && (e.code === HIDE.KEY || e.code === HIDE.ROT_KEY)) { // Escondido: E troca o objeto · R gira
-    if (e.code === HIDE.KEY) { player.prop = nextProp(player.prop); flashMsg(`Agora você é: ${PROP_NAMES[player.prop]}`); } else player.propRot = ((player.propRot || 0) + Math.PI / 4) % (Math.PI * 2);
+  if (state === 'playing' && hideS && player && player.alive && player.hider && !e.repeat && (e.code === HIDE.KEY || e.code === HIDE.ROT_KEY || e.code === HIDE.LOCK_KEY)) { // Escondido: E troca o objeto · R gira · L trava a posição
+    if (e.code === HIDE.LOCK_KEY) { player.propLock = !player.propLock; flashMsg(player.propLock ? `🔒 Posição travada · só a câmera mexe (${HIDE.LOCK_LABEL} destrava)` : '🔓 Posição destravada'); return; }
+    if (e.code === HIDE.KEY) { player.prop = nextProp(player.prop, hideS.props); flashMsg(`Agora você é: ${PROP_NAMES[player.prop]}`); } else player.propRot = ((player.propRot || 0) + Math.PI / 4) % (Math.PI * 2);
     hideSeen(player); return;
   }
   if (tryOpenChat(e)) { e.preventDefault(); return; }
@@ -6200,7 +6201,7 @@ const MENU_RULES = {
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. Munição não acaba e a partida não termina.',
-  hide: `🫥 COMO JOGAR · Docão Escondido (protótipo, estilo Prop Hunt)\n🙈 Escondidos: você vira um objeto do mapa. ${HIDE.KEY_LABEL} troca o objeto, ${HIDE.ROT_LABEL} gira. Fique parado e sobreviva até o tempo acabar.\n🔫 Caçadores: ${HIDE.PREP} s presos e cegos no spawn, depois ${Math.round(HIDE.ROUND / 60 * 10) / 10} min pra achar e abater todos os objetos-Docão.\n🔁 Os papéis trocam toda rodada · primeiro time a ${HIDE.WIN} vence.`,
+  hide: `🫥 COMO JOGAR · Docão Escondido (protótipo, estilo Prop Hunt)\n🙈 Escondidos: você vira um objeto do mapa. ${HIDE.KEY_LABEL} troca o objeto (só os que existem no mapa), ${HIDE.ROT_LABEL} gira, ${HIDE.LOCK_LABEL} trava a posição (só a câmera mexe). Mapa: Rodízio do Docão. Fique parado e sobreviva até o tempo acabar.\n🔫 Caçadores: ${HIDE.PREP} s presos e cegos no spawn, depois ${Math.round(HIDE.ROUND / 60 * 10) / 10} min pra achar e abater todos os objetos-Docão.\n🔁 Os papéis trocam toda rodada · primeiro time a ${HIDE.WIN} vence.`,
   x1: 'X1 · duelo. Mapa pequeno sorteado, cada um nasce de um lado. Primeiro a 10 abates. Só munição no chão, sem vida. A arma é a mesma pros dois e troca quando alguém cai.',
 };
 function readLimitStore() {
@@ -7808,21 +7809,15 @@ window.__docao = { get state() { return state; }, toMenu: () => toMenu(), benchO
 //  Docão Escondido (estilo Prop Hunt) — PROTÓTIPO offline. Regras em shared/hide.js; aqui: objetos, câmera, bots e HUD.
 // ============================================================
 const HIDE_MAT = {}; const hmat = (c) => (HIDE_MAT[c] ||= new THREE.MeshLambertMaterial({ color: c }));
-function hidePropMesh(t) { // formas simples no estilo dos props de world.js (barril, feno, copão, banco, árvore, caixote)
-  const g = new THREE.Group(), add = (geo, c, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, hmat(c)); m.position.set(x, y, z); g.add(m); return m; };
-  if (t === 'keg') { add(new THREE.CylinderGeometry(0.55, 0.55, 1.2, 18), '#8a5a2b', 0, 0.6); add(new THREE.CylinderGeometry(0.57, 0.57, 0.08, 18), '#3a3a3a', 0, 0.25); add(new THREE.CylinderGeometry(0.57, 0.57, 0.08, 18), '#3a3a3a', 0, 0.95); }
-  else if (t === 'hay') add(new THREE.BoxGeometry(1.6, 1.1, 1), '#f2c94c', 0, 0.55);
-  else if (t === 'cup') { add(new THREE.CylinderGeometry(0.6, 0.42, 1.5, 20), '#d8261c', 0, 0.75); add(new THREE.CylinderGeometry(0.61, 0.61, 0.15, 20), '#ffffff', 0, 1.4); }
-  else if (t === 'bench') { add(new THREE.BoxGeometry(1.8, 0.12, 0.6), '#9b6a3a', 0, 0.5); add(new THREE.BoxGeometry(1.8, 0.5, 0.1), '#9b6a3a', 0, 0.85, 0.28); add(new THREE.BoxGeometry(0.1, 0.5, 0.5), '#444', -0.8, 0.25); add(new THREE.BoxGeometry(0.1, 0.5, 0.5), '#444', 0.8, 0.25); }
-  else if (t === 'tree') { add(new THREE.CylinderGeometry(0.18, 0.25, 1, 10), '#6b4423', 0, 0.5); add(new THREE.ConeGeometry(0.9, 1.6, 12), '#2f8f3a', 0, 1.7); }
-  else add(new THREE.BoxGeometry(1.1, 1.1, 1.1), '#b8864b', 0, 0.55); // caixote
-  return g;
+function hidePropMesh(t) { // V2: mesma malha do prop do mapa (world.js); caixote = caixa do Rodízio
+  if (t === 'crate') { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), hmat('#9c6b3a')); m.position.y = 0.8; g.add(m); return g; }
+  return buildPropMesh({ t });
 }
 function hideSyncProp(e) {
   const want = !!(hideS && e.hider && e.alive && e.prop);
   if (e.propMesh && (!want || e.propMeshT !== e.prop)) { scene.remove(e.propMesh); e.propMesh = null; }
   if (want && !e.propMesh) { e.propMesh = hidePropMesh(e.prop); e.propMeshT = e.prop; scene.add(e.propMesh); }
-  if (e.propMesh) { e.propMesh.position.copy(e.pos); e.propMesh.rotation.y = e.yaw + (e.propRot || 0); }
+  if (e.propMesh) { if (!e.propLock || e.propYaw == null) e.propYaw = e.yaw; e.propMesh.position.copy(e.pos); e.propMesh.rotation.y = e.propYaw + (e.propRot || 0); } // travado: o objeto não gira com a câmera
   if (e.model && want) e.model.group.visible = false; // o Docão some; só o objeto fica
 }
 function hideSeen(e) { e.hideSeenUntil = gameTime + 2.5; } // trocou/girou o objeto: Caçador bot nota de mais longe por um tempinho
@@ -7833,17 +7828,18 @@ function hidePlaceBot(b) { // Escondido bot: escolhe um canto do mapa longe do s
   b.yaw = Math.random() * Math.PI * 2; b.propRot = ((Math.random() * 8) | 0) * Math.PI / 4;
 }
 function hideThirdPerson(p) {
-  const back = new V3(Math.sin(p.yaw), 0, Math.cos(p.yaw)).multiplyScalar(3.6);
-  camera.position.set(p.pos.x + back.x, p.pos.y + 2.2, p.pos.z + back.z);
+  const big = p.prop === 'tree'; // árvore é alta: câmera mais longe e mais alta pra não ficar dentro da copa
+  const back = new V3(Math.sin(p.yaw), 0, Math.cos(p.yaw)).multiplyScalar(big ? 7 : 3.6);
+  camera.position.set(p.pos.x + back.x, p.pos.y + (big ? 4.6 : 2.2), p.pos.z + back.z);
   if (!losClear(new V3(p.pos.x, p.pos.y + 1.6, p.pos.z), camera.position)) camera.position.set(p.pos.x + back.x * 0.35, p.pos.y + 1.9, p.pos.z + back.z * 0.35); // parede atrás: chega mais perto
 }
 function endHide() {
   for (const e of entities) if (e.propMesh) { scene.remove(e.propMesh); e.propMesh = null; }
-  for (const e of entities) { e.hider = false; e.prop = null; }
+  for (const e of entities) { e.hider = false; e.prop = null; e.propLock = false; }
   hideS = null; if (hideBlindEl) hideBlindEl.style.display = 'none'; const h = document.getElementById('hidehud'); if (h) h.classList.add('hidden');
 }
 function startHideOffline() {
-  hideS = newHideState(); teamScore = hideS.score;
+  hideS = newHideState(propsForMap(currentMap)); teamScore = hideS.score;
   return startHideRound(hideS, gameTime, entities);
 }
 function updateHideOffline(dt) {
@@ -7864,7 +7860,7 @@ function updateHideOffline(dt) {
   const role = player ? ROLE_NAMES[player.hider ? 1 : 0] : '';
   const fase = hideS.phase === 'prep' ? 'Escondendo' : hideS.phase === 'live' ? 'Caçada' : hideS.phase === 'end' ? 'Fim da rodada' : '';
   const wl = hideS.phase === 'live' && hideS.whistleAt ? hideS.whistleAt - gameTime : 99;
-  h.innerHTML = `Rodada ${hideS.round} · <b>${role}</b> · ${fase} ${fmtT(left)} · 🙈 ${hidersAlive(hideS, entities)} vivos · ${wl <= HIDE.WHISTLE_WARN ? `<b style="color:#ffd27a">📯 apito em ${Math.ceil(wl)}</b> · ` : hideS.phase === 'live' ? `📯 ${Math.ceil(wl)} s · ` : ''} <span style="color:${TEAM_COLORS[0]}">${hideS.score[0]}</span> × <span style="color:${TEAM_COLORS[1]}">${hideS.score[1]}</span>${player && player.hider && player.prop ? ` · ${PROP_NAMES[player.prop]} (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira)` : ''}`;
+  h.innerHTML = `Rodada ${hideS.round} · <b>${role}</b> · ${fase} ${fmtT(left)} · 🙈 ${hidersAlive(hideS, entities)} vivos · ${wl <= HIDE.WHISTLE_WARN ? `<b style="color:#ffd27a">📯 apito em ${Math.ceil(wl)}</b> · ` : hideS.phase === 'live' ? `📯 ${Math.ceil(wl)} s · ` : ''} <span style="color:${TEAM_COLORS[0]}">${hideS.score[0]}</span> × <span style="color:${TEAM_COLORS[1]}">${hideS.score[1]}</span>${player && player.hider && player.prop ? ` · ${PROP_NAMES[player.prop]} (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira · ${HIDE.LOCK_LABEL} ${player.propLock ? '🔒 travado' : 'trava'})` : ''}`;
 }
 function hideNewRound() { // papéis já trocaram em startHideRound: limpa projéteis e todo mundo renasce
   clearTacticals(); for (const n of grenades) scene.remove(n.mesh); grenades.length = 0; for (const r of rockets) scene.remove(r.mesh); rockets.length = 0;
@@ -7872,7 +7868,7 @@ function hideNewRound() { // papéis já trocaram em startHideRound: limpa proj�
 }
 function onHideEvent(ev) {
   const k = ev[0], me = player && player.hider;
-  if (k === 'round') bombBanner(`Rodada ${ev[1]} · ${me ? 'VOCÊ SE ESCONDE' : 'VOCÊ CAÇA'}`, me ? `Vire um objeto (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira) e se esconda em ${HIDE.PREP} s` : `Time ${TEAM_NAMES[ev[2]]} está se escondendo · aguarde ${HIDE.PREP} s`, TEAM_COLORS[player ? player.team : 0], 4);
+  if (k === 'round') bombBanner(`Rodada ${ev[1]} · ${me ? 'VOCÊ SE ESCONDE' : 'VOCÊ CAÇA'}`, me ? `Vire um objeto (${HIDE.KEY_LABEL} troca · ${HIDE.ROT_LABEL} gira · ${HIDE.LOCK_LABEL} trava) e se esconda em ${HIDE.PREP} s` : `Time ${TEAM_NAMES[ev[2]]} está se escondendo · aguarde ${HIDE.PREP} s`, TEAM_COLORS[player ? player.team : 0], 4);
   else if (k === 'whistle') { // apito obrigatório: cada Escondido vivo apita de onde está
     window.__hideWhistles = (window.__hideWhistles || 0) + 1;
     for (const e of entities) if (e.hider && e.alive) { const v = e === player ? 1 : distVol(e.pos); tone('sine', 1500, 2300, 0.18, 0.22 * v); tone('sine', 2300, 1700, 0.2, 0.22 * v, 0.2); hideSeen(e); }
