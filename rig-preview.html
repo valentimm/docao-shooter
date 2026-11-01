@@ -1,0 +1,39 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Docão M0 — esqueleto + animações</title>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<style>body{margin:0;background:#1b2230;color:#fff;font:14px system-ui;overflow:hidden}#ui{position:fixed;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:2}
+button,select{background:#2c3850;color:#fff;border:1px solid #4a5a7a;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}button.on{background:#d8261c}
+#t{position:fixed;bottom:10px;left:10px;opacity:.75}</style></head><body>
+<div id="ui"><button data-a="all" class="on">Lado a lado</button><button data-a="idle">Idle</button><button data-a="walk">Walk</button><button data-a="run">Run</button><button id="bones">Ossos</button><select id="skin"></select></div>
+<div id="t">M0 · protótipo com esqueleto real (25 ossos + 5 encaixes) · SkinnedMesh + AnimationMixer · arraste para girar</div>
+<script type="module">
+import * as THREE from 'three';
+import { makeDocaoRigged } from './docao-rigged.js';
+import { SKINS } from './skins.js';
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.shadowMap.enabled = true; document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color('#87b8e8'); sc.fog = new THREE.Fog('#87b8e8', 12, 30);
+const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+sc.add(new THREE.HemisphereLight('#fff6e0', '#6a8a50', 1.6)); const sun = new THREE.DirectionalLight('#fff', 2.2); sun.position.set(4, 8, 5); sun.castShadow = true; sun.shadow.camera.left = -6; sun.shadow.camera.right = 6; sun.shadow.camera.top = 6; sun.shadow.camera.bottom = -6; sc.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(20, 48), new THREE.MeshToonMaterial({ color: '#7cbf5a' })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; sc.add(ground);
+const sel = document.getElementById('skin'); for (const s of SKINS) sel.add(new Option(s.name, s.id));
+let rigs = [], helpers = [], mode = 'all', showBones = false;
+function build() {
+  for (const g of rigs) sc.remove(g.group); for (const h of helpers) sc.remove(h); rigs = []; helpers = [];
+  const skin = SKINS.find((s) => s.id === sel.value) || SKINS[0];
+  ['idle', 'walk', 'run'].forEach((a, i) => { const rig = makeDocaoRigged(skin); rig.group.position.x = (i - 1) * 2; rig.group.rotation.y = 0.35; sc.add(rig.group); rig.play(a, 0); rig.anim = a; rigs.push(rig);
+    const h = new THREE.SkeletonHelper(rig.mesh); h.visible = showBones; sc.add(h); helpers.push(h); });
+  apply();
+}
+function apply() { rigs.forEach((rig, i) => { const solo = mode !== 'all'; rig.group.visible = !solo || i === 1; helpers[i].visible = showBones && rig.group.visible; rig.play(solo ? mode : rig.anim); });
+  document.querySelectorAll('[data-a]').forEach((b) => b.classList.toggle('on', b.dataset.a === mode)); }
+document.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => { mode = b.dataset.a; apply(); });
+document.getElementById('bones').onclick = (e) => { showBones = !showBones; e.target.classList.toggle('on', showBones); apply(); };
+sel.onchange = build;
+let yaw = 0, drag = null; addEventListener('pointerdown', (e) => { if (e.target.tagName === 'CANVAS') drag = e.clientX; }); addEventListener('pointerup', () => drag = null);
+addEventListener('pointermove', (e) => { if (drag != null) { yaw += (e.clientX - drag) * 0.01; drag = e.clientX; } });
+function size() { r.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); } addEventListener('resize', size); size();
+build(); const clk = new THREE.Clock();
+r.setAnimationLoop(() => { const dt = Math.min(clk.getDelta(), 0.05); for (const g of rigs) { g.mixer.update(dt); g.group.rotation.y = 0.35 + yaw; }
+  const d = mode === 'all' ? 7.5 : 4.2; cam.position.set(0, 1.6, d); cam.lookAt(0, 1.0, 0); r.render(sc, cam); });
+window.__ready = true;
+</script></body></html>
