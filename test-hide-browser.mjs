@@ -18,6 +18,15 @@ ok(s.phase === 'prep' && s.round === 1, 'rodada 1 em preparação');
 ok(s.ents.some((e) => e.hider) && s.ents.some((e) => !e.hider), 'tem Escondidos e Caçadores');
 ok(s.ents.filter((e) => e.hider).every((e) => e.mesh && e.w === 7 && e.vis !== true), 'Escondidos: objeto no lugar do Docão, só faca');
 ok(/Rodada 1/.test(s.hud || ''), 'HUD do modo');
+ok(await G(() => window.__hide.S.props.join() === 'keg,hay,tree,jar,crate'), 'V2: mapa Rodízio e só objetos que existem nele');
+ok(s.ents.filter((e) => e.hider).every((e) => ['keg', 'hay', 'tree', 'jar', 'crate'].includes(e.prop)), 'V2: Escondidos sorteiam objeto do mapa');
+{ const pl = await G(() => { const p = window.__hide.player; window.__wasH = [p.hider, p.prop]; p.hider = true; p.prop ||= 'keg'; return !!p; });
+  if (pl) { await page.keyboard.press('KeyL'); await wait(150); await page.keyboard.down('KeyW'); const p0 = await G(() => { const p = window.__hide.player; return [p.pos.x, p.pos.z, p.propLock]; }); await wait(700);
+    const p1 = await G(() => { const p = window.__hide.player; p.yaw += 1; return [p.pos.x, p.pos.z]; }); await wait(200); await page.keyboard.up('KeyW');
+    const y = await G(() => { const p = window.__hide.player; return p.propMesh ? Math.abs(p.propMesh.rotation.y - p.propYaw - (p.propRot || 0)) < 1e-6 && Math.abs(p.propYaw - p.yaw) > 0.5 : null; });
+    ok(p0[2] === true && Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 0.05, 'V2: L trava a posição (W não anda)'); ok(y !== false, 'V2: travado, objeto não gira com a câmera');
+    await page.keyboard.press('KeyL'); ok(await G(() => window.__hide.player.propLock === false), 'V2: L de novo destrava');
+    await G(() => { const p = window.__hide.player; [p.hider, p.prop] = window.__wasH; }); await wait(200); } }
 await page.screenshot({ path: '/tmp/hide-prep.png' });
 // pula a preparação e mata todos os Escondidos
 await G(() => { window.__hide.S.phaseEnd = 0; }); await wait(400);
