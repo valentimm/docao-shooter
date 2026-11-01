@@ -4,6 +4,12 @@ Jogue em **https://docao.mvalentim.dev**
 
 ---
 
+## v1.32 — Docão Escondido 📯🐷
+
+📯 **DOCÃO ESCONDIDO (Prop Hunt).** Modo novo no menu offline: Escondidos viram barril, feno, copão, banco, árvore ou caixote; Caçadores caçam. Preparação 25 s (caçador cego no spawn), caçada 150 s. **E** troca o objeto, **R** gira. **Apito obrigatório** 20 s após a caçada começar e depois a cada 25 s — o Escondido apita sozinho, com aviso na tela. Melhor de 5 (primeiro a 3), papéis trocam a cada rodada. Protótipo offline (ainda sem sala online).
+
+---
+
 ## Próxima versão — Luneta da Carabina
 
 🔭 **CARABINA DA GRANJA.** A luneta demora **0,1725 s** pra entrar: 15% mais lenta que os **0,15 s** de antes do flinch. Os 0,24 s (60% mais lentos) ficaram longos demais. Pente, recuo e as outras armas continuam iguais. A lente ainda só cobre a tela quando a arma já chegou no ombro.
