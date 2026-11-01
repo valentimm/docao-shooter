@@ -363,7 +363,7 @@ export function makeDocao(skinOrId, opts = {}) {
   }
   const shorts = mesh(roundedCyl(0.41, 0.24, 0.07), pantsM, g, 0.012, true); shorts.position.y = 0.47; shorts.scale.z = 0.85;
   // tronco/camiseta
-  const torso = mesh(getTorsoGeo(), shirtM, g, 0.014, true); torso.scale.z = 0.85;
+  const torso = mesh(getTorsoGeo(), shirtM, g, 0.014, true); torso.scale.set(1.08, 1, 0.92); // barriguinha mais fofa
   const collar = mesh(new THREE.TorusGeometry(0.27, 0.045, 10, 32), trimM, g, 0.01); collar.rotation.x = Math.PI / 2; collar.position.y = 1.1; collar.scale.y = 0.85;
   // rabinho enrolado
   var tail = mesh(new THREE.TorusGeometry(0.08, 0.032, 10, 24, Math.PI * 1.7), skinM, g, 0.01); tail.position.set(0, 0.5, -0.4); tail.scale.setScalar(1.25); tail.rotation.y = Math.PI / 2;
@@ -388,7 +388,7 @@ export function makeDocao(skinOrId, opts = {}) {
     const inn = new THREE.Mesh(innerGeo, earInM); inn.position.z = 0.07; ear.add(inn);
   }
   // focinho grande, oval e achatado na frente
-  const snoutY = 1.47, snoutDepth = 0.22;
+  const snoutY = 1.47, snoutDepth = 0.16; // focinho mais achatado (gfx v1)
   const sp = headPoint(0, snoutY);
   const snout = mesh(roundedCyl(0.2, snoutDepth, 0.065), snoutM, head, 0.012);
   snout.rotation.x = Math.PI / 2 - 0.12; snout.scale.set(1.22, 1, 0.82); snout.position.set(0, snoutY, sp.z + snoutDepth / 2 - 0.08);
@@ -403,7 +403,7 @@ export function makeDocao(skinOrId, opts = {}) {
   for (const s of [-1, 1]) {
     const th = s * 0.33, ey = 1.7; const n = headNormal(th, ey); const p = headPoint(th, ey, -0.02);
     const eye = new THREE.Group(); eye.position.copy(p); eye.lookAt(p.clone().add(n)); eye.userData.n = n; head.add(eye);
-    const w = mesh(new THREE.SphereGeometry(0.135, 24, 16), white, eye, 0.012); w.scale.set(0.95, 1.2, 0.55);
+    const w = mesh(new THREE.SphereGeometry(0.135, 24, 16), white, eye, 0.012); w.scale.set(0.95, 1.18, 0.42);
     const iris = new THREE.Mesh(new THREE.SphereGeometry(0.095, 20, 14), basic((skin.eyes && skin.eyes.iris) || PALETTE.iris)); iris.scale.set(1, 1.1, 0.4); iris.position.set(-s * 0.012, -0.01, 0.052); eye.add(iris);
     if (skin.eyes && skin.eyes.ring) { // anel mais escuro em volta da íris (opcional, por skin)
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.083, 0.012, 8, 28), basic(skin.eyes.ring)); ring.scale.set(1, 1.1, 0.4); ring.position.set(-s * 0.012, -0.01, 0.066); eye.add(ring);
@@ -622,6 +622,7 @@ export function makeDocao(skinOrId, opts = {}) {
     const obj = b(part, rig); if (!obj) continue;
     (obj.userData.anchor === 'head' || ['cap', 'glasses', 'sunglasses', 'headphones'].includes(part.type) ? head : g).add(obj);
   }
+  { const HK = 1.1; head.scale.setScalar(HK); head.position.y = HEAD.y0 * (1 - HK) - 0.02; } // cabeção (pivô no pescoço)
   g.traverse((o) => { if (o.isMesh && !o.userData.isOutline && o.parent === g) o.castShadow = true; });
   for (const b of brows) b.userData.base = { p: b.position.clone(), q: b.quaternion.clone() };
   const face = { eyes, brows, faceM, tex: [tone, beard, facePaint], neutralMap: faceM.map, angryMap: null, t: 0, target: 0, hold: 0 };
@@ -1084,10 +1085,10 @@ export function animateLife(m, dt, time, speed = 0, walk = 0) {
   const B = L.base;
   // respiração (some com a corrida)
   const br = Math.sin(t * 2.2) * (1 - mv);
-  m.torso.scale.set(B.ts.x * (1 + 0.018 * br), B.ts.y * (1 + 0.012 * br), B.ts.z * (1 + 0.018 * br));
+  m.torso.scale.set(B.ts.x * (1 + 0.03 * br), B.ts.y * (1 + 0.018 * br), B.ts.z * (1 + 0.03 * br));
   // cabeça: bob + tilt preguiçoso parado; balanço no passo andando
   m.head.position.y = B.hy + 0.012 * br + Math.abs(Math.sin(walk)) * 0.035 * mv;
-  m.head.rotation.z = B.hr.z + Math.sin(t * 0.7) * 0.05 * (1 - mv) + Math.sin(walk) * 0.06 * mv;
+  m.head.rotation.z = B.hr.z + Math.sin(t * 0.7) * 0.07 * (1 - mv) + Math.sin(walk) * 0.06 * mv;
   m.head.rotation.x = B.hr.x + Math.sin(t * 0.45) * 0.03 * (1 - mv);
   // rabinho abana
   if (m.tail) m.tail.rotation.x = B.tr.x + Math.sin(t * (6 + 6 * mv)) * 0.35;
