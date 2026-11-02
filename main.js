@@ -35,7 +35,7 @@ import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh } fr
 import { buildNav } from './nav.js';
 import { initBacon, spawnBacon, updateBacon, clearBacon, popModel, baconStats, activeBacons, edibleBacons, eatBacon, BACON } from './bacon.js';
 import { Net, createRoom, roomInfo } from './net.js';
-import { initChat, chatTyping, chatShown, chatRoomOn, chatConsumeUnlock, chatNoteLocked, openChat, closeChat, chatSeed, chatPush, chatSetRoom, chatSetTeam, chatClear, chatUseAll } from './chat.js';
+import { initChat, chatTyping, chatShown, chatRoomOn, chatConsumeUnlock, chatNoteLocked, openChat, closeChat, chatSeed, chatPush, chatSetRoom, chatSetTeam, chatClear, chatUseAll, chatRefresh } from './chat.js';
 import { initVoice, voicePtt, voiceCycle, voiceReset, voiceRoster, voiceSignal, voiceTalking, voiceMuted, voiceToggleMute, voiceRefresh } from './voice.js';
 import { SEND_HZ, INTERP_DELAY } from './config.js';
 import { cleanName, NAME_MAX } from './shared/names.js';
@@ -126,13 +126,43 @@ function canvasTex(w, h, draw) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
-function nameSprite(text, color = '#ffffff') {
-  const tex = canvasTex(256, 64, (x, w, h) => {
-    x.font = 'bold 34px Fredoka, "Trebuchet MS", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.lineWidth = 7; x.strokeStyle = '#2a1410'; x.strokeText(text, w / 2, h / 2); x.fillStyle = color; x.fillText(text, w / 2, h / 2);
+function nameSprite(text, color = '#ffffff', nemesis = false) {
+  const label = String(text || '');
+  const font = 'bold 34px Fredoka, "Trebuchet MS", Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+  let w = 256, h = 64;
+  if (nemesis) {
+    const probe = document.createElement('canvas').getContext('2d');
+    probe.font = font;
+    w = Math.max(256, Math.ceil(probe.measureText('💀 ' + label).width) + 36);
+  }
+  const tex = canvasTex(w, h, (x) => {
+    x.font = font; x.textBaseline = 'middle';
+    if (!nemesis) {
+      x.textAlign = 'center';
+      x.lineWidth = 7; x.strokeStyle = '#2a1410'; x.strokeText(label, w / 2, h / 2); x.fillStyle = color; x.fillText(label, w / 2, h / 2);
+      return;
+    }
+    x.textAlign = 'left';
+    const skull = '💀 ';
+    const left = (w - x.measureText(skull + label).width) / 2;
+    x.fillText(skull, left, h / 2);
+    const nx = left + x.measureText(skull).width;
+    x.lineJoin = 'round'; x.lineWidth = 4; x.strokeStyle = '#e10600'; x.strokeText(label, nx, h / 2);
+    x.shadowColor = '#ff2424'; x.shadowBlur = 10; x.fillStyle = color; x.fillText(label, nx, h / 2);
   });
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
-  s.scale.set(1.8, 0.45, 1); s.position.y = 2.55; s.userData.tagH = 0.45; return s;
+  s.scale.set((w / h) * 0.45, 0.45, 1); s.position.y = 2.55; s.userData.tagH = 0.45; s.userData.tagW = w / h; return s;
+}
+function paintNameTag(e) {
+  if (!e || !e.model || e.isPlayer) return;
+  const on = teamMode() && (e.team === 0 || e.team === 1);
+  if (e.tagSprite) {
+    e.model.group.remove(e.tagSprite);
+    const mat = e.tagSprite.material;
+    if (mat) { if (mat.map) mat.map.dispose(); mat.dispose(); }
+  }
+  e.tagSprite = nameSprite(e.name, on ? TEAM_COLORS[e.team] : (e.tag || '#ffffff'), isNemesis(e));
+  e.model.group.add(e.tagSprite);
 }
 // Nametag perto demais vira um cartaz em cima do timer. Esconde abaixo de uma distância
 // mínima e também quando a projeção cairia na faixa do HUD de cima.
@@ -150,7 +180,7 @@ function placeNameTags() {
     const dist = camera.position.distanceTo(_tagPt);
     if (dist < TAG_MIN_DIST) { s.visible = false; continue; }
     const worldH = Math.min(0.45, (26 / Math.max(focal, 1)) * dist);
-    s.scale.set(worldH * 4, worldH, 1);
+    s.scale.set(worldH * (s.userData.tagW || 4), worldH, 1);
     _tagPt.project(camera);
     if (_tagPt.z < -1 || _tagPt.z > 1) { s.visible = false; continue; }
     const sx = (_tagPt.x + 1) * 0.5 * innerWidth, sy = (1 - _tagPt.y) * 0.5 * innerHeight;
@@ -1453,6 +1483,66 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   return false;
 }
 
+// Nemesis: só na sua tela. Três mortes seguidas para a mesma pessoa, sem você matar ela.
+let nemesisRun = new Map(), nemesisOn = new Set(), nemesisLast = null;
+function resetNemesis() { nemesisRun.clear(); nemesisOn.clear(); nemesisLast = null; }
+function isNemesis(e) { return !!(e && nemesisOn.has(e)); }
+function forgetNemesis(e) {
+  if (!e) return;
+  nemesisRun.delete(e);
+  if (nemesisLast === e) nemesisLast = null;
+  if (nemesisOn.delete(e)) chatRefresh();
+}
+function breakNemesisRun() {
+  if (nemesisLast && !nemesisOn.has(nemesisLast)) nemesisRun.set(nemesisLast, 0);
+  nemesisLast = null;
+}
+function markNemesis(e, on) {
+  if (!e || e.isPlayer || e.zt || e.dummy || e.fog) return;
+  if (!on) {
+    nemesisRun.set(e, 0);
+    if (nemesisLast === e) nemesisLast = null;
+    if (!nemesisOn.delete(e)) return;
+  } else if (nemesisOn.has(e)) return;
+  else nemesisOn.add(e);
+  paintNameTag(e);
+  chatRefresh();
+}
+function noteNemesisKill(attacker, victim) {
+  if (!player || !victim || victim.zt) return;
+  if (victim === player) {
+    if (player._nemDeaths === player.deaths) return;
+    player._nemDeaths = player.deaths;
+    if (!attacker || attacker === player || attacker.fog || attacker.zt || attacker.dummy || friends(attacker, player)) { breakNemesisRun(); return; }
+    if (nemesisLast !== attacker) {
+      if (nemesisLast && !nemesisOn.has(nemesisLast)) nemesisRun.set(nemesisLast, 0);
+      nemesisLast = attacker;
+      if (!nemesisOn.has(attacker)) nemesisRun.set(attacker, 0);
+    }
+    const n = (nemesisRun.get(attacker) || 0) + 1;
+    nemesisRun.set(attacker, n);
+    if (n >= 3) markNemesis(attacker, true);
+    return;
+  }
+  if (attacker === player) markNemesis(victim, false);
+}
+function shownName(e) {
+  const name = escapeHtml((e && e.name) || '');
+  if (!e || !isNemesis(e)) return name;
+  return `<span class="nemesis"><span class="nemesis-skull">💀</span>${name}</span>`;
+}
+function nameBits(e) {
+  if (!e) return '';
+  const nem = isNemesis(e);
+  return `<b class="${e.isPlayer ? 'me' : ''}${nem ? ' nemesis' : ''}">${nem ? '<span class="nemesis-skull">💀</span>' : ''}${escapeHtml(e.name)}</b>`;
+}
+function whoHtml(p) {
+  const named = p.killerName || (p.lastAttacker && p.lastAttacker !== p && p.lastAttacker.name) || '';
+  if (!named) return '';
+  const ent = p.lastAttacker && p.lastAttacker !== p && p.lastAttacker.name === named && isNemesis(p.lastAttacker) ? p.lastAttacker
+    : entities.find((e) => e !== p && e.name === named && isNemesis(e));
+  return ent ? shownName(ent) : escapeHtml(named);
+}
 function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx = 0) { // fx: 1 pela parede, 2 collateral
   if (state === 'over' || !t.alive) return; // resultado fechado ou morte já processada
   if (t.zt) { killZombieLocal(t, a, wIdx, head, back); return; } // Invasão: zumbi
@@ -1460,7 +1550,9 @@ function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx
   if (a) t.lastAttacker = a;
   if (t.isPlayer) t.killerName = a && a !== t && a.name ? a.name : (label || '');
   if (a && a !== t && !friends(a, t)) a.kills++;
+  if (t === player) noteNemesisKill(a, t); // a 3ª seguida já sai com a caveira no feed
   addKillFeed(a, t, wIdx, head, back, label, fx);
+  if (t !== player) noteNemesisKill(a, t); // o abate que acaba com o nemesis ainda mostra a marca
   sfx.die(t.isPlayer ? 1 : distVol(t.pos));
   if (hideS && t.hider) { t.respawnAt = Infinity; if (t.model) t.model.group.visible = true; } // Docão Escondido: achado = fora da rodada (e o Docão aparece no lugar do objeto)
   if (t.isPlayer && invMode() && inv && !inv.onPlayerDeath(t)) t.respawnAt = Infinity; // Invasão: sem vidas = assiste até alguém usar a Ressurreição
@@ -2256,7 +2348,8 @@ function paintAc130Tags(node) {
     tag.className = 'ac-tag' + (it.ally ? ' ally' : ' foe') + (it.off ? ' off' : '');
     tag.style.left = ((x + 1) / 2 * innerWidth).toFixed(0) + 'px';
     tag.style.top = ((1 - y) / 2 * innerHeight).toFixed(0) + 'px';
-    tag.textContent = `${it.e.name} ${Math.round(it.d)}m`;
+    const label = `${shownName(it.e)} ${Math.round(it.d)}m`;
+    if (tag.dataset.h !== label) { tag.dataset.h = label; tag.innerHTML = label; }
     tag.hidden = false;
   }
   for (let i = nMax; i < box.children.length; i++) box.children[i].hidden = true;
@@ -2872,9 +2965,9 @@ const SELF_PHRASES = [(t) => `${t} se pururucou`, (t) => `${t} virou bacon sozin
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 function showStamp(wIdx) { const s = $('stamp'); s.textContent = isKnife(wIdx) ? 'MOGGADO!' : wIdx === TAMPA ? 'AMASSADO!' : wIdx === W_BOMB ? 'EXPLODIDO!' : wIdx === EGG_W ? 'OMELETADO!' : 'PURURUCADO!'; s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
 function addKillFeed(a, t, wIdx, head, back = false, label = null, fx = 0) {
-  if (wIdx === W_BOMB) { const n = `<b class="${t.isPlayer ? 'me' : ''}">${escapeHtml(t.name)}</b>`; addFeedLine(pick(BOOM_PHRASES)(n), `${t.name} explodiu com o botijão`); return; }
+  if (wIdx === W_BOMB) { const n = nameBits(t); addFeedLine(pick(BOOM_PHRASES)(n), `${t.name} explodiu com o botijão`); return; }
   const div = document.createElement('div'); div.className = 'kf' + (isKnife(wIdx) ? ' knife' : '');
-  const nm = (e) => `<b class="${e.isPlayer ? 'me' : ''}">${escapeHtml(e.name)}</b>`;
+  const nm = (e) => nameBits(e);
   const knife = isKnife(wIdx) && a && a !== t; // faca: frase fixa "moggou"
   const lidKill = wIdx === TAMPA && a && a !== t;
   const zk = a && a.zt, fogK = (a && a.fog) || label === 'Névoa Assombrada'; // Invasão: zumbi / névoa
@@ -2891,7 +2984,7 @@ function boardHtml() {
   const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths);
   const pg = (e) => (online ? `<td>${e.bot ? 'bot' : (e.isPlayer ? online.net.ping : e.ping || 0) + ' ms'}</td>` : '');
   return `<table><tr><th>#</th><th style="text-align:left">Docão</th><th>Abates</th><th>Mortes</th><th>K/D</th>${online ? '<th>Ping</th>' : ''}</tr>${rows.map((e, i) =>
-    `<tr class="${e.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td style="text-align:left"><span class="dot" style="background:${teamMode() && e.team >= 0 ? TEAM_COLORS[e.team] : e.shirt}"></span>${escapeHtml(e.name)}${armsMode() ? ` <small>Etapa ${(e.armsStage | 0) + 1}/${ARMS_STAGES.length} · ${e.armsKills | 0}/2</small>` : teamMode() ? ` <small style="color:${TEAM_COLORS[e.team] || '#fff'}">${e.caps || 0} ${mode === 'bomb' ? 'obj.' : (e.caps || 0) === 1 ? 'zona' : 'zonas'}</small>` : ''}</td><td>${e.kills}</td><td>${e.deaths}</td><td>${(e.kills / Math.max(1, e.deaths)).toFixed(2)}</td>${pg(e)}</tr>`).join('')}</table>`;
+    `<tr class="${e.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td style="text-align:left"><span class="dot" style="background:${teamMode() && e.team >= 0 ? TEAM_COLORS[e.team] : e.shirt}"></span>${shownName(e)}${armsMode() ? ` <small>Etapa ${(e.armsStage | 0) + 1}/${ARMS_STAGES.length} · ${e.armsKills | 0}/2</small>` : teamMode() ? ` <small style="color:${TEAM_COLORS[e.team] || '#fff'}">${e.caps || 0} ${mode === 'bomb' ? 'obj.' : (e.caps || 0) === 1 ? 'zona' : 'zonas'}</small>` : ''}</td><td>${e.kills}</td><td>${e.deaths}</td><td>${(e.kills / Math.max(1, e.deaths)).toFixed(2)}</td>${pg(e)}</tr>`).join('')}</table>`;
 }
 function paintSaberHud(p, w) {
   const el = $('saberhud'); if (!el) return;
@@ -2966,7 +3059,9 @@ function updateHud(dt) {
   const lead = entities.filter((e) => !e.zt).reduce((a, b) => (b.kills > a.kills ? b : a));
   const killGoal = x1Mode() ? X1.KILLS : KILL_LIMIT;
   const x1Name = x1Mode() && WEAPONS[x1Gun] ? ` · ${WEAPONS[x1Gun].short}` : '';
-  $('leader').textContent = armsMode() ? `Corrida Armada · Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.primary === GOLD_KNIFE ? '1 abate para vencer' : `${p.armsKills}/2 abates`}` : invMode() ? '' : exploreMode() ? 'Mapa vazio · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : hideMode() ? `Docão Escondido (protótipo) · primeiro time a ${HIDE.WIN} rodadas vence` : x1Mode() ? (lead.kills ? `X1 · ${lead.name} ${lead.kills}/${killGoal}${x1Name}` : `X1 · primeiro a ${killGoal}${x1Name}`) : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${lead.name} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
+  const leadHtml = armsMode() ? `Corrida Armada · Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.primary === GOLD_KNIFE ? '1 abate para vencer' : `${p.armsKills}/2 abates`}` : invMode() ? '' : exploreMode() ? 'Mapa vazio · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : hideMode() ? `Docão Escondido (protótipo) · primeiro time a ${HIDE.WIN} rodadas vence` : x1Mode() ? (lead.kills ? `X1 · ${shownName(lead)} ${lead.kills}/${killGoal}${x1Name}` : `X1 · primeiro a ${killGoal}${x1Name}`) : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${shownName(lead)} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
+  const leaderEl = $('leader');
+  if (leaderEl.dataset.h !== leadHtml) { leaderEl.dataset.h = leadHtml; leaderEl.innerHTML = leadHtml; }
   updateLeaderboard(dt); tickFeedback(dt);
   hurtLevel = Math.max(0, hurtLevel - dt * 2.5);
   { const left = p.alive ? eggSplatUntil - gameTime : 0, el = $('eggsplat'); if (el) { el.style.opacity = left > 0 ? Math.min(1, left / 0.5).toFixed(2) : '0'; if (left > 0) drawEggSplat(); } } // sujeira de ovo na tela: 2 s escorrendo, some no último meio segundo
@@ -2977,12 +3072,13 @@ function updateHud(dt) {
   document.body.classList.toggle('cls-on', veil);
   if (!p.alive) {
     const line = deathLine(p);
-    const who = $('deathWho'); if (who && who.textContent !== line) who.textContent = line;
-    if (document.body.classList.contains('dead') || document.body.classList.contains('killcam')) { if (cm.textContent) cm.textContent = ''; }
-    else if (cm.textContent !== line) cm.textContent = line;
+    const who = $('deathWho');
+    if (who && who.dataset.line !== line) { who.dataset.line = line; who.innerHTML = line; }
+    if (document.body.classList.contains('dead') || document.body.classList.contains('killcam')) { if (cm.textContent) { cm.textContent = ''; delete cm.dataset.line; } }
+    else if (cm.dataset.line !== line) { cm.dataset.line = line; cm.innerHTML = line; }
   }
-  else if (msgTimer > 0) { msgTimer -= dt; if (cm.textContent.startsWith('Você foi ') || cm.textContent.startsWith('Você se ') || cm.textContent.startsWith('Você explodiu') || cm.textContent.startsWith('Você se amassou')) cm.textContent = ''; } // mensagem (ex.: "Mapa: …") tem prioridade; tira o aviso de morte que sobrou de antes de nascer
-  else cm.textContent = '';
+  else if (msgTimer > 0) { msgTimer -= dt; if (cm.textContent.startsWith('Você foi ') || cm.textContent.startsWith('Você se ') || cm.textContent.startsWith('Você explodiu') || cm.textContent.startsWith('Você se amassou')) { cm.textContent = ''; delete cm.dataset.line; } } // mensagem (ex.: "Mapa: …") tem prioridade; tira o aviso de morte que sobrou de antes de nascer
+  else if (cm.textContent || cm.dataset.line) { cm.textContent = ''; delete cm.dataset.line; }
   const prot = $('protmsg');
   const shielded = !!(p.alive && gameTime < p.invulnUntil && msgTimer <= 0);
   if (prot) { prot.textContent = shielded ? 'PROTEGIDO' : ''; prot.classList.toggle('hidden', !shielded); }
@@ -3309,9 +3405,7 @@ const SNIPER_W = WEAPONS.findIndex((w) => w.key === 'sniper');
 const GUN_MESH = Object.fromEntries(['rifle', 'sniper', 'pistol', 'carabina', 'p90'].map((k) => [k, WEAPONS.findIndex((w) => w.key === k)]));
 function paintGunMesh(group, id) {
   if (!group) return;
-  const paint = gunPaint(id);
-  if (paint === 'lore') return;
-  applyGunPaint(group, paint);
+  applyGunPaint(group, gunPaint(id));
 }
 function paintSniper(model, id) {
   const g = model && model.guns && model.guns[SNIPER_W];
@@ -5132,6 +5226,39 @@ wardrobePreviewCamera.position.set(0, 1.05, 4.5); wardrobePreviewCamera.lookAt(0
 const wardrobePreviewPosition = new V3(), wardrobePreviewRotation = new THREE.Quaternion();
 let wardrobePreviewRenderer = null;
 let wardrobePreviewWidth = 0, wardrobePreviewHeight = 0;
+let wardrobeGun = { key: 'rifle', id: '', name: 'Fuzil de fábrica' };
+let wardrobeHold = null;
+let previewShown = '';
+function wardrobeHoldModel(skinId) {
+  if (wardrobeHold && wardrobeHold.skin === skinId) return wardrobeHold.model;
+  const model = makeDocao(skinId || DEFAULT_SKIN, { withGun: true, pose: 'gun' });
+  model.guns.forEach((g) => { g.visible = false; if (g.userData.twin) g.userData.twin.visible = false; });
+  wardrobeHold = { skin: skinId, model };
+  return model;
+}
+function showWardrobeGun(model) {
+  const idx = WEAPONS.findIndex((w) => w.key === wardrobeGun.key);
+  const i = idx < 0 ? 0 : idx;
+  const stamp = `${i}|${wardrobeGun.id || ''}`;
+  const previewScale = { pistol: 2.2, sniper: 1.2, p90: 1.55, carabina: 1.55, rifle: 1.45 }[wardrobeGun.key] || 1.45;
+  model.guns.forEach((g, n) => {
+    const on = n === i;
+    g.visible = on;
+    if (g.userData.twin) g.userData.twin.visible = false;
+    if (on) g.scale.setScalar(previewScale);
+  });
+  if (model.group.userData.wardrobeStamp === stamp) return;
+  model.group.userData.wardrobeStamp = stamp;
+  if (WEAPONS[i] && WEAPONS[i].key === 'sniper') paintSniper(model, wardrobeGun.id);
+  else if (model.guns[i]) paintGunMesh(model.guns[i], wardrobeGun.id);
+}
+document.addEventListener('docao-gun-preview', (e) => {
+  const d = e.detail || {};
+  wardrobeGun = { key: d.key || 'rifle', id: d.id || '', name: d.name || 'Arma de fábrica' };
+  const cap = $('wardrobePreview') && $('wardrobePreview').querySelector('span');
+  if (cap) cap.textContent = wardrobeGun.name;
+  if (wardrobeHold) wardrobeHold.model.group.userData.wardrobeStamp = '';
+});
 function renderWardrobePreview() {
   if (crateJourney.phase !== 'inside' || crateJourney.view !== 'operator') return;
   if (!wardrobePreviewRenderer) {
@@ -5142,15 +5269,18 @@ function renderWardrobePreview() {
   }
   const rect = $('wardrobePreview').getBoundingClientRect();
   if (!rect.width || !rect.height) return;
-  wardrobePreviewPosition.copy(showcase.position); wardrobePreviewRotation.copy(showcase.quaternion);
-  wardrobePreviewScene.add(showcase); showcase.position.set(0, 0, 0); showcase.rotation.set(0, .12 + Math.sin(menuT * 1.8) * .1, 0);
+  const model = wardrobeHoldModel(previewShown || selectedSkin);
+  showWardrobeGun(model);
+  const group = model.group;
+  wardrobePreviewScene.add(group); group.position.set(0, 0, 0); group.rotation.set(0, 0.95 + Math.sin(menuT * 1.8) * 0.04, 0);
+  wardrobePreviewCamera.position.set(1.15, 1.2, 2.55); wardrobePreviewCamera.lookAt(0.05, 0.95, 0.15);
   wardrobePreviewCamera.aspect = rect.width / rect.height; wardrobePreviewCamera.updateProjectionMatrix();
   if (wardrobePreviewWidth !== rect.width || wardrobePreviewHeight !== rect.height) {
     wardrobePreviewRenderer.setSize(rect.width, rect.height, false);
     wardrobePreviewWidth = rect.width; wardrobePreviewHeight = rect.height;
   }
   wardrobePreviewRenderer.render(wardrobePreviewScene, wardrobePreviewCamera);
-  menuActorRoot.add(showcase); showcase.position.copy(wardrobePreviewPosition); showcase.quaternion.copy(wardrobePreviewRotation);
+  wardrobePreviewScene.remove(group);
 }
 let selectedSkin = getSkin(localStorage.getItem('docao.skin') || DEFAULT_SKIN).id, preview = null;
 // Cinco classes no navegador. A última usada é a que nasce. docao.primary continua espelhando a classe armada.
@@ -5371,6 +5501,7 @@ function buildPrimaryPickers() {
 }
 function paintPreview(id, persist) {
   const skin = getSkin(id), shown = skin.id;
+  previewShown = shown;
   if (persist) {
     selectedSkin = shown; wardrobeDraft = false;
     try { localStorage.setItem('docao.skin', selectedSkin); } catch (e) { /* sem storage */ }
@@ -5672,7 +5803,7 @@ function startGame(mapId) {
   const name = myName(); saveName(name);
   sens = parseFloat($('sens').value) || 1.4; sensAds = parseFloat($('sensAds').value) || 1;
   try { localStorage.setItem('docao.sens', String(sens)); localStorage.setItem('docao.sensAds', String(sensAds)); } catch (e) { /* sem storage */ }
-  revengeName = null; resetFeedback(); resetRewards(); resetMatchCamos();
+  revengeName = null; resetNemesis(); resetFeedback(); resetRewards(); resetMatchCamos();
   clearBots(); gameTime = 0; inv = null; invNet = null;
   const picked = $('modeSel').value;
   saveBotDiff($('botDiff').value);
@@ -6100,8 +6231,7 @@ function applyTeam(e, team) {
   e.team = team; if (!e.model) return;
   const on = teamMode() && (team === 0 || team === 1);
   e.model.group.traverse((o) => { if (!o.userData.isOutline) return; if (!o.userData.baseMat) o.userData.baseMat = o.material; o.material = on ? teamOutline(o.userData.baseMat, team) : o.userData.baseMat; });
-  if (e.tagSprite) e.model.group.remove(e.tagSprite);
-  e.tagSprite = nameSprite(e.name, on ? TEAM_COLORS[team] : e.tag); e.model.group.add(e.tagSprite);
+  paintNameTag(e);
   if (!e.teamRing) { e.teamRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.8, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false })); e.teamRing.rotation.x = -Math.PI / 2; e.teamRing.position.y = 0.04; e.model.group.add(e.teamRing); }
   e.teamRing.visible = on; if (on) e.teamRing.material.color.setHex(TEAM_HEX[team]);
 }
@@ -6180,7 +6310,7 @@ function updateLeaderboard(dt) {
   lbT -= dt; if (lbT > 0) return; lbT = 0.25;
   const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths).slice(0, 10);
   const head = armsMode() ? `<div class="lbh"><span>Corrida Armada</span><span>progresso</span></div>` : invMode() ? `<div class="lbh"><span>Invasão 🎃</span><span>abates</span></div>` : exploreMode() ? `<div class="lbh"><span>Exploração</span><span>só você</span></div>` : teamMode() ? `<div class="lbh"><span class="r">Vermelho ${teamScore[0]}</span><span>/${hideMode() ? HIDE.WIN : mode === 'bomb' ? BOMB.WIN : DOM.WIN_CAPS}</span><span class="b">${teamScore[1]} Azul</span></div>` : `<div class="lbh"><span>Placar</span><span>abates</span></div>`;
-  $('lb').innerHTML = head + rows.map((e, i) => { const pid = online ? (e.isPlayer ? online.myId : (e.netId || 0)) : 0; return `<div class="row${e.isPlayer ? ' me' : ''}${e.alive ? '' : ' dead'}${pid && voiceTalking(pid) ? ' talking' : ''}${pid && voiceMuted(pid) ? ' vmuted' : ''}"${pid ? ` data-pid="${pid}"` : ''}><span>${i + 1}</span><span class="dot" style="background:${teamMode() && e.team >= 0 ? TEAM_COLORS[e.team] : e.shirt}"></span><span class="n">${escapeHtml(e.name)}</span><span class="k">${scoreOf(e)}</span></div>`; }).join('');
+  $('lb').innerHTML = head + rows.map((e, i) => { const pid = online ? (e.isPlayer ? online.myId : (e.netId || 0)) : 0; return `<div class="row${e.isPlayer ? ' me' : ''}${e.alive ? '' : ' dead'}${pid && voiceTalking(pid) ? ' talking' : ''}${pid && voiceMuted(pid) ? ' vmuted' : ''}"${pid ? ` data-pid="${pid}"` : ''}><span>${i + 1}</span><span class="dot" style="background:${teamMode() && e.team >= 0 ? TEAM_COLORS[e.team] : e.shirt}"></span><span class="n">${shownName(e)}</span><span class="k">${scoreOf(e)}</span></div>`; }).join('');
 }
 // botões de time (Vermelho / Azul / Automático)
 function teamButtons(el, current, onPick, counts) { // atualiza no lugar: o lobby re-renderiza a cada ping e não pode engolir cliques
@@ -6701,7 +6831,7 @@ const respawnReady = (p) => !!p && !p.alive && Number.isFinite(p.respawnAt) && g
 function deathLine(p) {
   if (!p) return '';
   if (p.killW === W_BOMB) return 'Você explodiu com o botijão';
-  const who = p.killerName || (p.lastAttacker && p.lastAttacker !== p && p.lastAttacker.name) || '';
+  const who = whoHtml(p);
   if (isKnife(p.killW)) return who ? `Você foi moggado por ${who}${p.killBack ? ' pelas costas' : ''}` : 'Você se moggou';
   if (p.killW === TAMPA) return who ? `Você foi amassado na tampa por ${who}` : 'Você se amassou na tampa';
   if (p.killW === EGG_W) return who ? `Você foi omeletado por ${who}` : 'Você se omeletou';
@@ -6960,7 +7090,7 @@ function remoteEnt(info) {
 }
 function removeEnt(id) {
   const o = online, e = o.ents.get(id); if (!e || e === player) return;
-  scene.remove(e.model.group); o.ents.delete(id); entities = entities.filter((x) => x !== e);
+  scene.remove(e.model.group); o.ents.delete(id); entities = entities.filter((x) => x !== e); forgetNemesis(e);
 }
 function startOnlineMatch(m) {
   closeBench();
@@ -6975,7 +7105,7 @@ function startOnlineMatch(m) {
   zone = m.zone ? newZoneState({ x: m.zone[0], y: m.zone[1], z: m.zone[2] }) : null; teamScore = m.zone ? [m.zone[8], m.zone[9]] : [0, 0];
   const me = m.ents.find((x) => x.id === o.myId) || { name: profile().name, skin: selectedSkin };
   player = makeEntity(me.name, true, me.skin, '#ffd27a'); player.netId = player.id = o.myId; player.sq = 0; player.alive = false; player.respawnAt = Infinity;
-  player.kills = me.kills || 0; player.deaths = me.deaths || 0; player.gunKills = WEAPONS.map(() => 0); revengeName = null; resetFeedback(); resetMatchCamos();
+  player.kills = me.kills || 0; player.deaths = me.deaths || 0; player.gunKills = WEAPONS.map(() => 0); revengeName = null; resetNemesis(); resetFeedback(); resetMatchCamos();
   player.primary = player.nextPrimary = selectedPrimary; player.nextSecondary = selectedSecondary; player.nextMelee = selectedMelee; player.slots = [selectedPrimary, selectedSecondary, selectedMelee]; setWeapon(player, selectedPrimary); // até o servidor mandar o renascimento
   if (armsMode()) { [player.armsStage, player.armsKills] = me.arms || [0, 0]; equipArmsLocal(player); }
   entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.caps = me.caps || 0; applyTeam(player, me.team ?? -1);
@@ -7096,7 +7226,10 @@ function netEvent(ev) {
     if (a) a.kills = aK; t.deaths = tD; t.mgSpinOn = false; t.alive = false; t.hp = 0; t.deathAt = gameTime; t.respawnAt = gameTime + respawnDelay(); t.lastAttacker = a || null; t.killW = w; t.killBack = back;
     { const named = a && a !== t && a.name ? a.name : ''; const row = !named && aid && o.lobby && o.lobby.players && o.lobby.players.find((p) => p.id === aid); t.killerName = named || (row && row.name) || (ks === 'fog' ? 'Névoa Assombrada' : ''); }
     if (w === -2) { t.fxDeath = t.deathAt; return; } // trocou de time (sem bacon)
+    const nemAtk = ks === 'fog' ? null : a;
+    if (t === player) noteNemesisKill(nemAtk, t);
     addKillFeed(a, t, w, head, back, ks === 'fog' ? 'Névoa Assombrada' : KS_KILL_NAME[ks] || null, fx); sfx.die(t === player ? 1 : distVol(t.pos));
+    if (t !== player) noteNemesisKill(nemAtk, t);
     if (a === player && t !== player) { sfx.kill(); if (ks === 'h' || ks === 'x' || ks === 'g' || ks === 'a') { if (ks === 'h' || ks === 'g') feedbackAward(HELI.points); } else { notePlayerKill(t, !!head, fx); if (w >= 0) noteWeaponKill(player, w); } }
     if (t === player) { const swap = pauseSwapQuiet(); if (!swap && a && a !== player) revengeName = a.name; onPlayerDeath(swap ? { keepAim: true } : undefined); if (!swap) showStamp(w); player.charging = false; arcLine.visible = arcMark.visible = false; }
   } else if (k === 'ar') {
@@ -7292,6 +7425,11 @@ initChat({
   shouldLock: () => state === 'playing' && !!player && player.alive && $('pause').classList.contains('hidden') && $('teamPick').classList.contains('hidden'),
   lockPointer,
   clearKeys: () => { for (const k in keys) keys[k] = false; mouseDown = false; rightDown = false; if (player) player.charging = false; },
+  nemesis: (id) => {
+    if (!id) return false;
+    const e = online && online.ents ? online.ents.get(id) : entities.find((x) => x.id === id);
+    return isNemesis(e);
+  },
 });
 initVoice({
   send: (m) => { if (online && online.net) online.net.send(m); },

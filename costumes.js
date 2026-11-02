@@ -2,7 +2,7 @@
 // (userData.anchor = 'head' para prender na cabeça) ou null quando só altera o rig.
 // A identidade do Docão (cabeça, focinho, orelhas, bochechas, olhos, contorno) nunca é removida.
 import * as THREE from 'three';
-import { PARTS, SHIRT_DETAILS, toon, toonWarm, basic, outline, canvasTex, headR, headPoint, HEAD, TORSO_PTS, torsoR, gloveMat, addSparkles, drawLogo, headNormal } from './docao.js';
+import { PARTS, SHIRT_DETAILS, toon, toonWarm, basic, outline, canvasTex, headR, headPoint, HEAD, TORSO_PTS, torsoR, gloveMat, gloveSparkles, addSparkles, drawLogo, headNormal } from './docao.js';
 
 const V3 = THREE.Vector3, V2 = THREE.Vector2, TAU = Math.PI * 2;
 const M = (geo, mat, parent, th = 0.01) => { const m = new THREE.Mesh(geo, mat); if (parent) parent.add(m); if (th) outline(m, th); m.castShadow = true; return m; };
@@ -81,9 +81,9 @@ Object.assign(PARTS, {
   glove(o, rig) { // luva (ex.: uma luva branca brilhante)
     const sides = o.hand === 'both' ? [0, 1] : [(o.hand || 'right') === 'right' ? 0 : 1];
     for (const i of sides) {
-      const { fist, thumb } = rig.fists[i]; const gm = gloveMat(o.color);
+      const { fist, thumb } = rig.fists[i]; const gm = gloveMat(o.color, o);
       fist.material = gm; thumb.material = gm; fist.scale.multiplyScalar(1.04);
-      if (o.sparkle !== false) addSparkles(fist, 16, 0.158);
+      gloveSparkles(fist, o, 0.158);
       const cuff = M(new THREE.TorusGeometry(0.12, 0.03, 8, 18), gm, rig.arms[i], 0.008); cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.45;
     }
     return null;

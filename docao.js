@@ -602,7 +602,26 @@ export function setCrouchPose(model, amount) {
 
 export function sleeveColor(shirt) { return shirt.sleeveColor || (shirt.pattern ? shirt.pattern.colors[0] : (shirt.color || '#d8261c')); }
 // material de luva (branca com brilho) usado por PARTS.glove e pelos braços em 1ª pessoa
-export function gloveMat(color = '#ffffff') { return toonWarm(color, 0.18, {}, '#c8d8ff'); }
+let rainbowGloveMap = null;
+function rainbowGloveTex() {
+  if (rainbowGloveMap) return rainbowGloveMap;
+  const c = document.createElement('canvas'); c.width = 64; c.height = 8;
+  const x = c.getContext('2d');
+  for (let i = 0; i < 64; i++) { x.fillStyle = `hsl(${Math.round((i / 64) * 300)} 85% 54%)`; x.fillRect(i, 0, 1, 8); }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  rainbowGloveMap = tex; return tex;
+}
+export function gloveMat(color = '#ffffff', opt = {}) {
+  if (opt && opt.rainbow) return toonWarm('#ffffff', 0.1, { map: rainbowGloveTex() }, '#ffffff');
+  if (opt && opt.gold) return toonWarm(opt.color || color || '#f3d78a', 0.32, {}, '#fff1a8');
+  return toonWarm(color, 0.18, {}, '#c8d8ff');
+}
+export function gloveSparkles(mesh, glove, r = 0.158) {
+  if (!mesh || !glove) return;
+  if (glove.rainbow) { for (const col of ['#ff4d4d', '#ffd24a', '#3dff7a', '#4db4ff', '#d06bff']) addSparkles(mesh, 3, r, col); return; }
+  if (glove.gold) { addSparkles(mesh, 14, r, '#fff1a8'); return; }
+  if (glove.sparkle !== false) addSparkles(mesh, 14, r);
+}
 export function addSparkles(mesh, n = 10, r = 0.16, color = '#e8f4ff') {
   const m = basic(color);
   for (let i = 0; i < n; i++) {
@@ -655,9 +674,9 @@ export function makeFPArms(skinOrId, pose = 'rifle') {
       for (const pp of [p0, p1]) for (const k of [-1, 1]) { const kn = addL(new THREE.SphereGeometry(r * 0.38, 10, 8), bm, 0.004); kn.position.copy(pp).addScaledVector(new V3().crossVectors(dir, up).normalize(), k * r * 0.3); }
     }
     const hand = limbIdx++ === 0 ? 'right' : 'left';
-    const gl = glove && (glove.hand === 'both' || (glove.hand || 'right') === hand); const handM = gl ? gloveMat(glove.color) : skinM;
+    const gl = glove && (glove.hand === 'both' || (glove.hand || 'right') === hand); const handM = gl ? gloveMat(glove.color, glove) : skinM;
     const fist = addL(new THREE.SphereGeometry(r * 1.45, 18, 14), handM); fist.position.copy(b).addScaledVector(dir, r * 0.6); fist.scale.set(1, 0.9, 1.1);
-    if (gl && glove.sparkle !== false) addSparkles(fist, 14, r * 1.45);
+    if (gl) gloveSparkles(fist, glove, r * 1.45);
     const th = addL(new THREE.CapsuleGeometry(r * 0.42, r * 0.6, 4, 8), handM, 0.005); th.position.copy(fist.position).add(new V3(-0.03, 0.05, -0.04)); th.rotation.set(0.4, 0, 0.9);
     return limbG;
   }
@@ -677,14 +696,14 @@ export function makeFPForearm(skinOrId) {
   const tone = safeTone(skin.body && skin.body.tone);
   const skinM = toonWarm(tone, 0.42, {}, '#e0500a'), sleeveM = toonWarm(sleeveColor(shirt), 0.12);
   const glove = (skin.parts || []).find((p) => p.type === 'glove');
-  const handM = glove && (glove.hand === 'both' || glove.hand === 'left' || !glove.hand) ? gloveMat(glove.color) : skinM;
+  const handM = glove && (glove.hand === 'both' || glove.hand === 'left' || !glove.hand) ? gloveMat(glove.color, glove) : skinM;
   const g = new THREE.Group();
   const armLen = 0.52;
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.052, armLen, 14), skinM); outline(arm, 0.006); g.add(arm);
   const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.088, armLen * 0.42, 14), sleeveM); sleeve.position.y = armLen * 0.2; outline(sleeve, 0.005); arm.add(sleeve);
   const fist = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), handM); fist.scale.set(1.2, 0.82, 1.05); outline(fist, 0.007); g.add(fist);
   const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.05, 4, 8), handM); thumb.position.set(0.05, 0.04, 0.02); thumb.rotation.set(0.7, 0, 0.8); outline(thumb, 0.004); g.add(thumb);
-  if (glove && glove.sparkle !== false && handM !== skinM) addSparkles(fist, 10, 0.1);
+  if (glove && handM !== skinM) gloveSparkles(fist, glove, 0.1);
   g.userData.arm = arm; g.userData.armLen = armLen; g.userData.handR = 0.1;
   return g;
 }
@@ -755,7 +774,7 @@ export function makeRocket(scale = 1) {
 // ---------- Facas ----------
 // Origem = centro da empunhadura; lâmina aponta pra -z, fio pra -y, espessura em x. Usada em 1ª e 3ª pessoa.
 // kind: chef (churrasqueiro), skeleton, karambit, bayonet.
-// finish: factory, rusty, rainbow, sapphire, emerald, ruby. O churrasqueiro não tem pintura.
+// finish: factory, rusty, rainbow, sapphire, emerald, ruby, camo, obsidian. O churrasqueiro não tem pintura.
 let knifeLogoTex = null;
 const KNIFE_FINISH = {
   factory: { steel: '#d5dde6', warm: '#f4f8ff', metal: '#8d939c', dark: '#1a1c20', edge: '#ffffff', fuller: '#8aa0b4' },
@@ -765,6 +784,7 @@ const KNIFE_FINISH = {
   emerald: { steel: '#0f9d58', warm: '#8dffc0', metal: '#0b6b3a', dark: '#07140e', edge: '#e9fff0', fuller: '#0d5a32' },
   ruby: { steel: '#d0123a', warm: '#ff9aaf', metal: '#8a142c', dark: '#1a0a0e', edge: '#ffe8ee', fuller: '#7a1830' },
   camo: { steel: '#4a5c32', warm: '#8aa05a', metal: '#2c3a20', dark: '#141c10', edge: '#d5ddc4', fuller: '#3d4a28', camo: true },
+  obsidian: { steel: '#16161c', warm: '#b388ff', metal: '#2a1840', dark: '#0c0c10', edge: '#e6d4ff', fuller: '#3a2158', obsidian: true },
 };
 function tintVerts(mesh, fn) {
   const geo = mesh.geometry; if (!geo || !geo.attributes.position) return;
@@ -792,6 +812,11 @@ function knifePal(finish) {
       tintVerts(mesh, (c, x, y, z) => {
         const n = Math.sin(x * 46 + z * 18) + Math.cos(y * 28 + x * 12);
         c.set(n > 0.6 ? '#6d8348' : n > -0.2 ? '#3d5228' : '#1c2814');
+      });
+    } else if (f.obsidian) {
+      tintVerts(mesh, (c, x, y, z) => {
+        const n = Math.sin(x * 80 + z * 30) + Math.cos(y * 50);
+        c.set(n > 0.7 ? '#c9a6ff' : n > 0.05 ? '#3a2158' : '#121216');
       });
     }
     return mesh;

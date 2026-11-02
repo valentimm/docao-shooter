@@ -10,13 +10,13 @@ import './costumes.js';
 import { getAccount, getItems, getEarn, getChal, onAccount, refreshStats, equipLook, buyItem, equipKnife, equipSniper, equipGun, openBox, spinWheel } from './account.js';
 import { CHAL_PER_DAY, TIERS } from './shared/challenges.js';
 import { COLORS, SLOTS, ITEMS, SHOP_TEAMS, CURRENCY, COIN_ICON, SHOP_NAME, SHOP_EMOJI, SHOP_BUTTON, DEFAULT_LOOK, COSTUME_SLOT, DANCE_SLOT, KNIFE_SLOT, KNIFE_MODELS, KNIFE_COLORS, GUN_GROUPS, encodeLook, parseLook, itemById, itemForDance, isFreeItem, teamItems } from './shared/closet.js';
-import { BOX_NAME, BOX_EMOJI, lootItems } from './shared/lootbox.js';
+import { BOX_NAME, BOX_EMOJI, lootItems, wheelFloor } from './shared/lootbox.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let look = { ...DEFAULT_LOOK, items: {} }, tab = 'look', trial = null, busy = false, three = null, raf = 0, pendingBuy = null, pendingWheel = null, wheelPick = [];
 
-const currentCode = () => { const items = { ...look.items }; if (trial && trial.slot !== DANCE_SLOT && trial.slot !== KNIFE_SLOT && !(itemById(trial.id) && itemById(trial.id).sniper)) { if (trial.slot !== COSTUME_SLOT) delete items[COSTUME_SLOT]; items[trial.slot] = trial.id; } return encodeLook({ shirt: look.shirt, pants: look.pants, items }); };
+const currentCode = () => { const items = { ...look.items }; const trialItem = trial && itemById(trial.id); if (trial && trial.slot !== DANCE_SLOT && trial.slot !== KNIFE_SLOT && !(trialItem && (trialItem.sniper || trialItem.gun))) items[trial.slot] = trial.id; return encodeLook({ shirt: look.shirt, pants: look.pants, items }); };
 const previewKnife = () => {
   if (trial) { const it = itemById(trial.id); if (it && it.knife) return it; }
   const id = getAccount() && getAccount().knife;
@@ -84,7 +84,7 @@ function renderLook() {
   let h = `<div class="closet-slot"><h4>Camiseta</h4><div class="closet-chips">${sw('shirt', look.shirt)}</div></div><div class="closet-slot"><h4>Shorts</h4><div class="closet-chips">${sw('pants', look.pants)}</div></div>`;
   for (const [k, name] of SLOTS) {
     const mine = ITEMS.filter((i) => i.slot === k && (isFreeItem(i.id) || owned.has(i.id)));
-    h += `<div class="closet-slot"><h4>${name}${k === COSTUME_SLOT ? ' <small>(troca camiseta, shorts e peças de uma vez)</small>' : ''}</h4><div class="closet-chips"><button type="button" data-slot="${k}" data-item=""${!look.items[k] ? ' class="on"' : ''}>Nada</button>${mine.map((i) => `<button type="button" data-slot="${k}" data-item="${i.id}"${look.items[k] === i.id ? ' class="on"' : ''}>${i.emoji} ${esc(i.name)}${isFreeItem(i.id) ? ' · grátis' : ''}</button>`).join('')}${mine.length ? '' : '<span class="closet-note">Nada na mochila ainda. Veja a Loja!</span>'}</div></div>`;
+    h += `<div class="closet-slot"><h4>${name}${k === COSTUME_SLOT ? ' <small>(a fantasia fica, e o acessório entra junto)</small>' : ''}</h4><div class="closet-chips"><button type="button" data-slot="${k}" data-item=""${!look.items[k] ? ' class="on"' : ''}>Nada</button>${mine.map((i) => `<button type="button" data-slot="${k}" data-item="${i.id}"${look.items[k] === i.id ? ' class="on"' : ''}>${i.emoji} ${esc(i.name)}${isFreeItem(i.id) ? ' · grátis' : ''}</button>`).join('')}${mine.length ? '' : '<span class="closet-note">Nada na mochila ainda. Veja a Loja!</span>'}</div></div>`;
   }
   const curK = (getAccount() && getAccount().knife) || '';
   h += `<div class="closet-slot"><h4>Faca</h4><div class="closet-chips"><button type="button" data-knife=""${!curK ? ' class="on"' : ''}>Faca de churrasqueiro</button></div></div>`;
@@ -124,11 +124,11 @@ function renderShop() {
     h += `<div class="closet-sec team"><h4>${esc(name)}</h4><div class="closet-grid">${members.map((i) => shopCard(i, owned, coins)).join('')}</div></div>`;
   }
   for (const [k, name] of SLOTS) {
-    const list = ITEMS.filter((i) => i.slot === k && !i.team);
+    const list = ITEMS.filter((i) => i.slot === k && !i.team && !i.loot);
     if (!list.length) continue;
     h += `<div class="closet-sec"><h4>${esc(name)}</h4><div class="closet-grid">${list.map((i) => shopCard(i, owned, coins)).join('')}</div></div>`;
   }
-  h += `<p class="closet-note">Skins de arma e faca não se compram. O peso delas é a raridade no ${esc(BOX_NAME)}.</p>`;
+  h += `<p class="closet-note">Skins de arma, faca e luva do caixote não se compram. O peso delas é a raridade no ${esc(BOX_NAME)}.</p>`;
   h += `<div class="closet-sec"><h4>Danças da vitória <small>(tecla B)</small></h4><div class="closet-grid">${ITEMS.filter((i) => i.slot === DANCE_SLOT).map((i) => shopCard(i, owned, coins)).join('')}</div></div>`;
   $('closetShop').innerHTML = h;
 }
@@ -141,10 +141,11 @@ function renderBox() {
   const a = getAccount(), n = a ? a.boxes | 0 : 0, owned = new Set(getItems());
   wheelPick = wheelPick.filter((id) => owned.has(id)).slice(0, 3);
   const weights = [...new Set(lootItems().map((i) => i.weight))].sort((x, y) => x - y);
-  const catalog = weights.map((w) => {
+  const catalogBody = weights.map((w) => {
     const list = lootItems().filter((i) => i.weight === w).map((i) => `<span class="loot-chip${owned.has(i.id) ? ' mine' : ''}">${i.emoji} ${esc(i.name)}</span>`).join('');
     return `<div class="closet-sec"><h4>Peso ${w}</h4><div class="loot-catalog">${list}</div></div>`;
   }).join('');
+  const catalog = `<details class="loot-fold"><summary>Ver prêmios do caixote</summary>${catalogBody}</details>`;
   const mine = lootItems().filter((i) => owned.has(i.id)).sort((x, y) => x.weight - y.weight || x.name.localeCompare(y.name, 'pt'));
   const slots = [0, 1, 2].map((i) => {
     const it = itemById(wheelPick[i]);
@@ -153,7 +154,6 @@ function renderBox() {
   const picks = mine.map((i) => `<button type="button" class="loot-chip${wheelPick.includes(i.id) ? ' pick' : ''}" data-wheel-pick="${i.id}">${i.emoji} ${esc(i.name)}</button>`).join('');
   const wheel = `<div class="wheel-box"><div class="chal-head"><b>🎡 Roleta</b></div><div class="wheel-slots">${slots}</div>`
     + (mine.length < 3 ? '<p class="closet-note">Precisa de 3 skins na mochila.</p>' : `<div class="loot-catalog">${picks}</div>`)
-    + `<p id="closetWheelReel" class="wheel-reel" hidden></p>`
     + `<button type="button" id="closetSpin" class="ticket-btn"${wheelPick.length === 3 ? '' : ' disabled'}>${wheelPick.length === 3 ? 'GIRAR A ROLETA' : 'ESCOLHA 3 SKINS'}</button></div>`;
   box.innerHTML = `<div class="chal-head"><b>${BOX_EMOJI} ${esc(BOX_NAME)}</b> <span>${n} fechado${n === 1 ? '' : 's'}</span></div>`
     + `<button type="button" id="closetOpenBox" class="ticket-btn"${n ? '' : ' disabled'}>${n ? 'ABRIR UM CAIXOTE' : 'SEM CAIXOTE AGORA'}</button>`
@@ -196,7 +196,7 @@ function askBuy(it) {
   $('closetBuyNo').focus();
 }
 function closeWheelAsk() { pendingWheel = null; $('closetBuyAsk').classList.add('hidden'); }
-function closeCloset() { clearInterval(chalTimer); closeAsk(); pendingWheel = null; $('closetModal').classList.add('hidden'); trial = null; stopDance(); stopThree(); }
+function closeCloset() { clearInterval(chalTimer); closeAsk(); pendingWheel = null; abortReel(); $('closetReveal').classList.add('hidden'); $('closetModal').classList.add('hidden'); trial = null; stopDance(); stopThree(); }
 async function finishBuy(it) {
   busy = true; msg('Comprando…'); const r = await buyItem(it.id); busy = false;
   if (r.error) msg(r.error); else {
@@ -204,14 +204,16 @@ async function finishBuy(it) {
     if (it.sniper) { const er = await equipSniper(it.id); if (!er.error) document.dispatchEvent(new CustomEvent('docao-sniper-pick', { detail: it.id })); }
     else if (it.knife) { const er = await equipKnife(it.id); if (!er.error) document.dispatchEvent(new CustomEvent('docao-knife-pick', { detail: it.id })); }
     else if (it.dance) { try { localStorage.setItem('docao.dance', it.dance); } catch (er) { /* sem storage */ } document.dispatchEvent(new CustomEvent('docao-dance-pick', { detail: it.dance })); }
-    else { if (it.slot === COSTUME_SLOT) look.items = {}; else delete look.items[COSTUME_SLOT]; look.items[it.slot] = it.id; }
+    else look.items[it.slot] = it.id;
     trial = null;
   }
   render();
 }
 
 async function onClick(e) {
-  const t = e.target; if (busy) return;
+  const t = e.target;
+  if (reel) { reel.skip(); return; }
+  if (busy) return;
   if (pendingBuy) {
     if (t.id === 'closetBuyAsk' || t.closest('#closetBuyNo')) { closeAsk(); return; }
     if (t.closest('#closetBuyYes')) { const it = pendingBuy; closeAsk(); await finishBuy(it); return; }
@@ -227,7 +229,7 @@ async function onClick(e) {
   const sl = t.closest('button[data-slot]');
   if (sl) {
     const k = sl.dataset.slot;
-    if (sl.dataset.item) { if (k === COSTUME_SLOT) look.items = {}; else delete look.items[COSTUME_SLOT]; look.items[k] = sl.dataset.item; } else delete look.items[k]; // fantasia completa não mistura com outras partes
+    if (sl.dataset.item) look.items[k] = sl.dataset.item; else delete look.items[k];
     msg(''); render(); return;
   }
   if (!$('closetReveal').classList.contains('hidden')) {
@@ -283,13 +285,179 @@ async function onClick(e) {
   }
 }
 
-let revealDrop = null;
-function showReveal(r) {
-  revealDrop = r && r.item && !r.dupe ? r.item : null;
+let revealDrop = null, reel = null, reelGen = 0;
+// Faixa da sorte → cor. Quanto maior o peso, mais perto do dourado e mais longa a festa.
+// Amarelo não é faixa: é o último suspiro antes do dourado travar.
+const LOOT_LADDER = [
+  { id: 'green', label: 'Verde', rank: 0, hex: '#24924a', glow: '#8dffb4', ink: '#f3fff6' },
+  { id: 'blue', label: 'Azul', rank: 1, hex: '#2a6fbf', glow: '#9dceff', ink: '#f2f8ff' },
+  { id: 'red', label: 'Vermelho', rank: 2, hex: '#d12626', glow: '#ff9b92', ink: '#fff4f2' },
+  { id: 'orange', label: 'Laranja', rank: 3, hex: '#e86a12', glow: '#ffc48a', ink: '#fff6ec' },
+  { id: 'yellow', label: 'Amarelo', rank: 4, hex: '#e2b000', glow: '#ffe58a', ink: '#fffbeb' },
+  { id: 'gold', label: 'Dourado', rank: 5, hex: '#f0c14a', glow: '#fff1a8', ink: '#fff8df' },
+];
+const LOOT_RANK = { 500: 0, 750: 1, 1000: 2, 1250: 3, 2000: 5 };
+const SPIN_MS = [1500, 2100, 2700, 3400, 4000, 4600];
+const SPIN_LEAD = [16, 22, 30, 38, 44, 52];
+const SPIN_OVER = [8, 16, 32, 52, 64, 78];
+const lookOf = (it) => LOOT_LADDER[LOOT_RANK[it && it.weight | 0] ?? 0];
+function motionOff() {
+  try {
+    const v = localStorage.getItem('docao.reducedAnim');
+    if (v === '1') return true;
+    if (v === '0') return false;
+  } catch (e) { /* segue o sistema */ }
+  return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+const paintLoot = (el, look) => {
+  if (!el || !look) return;
+  el.dataset.tier = look.id;
+  el.style.setProperty('--loot', look.hex);
+  el.style.setProperty('--loot-glow', look.glow);
+  el.style.setProperty('--loot-ink', look.ink);
+};
+const cardHtml = (it) => {
+  const look = lookOf(it);
+  return `<div class="loot-card" data-tier="${look.id}" style="--loot:${look.hex};--loot-glow:${look.glow}"><span class="loot-photo">${it.emoji || '🎁'}</span><span class="loot-name">${esc(it.name || 'Skin')}</span><span class="loot-tier">${look.label}</span></div>`;
+};
+function pickFrom(pool) { return pool[Math.floor(Math.random() * pool.length)]; }
+function buildStrip(pool, winner, rank) {
+  const lead = SPIN_LEAD[rank] || SPIN_LEAD[0];
+  const cards = [];
+  for (let i = 0; i < lead; i++) cards.push(pickFrom(pool));
+  const winAt = cards.length;
+  cards.push(winner);
+  const up = rank >= 2 ? pool.filter((i) => (i.weight | 0) > (winner.weight | 0)) : [];
+  cards.push(up.length ? pickFrom(up) : pickFrom(pool));
+  for (let i = 0; i < 7; i++) cards.push(pickFrom(pool));
+  return { cards, winAt };
+}
+const xAt = (t, target, overshoot) => {
+  const past = target - overshoot;
+  if (t < 0.9) return past * (1 - Math.pow(2, -11 * (t / 0.9)));
+  const u = (t - 0.9) / 0.1, e = u * u * (3 - 2 * u);
+  return past * (1 - e) + target * e;
+};
+// No começo a moldura segue a carta que passa. No fim ela sobe a escada só até a faixa sorteada
+// (verde → … → amarelo → dourado) e uma carta mais rara ainda pode piscar na agulha.
+function climbLook(t, result) {
+  const start = Math.max(0.4, 0.78 - result.rank * 0.06);
+  if (t < start) return null;
+  if (t >= 1) return result;
+  const u = (t - start) / (1 - start);
+  const step = Math.min(result.rank, Math.floor(Math.pow(u, 1.6) * (result.rank + 0.999)));
+  return LOOT_LADDER[step] || result;
+}
+function lookAt(t, result, card) {
+  if (t >= 1) return result;
+  const cardLook = lookOf(card), climbed = climbLook(t, result);
+  if (!climbed) return cardLook;
+  return cardLook.rank > climbed.rank ? cardLook : climbed;
+}
+function burst(host, look) {
+  host.innerHTML = '';
+  const n = [0, 8, 14, 22, 28, 36][look.rank] || 0;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, d = 46 + Math.random() * (36 + look.rank * 18);
+    const s = document.createElement('i');
+    s.className = 'loot-spark';
+    s.style.setProperty('--x', (Math.cos(a) * d).toFixed(1) + 'px');
+    s.style.setProperty('--y', (Math.sin(a) * d).toFixed(1) + 'px');
+    s.style.background = i % 4 === 0 ? '#fff8e0' : look.glow;
+    s.style.animationDelay = (Math.random() * 0.08) + 's';
+    host.appendChild(s);
+  }
+}
+function abortReel() { reelGen += 1; if (reel) reel.abort(); reel = null; }
+function dropLine(r, kind) {
   const it = r.item, name = it ? `${it.emoji} ${it.name}` : 'uma skin';
-  $('closetRevealText').textContent = r.dupe ? `Repetida: ${name}. Entrou ${r.gain} Docoins no lugar.` : `Nova skin: ${name}. Peso ${it ? it.weight : ''}. Já está na mochila.`;
+  if (r.dupe) return `Repetida: ${name}. Entrou ${r.gain} Docoins no lugar.`;
+  if (kind === 'wheel') return `A roleta parou em ${name}. Peso ${it.weight}. Já está na mochila.`;
+  return `Nova skin: ${name}. Peso ${it.weight}. Já está na mochila.`;
+}
+function spinTrack(o) {
+  if (o.ms <= 0) return Promise.resolve();
+  const t0 = performance.now();
+  let lastId = '', lastClimb = '', lastIndex = -1;
+  return new Promise((resolve) => {
+    const frame = (now) => {
+      if (o.dead()) { resolve(); return; }
+      const t = o.skipped() ? 1 : Math.min(1, (now - t0) / o.ms);
+      const x = xAt(t, o.target, o.overshoot);
+      o.track.style.transform = `translate3d(${x}px,0,0)`;
+      const idx = Math.max(0, Math.min(o.cards.length - 1, Math.round((o.center - x) / o.step)));
+      const shown = lookAt(t, o.result, o.cards[idx]);
+      const climbed = climbLook(t, o.result);
+      if (shown.id !== lastId) { lastId = shown.id; paintLoot(o.show, shown); }
+      if (climbed && o.result.rank > 0 && climbed.id !== lastClimb) {
+        lastClimb = climbed.id;
+        o.kicker.textContent = climbed.rank >= 5 ? 'Dourado…' : climbed.rank >= 4 ? 'Amarelo…' : climbed.label + '…';
+        o.kicker.classList.remove('pop'); void o.kicker.offsetWidth; o.kicker.classList.add('pop');
+      }
+      if (idx !== lastIndex && t > 0.5) {
+        lastIndex = idx;
+        const marker = $('closetLootMarker');
+        if (marker) { marker.classList.remove('tick'); void marker.offsetWidth; marker.classList.add('tick'); }
+      }
+      if (t < 1) requestAnimationFrame(frame); else resolve();
+    };
+    requestAnimationFrame(frame);
+  });
+}
+async function presentDrop(r, kind, pool) {
+  const it = r && r.item;
+  const show = $('closetLootShow'), track = $('closetLootTrack'), kicker = $('closetLootKicker');
+  const text = $('closetRevealText'), acts = $('closetRevealActs'), sparks = $('closetLootSparks');
+  if (!it || !show || !track) {
+    if (text) text.textContent = r && r.dupe ? `Repetida. Entrou ${r.gain} Docoins.` : 'O caixote abriu.';
+    $('closetReveal').classList.remove('hidden');
+    return;
+  }
+  const gen = ++reelGen;
+  const look = lookOf(it);
+  const source = (pool && pool.length ? pool : lootItems()).slice();
+  if (!source.some((i) => i.id === it.id)) source.push(it);
+  const reduce = motionOff();
+  const { cards, winAt } = buildStrip(source, it, reduce ? 0 : look.rank);
+  revealDrop = r.dupe ? null : it;
+  track.innerHTML = cards.map(cardHtml).join('');
+  track.style.transform = 'translate3d(0,0,0)';
+  sparks.innerHTML = '';
+  show.className = 'loot-show';
+  paintLoot(show, LOOT_LADDER[0]);
+  kicker.textContent = kind === 'wheel' ? 'A roleta está girando…' : 'O caixote está girando…';
+  kicker.classList.remove('pop');
+  text.textContent = '';
+  acts.classList.add('hidden');
   $('closetRevealEquip').classList.toggle('hidden', !revealDrop);
   $('closetReveal').classList.remove('hidden');
+  const card = track.children[0];
+  const gap = parseFloat(getComputedStyle(track).gap) || 8;
+  const w = card ? card.getBoundingClientRect().width : 0;
+  const view = track.parentElement.clientWidth;
+  const step = w + gap;
+  const center = (view - w) / 2;
+  const jitter = (Math.random() - 0.5) * w * 0.2;
+  const target = center - winAt * step + jitter;
+  const ms = reduce || !(w > 0) ? 0 : SPIN_MS[look.rank];
+  let skipped = false, dead = false;
+  reel = { skip() { skipped = true; }, abort() { dead = true; } };
+  await spinTrack({
+    track, ms, target, overshoot: reduce ? 0 : SPIN_OVER[look.rank], cards, step, center, result: look, kicker, show,
+    skipped: () => skipped, dead: () => dead || gen !== reelGen,
+  });
+  if (dead || gen !== reelGen) { if (reelGen === gen) reel = null; return; }
+  track.style.transform = `translate3d(${target}px,0,0)`;
+  paintLoot(show, look);
+  show.classList.add('land', 'is-' + look.id);
+  const hit = track.children[winAt];
+  if (hit) hit.classList.add('hit');
+  kicker.textContent = look.rank >= 5 ? 'DOURADO!' : look.label.toUpperCase() + '!';
+  kicker.classList.remove('pop'); void kicker.offsetWidth; kicker.classList.add('pop');
+  if (!reduce) burst(sparks, look);
+  text.textContent = dropLine(r, kind);
+  acts.classList.remove('hidden');
+  reel = null;
 }
 async function equipReveal() {
   const it = revealDrop; if (!it) return;
@@ -307,10 +475,14 @@ async function equipReveal() {
   msg(`${it.name} equipada.`, true); render();
 }
 async function finishOpen() {
-  busy = true; msg('Abrindo…'); const r = await openBox(); busy = false;
-  if (r.error) { msg(r.error); return; }
-  msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
-  render(); showReveal(r);
+  busy = true; msg('Abrindo…');
+  try {
+    const r = await openBox();
+    if (r.error) { msg(r.error); return; }
+    msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
+    render();
+    await presentDrop(r, 'box');
+  } finally { busy = false; }
 }
 function askWheel() {
   if (wheelPick.length !== 3) return;
@@ -323,36 +495,40 @@ function askWheel() {
 async function finishWheel(ids) {
   const prev = getAccount() || {}, prevKnife = prev.knife || '', prevSniper = prev.sniper || '', prevGuns = { ...(prev.guns || {}) };
   busy = true; msg('Girando…');
-  const reel = document.getElementById('closetWheelReel'), pool = lootItems();
-  let spinning = true;
-  const ticks = (async () => {
-    let n = 0;
-    while (spinning && reel) {
-      const it = pool[n % pool.length];
-      reel.hidden = false; reel.textContent = `${it.emoji} ${it.name}`;
-      n += 1; await new Promise((res) => setTimeout(res, 60));
-    }
-  })();
-  const r = await spinWheel(ids);
-  spinning = false; await ticks; busy = false;
-  if (r.error) { if (reel) reel.hidden = true; msg(r.error); return; }
-  wheelPick = [];
-  const nowA = getAccount() || {};
-  if (prevKnife && prevKnife !== (nowA.knife || '')) document.dispatchEvent(new CustomEvent('docao-knife-pick', { detail: '' }));
-  if (prevSniper && prevSniper !== (nowA.sniper || '')) document.dispatchEvent(new CustomEvent('docao-sniper-pick', { detail: '' }));
-  for (const [key, gid] of Object.entries(prevGuns)) if (gid && gid !== ((nowA.guns || {})[key] || '')) document.dispatchEvent(new CustomEvent('docao-gun-pick', { detail: { key, id: '' } }));
-  msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
-  render(); showReveal(r);
-  if (!r.dupe && r.item) $('closetRevealText').textContent = `A roleta parou em ${r.item.emoji} ${r.item.name}. Peso ${r.item.weight}. Já está na mochila.`;
+  try {
+    const r = await spinWheel(ids);
+    if (r.error) { msg(r.error); return; }
+    wheelPick = [];
+    const nowA = getAccount() || {};
+    if (prevKnife && prevKnife !== (nowA.knife || '')) document.dispatchEvent(new CustomEvent('docao-knife-pick', { detail: '' }));
+    if (prevSniper && prevSniper !== (nowA.sniper || '')) document.dispatchEvent(new CustomEvent('docao-sniper-pick', { detail: '' }));
+    for (const [key, gid] of Object.entries(prevGuns)) if (gid && gid !== ((nowA.guns || {})[key] || '')) document.dispatchEvent(new CustomEvent('docao-gun-pick', { detail: { key, id: '' } }));
+    msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
+    render();
+    const floor = wheelFloor(ids.map((id) => itemById(id)).filter(Boolean));
+    const pool = lootItems().filter((i) => i.weight >= floor);
+    await presentDrop(r, 'wheel', pool);
+  } finally { busy = false; }
 }
-let wardrobeDirty = false, wardrobeCustom = false, wardrobeSniper = '', wardrobeGuns = {};
+let wardrobeDirty = false, wardrobeCustom = false, wardrobeSniper = '', wardrobeGuns = {}, wardrobeGunFocus = 'rifle', wardrobeGunTouched = false;
 const wardrobeNote = (t, ok = false) => { const m = $('wardrobeOwnedMsg'); if (!m) return; m.textContent = t || ''; m.style.color = ok ? '#d5c597' : '#ffb4a8'; };
+function emitGunPreview() {
+  if (!wardrobeGunTouched) {
+    const equipped = GUN_GROUPS.map(([k]) => k).find((k) => (k === 'sniper' ? wardrobeSniper : wardrobeGuns[k]));
+    wardrobeGunFocus = equipped || 'rifle';
+  }
+  const id = wardrobeGunFocus === 'sniper' ? (wardrobeSniper || '') : (wardrobeGuns[wardrobeGunFocus] || '');
+  const it = id && itemById(id);
+  const label = (GUN_GROUPS.find(([k]) => k === wardrobeGunFocus) || ['', 'Arma'])[1];
+  document.dispatchEvent(new CustomEvent('docao-gun-preview', { detail: { key: wardrobeGunFocus, id, name: it ? it.name : `${label} de fábrica` } }));
+}
 function paintWardrobe() {
   const box = $('wardrobeOwned'); if (!box) return;
   const a = getAccount();
   if (!a) {
     box.innerHTML = '<p class="wardrobe-note">Entre na conta para montar o visual com o que você já comprou. As skins da lista continuam aqui.</p><button type="button" id="wardrobeLogin" class="wardrobe-save">ENTRAR</button>';
     wardrobeNote('');
+    emitGunPreview();
     return;
   }
   const ownedSet = new Set(getItems());
@@ -373,6 +549,7 @@ function paintWardrobe() {
   }
   h += '<button type="button" id="wardrobeSave" class="wardrobe-save">SALVAR E USAR ESTE VISUAL</button>';
   box.innerHTML = h;
+  emitGunPreview();
 }
 function markWardrobe() {
   wardrobeDirty = true; wardrobeCustom = true;
@@ -399,7 +576,7 @@ async function onWardrobeClick(e) {
   const sl = t.closest('button[data-wslot]');
   if (sl) {
     const k = sl.dataset.wslot;
-    if (sl.dataset.witem) { if (k === COSTUME_SLOT) look.items = {}; else delete look.items[COSTUME_SLOT]; look.items[k] = sl.dataset.witem; }
+    if (sl.dataset.witem) look.items[k] = sl.dataset.witem;
     else delete look.items[k];
     wardrobeNote(''); markWardrobe(); return;
   }
@@ -407,7 +584,7 @@ async function onWardrobeClick(e) {
   if (gn) {
     const key = gn.dataset.wgun, id = gn.dataset.wgid || '';
     if (key === 'sniper') wardrobeSniper = id; else { wardrobeGuns = { ...wardrobeGuns }; if (id) wardrobeGuns[key] = id; else delete wardrobeGuns[key]; }
-    wardrobeDirty = true; wardrobeNote(''); paintWardrobe(); return;
+    wardrobeGunFocus = key; wardrobeGunTouched = true; wardrobeDirty = true; wardrobeNote(''); paintWardrobe(); return;
   }
   if (!t.closest('#wardrobeSave')) return;
   const a = getAccount(); if (!a) { wardrobeNote('Entre na conta para salvar.'); return; }
@@ -445,7 +622,7 @@ export function initCloset() {
   $('closetLogin').onclick = () => { closeCloset(); $('acctBtn').click(); };
   $('closetTabLook').onclick = () => setTab('look'); $('closetTabShop').onclick = () => setTab('shop'); $('closetTabChal').onclick = () => setTab('chal'); $('closetTabBox').onclick = () => setTab('box');
   $('closetModal').addEventListener('click', onClick);
-  $('closetModal').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { if (!$('closetReveal').classList.contains('hidden')) { $('closetReveal').classList.add('hidden'); return; } if (pendingBuy) closeAsk(); else if (pendingWheel) closeWheelAsk(); else closeCloset(); } });
+  $('closetModal').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { if (reel) { reel.skip(); return; } if (!$('closetReveal').classList.contains('hidden')) { $('closetReveal').classList.add('hidden'); return; } if (pendingBuy) closeAsk(); else if (pendingWheel) closeWheelAsk(); else closeCloset(); } });
   $('closetModal').addEventListener('mousedown', (e) => e.stopPropagation());
   const ownedBox = $('wardrobeOwned'); if (ownedBox) ownedBox.addEventListener('click', onWardrobeClick);
   document.addEventListener('docao-skin-catalog', () => { wardrobeDirty = false; wardrobeCustom = false; refreshWardrobeLook(); });
