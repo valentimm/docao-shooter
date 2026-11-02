@@ -5,7 +5,8 @@
 //  Caminho: A* com heap binário; nó mais próximo com teste de caminhada.
 // ============================================================
 export function buildNav(o) {
-  const { hx, hz, spacing = 2, collides, groundAt, solids, topAt, seeds = [], extra = [] } = o;
+  const { hx, hz, spacing = 2, collides, groundAt, solids, topAt, seeds = [], extra = [], avoid = [] } = o;
+  const inAvoid = (x, z) => { for (const r of avoid) if (x >= r[0] && z >= r[1] && x <= r[2] && z <= r[3]) return true; return false; };
   const nodes = []; const CELL = spacing;
   const hash = new Map(); const key = (ix, iz) => ix * 73856 + iz;
   const addNode = (x, y, z) => {
@@ -19,6 +20,7 @@ export function buildNav(o) {
     return out;
   }
   const tryNode = (x, z, h) => {
+    if (inAvoid(x, z)) return null;
     const y = groundAt(x, z, h + 0.01); if (Math.abs(y - h) > 0.05) return null;
     if (collides(x, y, z)) return null; return addNode(x, y, z);
   };

@@ -1238,8 +1238,11 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   const flat = (x0, z0, x1, z1, h, c, y0 = 0) => boxes.push({ b: [Math.min(x0, x1), y0, Math.min(z0, z1), Math.max(x0, x1), y0 + h, Math.max(z0, z1)], c, flat: true });
   const voids = [], slopes = [];
   const bulge = (z) => { const t = (z + 2) / 28; return (t <= -1 || t >= 1) ? 0 : 5 * (1 - t * t); };
-  flat(-26.15, -58, -25.45, 58, 1.1, ROCK);
-  flat(-26.22, -58, -25.38, 58, 0.22, SNOW, 0.92);
+  // vão no canto noroeste: a passarela sai por aqui. O resto da crista continua fechado.
+  flat(-26.15, -58, -25.45, 51.55, 1.1, ROCK);
+  flat(-26.15, 57.55, -25.45, 58, 1.1, ROCK);
+  flat(-26.22, -58, -25.38, 51.55, 0.22, SNOW, 0.92);
+  flat(-26.22, 57.55, -25.38, 58, 0.22, SNOW, 0.92);
   for (let z = -18; z < 14; z += 2) {
     const z1 = Math.min(14, z + 2);
     const outer = -26.15 - Math.max(bulge(z), bulge(z + 1), bulge(z1));
@@ -1247,10 +1250,14 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     flat(outer - 0.06, z, -25.38, z1, 0.22, SNOW, 0.92);
     boxes.push({ b: [outer - 0.3, 0, z, outer, 4, z1], hide: true, c: ROCK });
   }
-  boxes.push({ b: [-26.45, 0, -58, -26.15, 4, 58], hide: true, c: ROCK });
-  flat(27.35, -58, 28.05, 58, 1.1, ROCK);
-  flat(27.28, -58, 28.12, 58, 0.22, SNOW, 0.92);
-  boxes.push({ b: [28.05, 0, -58, 28.35, 4, 58], hide: true, c: ROCK });
+  boxes.push({ b: [-26.45, 0, -58, -26.15, 4, 51.55], hide: true, c: ROCK });
+  boxes.push({ b: [-26.45, 0, 57.55, -26.15, 4, 58], hide: true, c: ROCK });
+  flat(27.35, -58, 28.05, 51.55, 1.1, ROCK);
+  flat(27.35, 57.55, 28.05, 58, 1.1, ROCK);
+  flat(27.28, -58, 28.12, 51.55, 0.22, SNOW, 0.92);
+  flat(27.28, 57.55, 28.12, 58, 0.22, SNOW, 0.92);
+  boxes.push({ b: [28.05, 0, -58, 28.35, 4, 51.55], hide: true, c: ROCK });
+  boxes.push({ b: [28.05, 0, 57.55, 28.35, 4, 58], hide: true, c: ROCK });
   voids.push([-74, -62, -26.15, 62], [28.05, -62, 76, 62]);
   // 48 m de projeção e 30 m de queda: ~32°. O plano da encosta cobre o vazio, senão o poço lê como chão.
   slopes.push({ x0: -74, y0: -30, z0: -62, x1: -26.15, y1: 0.2, z1: 62, axis: 'x', dir: 1 });
@@ -1284,53 +1291,49 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   boxes.push(B(-12.2, -19.6, -7.2, -16.2, 3.8, ROCK, -1.5)); // 2,2 m acima do chão alto, no meio da linha de 61 m
   for (const z of [24, 10, -4, -18]) boxes.push(B(-23.4, z, -21.8, z + 1.5, 1.0, SNOW));
 
-  // lab: 15 × 10 m, x −8…7, z 36…46. Pesquisador: x 18…33, y 14…24.
-  boxes.push(...building(-8, 36, 7, 46, { col: { ...col, wall: CONC, wall2: '#c8c2b6' }, floors: 1, H: 3.5, parapet: 0.6,
-    ops: [{ s: 'n', a: -5, b: -1.6 }, { s: 'n', a: 1.4, b: 4.8 }, { s: 's', a: -2, b: 1.4 }, { s: 'e', a: 38, b: 41 },
-      { s: 'n', a: -7.2, b: -4.6, k: 'win', lo: 1.05, hi: 2.15 }, { s: 'w', a: 38, b: 41.2, k: 'win', lo: 1.05, hi: 2.1 }],
-    inner: [{ axis: 'x', s0: -7.4, s1: 6.4, line: 41.2, ops: [{ a: -1.4, b: 1.6 }] }] }));
-  // meio. Corredor de 3,6 m (x −2…1,6). Oeste 14×12 m. Leste 12,6×14 m (x 1,6…14,2).
-  boxes.push(...building(-16, 19, -2, 31, { col: { ...col, wall: '#c4bfb4', wall2: CONC }, floors: 2, H, parapet: 1.7,
-    ops: [{ s: 'n', a: -10, b: -6.4 }, { s: 's', a: -12, b: -8.4 }, { s: 'e', a: 22, b: 25.6 }, { s: 'w', a: 24, b: 27.4 },
-      { s: 'e', a: 26, b: 29.5, f: 1, k: 'win', lo: 0.85, hi: 2.05 }, { s: 'n', a: -10, b: -6, f: 1, k: 'win', lo: 0.85, hi: 2.05 }],
-    stairs: [{ f: 0, r: [-13.5, 21.2, -6.8, 24.2], axis: 'x', dir: 1 }] }));
-  boxes.push(...building(1.6, 18, 14.2, 32, { col: { ...col, wall: '#d4cfc4', wall2: CONC }, floors: 2, H, parapet: 1.7,
-    roofGaps: [{ s: 'n', a: 3.4, b: 11.6 }],
-    ops: [{ s: 'n', a: 4, b: 7.6, k: 'wide' }, { s: 's', a: 2.4, b: 5.6 }, { s: 'w', a: 22, b: 25.6 }, { s: 'e', a: 24, b: 27.4 },
-      { s: 's', a: 8, b: 11.4, f: 1, k: 'win', lo: 0.85, hi: 2.05 }],
-    stairs: [{ f: 0, r: [3.2, 20.2, 9.4, 23.4], axis: 'x', dir: 1 }, { f: 1, r: [3.2, 26, 9.4, 29.2], axis: 'x', dir: 1 }] }));
-  C(6.5, 28, 1.6, 1.1, '#6E7378', H); C(11, 24, 1.2, 0.9, RUST);
-  for (let z = 20; z < 30; z += 1.6) boxes.push(B(-16.15, z, -15.95, z + 0.1, 3.2, METAL2, 0.15));
-  // alas que colam o lab nos prédios do meio: o miolo lê como um bloco, o corredor central fica aberto
-  boxes.push(...building(-8, 31.3, -2.2, 35.7, { col: { ...col, wall: CONC, wall2: '#c8c2b6' }, floors: 1, H: 3.2, parapet: 0.45,
-    ops: [{ s: 'n', a: -6.4, b: -3.2 }, { s: 's', a: -6.4, b: -3.2 }, { s: 'e', a: 32.2, b: 34.8 }] }));
-  boxes.push(...building(1.6, 32.2, 11.6, 35.8, { col: { ...col, wall: '#d4cfc4', wall2: CONC }, floors: 1, H: 3.2, parapet: 0.45,
-    ops: [{ s: 'n', a: 8.2, b: 11.2 }, { s: 's', a: 8.2, b: 11.2 }] }));
-  // telhado caminhável entre o bloco leste (z 18) e a Sala Fria (z 16): piso a 3,7 m, guarda dos dois lados
-  boxes.push(B(1.6, 15.5, 14.2, 18.5, 0.35, SNOW, 6.45));
-  boxes.push(B(1.55, 15.55, 1.9, 18.45, 1.05, METAL, 6.8), B(13.9, 15.55, 14.25, 18.45, 1.05, METAL, 6.8));
-  boxes.push(B(1.6, 15.42, 3.5, 15.75, 1.9, METAL, 6.8), B(8.4, 15.42, 14.2, 15.75, 1.9, METAL, 6.8));
+  // spawn norte limpo: os três prédios (lab, bloco oeste, bloco leste) saíram. Cobertura e caixote, sem labirinto.
+  boxes.push(B(-7.2, 33.2, 8.4, 45.6, 0.16, SNOW, 2.72));
+  // escada + plataforma baixa a leste do abrigo: dá um piso acima de 2,5 m ligado ao chão
+  {
+    const y1 = 2.7, z0 = 23.4, z1 = 29.2, x0 = 4.6, x1 = 7.4, n = Math.round(y1 / 0.18);
+    const rise = y1 / n, run = (z1 - z0) / n;
+    for (let i = 0; i < n; i++) {
+      const zA = z0 + i * run, top = (i + 1) * rise;
+      boxes.push(B(x0, zA, x1, zA + run + 0.02, rise, METAL, top - rise));
+    }
+    boxes.push({ b: [x0 + 0.08, 0, z0, x1 - 0.08, y1, z1], ramp: { axis: 'z', dir: 1 }, hide: true, c: '#888' });
+    boxes.push(B(4.7, 28.85, 7.3, 30.25, 0.16, SNOW, y1 - 0.16));
+    boxes.push({ wp: [6, 0.3, 23] }, { wp: [6, y1 + 0.2, 29.6] });
+  }
+  for (const [x, z] of [[-6.95, 33.4], [8.05, 33.4], [-6.95, 45.25], [8.05, 45.25]]) boxes.push(B(x, z, x + 0.28, z + 0.28, 2.72, METAL));
+  boxes.push(B(-1.15, 37.6, 2.15, 40.8, 1.15, CONC));
+  C(-3.4, 35.2, 1.45, 1.15, METAL); C(5.2, 42.4, 1.5, 1.2, '#6E5438'); C(11, 24, 1.35, 1.15, RUST);
+  C(-12.5, 28, 1.4, 1.2, METAL); C(12.5, 30, 1.5, 1.15, METAL2);
+  boxes.push(B(-14.2, 22.4, -11.4, 25.6, 1.25, CONC), B(8.2, 22.2, 11.6, 23.5, 1.2, METAL));
+  C(-2, 25.2, 1.7, 1.3, CONC); // caixote no vão do antigo bloco norte, sem virar piso largo
+  boxes.push(B(-4.2, 48.4, -1.2, 51.2, 1.2, CONC), B(6.4, 49.2, 9.6, 51.8, 1.25, METAL2));
+  boxes.push({ wp: [-2, 0.3, 40] }, { wp: [4, 0.3, 36] }, { wp: [0, 0.3, 28] }, { wp: [-10, 0.3, 34] });
 
   // SALA FRIA: 28 × 22 m, x −16…12, z −6…16. Pesquisador: x 10…38, y 44…66. Mezanino a +3,4 m.
   boxes.push(...building(-16, -6, 12, 16, { col: { ...col, wall: CONC, wall2: '#c8c2b6', inner: '#C4BFB4' }, floors: 2, H, roof: false,
-    ops: [{ s: 'w', a: 2.2, b: 5.8 }, { s: 'e', a: 0.2, b: 3.8 }, { s: 'n', a: -6, b: -2.4 }, { s: 's', a: -8, b: -4.4 }, { s: 's', a: 2, b: 5.6 },
+    ops: [{ s: 'w', a: 6.15, b: 9.05, k: 'wide' }, { s: 'e', a: 6.15, b: 9.05, k: 'wide' }, { s: 'n', a: -6, b: -2.4 }, { s: 's', a: -8, b: -4.4 }, { s: 's', a: 2, b: 5.6 },
       { s: 's', a: -2, b: 2, k: 'win', lo: 1.0, hi: 2.15 },
       { s: 'w', a: -3.5, b: 0, f: 1, k: 'win', lo: 0.8, hi: 1.4 }],
     stairs: [{ f: 0, r: [-4.2, 9.2, 4.4, 12.2], axis: 'x', dir: 1 }],
-    floorHoles: { 1: [[-10, -5.4, 6, 8.4]] } }));
-  boxes.push(...slab(-16, -6, 12, 16, 2 * H, 0.35, SNOW, [[-6, -1, 2, 11]]));
+    floorHoles: { 1: [[-13.6, -4.4, 9.6, 8.55]] } }));
+  boxes.push(...slab(-16, -6, 12, 16, 2 * H, 0.35, SNOW, [[-12.2, -3.4, 8.2, 8.9]]));
   // guarda-corpo tubular de 1 m no mezanino
   const tube = (x0, z0, x1, z1) => {
     boxes.push(B(Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1), Math.max(z0, z1), 0.07, METAL, H + 0.9));
     boxes.push(B(Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1), Math.max(z0, z1), 0.05, METAL, H + 0.42));
   };
-  tube(-9.6, 8.22, 5.6, 8.4); tube(-9.6, -5.45, 5.6, -5.28);
-  tube(5.85, -5.3, 6.05, 8.3); tube(-10.15, -5.3, -9.95, 8.3);
-  for (let x = -9.4; x <= 5.4; x += 1.8) { boxes.push(B(x, 8.18, x + 0.08, 8.44, 1.0, METAL, H)); boxes.push(B(x, -5.48, x + 0.08, -5.22, 1.0, METAL, H)); }
-  for (let z = -5; z <= 8; z += 1.8) { boxes.push(B(5.82, z, 6.08, z + 0.08, 1.0, METAL, H)); boxes.push(B(-10.18, z, -9.92, z + 0.08, 1.0, METAL, H)); }
+  tube(-13.4, 8.5, 9.4, 8.68); tube(-13.4, -4.48, 9.4, -4.3);
+  tube(9.45, -4.35, 9.62, 8.55); tube(-13.55, -4.35, -13.38, 8.55);
+  for (let x = -13; x <= 9; x += 2.2) { boxes.push(B(x, 8.48, x + 0.08, 8.72, 1.0, METAL, H)); boxes.push(B(x, -4.5, x + 0.08, -4.26, 1.0, METAL, H)); }
+  for (let z = -4; z <= 8.2; z += 2.2) { boxes.push(B(9.42, z, 9.66, z + 0.08, 1.0, METAL, H)); boxes.push(B(-13.58, z, -13.34, z + 0.08, 1.0, METAL, H)); }
   boxes.push(R(-8.2, 0.4, -2.4, 2.2, 0.55, 1.15, 'z', 1, '#3e4852'), R(-8.2, 4.0, -2.4, 5.8, 0.55, 1.15, 'z', 1, '#3e4852'));
   for (const [x, z] of [[-7.4, 1.85], [-5.6, 1.85], [-3.8, 1.85], [-7.4, 5.4], [-5.6, 5.4], [-3.8, 5.4]]) boxes.push(B(x, z, x + 0.85, z + 0.1, 0.48, '#5ee0c8', 0.82));
-  for (const [x, z] of [[9.6, -3.4], [9.6, -1.2], [9.6, 8.4], [9.6, 10.6], [-14.6, -2.8], [-14.6, 8.8]]) {
+  for (const [x, z] of [[9.6, -3.4], [9.6, -1.2], [9.6, 12.8], [9.6, 10.6], [-14.6, -2.8], [-14.6, 12.4]]) {
     boxes.push(B(x, z, x + 0.7, z + 1.4, 2.0, '#8b949c'));
     boxes.push(B(x + 0.08, z + 0.15, x + 0.62, z + 1.25, 0.07, '#e8eef3', 0.65), B(x + 0.08, z + 0.15, x + 0.62, z + 1.25, 0.07, '#e8eef3', 1.3));
   }
@@ -1344,23 +1347,23 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     for (const yy of [0.45, 0.95, 1.45]) boxes.push(B(x0 - 0.02, z + 0.04, x1 + 0.02, z + 0.56, 0.05, '#6E7378', yy));
   };
   for (const z of [-3.4, 1.4, 5.6]) cabinet(-15.2, z, -14.6);
-  for (const z of [-2.2, 2.8, 7.4]) cabinet(10.7, z, 11.3);
+  for (const z of [-2.2, 2.8, 12.6]) cabinet(10.7, z, 11.3);
   for (let x = -15; x < 11; x += 1.7) boxes.push(B(x, 15.85, x + 0.12, 16.12, 3.1, METAL2, 0.2));
   // beiral arredondado: faixa de neve 30 cm para fora, 32 cm abaixo da laje
   boxes.push(B(-16.3, -6.3, 12.3, -6, 0.32, SNOW, 6.45), B(-16.3, 16, 12.3, 16.3, 0.32, SNOW, 6.45));
   boxes.push(B(-16.3, -6, -16, 16, 0.32, SNOW, 6.45), B(12, -6, 12.3, 16, 0.32, SNOW, 6.45));
   boxes.push(B(-16.2, -6.2, 12.2, -5.9, 1.05, METAL, 6.8), B(-16.2, -6, -15.9, 16, 1.85, METAL, 6.8), B(11.9, -6, 12.2, 16, 1.85, METAL, 6.8));
   boxes.push(B(-16.2, 15.9, 1.4, 16.2, 1.05, METAL, 6.8));
-  boxes.push(B(-6.35, -1.35, 2.35, -1.05, 0.9, METAL, 6.8), B(-6.35, 11.05, 2.35, 11.35, 0.9, METAL, 6.8));
-  boxes.push(B(-6.35, -1.05, -6.05, 11.05, 0.9, METAL, 6.8), B(2.05, -1.05, 2.35, 11.05, 0.9, METAL, 6.8));
+  boxes.push(B(-12.2, -3.55, 8.2, -3.25, 0.9, METAL, 6.8), B(-12.2, 8.9, 8.2, 9.2, 0.9, METAL, 6.8));
+  boxes.push(B(-12.2, -3.25, -11.9, 8.9, 0.9, METAL, 6.8), B(7.9, -3.25, 8.2, 8.9, 0.9, METAL, 6.8));
   boxes.push(B(-16.55, -6.55, 12.55, -6.25, 0.18, SNOW, 6.22), B(-16.55, 16.25, 12.55, 16.55, 0.18, SNOW, 6.22));
   boxes.push(B(-16.55, -6.25, -16.25, 16.25, 0.18, SNOW, 6.22), B(12.25, -6.25, 12.55, 16.25, 0.18, SNOW, 6.22));
   boxes.push(B(2.3, 2.6, 3.7, 4.4, 0.55, RUST, 6.9)); // respiro vermelho ao lado da claraboia, entra no card
 
   // salas estreitas a leste (CQB), parede oeste é a da sala fria
+  // alpendre leste: a entrada da direita do pátio atravessa reto, sem as salas internas
   boxes.push(...building(12, -2, 18, 14, { col, floors: 1, H: 3.3, parapet: 0.4, noWall: ['w0'],
-    ops: [{ s: 'e', a: 1, b: 4.2 }, { s: 'e', a: 8, b: 11.2 }, { s: 's', a: 13.2, b: 16.2 }, { s: 'n', a: 13.2, b: 16.2 }],
-    inner: [{ axis: 'x', s0: 12.4, s1: 17.6, line: 4, ops: [{ a: 13.4, b: 16.2 }] }, { axis: 'x', s0: 12.4, s1: 17.6, line: 9, ops: [{ a: 12.8, b: 15.4 }] }] }));
+    ops: [{ s: 'e', a: 6.15, b: 9.05, k: 'wide' }, { s: 's', a: 13.2, b: 16.2 }, { s: 'n', a: 13.2, b: 16.2 }] }));
 
   // galpão sul + rampa pro telhado (antena)
   boxes.push(...building(-12, -46, 12, -30, { col: { ...col, wall: CONC }, floors: 1, H: 3.6, parapet: 1.15,
@@ -1411,8 +1414,9 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   for (let i = 0; i < 18; i++) { const z0 = 31.6 + i * 0.48, y = 4.05 + (Math.min(z0 + 0.55, 40) - 31.6) / 8.4 * 4.1 - 0.05; rail(z0, Math.min(z0 + 0.56, 40.15), y); }
   rail(39.1, 42.2, 7.1);
   // bloqueador alto ~30 m ao sul da rampa, no caminho da visada para o sudeste
-  boxes.push(B(-10.4, 0.2, -9.9, 4.6, 6.6, METAL2), B(-12.2, 1.4, -10.6, 4.8, 0.18, METAL, 6.15));
-  boxes.push(B(-9.2, 2.2, -8.7, 5.4, 6.6, METAL2));
+  // os mastros saíram do eixo da entrada. Ficam no sul do pátio, fora do corredor z 6,2…9.
+  boxes.push(B(-10.4, -1.6, -9.9, 2.2, 6.6, METAL2), B(-12.2, -0.4, -10.6, 2.6, 0.18, METAL, 6.15));
+  boxes.push(B(-9.2, 0.4, -8.7, 3.2, 6.6, METAL2));
   // antena no pátio sul: corta a visada do telhado do galpão para o 2º piso do bloco oeste
   boxes.push(B(-6.3, -16.4, -5.9, -15.5, 7.6, METAL2, -1.5), B(-4.3, -16.4, -3.9, -15.5, 7.6, METAL2, -1.5));
   boxes.push(B(-6.4, -16.5, -3.8, -15.4, 1.3, METAL, 4.5));
@@ -1431,23 +1435,37 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
 
   // montes de neve (0,55–1,0 m) e caixotes de cobertura — pátio norte, vão central, pátio sul
   for (const [x, z, s, h] of [[-17.4, 22, 1.8, 1], [-17.4, 27, 1.6, 0.9], [-17.2, 38, 1.7, 1], [-3.4, 33.4, 1.6, 1],
-    [12, 38.5, 1.8, 1], [-18.6, 8, 1.5, 1], [-18.4, -2, 1.6, 0.95], [22.5, -8, 1.5, 1]]) mound(x, z, s, h);
+    [12, 38.5, 1.8, 1], [-20.6, 3.4, 1.5, 1], [-18.4, -2, 1.6, 0.95], [22.5, -8, 1.5, 1]]) mound(x, z, s, h);
   C(-12.4, 16.2, 1.4, 1.2, METAL); C(-8, -20, 1.5, 1.3, '#6E5438', -1.5); C(14, -20, 1.3, 1.15, METAL2, -1.5); C(-16, -21, 1.6, 1.3, METAL); C(-18.6, 10, 1.2, 1.05, METAL);
   for (const [x, z, s, h] of [[-6, -14, 1.6, 0.8], [6, -18, 1.6, 0.7], [14, -16, 1.5, 0.9], [16, -22, 1.4, 0.75]]) mound(x, z, s, h, -1.5);
 
   // estalactites de gelo nos beirais (acima da cabeça: y ≥ 2,6)
-  for (const [x, z, y] of [[-14, 46.05, 2.7], [4, 46.05, 2.7], [-16.05, 31, 6.1], [14.25, 32, 6.1], [-2, 16.05, 6.15], [12.05, 16, 6.15], [-10, -29.9, 2.9], [8, -29.9, 2.9], [0, -45.95, 2.9], [-8, -6.05, 6.15], [6, -6.05, 6.15], [-16.05, 4, 6.15], [12.05, 2, 6.15]]) {
+  for (const [x, z, y] of [[-2, 16.05, 6.15], [12.05, 16, 6.15], [-10, -29.9, 2.9], [8, -29.9, 2.9], [0, -45.95, 2.9], [-8, -6.05, 6.15], [6, -6.05, 6.15], [-16.05, 4, 6.15], [12.05, 2, 6.15]]) {
     boxes.push(B(x - 0.1, z - 0.1, x + 0.1, z + 0.1, 0.7, ICE, y));
     boxes.push(B(x - 0.05, z - 0.05, x + 0.05, z + 0.05, 0.55, ICE, y - 0.5));
   }
 
+  // passarelas dos cantos. O trecho de fora não tem guarda: cair dali é o penhasco.
+  const deck = (x0, x1, z0, z1) => {
+    boxes.push(B(x0, z0, x1, z1, 0.16, METAL, 0.04));
+    boxes.push(B(x0, z0, x1, z1, 0.08, SNOW, 0.2));
+  };
+  // a ponta para antes da borda invisível: o corpo solta o piso e cai, em vez de grudar no clamp
+  deck(-29.45, -16.5, 52.15, 56.85);
+  deck(16.5, 29.45, 52.15, 56.85);
+  // guarda só no pedaço de dentro. O balanço (x além de ±27,4) fica aberto pros lados e na ponta.
+  for (const [x0, x1] of [[-27.2, -17.2], [17.2, 27.2]]) {
+    boxes.push(B(x0, 52.15, x1, 52.38, 1.15, METAL, 0.28));
+    boxes.push(B(x0, 56.62, x1, 56.85, 1.15, METAL, 0.28));
+  }
+  boxes.push({ wp: [-22, 0.45, 54.5] }, { wp: [-18, 0.45, 54.5] }, { wp: [18, 0.45, 54.5] }, { wp: [22, 0.45, 54.5] });
+
   const props = [
-    { t: 'dome', x: 2, y: 3.55, z: 41, r: 1.7, h: 1.05, c: CONC, cap: SNOW },
     { t: 'dome', x: 6.5, z: 1.6, r: 1.7, h: 1.05, c: METAL, cap: SNOW },
     { t: 'tank', x: -8.2, z: -16.5, y: -1.5, r: 0.75, h: 2.2, c: METAL, cap: SNOW, band: RUST },
     { t: 'tank', x: 16.5, z: -10, y: -1.5, r: 0.85, h: 1.8, c: RUST, cap: SNOW2 },
     { t: 'truck', x: 1.5, z: -18.5, y: -1.5, c: '#4A4E54' },
-    { t: 'pine', x: -21.2, z: -56, s: 1.15 }, { t: 'pine', x: 21.2, z: 55.2, s: 1.25 }, { t: 'pine', x: 23.2, z: 2.2, s: 1.05 },
+    { t: 'pine', x: -21.2, z: -56, s: 1.15 }, { t: 'pine', x: 23.4, z: 48.6, s: 1.25 }, { t: 'pine', x: 23.2, z: 2.2, s: 1.05 },
     { t: 'pine', x: 22.4, z: -27, s: 1.1 }, { t: 'pine', x: -16.2, z: 26.5, s: 0.95 }, { t: 'pine', x: 18.5, z: -52, s: 1.2 },
     { t: 'sign', x: -2, y: 4.5, z: 16.35, w: 6.2, h: 1.35, rot: 0, text: 'SALA FRIA', bg: RUST, fg: '#F2D9A0' },
     { t: 'sign', x: -28.7, y: 2.45, z: -2, w: 2.3, h: 1.05, rot: Math.PI / 2, text: 'PENHASCO', bg: RUST, fg: '#fff' },
@@ -1455,12 +1473,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     { t: 'sign', x: -6.2, y: 1.7, z: 15.35, w: 2.4, h: 0.7, rot: Math.PI, text: '09:40', bg: '#1c242c', fg: '#F2D9A0' },
     { t: 'clock', x: -2, y: 1.7, z: 15.35, w: 2.4, h: 0.7, rot: Math.PI },
     { t: 'sign', x: 2.2, y: 1.7, z: 15.35, w: 2.4, h: 0.7, rot: Math.PI, text: '18:10', bg: '#1c242c', fg: '#F2D9A0' },
-    { t: 'sign', x: -0.4, y: 2.5, z: 35.85, w: 3.4, h: 0.9, rot: Math.PI, text: 'LAB', bg: '#1c242c', fg: '#F2D9A0' },
-    { t: 'pane', x0: -6, z0: -1, x1: -2, z1: 5, y: 6.72, axis: 'y', c: 0xBFDDEB, o: 0.35 },
-    { t: 'pane', x0: -2, z0: -1, x1: 2, z1: 5, y: 6.72, axis: 'y', c: 0xBFDDEB, o: 0.35 },
-    { t: 'pane', x0: -6, z0: 5, x1: -2, z1: 11, y: 6.72, axis: 'y', c: 0xBFDDEB, o: 0.35 },
-    { t: 'pane', x0: -2, z0: 5, x1: 2, z1: 11, y: 6.72, axis: 'y', c: 0xBFDDEB, o: 0.35 },
-    { t: 'glow', x0: -6, z0: -1, x1: 2, z1: 11, y: 6.55, c: 0xF2D9A0, o: 0.82 },
+    { t: 'sign', x: 1.2, y: 2.15, z: 33.05, w: 3.2, h: 0.85, rot: Math.PI, text: 'ABRIGO', bg: '#1c242c', fg: '#F2D9A0' },
     { t: 'cable', x0: -24.3, y0: 5.2, z0: 43.6, x1: -21.4, y1: 13.4, z1: 40.8, c: '#1a1e22', r: 0.16 },
     { t: 'cable', x0: -24.3, y0: 5.2, z0: 45.4, x1: -21.4, y1: 13.4, z1: 42.8, c: '#1a1e22', r: 0.16 },
     { t: 'cable', x0: -21.4, y0: 13.4, z0: 40.8, x1: -42, y1: 24, z1: 18, c: '#1a1e22', r: 0.12 },
@@ -1476,30 +1489,33 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     { t: 'pine', x: 48, z: -6, y: -12.5, s: 1.8 }, { t: 'pine', x: 56, z: 8, y: -17.5, s: 1.45 },
     { t: 'pine', x: 34, z: 22, y: -3.7, s: 1.9 }, { t: 'pine', x: 44, z: 36, y: -10, s: 1.6 },
     { t: 'pine', x: 52, z: 48, y: -15, s: 1.5 }, { t: 'pine', x: 38, z: 6, y: -6.2, s: 1.75 },
+    { t: 'pine', x: -36, z: 54, y: -5.2, s: 1.7 }, { t: 'pine', x: -44, z: 50, y: -10, s: 1.45 },
+    { t: 'pine', x: 36, z: 55, y: -5.1, s: 1.65 }, { t: 'pine', x: 46, z: 50, y: -11, s: 1.5 },
     { t: 'decal', x0: -1.55, z0: -25.2, x1: -0.7, z1: -8.2, y: -1.47, c: 0x3a4148 },
     { t: 'decal', x0: 0.85, z0: -25.2, x1: 1.7, z1: -8.6, y: -1.47, c: 0x3a4148 },
     { t: 'keg', x: -18.5, z: 14 }, { t: 'keg', x: 22, z: 30 }, { t: 'keg', x: 22, z: 14 },
     { t: 'keg', x: -8.1, z: -14, y: -1.5 }, { t: 'keg', x: 6, z: -16, y: -1.5 }, { t: 'keg', x: -19.3, z: 11 },
     ...drifts, ...cables,
   ];
-  const roofs = [[-8, 36, 7, 46, 3.5], [-16, 19, -2, 31, 6.8], [1.6, 18, 14.2, 32, 6.8],
+  const roofs = [[-7.2, 33.2, 8.4, 45.6, 2.88],
     [-16, -6, 12, 16, 6.8],
     [12, -2, 18, 14, 3.3], [-12, -46, 12, -30, 3.6], [-25.9, 42.2, -22.6, 46.8, 5.25], [-23.2, 39.2, -18.4, 44.6, 8.15]];
   MAPS.push({
     id: 'posto-nevasca', name: 'Posto Nevasca',
-    desc: 'Base no cume: sala fria com mezanino e claraboia, passarela no penhasco e salas estreitas a leste.',
+    desc: 'Base no cume: pátio aberto dos dois lados, abrigo no spawn norte e passarelas sobre o penhasco.',
     size: [31, 60], wallH: 0.85, wallColor: [ROCK, ROCK], openMax: 8.5, laneMin: 40,
-    fall: { y: -50, abyss: -62, rects: voids, cuts: [[-16, -28.9, 20, -5.6]], slopes, openWest: true, openEast: true, basins: [[-14, -26, 18, -6, -1.5]], pit: '#3A4046', floor: -32, slopeColor: '#9AA6B0',
+    navAvoid: [[-31.2, 51.8, -27.35, 57.2], [27.35, 51.8, 31.2, 57.2]],
+    fall: { y: -50, abyss: -62, haze: true, rects: voids, cuts: [[-16, -28.9, 20, -5.6]], slopes, openWest: true, openEast: true, basins: [[-14, -26, 18, -6, -1.5]], pit: '#2A3038', floor: -32, slopeColor: '#9AA6B0',
       slopeBands: ['#F7FBFF', '#C5CED6', '#A8B3BD', '#8E99A3', '#7A848C', '#6A737C', '#5C656C', '#4A4E54', '#40464C', '#3A4046', '#343A40', '#2E343A'] },
     thumb: { x: 4.5, y: 12.5, z: -7, tx: -1.5, ty: 5.4, tz: 4 },
     palette: { sky: '#C9D3DC', fog: ['#C9D3DC', 40, 180], fogExp: ['#C9D3DC', 0.0065], hemi: ['#e7eef3', '#8B98A6', 1.55], sun: ['#f4f7fa', 0.9], ground: SNOW, tiles: null, clouds: true, mountains: true,
       lights: [['#F2D9A0', -4, 2.6, 2, 16, 12], ['#F2D9A0', 2, 2.6, 6, 16, 12], ['#F2D9A0', -2, 5.4, 8, 14, 10], ['#F2D9A0', -6, 5.4, 2, 12, 9], ['#F2D9A0', -8, 2.4, 24, 12, 10], ['#F2D9A0', 6, 2.4, 24, 12, 10], ['#F2D9A0', -1, 2.2, -31, 10, 8], ['#F2D9A0', 6, 2.2, -31, 10, 8], ['#fff6e4', -10, 2.6, 22.8, 18, 11]] },
     weather: { kind: 'snow', n: 1400, fall: 6.2, wind: [2.3, 0, 0.55], top: 34, color: 0xF7FBFF, size: 0.15, roofs },
     ...fin(boxes), props,
-    spawns: [[-6, 40], [2, 38.5], [18, 44], [-0.2, 17.4], [15, 22], [14, 38], [-8, -52], [0, -56], [8, -50], [-4, -58], [6, -44], [-14, -50]],
-    pickups: [['health', 4, 2], ['health', -4, 40], ['health', -11, -22, -1.5], ['health', 2, 38.5], ['health', -5, 28, H],
-      ['ammo', -23.4, -1], ['ammo', 15.2, 6], ['ammo', -9, 27, H], ['ammo', 0, -38, 3.6],
-      ['grenade', 8, 24], ['grenade', -2, -12, -1.5], ['grenade', 4, 11, H]],
+    spawns: [[-4.2, 41.2], [3.4, 36.2], [16.5, 46], [-12, 36], [8, 28], [-0.4, 18.2], [15, 22], [-8, -52], [0, -56], [8, -50], [-4, -58], [6, -44], [-14, -50]],
+    pickups: [['health', 4, 2], ['health', -4.6, 39.2], ['health', -11, -22, -1.5], ['health', 3.2, 43.5], ['health', -16.4, 30],
+      ['ammo', -23.4, -1], ['ammo', 15.2, 6], ['ammo', -8, 30], ['ammo', 0, -38, 3.6],
+      ['grenade', 10, 26], ['grenade', -2, -12, -1.5], ['grenade', -10, 11.2, H]],
     showcase: [-2, 0, 4], view: [-16, 1.6, 2, -0.35, -0.04],
     test: { stairs: { from: [-6.2, 0, 10.7], to: [5.2, H, 10.7], level: H }, roof: { from: [0, 0, -56.2], to: [0, 3.6, -38], level: 3.6 }, under: { from: [15.2, 0, 1], to: [15.2, 0, 7.5], ceil: 3.0 } },
   });

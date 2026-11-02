@@ -5820,7 +5820,7 @@ function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de muniçã
   for (const [t, x, z, y] of inv && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups) makePickup(t, x, z, y || 0);
   pickups.forEach((p) => (p.mesh.visible = state !== 'menu'));
   const t0 = performance.now();
-  nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides, groundAt, solids, topAt, seeds: SPAWNS.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [] });
+  nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides, groundAt, solids, topAt, seeds: SPAWNS.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [], avoid: map.navAvoid || [] });
   navMs = performance.now() - t0;
   showcase.position.set(...map.showcase); showBaseY = map.showcase[1]; pickShowcaseCam();
   currentMap = map; return map;
@@ -5834,7 +5834,7 @@ function syncSurvivalSpace() {
   SPAWNS = src.map(([x, z, y = 0]) => new V3(x, groundAt(x, z, y + 0.3), z));
   const seeds = currentMap.spawns.map(([x, z, y = 0]) => [x, groundAt(x, z, y + 0.3), z]);
   const t0 = performance.now();
-  nav = buildNav({ hx: currentMap.size[0], hz: currentMap.size[1], spacing: currentMap.navSpacing || 2, collides, groundAt, solids, topAt, seeds, extra: currentMap.waypoints || [] });
+  nav = buildNav({ hx: currentMap.size[0], hz: currentMap.size[1], spacing: currentMap.navSpacing || 2, collides, groundAt, solids, topAt, seeds, extra: currentMap.waypoints || [], avoid: currentMap.navAvoid || [] });
   navMs = performance.now() - t0;
   if (inv) { inv.A.nav = nav; inv.A.P = PHYS; inv.rev = null; for (const z of inv.zombies || []) z.node = null; }
 }

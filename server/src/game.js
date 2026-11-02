@@ -249,7 +249,7 @@ export class Game {
     const spawnSrc = this.survival && map.survival ? map.survival.playerSpawns : map.spawns;
     this.spawns = spawnSrc.map(([x, z, y = 0]) => ({ x, y: this.P.groundAt(x, z, y + 0.3), z }));
     const navSeeds = map.spawns.map(([x, z, y = 0]) => [x, this.P.groundAt(x, z, y + 0.3), z]);
-    this.nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds: navSeeds, extra: map.waypoints || [] });
+    this.nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds: navSeeds, extra: map.waypoints || [], avoid: map.navAvoid || [] });
     const rawPicks = this.invasion && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups;
     this.pickups = (this.x1Mode ? rawPicks.filter((p) => p[0] === 'ammo') : rawPicks).map(([type, x, z, y]) => { const on = (!this.armsMode || type === 'ammo' || type === 'health') && powerOn(type, this.cfg.powers); return { type, pos: { x, y: this.P.groundAt(x, z, (y || 0) + 0.3), z }, active: on, respawnAt: on ? 0 : 1e9 }; });
     this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.events = []; this.personal.clear();
@@ -1610,7 +1610,7 @@ startMsg() {
     const solids = mapSolids(this.map).concat(closedDoorSolids(this.map, this.surv.open));
     this.P = createPhysics(solids, this.map.size, this.map.fall || null);
     const seeds = this.map.spawns.map(([x, z, y = 0]) => [x, this.P.groundAt(x, z, y + 0.3), z]);
-    this.nav = buildNav({ hx: this.map.size[0], hz: this.map.size[1], spacing: this.map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds, extra: this.map.waypoints || [] });
+    this.nav = buildNav({ hx: this.map.size[0], hz: this.map.size[1], spacing: this.map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds, extra: this.map.waypoints || [], avoid: this.map.navAvoid || [] });
     if (this.inv) { this.inv.A.P = this.P; this.inv.A.nav = this.nav; this.inv.rev = null; for (const z of this.inv.zombies) z.node = null; }
   }
   buyDoor(e, doorId) {
