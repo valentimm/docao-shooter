@@ -297,7 +297,7 @@ const LOOT_LADDER = [
   { id: 'gold', label: 'Dourado', rank: 5, hex: '#f0c14a', glow: '#fff1a8', ink: '#fff8df' },
 ];
 const LOOT_RANK = { 500: 0, 750: 1, 1000: 2, 1250: 3, 2000: 5 };
-const SPIN_MS = [1500, 2100, 2700, 3400, 4000, 4600];
+const SPIN_MS = [1800, 2500, 3200, 4000, 4800, 5500];
 const SPIN_LEAD = [16, 22, 30, 38, 44, 52];
 const SPIN_OVER = [8, 16, 32, 52, 64, 78];
 const lookOf = (it) => LOOT_LADDER[LOOT_RANK[it && it.weight | 0] ?? 0];
@@ -332,10 +332,21 @@ function buildStrip(pool, winner, rank) {
   for (let i = 0; i < 7; i++) cards.push(pickFrom(pool));
   return { cards, winAt };
 }
+// Os primeiros 10% do giro levam ~70% da fita. O resto desacelera até parar, e o final só assenta.
+const SPIN_BURST_T = 0.10, SPIN_BURST_D = 0.70, SPIN_SETTLE = 0.14;
+const SPIN_SLOW_R = 1 - SPIN_BURST_T;
+const SPIN_VJOIN = 2 * (1 - SPIN_BURST_D) / SPIN_SLOW_R;
+const SPIN_V0 = 2 * SPIN_BURST_D / SPIN_BURST_T - SPIN_VJOIN;
+function spinApproach(tau) {
+  if (tau <= SPIN_BURST_T) return SPIN_V0 * tau + (SPIN_VJOIN - SPIN_V0) * tau * tau / (2 * SPIN_BURST_T);
+  const s = tau - SPIN_BURST_T;
+  return SPIN_BURST_D + SPIN_VJOIN * s - SPIN_VJOIN * s * s / (2 * SPIN_SLOW_R);
+}
 const xAt = (t, target, overshoot) => {
   const past = target - overshoot;
-  if (t < 0.9) return past * (1 - Math.pow(2, -11 * (t / 0.9)));
-  const u = (t - 0.9) / 0.1, e = u * u * (3 - 2 * u);
+  const approachEnd = 1 - SPIN_SETTLE;
+  if (t < approachEnd) return past * spinApproach(t / approachEnd);
+  const u = (t - approachEnd) / SPIN_SETTLE, e = u * u * (3 - 2 * u);
   return past * (1 - e) + target * e;
 };
 // No começo a moldura segue a carta que passa. No fim ela sobe a escada só até a faixa sorteada
