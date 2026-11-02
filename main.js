@@ -41,6 +41,7 @@ import { SEND_HZ, INTERP_DELAY } from './config.js';
 import { cleanName, NAME_MAX } from './shared/names.js';
 import { createPhysics, rayHitboxes } from './shared/physics.js';
 import { CROUCH, crouchAmount, stanceScale, eyeHeight, stepCrouch } from './shared/stance.js';
+import { footstepVolume, takeFootstep } from './shared/footsteps.js';
 import { explosionHits, rayCapsule, ROCKET_PAD, sniperSpread, shotKnock } from './shared/combat.js';
 import { meleeHit, MELEE_KINDS } from './shared/melee.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, commitSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc, aimForward } from './shared/saber.js';
@@ -231,19 +232,28 @@ function initAudio() {
     saberSfx.bind(actx, master); bindGrenadeVoice(actx, master); sniperSfx.bind(actx, master);
   } catch (e) { actx = null; }
 }
-function noise(dur, freq, vol, type = 'lowpass', delay = 0) {
+function connectOut(node, pan = 0) {
+  if (!pan) { node.connect(master); return; }
+  try {
+    const p = actx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    node.connect(p); p.connect(master);
+  } catch (e) { node.connect(master); }
+}
+function noise(dur, freq, vol, type = 'lowpass', delay = 0, pan = 0) {
   if (!actx) return; const t = actx.currentTime + delay;
   const s = actx.createBufferSource(); s.buffer = noiseBuf;
   const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02);
+  s.connect(f); f.connect(g); connectOut(g, pan); s.start(t); s.stop(t + dur + 0.02);
 }
-function tone(type, f0, f1, dur, vol, delay = 0) {
+function tone(type, f0, f1, dur, vol, delay = 0, pan = 0) {
   if (!actx) return; const t = actx.currentTime + delay;
   const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+  o.connect(g); connectOut(g, pan); o.start(t); o.stop(t + dur + 0.02);
 }
+let stepSide = 0;
 const sfx = {
   rifle: (v = 1) => { noise(0.11, 3000, 0.5 * v); tone('square', 220, 60, 0.07, 0.15 * v); },
   commando: (v = 1) => { noise(0.06, 2600, 0.32 * v); tone('square', 170, 45, 0.05, 0.09 * v); }, // fuzil, mais seco e baixo
@@ -291,6 +301,10 @@ const sfx = {
   chomp: (v = 1) => { noise(0.06, 2400, 0.32 * v, 'bandpass'); noise(0.06, 1900, 0.26 * v, 'bandpass', 0.1); tone('sine', 520, 880, 0.1, 0.16 * v, 0.04); tone('triangle', 880, 1320, 0.12, 0.14 * v, 0.16); }, // nhac nhac + plim
   pickup: () => { tone('sine', 660, 660, 0.08, 0.2); tone('sine', 880, 880, 0.08, 0.2, 0.08); tone('sine', 1320, 1320, 0.12, 0.2, 0.16); },
   jump: () => tone('sine', 300, 600, 0.1, 0.06),
+  step: (v = 1, pan = 0) => { // sola no chão: um pé um pouco mais grave que o outro
+    if (v < 0.02) return; const n = (stepSide ^= 1) ? 0.92 : 1.08;
+    noise(0.05, 460 * n, 0.24 * v, 'lowpass', 0, pan); tone('triangle', 170 * n, 68, 0.07, 0.1 * v, 0, pan); noise(0.028, 1500, 0.045 * v, 'bandpass', 0.01, pan);
+  },
   boom: (v = 1) => { noise(1.1, 700, 1.4 * v); tone('sine', 110, 28, 0.8, 0.7 * v); noise(0.5, 3500, 0.25 * v, 'highpass', 0.12); noise(0.9, 6000, 0.12 * v, 'highpass', 0.3); tone('triangle', 900, 1600, 0.08, 0.12 * v, 0.05); },
   incoming: (v = 1) => { tone('sine', 980, 160, 1.05, 0.16 * v); noise(0.9, 1400, 0.1 * v, 'bandpass'); },
   toss: (v = 1) => { noise(0.18, 1800, 0.25 * v, 'bandpass'); tone('sine', 500, 260, 0.15, 0.08 * v); },
@@ -345,6 +359,22 @@ const mgWhirr = { o: null, o2: null, f: null, g: null, last: '', set(spin, firin
   this.o.frequency.setTargetAtTime(hz, t, 0.05); this.o2.frequency.setTargetAtTime(hz * 2.01, t, 0.05); this.f.frequency.setTargetAtTime(400 + 1400 * spin, t, 0.05); this.g.gain.setTargetAtTime(0.07 * spin, t, 0.06);
 } };
 const distVol = (p) => clamp(1 - p.distanceTo(player.pos) / 60, 0.05, 1);
+function updateFootsteps(dt) {
+  if (!player) return;
+  const ear = player.alive ? player.pos : camera.position; // vivo: distância entre os corpos; morto: de onde a câmera está
+  for (const e of entities) {
+    if (!takeFootstep(e, dt)) continue;
+    const self = e === player;
+    const vol = footstepVolume(self ? 0 : e.pos.distanceTo(ear));
+    if (vol < 0.02) continue;
+    let pan = 0;
+    if (!self) {
+      const dx = e.pos.x - camera.position.x, dz = e.pos.z - camera.position.z;
+      pan = clamp(Math.sin(Math.atan2(dx, dz) - camera.rotation.y), -1, 1) * 0.8;
+    }
+    sfx.step(vol, pan);
+  }
+}
 const sniperSfx = createSniperSfx();
 // Pan simples pro tiro de outra pessoa: o jogo não usa Panner 3D, só volume. As snipers ganham lado também.
 function stereoPan(pos) {
@@ -6118,6 +6148,7 @@ function loop() {
     if (emote.on && state === 'playing') stepEmote(dt);
     if (online) netTick(dt);
     for (const e of entities) if (!e.isPlayer) updateBot(e, dt);
+    updateFootsteps(dt);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
     updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt);
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
