@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider } from './docao.js';
+import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, KARAMBIT_RING_Z } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
 import { makeFPSniper, poseSniperBolt, applySniperSkin } from './sniper-view.js';
@@ -13,7 +13,7 @@ import { makeFPSlingshot } from './slingshot-view.js';
 import { makeFPCapataz, capatazSkin, capatazFx, noteCapataz, stepCapataz, capatazRead } from './revolver-view.js';
 import { renderWeaponThumb } from './weapon-thumbs.js';
 import { camoLevel, camoInfo, nextCamo, applyWeaponCamo, resetWeaponCamo } from './weapon-camo.js';
-import { INSPECT_DUR, INSPECT_HOLD, INSPECT_FADE, INSPECT_PROFILES, inspectKind, inspectPose } from './inspect.js';
+import { INSPECT_DUR, INSPECT_HOLD, INSPECT_FADE, INSPECT_PROFILES, inspectKind, inspectPose, knifeInspectLocal, fadeFullTurn } from './inspect.js';
 import { drawFlair, recoilFlair, recoilRecover, bobMul, idleFlair, rareFlair, locoFlair, killFlair, inspectFlair, reloadFlourish, drawCues, inspectCues, rareCue, ejectsBrass, brassPort, heatsBarrel, knifeExtra, saberCutDir, cupHandShake, tpReloadExtra, tpKickScale, RARE_IDLE_AFTER, KILL_TIME, EGG_P } from './weapon-anims.js';
 import { createSaberSfx } from './saber-sfx.js';
 import { createSniperSfx } from './sniper-sfx.js';
@@ -41,6 +41,7 @@ import { SEND_HZ, INTERP_DELAY } from './config.js';
 import { cleanName, NAME_MAX } from './shared/names.js';
 import { createPhysics, rayHitboxes } from './shared/physics.js';
 import { CROUCH, crouchAmount, stanceScale, eyeHeight, stepCrouch } from './shared/stance.js';
+import { footstepVolume, takeFootstep } from './shared/footsteps.js';
 import { explosionHits, rayCapsule, ROCKET_PAD, sniperSpread, shotKnock } from './shared/combat.js';
 import { meleeHit, MELEE_KINDS } from './shared/melee.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, commitSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc, aimForward } from './shared/saber.js';
@@ -231,19 +232,28 @@ function initAudio() {
     saberSfx.bind(actx, master); bindGrenadeVoice(actx, master); sniperSfx.bind(actx, master);
   } catch (e) { actx = null; }
 }
-function noise(dur, freq, vol, type = 'lowpass', delay = 0) {
+function connectOut(node, pan = 0) {
+  if (!pan) { node.connect(master); return; }
+  try {
+    const p = actx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    node.connect(p); p.connect(master);
+  } catch (e) { node.connect(master); }
+}
+function noise(dur, freq, vol, type = 'lowpass', delay = 0, pan = 0) {
   if (!actx) return; const t = actx.currentTime + delay;
   const s = actx.createBufferSource(); s.buffer = noiseBuf;
   const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02);
+  s.connect(f); f.connect(g); connectOut(g, pan); s.start(t); s.stop(t + dur + 0.02);
 }
-function tone(type, f0, f1, dur, vol, delay = 0) {
+function tone(type, f0, f1, dur, vol, delay = 0, pan = 0) {
   if (!actx) return; const t = actx.currentTime + delay;
   const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+  o.connect(g); connectOut(g, pan); o.start(t); o.stop(t + dur + 0.02);
 }
+let stepSide = 0;
 const sfx = {
   rifle: (v = 1) => { noise(0.11, 3000, 0.5 * v); tone('square', 220, 60, 0.07, 0.15 * v); },
   commando: (v = 1) => { noise(0.06, 2600, 0.32 * v); tone('square', 170, 45, 0.05, 0.09 * v); }, // fuzil, mais seco e baixo
@@ -291,6 +301,10 @@ const sfx = {
   chomp: (v = 1) => { noise(0.06, 2400, 0.32 * v, 'bandpass'); noise(0.06, 1900, 0.26 * v, 'bandpass', 0.1); tone('sine', 520, 880, 0.1, 0.16 * v, 0.04); tone('triangle', 880, 1320, 0.12, 0.14 * v, 0.16); }, // nhac nhac + plim
   pickup: () => { tone('sine', 660, 660, 0.08, 0.2); tone('sine', 880, 880, 0.08, 0.2, 0.08); tone('sine', 1320, 1320, 0.12, 0.2, 0.16); },
   jump: () => tone('sine', 300, 600, 0.1, 0.06),
+  step: (v = 1, pan = 0) => { // sola no chão: um pé um pouco mais grave que o outro
+    if (v < 0.02) return; const n = (stepSide ^= 1) ? 0.92 : 1.08;
+    noise(0.05, 460 * n, 0.24 * v, 'lowpass', 0, pan); tone('triangle', 170 * n, 68, 0.07, 0.1 * v, 0, pan); noise(0.028, 1500, 0.045 * v, 'bandpass', 0.01, pan);
+  },
   boom: (v = 1) => { noise(1.1, 700, 1.4 * v); tone('sine', 110, 28, 0.8, 0.7 * v); noise(0.5, 3500, 0.25 * v, 'highpass', 0.12); noise(0.9, 6000, 0.12 * v, 'highpass', 0.3); tone('triangle', 900, 1600, 0.08, 0.12 * v, 0.05); },
   incoming: (v = 1) => { tone('sine', 980, 160, 1.05, 0.16 * v); noise(0.9, 1400, 0.1 * v, 'bandpass'); },
   toss: (v = 1) => { noise(0.18, 1800, 0.25 * v, 'bandpass'); tone('sine', 500, 260, 0.15, 0.08 * v); },
@@ -345,6 +359,22 @@ const mgWhirr = { o: null, o2: null, f: null, g: null, last: '', set(spin, firin
   this.o.frequency.setTargetAtTime(hz, t, 0.05); this.o2.frequency.setTargetAtTime(hz * 2.01, t, 0.05); this.f.frequency.setTargetAtTime(400 + 1400 * spin, t, 0.05); this.g.gain.setTargetAtTime(0.07 * spin, t, 0.06);
 } };
 const distVol = (p) => clamp(1 - p.distanceTo(player.pos) / 60, 0.05, 1);
+function updateFootsteps(dt) {
+  if (!player) return;
+  const ear = player.alive ? player.pos : camera.position; // vivo: distância entre os corpos; morto: de onde a câmera está
+  for (const e of entities) {
+    if (!takeFootstep(e, dt)) continue;
+    const self = e === player;
+    const vol = footstepVolume(self ? 0 : e.pos.distanceTo(ear));
+    if (vol < 0.02) continue;
+    let pan = 0;
+    if (!self) {
+      const dx = e.pos.x - camera.position.x, dz = e.pos.z - camera.position.z;
+      pan = clamp(Math.sin(Math.atan2(dx, dz) - camera.rotation.y), -1, 1) * 0.8;
+    }
+    sfx.step(vol, pan);
+  }
+}
 const sniperSfx = createSniperSfx();
 // Pan simples pro tiro de outra pessoa: o jogo não usa Panner 3D, só volume. As snipers ganham lado também.
 function stereoPan(pos) {
@@ -3580,7 +3610,7 @@ function poseKnight(hold, k, side = 1, dual = false, mode = '', variant = 0) {
   if (!mode && variant === 3 && t > 0) hold.rotateZ(Math.sin(Math.min(k, 1) * Math.PI) * side * 0.85); // ovo: a lâmina gira no corte normal
 }
 // ---------------- Inspecionar arma (I): gira, mostra os dois lados e volta. Só visual, nada vai pro servidor ----------------
-const INS_ZERO = { ry: 0, rz: 0, rx: 0, x: 0, y: 0, z: 0, flip: 0, twist: 0, spin: false, k: 0 }, _ins = {};
+const INS_ZERO = { ry: 0, rz: 0, rx: 0, x: 0, y: 0, z: 0, flip: 0, twist: 0, spin: false, k: 0, fade: 1 }, _ins = {};
 function canInspect(p) {
   return state === 'playing' && !!p && p.alive && !gunner && !predator && !radioCall && !p.charging && !p.bowDraw && !p.eggDraw && !p.burstLeft && !(p.mgSpin > 0.05) && p.reloadEnd <= gameTime && p.switchEnd <= gameTime && ads < 0.05 && fp.actionT <= 0
     && !(isKnife(p.weapon) && fp.knifeT < KNIFE_ANIM[fp.knifeKind]) && tabletK < 0.04 && radioK < 0.04 && laptopK < 0.04 && !!fp.guns[p.weapon];
@@ -3589,7 +3619,7 @@ function startInspect(p) {
   if (!canInspect(p) || (fp.ins && !fp.ins.out && fp.ins.t < INSPECT_DUR * 0.8)) return false; // no meio: só reinicia na volta
   fp.ins = { t: 0, wpn: p.weapon, kind: inspectKind(WEAPONS[p.weapon]), fade: 1, out: false, hold: false, flipped: false, egg: !reducedAnims() && Math.random() < EGG_P, pig: false };
   if (WEAPONS[p.weapon].revolver) noteCapataz('inspect', { dual: !!WEAPONS[p.weapon].akimbo });
-  sfx.inspect(); if (fp.ins.egg) flairCue('boop', 0.05, 0.5); playCueList(inspectCues(WEAPONS[p.weapon].key), INSPECT_DUR, fp.ins.egg ? 1 : 0.75); showInspectHud(p); startButterfly(); return true;
+  sfx.inspect(); if (fp.ins.egg) flairCue('boop', 0.05, 0.5); playCueList(inspectCues(WEAPONS[p.weapon].key), INSPECT_DUR, fp.ins.egg ? 1 : 0.75); showInspectHud(p); return true;
 }
 function stopInspect(hard) { if (!fp.ins) return; if (hard) fp.ins = null; else fp.ins.out = true; showInspectHud(null); }
 function showInspectHud(p) {
@@ -3615,6 +3645,7 @@ function inspectStep(p, dt) {
   }
   const o = inspectPose(Math.min(1, s.t / INSPECT_DUR), INSPECT_PROFILES[s.kind], _ins), f = s.out ? Math.max(0, s.fade) : 1;
   for (const c of ['ry', 'rz', 'rx', 'x', 'y', 'z', 'twist', 'flip']) o[c] *= f;
+  o.fade = f;
   return o;
 }
 function addPose(p, s = 1) {
@@ -3670,7 +3701,7 @@ function updateFP(dt) {
   const bolting = !!(w.bolt && fp.actionT > 0);
   const drawn = p.weapon === CROSS || p.weapon === BOW || p.weapon === EGG_W;
   fp.fpRef.arms.visible = p.weapon !== PISTOL && p.weapon !== NAIL && !isKnife(p.weapon) && !isSaber(p.weapon) && !w.shield && !w.revolver && !drawn && !bolting && !shatter; fp.fpRef.armsP.visible = (p.weapon === PISTOL || p.weapon === NAIL) && !shatter && !w.revolver;
-  if (isKnife(p.weapon)) { knifeAnim(dt); const bfly = p.weapon === KNIFE && fp.kpiv.children.some((c) => c.userData.bflyBlade); fp.kpiv.rotation.x = bfly ? 0 : ins.flip; } // inspecionar: as outras facas giram no dedo; a butterfly gira a lâmina no pino
+  if (isKnife(p.weapon)) { knifeAnim(dt); poseKnifeInspect(ins); } // cada modelo de faca inspeciona do seu jeito
   let dip = 0, tilt = 0;
   // animações de ação: pump da Calibre 12, ferrolho do Sniper, ferrolho da pistola, foguete na boca da bazuca
   fp.actionT = Math.max(0, fp.actionT - dt); fp.shellT = Math.max(0, fp.shellT - dt);
@@ -4037,12 +4068,53 @@ function knifeAnim(dt) {
   if (!reducedAnims() && k < 1 && fp.knifeKind === 'slash') { const ex = knifeExtra(fp.knifeVar || 0, Math.min(1, k)); px += ex.x; py += ex.y; pz += ex.z; rx += ex.rx; ry += ex.ry; rz += ex.rz; }
   kr.position.set(px, py, pz); kr.rotation.set(rx, ry, 0); kp.rotation.z = rz;
   const mesh = kp.children.find((c) => c.userData.knifeSkin);
-  if (mesh && mesh.userData.bflyBlade) {
+  if (mesh && mesh.userData.bflyBlade && !fp.ins) { // na inspeção o flick segue o relógio do I, não o do saque
     const attacking = k < 1;
     if (attacking || reducedAnims()) fp.bflyT = BFLY_DUR;
     else if (fp.bflyT < BFLY_DUR) fp.bflyT += dt;
     poseButterfly(mesh, !(fp.bflyT < BFLY_DUR) ? 1 : fp.bflyT / BFLY_DUR);
   }
+}
+const _kSpinQ = new THREE.Quaternion(), _kAxisQ = new THREE.Quaternion(), _kAxisX = new V3(1, 0, 0), _kPivot = new V3(), _kMoved = new V3();
+function applyKnifePivot(mesh, spin) {
+  if (!mesh.userData.restQ) { mesh.userData.restQ = mesh.quaternion.clone(); mesh.userData.restP = mesh.position.clone(); }
+  const moving = Math.abs(spin) > 1e-4;
+  if (!moving && !mesh.userData.insHeld) return;
+  mesh.userData.insHeld = moving;
+  mesh.quaternion.copy(mesh.userData.restQ);
+  mesh.position.copy(mesh.userData.restP);
+  if (!moving) return;
+  _kSpinQ.identity().multiply(_kAxisQ.setFromAxisAngle(_kAxisX, spin));
+  mesh.quaternion.multiply(_kSpinQ);
+  const s = mesh.scale.x || 1;
+  _kPivot.set(0, 0, KARAMBIT_RING_Z);
+  _kMoved.copy(_kPivot).applyQuaternion(_kSpinQ);
+  _kPivot.sub(_kMoved).multiplyScalar(s).applyQuaternion(mesh.userData.restQ);
+  mesh.position.add(_kPivot);
+}
+// Inspeção da faca: a mão (kr) acompanha baioneta e skeleton. A karambit gira na argola. A butterfly abre no pino.
+function poseKnifeInspect(ins) {
+  const kp = fp.kpiv, kr = fp.kr;
+  if (!kp || !kr) return;
+  const mesh = kp.children.find((c) => c.userData.knifeSkin);
+  const kind = (mesh && mesh.userData.knifeKind) || 'chef';
+  const fancy = !reducedAnims();
+  const w = ins && ins.fade != null ? ins.fade : 1;
+  const local = knifeInspectLocal(fancy ? kind : (mesh && mesh.userData.bflyBlade ? 'butterfly' : 'chef'), fancy ? ((ins && ins.k) || 0) : 0);
+  kp.rotation.x = local.finger ? (ins.flip || 0) : 0;
+  kr.position.x += local.x * w; kr.position.y += local.y * w; kr.position.z += local.z * w;
+  kr.rotation.x += local.rx * w; kr.rotation.y += local.ry * w; kr.rotation.z += local.rz * w;
+  if (!mesh) return;
+  if (mesh.userData.bflyBlade) {
+    if (mesh.userData.insHeld && mesh.userData.restQ) { mesh.quaternion.copy(mesh.userData.restQ); mesh.position.copy(mesh.userData.restP); mesh.userData.insHeld = false; }
+    if (!fp.ins || !fancy) return;
+    poseButterfly(mesh, local.flick, local.show * w);
+    fp.bflyT = BFLY_DUR; // ao soltar o I, o saque não repete o flick
+    return;
+  }
+  let spin = fancy ? fadeFullTurn(local.spin, w) : 0;
+  if (Math.abs(spin) < 1e-3 || Math.abs(spin - Math.PI * 2) < 1e-3) spin = 0; // volta fechada: 2π é o descanso, sem erro de seno
+  applyKnifePivot(mesh, spin);
 }
 const BFLY_DUR = 0.95;
 function startButterfly() {
@@ -6118,6 +6190,7 @@ function loop() {
     if (emote.on && state === 'playing') stepEmote(dt);
     if (online) netTick(dt);
     for (const e of entities) if (!e.isPlayer) updateBot(e, dt);
+    updateFootsteps(dt);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
     updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt);
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas

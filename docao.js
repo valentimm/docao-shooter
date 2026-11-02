@@ -6,6 +6,7 @@ import { makeWorldShield } from './shield-view.js';
 import { getSkin } from './skins.js';
 import { mergeVertices } from './vendor/BufferGeometryUtils.js';
 import { crouchAmount, stanceScale } from './shared/stance.js';
+import { butterflyInspectAngles } from './inspect.js';
 
 const V3 = THREE.Vector3, V2 = THREE.Vector2;
 const TAU = Math.PI * 2;
@@ -897,7 +898,7 @@ function fillKarambit(g, th, pal) {
   m(new THREE.BoxGeometry(0.03, 0.036, 0.09), pal.dark()).position.set(0, 0, 0.02);
   pal.dress(m(new THREE.BoxGeometry(0.04, 0.016, 0.012), pal.metal())).position.set(0, 0, -0.03);
   const ring = pal.dress(m(new THREE.TorusGeometry(0.024, 0.0055, 8, 16), pal.steel(), 0.003));
-  ring.rotation.y = Math.PI / 2; ring.position.set(0, 0, 0.086);
+  ring.rotation.y = Math.PI / 2; ring.position.set(0, 0, KARAMBIT_RING_Z);
 }
 // Bayonetta (baioneta): lâmina reta de ponta cortada, guarda cruzada e o anel que entrava no cano.
 function fillBayonet(g, th, pal) {
@@ -944,13 +945,16 @@ function fillKnife(g, kind, th, finish) {
   if (!KNIFE_FILL[kind] || kind === 'chef') { fillChef(g, th, false); return; }
   KNIFE_FILL[kind](g, th, knifePal(finish));
 }
+// O furo da argola. A inspeção da karambit gira em volta desse ponto.
+export const KARAMBIT_RING_Z = 0.086;
 // k 0 = aberta na mão, k 1 = aberta de novo. No meio a lâmina dá uma volta e o cabo de cima abre.
-export function poseButterfly(group, k) {
+// show (inspeção) deixa a lâmina e o cabo de cima abertos, pra olhar o fio.
+export function poseButterfly(group, k, show = 0) {
   const blade = group && group.userData.bflyBlade, bite = group && group.userData.bflyBite;
   if (!blade || !bite) return;
-  const t = Math.min(1, Math.max(0, k)), e = t * t * (3 - 2 * t);
-  blade.rotation.x = e * Math.PI * 2;
-  bite.rotation.x = Math.sin(e * Math.PI) * Math.PI;
+  const a = butterflyInspectAngles(k, show);
+  blade.rotation.x = a.blade;
+  bite.rotation.x = a.bite;
 }
 function dropKnife(group) {
   for (const c of group.children.slice()) {
