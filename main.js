@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider } from './docao.js';
+import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, KARAMBIT_RING_Z } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
 import { makeFPSniper, poseSniperBolt, applySniperSkin } from './sniper-view.js';
@@ -13,7 +13,7 @@ import { makeFPSlingshot } from './slingshot-view.js';
 import { makeFPCapataz, capatazSkin, capatazFx, noteCapataz, stepCapataz, capatazRead } from './revolver-view.js';
 import { renderWeaponThumb } from './weapon-thumbs.js';
 import { camoLevel, camoInfo, nextCamo, applyWeaponCamo, resetWeaponCamo } from './weapon-camo.js';
-import { INSPECT_DUR, INSPECT_HOLD, INSPECT_FADE, INSPECT_PROFILES, inspectKind, inspectPose } from './inspect.js';
+import { INSPECT_DUR, INSPECT_HOLD, INSPECT_FADE, INSPECT_PROFILES, inspectKind, inspectPose, knifeInspectLocal, fadeFullTurn } from './inspect.js';
 import { drawFlair, recoilFlair, recoilRecover, bobMul, idleFlair, rareFlair, locoFlair, killFlair, inspectFlair, reloadFlourish, drawCues, inspectCues, rareCue, ejectsBrass, brassPort, heatsBarrel, knifeExtra, saberCutDir, cupHandShake, tpReloadExtra, tpKickScale, RARE_IDLE_AFTER, KILL_TIME, EGG_P } from './weapon-anims.js';
 import { createSaberSfx } from './saber-sfx.js';
 import { createSniperSfx } from './sniper-sfx.js';
@@ -3610,7 +3610,7 @@ function poseKnight(hold, k, side = 1, dual = false, mode = '', variant = 0) {
   if (!mode && variant === 3 && t > 0) hold.rotateZ(Math.sin(Math.min(k, 1) * Math.PI) * side * 0.85); // ovo: a lâmina gira no corte normal
 }
 // ---------------- Inspecionar arma (I): gira, mostra os dois lados e volta. Só visual, nada vai pro servidor ----------------
-const INS_ZERO = { ry: 0, rz: 0, rx: 0, x: 0, y: 0, z: 0, flip: 0, twist: 0, spin: false, k: 0 }, _ins = {};
+const INS_ZERO = { ry: 0, rz: 0, rx: 0, x: 0, y: 0, z: 0, flip: 0, twist: 0, spin: false, k: 0, fade: 1 }, _ins = {};
 function canInspect(p) {
   return state === 'playing' && !!p && p.alive && !gunner && !predator && !radioCall && !p.charging && !p.bowDraw && !p.eggDraw && !p.burstLeft && !(p.mgSpin > 0.05) && p.reloadEnd <= gameTime && p.switchEnd <= gameTime && ads < 0.05 && fp.actionT <= 0
     && !(isKnife(p.weapon) && fp.knifeT < KNIFE_ANIM[fp.knifeKind]) && tabletK < 0.04 && radioK < 0.04 && laptopK < 0.04 && !!fp.guns[p.weapon];
@@ -3619,7 +3619,7 @@ function startInspect(p) {
   if (!canInspect(p) || (fp.ins && !fp.ins.out && fp.ins.t < INSPECT_DUR * 0.8)) return false; // no meio: só reinicia na volta
   fp.ins = { t: 0, wpn: p.weapon, kind: inspectKind(WEAPONS[p.weapon]), fade: 1, out: false, hold: false, flipped: false, egg: !reducedAnims() && Math.random() < EGG_P, pig: false };
   if (WEAPONS[p.weapon].revolver) noteCapataz('inspect', { dual: !!WEAPONS[p.weapon].akimbo });
-  sfx.inspect(); if (fp.ins.egg) flairCue('boop', 0.05, 0.5); playCueList(inspectCues(WEAPONS[p.weapon].key), INSPECT_DUR, fp.ins.egg ? 1 : 0.75); showInspectHud(p); startButterfly(); return true;
+  sfx.inspect(); if (fp.ins.egg) flairCue('boop', 0.05, 0.5); playCueList(inspectCues(WEAPONS[p.weapon].key), INSPECT_DUR, fp.ins.egg ? 1 : 0.75); showInspectHud(p); return true;
 }
 function stopInspect(hard) { if (!fp.ins) return; if (hard) fp.ins = null; else fp.ins.out = true; showInspectHud(null); }
 function showInspectHud(p) {
@@ -3645,6 +3645,7 @@ function inspectStep(p, dt) {
   }
   const o = inspectPose(Math.min(1, s.t / INSPECT_DUR), INSPECT_PROFILES[s.kind], _ins), f = s.out ? Math.max(0, s.fade) : 1;
   for (const c of ['ry', 'rz', 'rx', 'x', 'y', 'z', 'twist', 'flip']) o[c] *= f;
+  o.fade = f;
   return o;
 }
 function addPose(p, s = 1) {
@@ -3700,7 +3701,7 @@ function updateFP(dt) {
   const bolting = !!(w.bolt && fp.actionT > 0);
   const drawn = p.weapon === CROSS || p.weapon === BOW || p.weapon === EGG_W;
   fp.fpRef.arms.visible = p.weapon !== PISTOL && p.weapon !== NAIL && !isKnife(p.weapon) && !isSaber(p.weapon) && !w.shield && !w.revolver && !drawn && !bolting && !shatter; fp.fpRef.armsP.visible = (p.weapon === PISTOL || p.weapon === NAIL) && !shatter && !w.revolver;
-  if (isKnife(p.weapon)) { knifeAnim(dt); const bfly = p.weapon === KNIFE && fp.kpiv.children.some((c) => c.userData.bflyBlade); fp.kpiv.rotation.x = bfly ? 0 : ins.flip; } // inspecionar: as outras facas giram no dedo; a butterfly gira a lâmina no pino
+  if (isKnife(p.weapon)) { knifeAnim(dt); poseKnifeInspect(ins); } // cada modelo de faca inspeciona do seu jeito
   let dip = 0, tilt = 0;
   // animações de ação: pump da Calibre 12, ferrolho do Sniper, ferrolho da pistola, foguete na boca da bazuca
   fp.actionT = Math.max(0, fp.actionT - dt); fp.shellT = Math.max(0, fp.shellT - dt);
@@ -4067,12 +4068,53 @@ function knifeAnim(dt) {
   if (!reducedAnims() && k < 1 && fp.knifeKind === 'slash') { const ex = knifeExtra(fp.knifeVar || 0, Math.min(1, k)); px += ex.x; py += ex.y; pz += ex.z; rx += ex.rx; ry += ex.ry; rz += ex.rz; }
   kr.position.set(px, py, pz); kr.rotation.set(rx, ry, 0); kp.rotation.z = rz;
   const mesh = kp.children.find((c) => c.userData.knifeSkin);
-  if (mesh && mesh.userData.bflyBlade) {
+  if (mesh && mesh.userData.bflyBlade && !fp.ins) { // na inspeção o flick segue o relógio do I, não o do saque
     const attacking = k < 1;
     if (attacking || reducedAnims()) fp.bflyT = BFLY_DUR;
     else if (fp.bflyT < BFLY_DUR) fp.bflyT += dt;
     poseButterfly(mesh, !(fp.bflyT < BFLY_DUR) ? 1 : fp.bflyT / BFLY_DUR);
   }
+}
+const _kSpinQ = new THREE.Quaternion(), _kAxisQ = new THREE.Quaternion(), _kAxisX = new V3(1, 0, 0), _kPivot = new V3(), _kMoved = new V3();
+function applyKnifePivot(mesh, spin) {
+  if (!mesh.userData.restQ) { mesh.userData.restQ = mesh.quaternion.clone(); mesh.userData.restP = mesh.position.clone(); }
+  const moving = Math.abs(spin) > 1e-4;
+  if (!moving && !mesh.userData.insHeld) return;
+  mesh.userData.insHeld = moving;
+  mesh.quaternion.copy(mesh.userData.restQ);
+  mesh.position.copy(mesh.userData.restP);
+  if (!moving) return;
+  _kSpinQ.identity().multiply(_kAxisQ.setFromAxisAngle(_kAxisX, spin));
+  mesh.quaternion.multiply(_kSpinQ);
+  const s = mesh.scale.x || 1;
+  _kPivot.set(0, 0, KARAMBIT_RING_Z);
+  _kMoved.copy(_kPivot).applyQuaternion(_kSpinQ);
+  _kPivot.sub(_kMoved).multiplyScalar(s).applyQuaternion(mesh.userData.restQ);
+  mesh.position.add(_kPivot);
+}
+// Inspeção da faca: a mão (kr) acompanha baioneta e skeleton. A karambit gira na argola. A butterfly abre no pino.
+function poseKnifeInspect(ins) {
+  const kp = fp.kpiv, kr = fp.kr;
+  if (!kp || !kr) return;
+  const mesh = kp.children.find((c) => c.userData.knifeSkin);
+  const kind = (mesh && mesh.userData.knifeKind) || 'chef';
+  const fancy = !reducedAnims();
+  const w = ins && ins.fade != null ? ins.fade : 1;
+  const local = knifeInspectLocal(fancy ? kind : (mesh && mesh.userData.bflyBlade ? 'butterfly' : 'chef'), fancy ? ((ins && ins.k) || 0) : 0);
+  kp.rotation.x = local.finger ? (ins.flip || 0) : 0;
+  kr.position.x += local.x * w; kr.position.y += local.y * w; kr.position.z += local.z * w;
+  kr.rotation.x += local.rx * w; kr.rotation.y += local.ry * w; kr.rotation.z += local.rz * w;
+  if (!mesh) return;
+  if (mesh.userData.bflyBlade) {
+    if (mesh.userData.insHeld && mesh.userData.restQ) { mesh.quaternion.copy(mesh.userData.restQ); mesh.position.copy(mesh.userData.restP); mesh.userData.insHeld = false; }
+    if (!fp.ins || !fancy) return;
+    poseButterfly(mesh, local.flick, local.show * w);
+    fp.bflyT = BFLY_DUR; // ao soltar o I, o saque não repete o flick
+    return;
+  }
+  let spin = fancy ? fadeFullTurn(local.spin, w) : 0;
+  if (Math.abs(spin) < 1e-3 || Math.abs(spin - Math.PI * 2) < 1e-3) spin = 0; // volta fechada: 2π é o descanso, sem erro de seno
+  applyKnifePivot(mesh, spin);
 }
 const BFLY_DUR = 0.95;
 function startButterfly() {
