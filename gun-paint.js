@@ -71,7 +71,90 @@ const rainbowTex = makeTex((x) => {
   return [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255)];
 });
 
-const TEX_OF = { camo: camoTex, rust: rustTex, waves: wavesTex, rainbow: rainbowTex };
+const O1 = rgb('#0c0c10'), O2 = rgb('#1a1a20'), O3 = rgb('#3a2158'), O4 = rgb('#b388ff');
+const obsidianTex = makeTex((x, y) => {
+  const n = Math.sin(x * 0.72 + y * 0.18) + Math.cos(y * 0.58 - x * 0.36);
+  const vein = (x + y * 2) % 17 < 2;
+  if (vein && n > -0.2) return O4;
+  if (n > 0.75) return O3;
+  if (n > -0.15) return O2;
+  return O1;
+});
+
+const J1 = rgb('#e2a23c'), J2 = rgb('#c47a22'), J3 = rgb('#1a120c'), J4 = rgb('#f0c56a');
+const ONCA = [[10, 14], [30, 8], [48, 18], [16, 34], [38, 30], [54, 40], [8, 52], [28, 50], [46, 54]];
+const oncaTex = makeTex((x, y) => {
+  for (const [cx, cy] of ONCA) {
+    const d = Math.hypot(x - cx, y - cy);
+    if (d < 2.6) return J4;
+    if (d < 5.1) return J3;
+  }
+  return Math.sin(x * 0.31) * Math.cos(y * 0.27) > 0 ? J1 : J2;
+});
+
+function cheersTex() {
+  const c = document.createElement('canvas');
+  c.width = c.height = TEX;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, TEX, TEX);
+  g.addColorStop(0, '#ff5a46');
+  g.addColorStop(0.42, '#d8261c');
+  g.addColorStop(1, '#7a100c');
+  x.fillStyle = g;
+  x.fillRect(0, 0, TEX, TEX);
+  x.fillStyle = '#ffd7cf';
+  x.fillRect(0, 0, TEX, 3);
+  drawLogo(x, TEX / 2, TEX * 0.56, TEX * 0.42, '#fff6e8', '#4a0c08');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.repeat.set(2, 2);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function gemTex(base, light, dark) {
+  const B = rgb(base), L = rgb(light), D = rgb(dark);
+  return makeTex((x, y) => {
+    const edge = x % 21 < 2 || y % 21 < 2;
+    if (edge) return D;
+    return ((Math.floor(x / 21) + Math.floor(y / 21)) % 2 === 0) ? L : B;
+  });
+}
+const sapphireTex = gemTex('#1d4ed8', '#d7e6ff', '#0c1c4d');
+const emeraldTex = gemTex('#0f9d58', '#d8ffe8', '#084028');
+const rubyTex = gemTex('#d0123a', '#ffd0d8', '#4a0818');
+
+function loreTex() {
+  const c = document.createElement('canvas');
+  c.width = c.height = TEX;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, TEX, TEX);
+  g.addColorStop(0, '#f6e7a8');
+  g.addColorStop(0.5, '#e2b34a');
+  g.addColorStop(1, '#a56b2f');
+  x.fillStyle = g;
+  x.fillRect(0, 0, TEX, TEX);
+  x.fillStyle = '#1f8f4a';
+  for (const [cx, cy, r] of [[14, 18, 7], [34, 12, 5], [48, 28, 8], [22, 40, 6], [40, 48, 7]]) {
+    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+  }
+  drawLogo(x, TEX / 2, TEX * 0.62, TEX * 0.28, '#fff6e8', '#4a3010');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.repeat.set(2, 2);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const TEX_OF = { camo: camoTex, rust: rustTex, waves: wavesTex, rainbow: rainbowTex, obsidian: obsidianTex, onca: oncaTex, cheers: cheersTex(), sapphire: sapphireTex, emerald: emeraldTex, ruby: rubyTex, lore: loreTex() };
 
 function skip(obj) {
   if (!obj) return true;
@@ -122,7 +205,13 @@ function paintMesh(mesh, paint) {
   } else {
     mat.color.set('#ffffff');
     mat.map = TEX_OF[paint];
-    if (mat.emissive && mat.emissive.set) { mat.emissive.set('#000000'); mat.emissiveIntensity = 0.06; }
+    if (paint === 'obsidian' && mat.emissive && mat.emissive.set) { mat.emissive.set('#5a2d91'); mat.emissiveIntensity = 0.34; }
+    else if (paint === 'cheers' && mat.emissive && mat.emissive.set) { mat.emissive.set('#8a1410'); mat.emissiveIntensity = 0.22; }
+    else if (paint === 'sapphire' && mat.emissive && mat.emissive.set) { mat.emissive.set('#3d6dff'); mat.emissiveIntensity = 0.28; }
+    else if (paint === 'emerald' && mat.emissive && mat.emissive.set) { mat.emissive.set('#1f8f4a'); mat.emissiveIntensity = 0.28; }
+    else if (paint === 'ruby' && mat.emissive && mat.emissive.set) { mat.emissive.set('#d0123a'); mat.emissiveIntensity = 0.28; }
+    else if (paint === 'lore' && mat.emissive && mat.emissive.set) { mat.emissive.set('#c4892a'); mat.emissiveIntensity = 0.3; }
+    else if (mat.emissive && mat.emissive.set) { mat.emissive.set('#000000'); mat.emissiveIntensity = 0.06; }
   }
   mat.needsUpdate = true;
 }

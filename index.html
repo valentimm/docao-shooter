@@ -420,10 +420,17 @@
     </div>
     <button type="button" id="closetClose" class="ticket-btn ghost">VOLTAR</button>
   </div>
-  <div id="closetReveal" class="closet-ask hidden" role="dialog" aria-modal="true" aria-labelledby="closetRevealText">
-    <div class="closet-ask-card">
+  <div id="closetReveal" class="closet-ask hidden" role="dialog" aria-modal="true" aria-labelledby="closetLootKicker">
+    <div class="loot-show" id="closetLootShow">
+      <div class="loot-fx" aria-hidden="true"><div class="loot-rays"></div></div>
+      <p class="loot-kicker" id="closetLootKicker" aria-live="polite"></p>
+      <div class="loot-window">
+        <div class="loot-marker" id="closetLootMarker" aria-hidden="true"></div>
+        <div class="loot-track" id="closetLootTrack" aria-hidden="true"></div>
+      </div>
+      <div class="loot-sparks" id="closetLootSparks" aria-hidden="true"></div>
       <p id="closetRevealText"></p>
-      <div class="closet-ask-acts">
+      <div class="closet-ask-acts hidden" id="closetRevealActs">
         <button type="button" id="closetRevealOk">FECHAR</button>
         <button type="button" id="closetRevealEquip">EQUIPAR</button>
       </div>

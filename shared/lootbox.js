@@ -1,7 +1,7 @@
 // ============================================================
-//  Caixote da Primeira Safra: skins de arma e faca saem daqui, não da loja.
+//  Caixote da Primeira Safra: skins de arma, faca e luva saem daqui, não da loja.
 //  O peso do catálogo (weight) é a faixa da sorte. Quem já tem a skin ganha Docoins (10% do peso).
-//  O 1% é o peso 1250 (Rainbow). Sem essa faixa, a Rainbow não saía em caixa nenhuma.
+//  O 1% é o peso 1250. Sem essa faixa, Rainbow e Obsidian de faca não saíam.
 // ============================================================
 import { ITEMS, itemById } from './closet.js';
 

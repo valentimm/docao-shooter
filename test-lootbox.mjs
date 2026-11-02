@@ -17,12 +17,19 @@ const knives = ['skeleton', 'karambit', 'bayonet', 'butterfly'];
 const has = (gun, paint, weight) => lootItems().some((i) => i.gun === gun && i.paint === paint && i.weight === weight);
 ok(guns.every((g) => has(g, 'camo', 500)) && knives.every((k) => lootItems().some((i) => i.knife === k && i.finish === 'camo' && i.weight === 500)), 'camuflagem peso 500 em todas as armas e facas');
 ok(guns.every((g) => has(g, 'rust', 750)), 'ferrugem peso 750 nas cinco armas');
-ok(guns.every((g) => has(g, 'waves', 1000)), 'ferrugem waves peso 1000 nas cinco armas');
-ok(has('pistol', 'rainbow', 1250) && lootItems().filter((i) => i.paint === 'rainbow' && i.gun).length === 1, 'pistola rainbow peso 1250');
-ok(has('rifle', 'gold', 2000) && itemById('t1') && itemById('t1').weight === 2000 && itemById('t1').loot, 'fuzil gold e a lore no peso 2000');
-ok(lootPool(500).length === 13 && lootPool(750).length === 9 && lootPool(1000).length === 17 && lootPool(1250).length === 5 && lootPool(2000).length === 2, 'tamanho de cada faixa (facas que já existiam + pinturas novas)');
-ok(lootItems().every((i) => [500, 750, 1000, 1250, 2000].includes(i.weight) && !isFreeItem(i.id) && !(i.price > 0)), 'só entra skin de arma ou faca, com peso e sem preço');
-ok(ITEMS.filter((i) => i.loot).length === lootItems().length, 'o caixote usa o catálogo inteiro de skins de arma e faca');
+ok(guns.every((g) => has(g, 'waves', 750)), 'ferrugem waves peso 750 nas cinco armas');
+ok(guns.every((g) => has(g, 'obsidian', 1000)) && knives.every((k) => lootItems().some((i) => i.knife === k && i.finish === 'obsidian' && i.weight === 1250)), 'obsidian peso 1000 nas armas e 1250 nas facas');
+ok(guns.every((g) => has(g, 'onca', 500)), 'onça peso 500 nas cinco armas');
+ok(guns.every((g) => has(g, 'cheers', 750)), 'cheers base peso 750 nas cinco armas');
+ok(has('pistol', 'rainbow', 1250) && has('rifle', 'rainbow', 1250), 'rainbow peso 1250 na pistola e no fuzil');
+ok(itemById('g4') && itemById('g4').weight === 1250 && itemById('g4').loot && itemById('g4').part.rainbow, 'luva rainbow peso 1250');
+ok(itemById('g5') && itemById('g5').weight === 2000 && itemById('g5').loot && itemById('g5').part.gold, 'luva docão gold peso 2000');
+ok(has('rifle', 'gold', 2000) && has('rifle', 'lore', 2000) && itemById('t1') && itemById('t1').weight === 2000 && itemById('t1').loot, 'fuzil gold, fuzil lore e a lore da Torresmo no peso 2000');
+ok(has('rifle', 'sapphire', 1000) && has('rifle', 'emerald', 1000) && has('rifle', 'ruby', 1000), 'safira, esmeralda e rubi no fuzil, peso 1000');
+ok(itemById('a16') && itemById('a16').paint === 'rainbow' && itemById('a16').gun === 'pistol' && itemById('a17') && itemById('a17').paint === 'gold', 'os ids antigos da rainbow e da gold não andaram');
+ok(lootPool(500).length === 18 && lootPool(750).length === 19 && lootPool(1000).length === 20 && lootPool(1250).length === 11 && lootPool(2000).length === 4, 'tamanho de cada faixa');
+ok(lootItems().every((i) => [500, 750, 1000, 1250, 2000].includes(i.weight) && !isFreeItem(i.id) && !(i.price > 0)), 'skin de caixote tem peso e não tem preço');
+ok(ITEMS.filter((i) => i.loot).length === lootItems().length, 'o caixote usa o catálogo inteiro de skins');
 
 function mulberry32(a) {
   return () => {

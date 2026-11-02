@@ -54,12 +54,14 @@ export const ITEMS = [
   { id: 'g1', name: 'Luvas Brancas', emoji: '🧤', price: 70, part: { type: 'glove', hand: 'both', color: '#f4f4f4' } },
   { id: 'g2', name: 'Luvas Pretas', emoji: '🧤', price: 70, part: { type: 'glove', hand: 'both', color: '#15151a' } },
   { id: 'g3', name: 'Luvas Brilhantes', emoji: '✨', price: 260, part: { type: 'glove', hand: 'both', color: '#f4f4f4', sparkle: true } },
+  { id: 'g4', name: 'Luvas Rainbow', emoji: '🌈', weight: 1250, loot: true, part: { type: 'glove', hand: 'both', color: '#ffffff', rainbow: true, sparkle: true } },
+  { id: 'g5', name: 'Luvas Docão Gold', emoji: '👑', weight: 2000, loot: true, part: { type: 'glove', hand: 'both', color: '#f3d78a', gold: true, sparkle: true } },
   { id: 's1', name: 'Tênis do Torresmo', emoji: '👟', price: 80, part: { type: 'shoes', color: '#141416', sole: '#f4f4f4' } },
   { id: 's2', name: 'Botinha Vermelha', emoji: '🥾', price: 80, part: { type: 'shoes', color: '#7d1f19', sole: '#f2c94c' } },
   { id: 's3', name: 'Meiões Brancos', emoji: '🧦', price: 40, part: { type: 'socks', color: '#f4f4f4' } },
   { id: 's4', name: 'Tênis Azul Royal', emoji: '👟', price: 80, part: { type: 'shoes', color: '#1446b8', sole: '#f4f4f4' } },
 ];
-// ---------- FANTASIAS COMPLETAS (espaço "c"): trocam camiseta, shorts e peças de uma vez, como as skins prontas; não combinam com outras partes ----------
+// ---------- FANTASIAS COMPLETAS (espaço "c"): trocam camiseta e shorts, e as peças da fantasia continuam. Acessório equipado entra junto e, se for do mesmo tipo, fica por cima. ----------
 // costume = mesmo formato de skins.js (shirt, pants, parts, face, eyes), só com peças que o modelo já tem.
 ITEMS.push(
   { id: 'c1', name: 'Super Porco', emoji: '🦸', price: 900, costume: { shirt: { color: '#1446b8', trim: '#d8261c', details: [{ type: 'star', color: '#f2c94c', outline: '#7d1f19', size: 0.3 }] }, pants: '#d8261c',
@@ -195,12 +197,13 @@ export const KNIFE_COLORS = [
   { finish: 'emerald', name: 'Emerald', weight: 1000, line: 'Aspecto de esmeralda.' },
   { finish: 'ruby', name: 'Ruby', weight: 1000, line: 'Aspecto de rubi.' },
   { finish: 'camo', name: 'Camuflagem', weight: 500, line: 'Verde de exército, manchas de camuflagem.' },
+  { finish: 'obsidian', name: 'Obsidian', weight: 1250, line: 'Preto metálico com detalhes roxos.' },
 ];
 const KNIFE_ID = {
-  skeleton: ['k1', 'k4', 'k7', 'k10', 'k13', 'k16', 'k25'],
-  karambit: ['k2', 'k5', 'k8', 'k11', 'k14', 'k17', 'k26'],
-  bayonet: ['k3', 'k6', 'k9', 'k12', 'k15', 'k18', 'k27'],
-  butterfly: ['k19', 'k20', 'k21', 'k22', 'k23', 'k24', 'k28'],
+  skeleton: ['k1', 'k4', 'k7', 'k10', 'k13', 'k16', 'k25', 'k29'],
+  karambit: ['k2', 'k5', 'k8', 'k11', 'k14', 'k17', 'k26', 'k30'],
+  bayonet: ['k3', 'k6', 'k9', 'k12', 'k15', 'k18', 'k27', 'k31'],
+  butterfly: ['k19', 'k20', 'k21', 'k22', 'k23', 'k24', 'k28', 'k32'],
 };
 ITEMS.push(...KNIFE_MODELS.flatMap((model) => KNIFE_COLORS.map((color, i) => ({
   id: KNIFE_ID[model.knife][i],
@@ -222,9 +225,12 @@ const GUN_LABEL = { pistol: 'Pistola', sniper: 'Sniper Torresmo', p90: 'P90', ca
 const GUN_PAINTS = [
   { paint: 'camo', name: 'Camuflagem', weight: 500, emoji: '🪖', line: 'Verde de exército, manchas de camuflagem.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
   { paint: 'rust', name: 'Ferrugem', weight: 750, emoji: '🪨', line: 'Aspecto enferrujado.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
-  { paint: 'waves', name: 'Ferrugem Waves', weight: 1000, emoji: '🌊', line: 'Tema aquático, com desenho de onda.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'waves', name: 'Ferrugem Waves', weight: 750, emoji: '🌊', line: 'Tema aquático, com desenho de onda.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
   { paint: 'rainbow', name: 'Rainbow', weight: 1250, emoji: '🌈', line: 'Arco-íris na Pistolinha.', guns: ['pistol'] },
   { paint: 'gold', name: 'Gold Docão', weight: 2000, emoji: '👑', line: 'Fuzil dourado com focinho, orelha e o C! do Docão.', guns: ['rifle'] },
+  { paint: 'obsidian', name: 'Obsidian', weight: 1000, emoji: '🖤', line: 'Preto metálico com detalhes roxos.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'onca', name: 'Onça', weight: 500, emoji: '🐆', line: 'Amarelo de onça com rosetas pretas.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'cheers', name: 'Cheers Base', weight: 750, emoji: '🔴', line: 'Vermelho da Cheers com o símbolo C!.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
 ];
 GUN_PAINTS.forEach((paint) => paint.guns.forEach((gun) => {
   const it = {
@@ -240,6 +246,26 @@ GUN_PAINTS.forEach((paint) => paint.guns.forEach((gun) => {
   if (gun === 'sniper') it.sniper = paint.paint;
   ITEMS.push(it);
 }));
+// Linhas que já existiam em outra arma ou na faca, e não tinham o Fuzil Pururuca. Entram no fim para não deslocar os ids a1–a32.
+const RIFLE_GAPS = [
+  { paint: 'rainbow', name: 'Rainbow', weight: 1250, emoji: '🌈', line: 'Arco-íris no Fuzil Pururuca.' },
+  { paint: 'sapphire', name: 'Sapphire', weight: 1000, emoji: '💎', line: 'Azul de safira no Fuzil Pururuca.' },
+  { paint: 'emerald', name: 'Emerald', weight: 1000, emoji: '💚', line: 'Verde de esmeralda no Fuzil Pururuca.' },
+  { paint: 'ruby', name: 'Ruby', weight: 1000, emoji: '♦️', line: 'Vermelho de rubi no Fuzil Pururuca.' },
+  { paint: 'lore', name: 'A Docão Lore', weight: 2000, emoji: '🐉', line: 'Dourada no jeito da Dragon Lore, no Fuzil Pururuca.' },
+];
+for (const paint of RIFLE_GAPS) {
+  ITEMS.push({
+    id: 'a' + (ITEMS.filter((i) => i.gun && i.id[0] === 'a').length + 1),
+    name: `Fuzil · ${paint.name}`,
+    emoji: paint.emoji,
+    weight: paint.weight,
+    loot: true,
+    gun: 'rifle',
+    paint: paint.paint,
+    line: paint.line,
+  });
+}
 for (const it of ITEMS) it.slot = it.id[0];
 export const COSTUME_SLOT = 'c', DANCE_SLOT = 'd', KNIFE_SLOT = 'k';
 export const isLookSlot = (k) => SLOTS.some(([x]) => x === k);
@@ -275,8 +301,7 @@ export const DEFAULT_LOOK = { shirt: 0, pants: 12, items: {} }; // camiseta verm
 export const isLookCode = (s) => typeof s === 'string' && s.length <= 48 && LOOK_RE.test(s);
 export function encodeLook(look) {
   const sh = Math.max(0, Math.min(COLORS.length - 1, look.shirt | 0)), pn = Math.max(0, Math.min(COLORS.length - 1, look.pants | 0));
-  let its = SLOTS.map(([k]) => look.items && look.items[k]).filter((id) => id && itemById(id));
-  const cos = its.find((id) => id[0] === COSTUME_SLOT); if (cos) its = [cos]; // fantasia completa: sozinha
+  const its = SLOTS.map(([k]) => look.items && look.items[k]).filter((id) => id && itemById(id) && isLookSlot(itemById(id).slot));
   return LOOK_PREFIX + sh.toString(16) + '.' + pn.toString(16) + its.map((i) => '.' + i).join('');
 }
 // Devolve { shirt, pants, items:{slot:id} } ou null se o código for inválido (formato, cor fora da paleta, item inexistente, dois itens no mesmo espaço).
@@ -286,7 +311,6 @@ export function parseLook(code) {
   if (!(shirt < COLORS.length) || !(pants < COLORS.length)) return null;
   const items = {};
   for (const id of f.slice(3)) { const it = itemById(id); if (!it || !isLookSlot(it.slot) || items[it.slot]) return null; items[it.slot] = id; }
-  if (items[COSTUME_SLOT] && Object.keys(items).length > 1) return null; // fantasia não mistura com outras partes
   if (encodeLook({ shirt, pants, items }) !== code) return null; // só a forma canônica (ordem dos espaços fixa)
   return { shirt, pants, items };
 }
@@ -295,7 +319,13 @@ export const lookItemIds = (code) => { const l = parseLook(code); return l ? Obj
 export function lookToSkin(code) {
   const l = typeof code === 'string' ? parseLook(code) : code; if (!l) return null;
   const cid = l.items[COSTUME_SLOT];
-  if (cid) { const c = itemById(cid).costume; return { ...JSON.parse(JSON.stringify(c)), id: typeof code === 'string' ? code : encodeLook(l), name: itemById(cid).name, custom: true }; }
+  if (cid) {
+    const c = JSON.parse(JSON.stringify(itemById(cid).costume));
+    const extras = Object.entries(l.items).filter(([slot]) => slot !== COSTUME_SLOT).map(([, id]) => ({ ...itemById(id).part }));
+    const types = new Set(extras.map((p) => p.type));
+    c.parts = [...(c.parts || []).filter((p) => !types.has(p.type)), ...extras];
+    return { ...c, id: typeof code === 'string' ? code : encodeLook(l), name: itemById(cid).name, custom: true };
+  }
   const parts = Object.values(l.items).map((id) => ({ ...itemById(id).part }));
   return { id: typeof code === 'string' ? code : encodeLook(l), name: 'Visual personalizado', custom: true,
     shirt: { color: COLORS[l.shirt], trim: '#1d1410', logo: { text: 'C!', color: '#f5e6d0' } }, pants: COLORS[l.pants], parts };
