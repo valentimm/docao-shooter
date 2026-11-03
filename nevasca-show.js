@@ -1,7 +1,7 @@
 // Natal, bondinhos e trenó do Posto Nevasca. Luzes são instâncias emissivas, sem luz real extra.
 import * as THREE from 'three';
 import { makeDocao } from './docao.js';
-import { gondolaPose, sleighPose } from './shared/nevasca.js';
+import { gondolaPose, sleighPose, sleighAt, sleighClock, SLEIGH } from './shared/nevasca.js';
 
 const COLORS = [0xff2a2a, 0x3d8f3d, 0xf2c94c, 0x4aa3ff, 0xff7ad1];
 const emissive = (hex) => new THREE.MeshBasicMaterial({ color: hex, toneMapped: false });
@@ -41,26 +41,140 @@ function tree() {
   return g;
 }
 
-function sleighRig() {
+function gift(w, h, d, hex) {
+  const g = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshToonMaterial({ color: hex }));
+  g.add(box);
+  const rib = new THREE.MeshToonMaterial({ color: 0xf2c94c });
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(w * 1.04, h * 1.04, d * 0.14), rib));
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.14, h * 1.04, d * 1.04), rib));
+  const bow = new THREE.Mesh(new THREE.BoxGeometry(w * 0.34, h * 0.18, d * 0.34), rib);
+  bow.position.y = h * 0.58; g.add(bow);
+  return g;
+}
+
+function reindeer(rudolph, fur) {
+  const g = new THREE.Group();
+  const dark = new THREE.MeshToonMaterial({ color: 0x3a2416 });
+  const antlerM = new THREE.MeshToonMaterial({ color: 0xe2c48a });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.42, 0.34), fur);
+  torso.position.set(0.08, 0.78, 0); g.add(torso);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.36, 0.22), fur);
+  neck.position.set(0.58, 1.02, 0); neck.rotation.z = -0.6; g.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.26), fur);
+  head.position.set(0.86, 1.16, 0); g.add(head);
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 5), fur);
+    ear.position.set(0.78, 1.32, s * 0.1); ear.rotation.z = -0.4; g.add(ear);
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.32, 0.045), antlerM);
+    stem.position.set(0.74, 1.48, s * 0.08); g.add(stem);
+    const tine = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.04), antlerM);
+    tine.position.set(0.84, 1.6, s * 0.08); g.add(tine);
+  }
+  const noseMat = rudolph ? new THREE.MeshBasicMaterial({ color: 0xff1a1a, toneMapped: false }) : dark;
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(rudolph ? 0.16 : 0.055, 10, 8), noseMat);
+  nose.position.set(1.12, 1.14, 0); g.add(nose);
+  let halo = null, haloMat = null;
+  if (rudolph) {
+    haloMat = new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false });
+    halo = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), haloMat);
+    halo.position.copy(nose.position); g.add(halo);
+  }
+  const legs = [];
+  [[0.38, 0.14, 0], [0.38, -0.14, Math.PI], [-0.22, 0.14, Math.PI], [-0.22, -0.14, 0]].forEach(([x, z, phase]) => {
+    const piv = new THREE.Group(); piv.position.set(x, 0.64, z); piv.userData.phase = phase;
+    const limb = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.34, 0.09), fur); limb.position.y = -0.17; piv.add(limb);
+    const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.13), dark); hoof.position.y = -0.36; piv.add(hoof);
+    g.add(piv); legs.push(piv);
+  });
+  g.userData = { legs, nose, noseMat, halo, haloMat, rudolph };
+  return g;
+}
+
+function santaHat() {
   const g = new THREE.Group();
   const red = new THREE.MeshToonMaterial({ color: 0xc0392b });
-  const wood = new THREE.MeshToonMaterial({ color: 0x8b5a2b });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.7, 1.15), red); body.position.set(0, 0.7, 0); g.add(body);
-  const runner = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.08, 0.1), new THREE.MeshToonMaterial({ color: 0xd5dbe0 }));
-  runner.position.set(0.2, 0.15, 0.4); g.add(runner);
-  const runner2 = runner.clone(); runner2.position.z = -0.4; g.add(runner2);
-  const deer = new THREE.Group();
-  const fur = new THREE.MeshToonMaterial({ color: 0x8d6a43 });
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.7, 0.55), fur); torso.position.set(2.3, 1.15, 0); deer.add(torso);
-  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.7, 0.3), fur); neck.position.set(3.05, 1.55, 0); deer.add(neck);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.4, 0.35), fur); head.position.set(3.4, 1.85, 0); deer.add(head);
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), emissive(0xff2a2a));
-  nose.position.set(3.7, 1.82, 0); deer.add(nose);
-  g.add(deer);
-  const rider = makeDocao('classico', { withGun: false, pose: 'idle' }).group;
-  rider.scale.setScalar(0.85); rider.position.set(-0.15, 0.95, 0); rider.rotation.y = -Math.PI / 2; g.add(rider);
-  const sack = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.55, 0.7), wood); sack.position.set(-0.7, 1.15, 0); g.add(sack);
+  const white = new THREE.MeshToonMaterial({ color: 0xfffaf0 });
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.1, 8), white);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.52, 8), red);
+  cone.position.y = 0.26; cone.rotation.z = 0.45; cone.position.x = 0.06;
+  const pom = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), white);
+  pom.position.set(0.22, 0.42, 0.02);
+  g.add(brim, cone, pom);
+  g.position.set(0, 2.02, 0.04);
   return g;
+}
+
+function sleighRig() {
+  const g = new THREE.Group(); g.name = 'docao-sleigh'; g.frustumCulled = false;
+  const bob = new THREE.Group(); g.add(bob);
+  const red = new THREE.MeshToonMaterial({ color: 0xb42318 });
+  const gold = new THREE.MeshToonMaterial({ color: 0xf2c94c });
+  const goldBright = new THREE.MeshBasicMaterial({ color: 0xffe08a, toneMapped: false });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.72, 1.4), red);
+  body.position.set(-0.15, 0.78, 0); bob.add(body);
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(2.56, 0.08, 1.48), gold);
+  lip.position.set(-0.15, 1.14, 0); bob.add(lip);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 1.28), red);
+  back.position.set(-1.32, 1.2, 0); bob.add(back);
+  const scroll = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.055, 6, 8, Math.PI), gold);
+  scroll.position.set(-1.28, 1.55, 0); scroll.rotation.y = Math.PI / 2; bob.add(scroll);
+  const prow = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.06, 6, 8, Math.PI * 0.65), gold);
+  prow.position.set(1.05, 0.7, 0); prow.rotation.z = -0.4; bob.add(prow);
+  for (const z of [-0.52, 0.52]) {
+    const runner = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.07, 0.08), goldBright);
+    runner.position.set(0.05, 0.16, z); bob.add(runner);
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.04, 5, 7, Math.PI), gold);
+    curl.position.set(1.35, 0.36, z); curl.rotation.z = Math.PI / 2; bob.add(curl);
+  }
+  const bed = 1.14;
+  const pile = [
+    [-0.85, 0.46, 0.08, 0.52, 0.4, 0.46, 0xc0392b],
+    [-0.45, 0.32, 0.32, 0.38, 0.32, 0.34, 0x1f6b32],
+    [-0.55, 0.28, -0.28, 0.34, 0.28, 0.32, 0x3d7ec4],
+    [-1.1, 0.34, -0.28, 0.4, 0.32, 0.36, 0xff7ad1],
+    [-0.2, 0.26, -0.34, 0.3, 0.24, 0.28, 0xf2c94c],
+    [0.35, 0.28, 0.4, 0.32, 0.26, 0.3, 0xc0392b],
+    [0.05, 0.24, -0.42, 0.28, 0.22, 0.26, 0x1f6b32],
+    [-0.7, 0.36, 0.02, 0.3, 0.26, 0.28, 0xf7f1e3],
+  ];
+  for (const [x, h, z, w, hh, d, hex] of pile) {
+    const p = gift(w, hh, d, hex); p.position.set(x, bed + hh / 2, z); bob.add(p);
+  }
+  const fur = new THREE.MeshToonMaterial({ color: 0x8d6a43 });
+  const furLead = new THREE.MeshToonMaterial({ color: 0xa86b3a });
+  const deer = [];
+  const team = new THREE.Group(); bob.add(team);
+  for (let rank = 0; rank < 4; rank++) {
+    for (let side = 0; side < 2; side++) {
+      const lead = rank === 3 && side === 0;
+      const d = reindeer(lead, lead ? furLead : fur);
+      d.position.set(2.05 + rank * 1.38 + (lead ? 0.62 : 0), 0, side === 0 ? 0.46 : -0.46);
+      d.userData.baseY = 0; team.add(d); deer.push(d);
+    }
+    const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.84), gold);
+    yoke.position.set(2.35 + rank * 1.38, 1.02, 0); team.add(yoke);
+  }
+  const rider = makeDocao('classico', { withGun: false, pose: 'wave' });
+  rider.group.scale.setScalar(0.86);
+  rider.group.position.set(0.05, 1.02, 0);
+  rider.group.rotation.y = Math.PI / 2;
+  rider.legs.forEach((leg) => { leg.rotation.x = 1.05; });
+  rider.head.add(santaHat());
+  bob.add(rider.group);
+
+  const burst = new THREE.Group(); burst.visible = false; g.add(burst);
+  const starMat = new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
+  for (let i = 0; i < 9; i++) {
+    const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.16 + (i % 3) * 0.08), starMat);
+    const a = i / 9 * Math.PI * 2;
+    s.position.set(7.7 + Math.cos(a) * 0.15, 1.35 + Math.sin(i) * 0.4, Math.sin(a) * 0.7);
+    burst.add(s);
+  }
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: 0.28, depthWrite: false, toneMapped: false });
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 6), glowMat);
+  glow.position.set(7.6, 1.25, 0); burst.add(glow);
+  return { group: g, bob, deer, wave: rider.arms[1], burst, starMat, glowMat };
 }
 
 export function mountNevasca(group, map) {
@@ -148,16 +262,27 @@ export function mountNevasca(group, map) {
   deco(snowman, -14, 0, 22); deco(snowman, 14, -1.5, -18); deco(cane, -10, 0, 30); deco(cane, 9, 0, -40);
   deco(nut, 6, 0, 34); deco(nut, -6, 0, -42); deco(lamp, -9, 0, -8); deco(lamp, 9, 0, 20); deco(lamp, 0, 12, 40); deco(lamp, 0, 12, -48);
 
-  const sled = sleighRig(); root.add(sled);
-  const trail = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 5, 4), new THREE.MeshBasicMaterial({ color: 0xfff6d8, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }), 10);
-  root.add(trail);
+  const rig = sleighRig(); root.add(rig.group);
+  const TRAIL_N = 72;
+  const trail = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.2, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false, toneMapped: false }), TRAIL_N);
+  trail.frustumCulled = false; root.add(trail);
+  const puffMat = new THREE.MeshBasicMaterial({ color: 0xf7fbff, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false });
+  const cloud = new THREE.Group(); cloud.visible = false; cloud.frustumCulled = false;
+  for (let i = 0; i < 11; i++) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.42 + (i % 3) * 0.16, 10, 8), puffMat);
+    const a = i / 11 * Math.PI * 2;
+    s.position.set(Math.cos(a) * 1.1, (i % 4) * 0.28, Math.sin(a) * 0.9);
+    cloud.add(s);
+  }
+  const puffCore = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff3c4, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }));
+  cloud.add(puffCore); root.add(cloud);
   group.add(root);
-  return { root, cabins, bulbs: mesh, bulbN: bulbs.length, sled, trail, big };
+  return { root, cabins, bulbs: mesh, bulbN: bulbs.length, sled: rig.group, bob: rig.bob, deer: rig.deer, wave: rig.wave, burst: rig.burst, starMat: rig.starMat, glowMat: rig.glowMat, trail, trailN: TRAIL_N, cloud, puffMat, puffCore, big };
 }
 
 const dummy = new THREE.Object3D();
 const color = new THREE.Color();
-export function updateNevasca(show, t, dt, bell) {
+export function updateNevasca(show, t, dt, onPass) {
   if (!show) return;
   for (let i = 0; i < 2; i++) {
     const p = gondolaPose(t, i);
@@ -174,19 +299,84 @@ export function updateNevasca(show, t, dt, bell) {
     }
     show.bulbs.instanceColor.needsUpdate = true;
   }
-  const sled = sleighPose(t);
-  show.sled.visible = !!sled;
-  show.trail.visible = !!sled;
-  if (sled) {
-    show.sled.position.set(sled.x, sled.y, sled.z);
-    show.sled.lookAt(sled.x + 1, sled.y, sled.z + 0.45);
-    for (let i = 0; i < 10; i++) {
-      const k = Math.max(0, sled.k - i * 0.012);
-      dummy.position.set(-52 + k * 104, 35.2, -22 + k * 46); dummy.scale.setScalar(1 - i * 0.06); dummy.updateMatrix();
-      show.trail.setMatrixAt(i, dummy.matrix);
-    }
-    show.trail.instanceMatrix.needsUpdate = true;
-    const chime = Math.floor(sled.k * 4);
-    if (chime !== show._chime) { show._chime = chime; if (bell) bell(); }
-  } else show._chime = -1;
+  const clock = sleighClock(t);
+  const pose = clock.flying ? sleighAt(Math.min(1, clock.k)) : null;
+  const smooth = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
+  const vis = pose ? Math.min(smooth(0.012, 0.1, pose.k), 1 - smooth(0.86, 1, pose.k)) : 0;
+  show.sled.visible = vis > 0.04;
+  if (pose && vis > 0.04) {
+    show.sled.position.set(pose.x, pose.y, pose.z);
+    show.sled.rotation.order = 'YXZ';
+    show.sled.rotation.set(pose.pitch, pose.yaw, pose.roll);
+    show.bob.scale.setScalar(0.22 + 0.78 * vis);
+    show.bob.position.y = Math.sin(t * 2.4) * 0.16;
+    show.bob.rotation.z = Math.sin(t * 1.7) * 0.05;
+    const gallop = t * 11;
+    show.deer.forEach((d, di) => {
+      const ph = gallop + di * 0.45;
+      d.position.y = Math.abs(Math.sin(ph)) * 0.1;
+      d.userData.legs.forEach((leg) => { leg.rotation.x = Math.sin(ph + leg.userData.phase) * 0.9; });
+      if (d.userData.rudolph) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 7.5);
+        d.userData.nose.scale.setScalar(0.75 + pulse * 0.7);
+        d.userData.noseMat.color.setRGB(1, 0.12 * (1 - pulse), 0.05 * (1 - pulse));
+        d.userData.halo.scale.setScalar(0.8 + pulse * 0.9);
+        d.userData.haloMat.opacity = 0.15 + pulse * 0.55;
+      }
+    });
+    const flap = Math.sin(t * 7);
+    // sobe no plano do perfil (pra ler de lado) e abre um pouco pra fora do corpo
+    show.wave.rotation.set(-2.05 + flap * 0.7, 0.15, 0.65);
+  }
+  const enter = !!(pose && pose.k < 0.2);
+  show.burst.visible = enter;
+  if (enter) {
+    const a = 1 - smooth(0.02, 0.2, pose.k);
+    show.burst.scale.setScalar(0.7 + (1 - a) * 2.4);
+    show.starMat.opacity = 0.25 + 0.7 * a;
+    show.glowMat.opacity = 0.08 + 0.32 * a;
+    show.burst.rotation.y = t * 1.4;
+  }
+  const exitAt = SLEIGH.flight * 0.88;
+  const cloudAge = clock.u - exitAt;
+  const cloudOn = cloudAge > 0 && cloudAge < 2.5;
+  show.cloud.visible = cloudOn;
+  if (cloudOn) {
+    const at = sleighAt(Math.min(1, Math.max(0.9, clock.flying ? clock.k : 1)));
+    show.cloud.position.set(at.x, at.y + 0.4, at.z);
+    show.cloud.scale.setScalar(0.45 + Math.min(1, cloudAge / 0.9) * 1.15);
+    const op = Math.max(0, 1 - Math.max(0, cloudAge - 0.25) / 2.1);
+    show.puffMat.opacity = 0.5 * op;
+    show.puffCore.material.opacity = 0.4 * op;
+  }
+  for (let i = 0; i < show.trailN; i++) {
+    const age = ((i + 0.35) / show.trailN) * SLEIGH.linger;
+    const born = sleighPose(t - age);
+    if (!born) { dummy.position.set(0, -80, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix(); show.trail.setMatrixAt(i, dummy.matrix); continue; }
+    const fx = Math.cos(born.yaw), fz = -Math.sin(born.yaw);
+    const lx = Math.sin(born.yaw), lz = Math.cos(born.yaw);
+    const h1 = Math.sin(i * 12.989) * 0.5 + 0.5, h2 = Math.sin(i * 78.233) * 0.5 + 0.5, h3 = Math.sin(i * 39.7) * 0.5 + 0.5;
+    const arriving = born.k < 0.12;
+    const back = arriving ? h1 * 1.1 : 2.3 + h1 * 2.6;
+    const spread = arriving ? 1.6 : 0.85;
+    dummy.position.set(
+      born.x - fx * back + lx * (h2 - 0.5) * spread,
+      born.y + 0.85 + (h3 - 0.4) * (arriving ? 1.3 : 0.7),
+      born.z - fz * back + lz * (h2 - 0.5) * spread,
+    );
+    const fade = Math.pow(1 - age / SLEIGH.linger, 1.15);
+    dummy.scale.setScalar((0.26 + h1 * 0.34) * fade * (arriving ? 1.4 : 1));
+    dummy.rotation.set(0, t + i, 0);
+    dummy.updateMatrix();
+    show.trail.setMatrixAt(i, dummy.matrix);
+    color.setHex(born.k > 0.9 ? 0xf7fbff : (i % 4 === 0 ? 0xfff6d8 : 0xffd56a));
+    color.multiplyScalar(0.45 + 0.55 * fade);
+    show.trail.setColorAt(i, color);
+  }
+  show.trail.instanceMatrix.needsUpdate = true;
+  if (show.trail.instanceColor) show.trail.instanceColor.needsUpdate = true;
+  if (pose && pose.k < 0.12 && show._ann !== clock.cycle) {
+    show._ann = clock.cycle;
+    if (onPass) onPass();
+  }
 }

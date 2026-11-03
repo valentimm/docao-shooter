@@ -304,6 +304,31 @@ function noise(dur, freq, vol, type = 'lowpass', delay = 0) {
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02);
 }
+function sleighBell(f, dur, delay) {
+  tone('sine', f, f, dur, 0.026, delay);
+  tone('triangle', f * 2.4, f * 1.35, Math.min(0.11, dur * 0.45), 0.009, delay);
+  noise(0.03, 4600, 0.008, 'highpass', delay);
+}
+// Primeira frase de Jingle Bells (melodia de 1857, domínio público) em sininhos. Sem amostra.
+function sleighTune() {
+  const q = 0.2;
+  const seq = [
+    [659, 0.16, 0], [659, 0.16, q], [659, 0.3, q * 2],
+    [659, 0.16, q * 3.4], [659, 0.16, q * 4.4], [659, 0.3, q * 5.4],
+    [659, 0.16, q * 7], [784, 0.16, q * 8], [523, 0.16, q * 9], [587, 0.16, q * 10],
+    [659, 0.42, q * 11.2],
+    [784, 0.18, 3.35], [659, 0.26, 3.9],
+  ];
+  for (const [f, d, when] of seq) sleighBell(f, d, when);
+}
+function hohoho() {
+  for (let i = 0; i < 3; i++) {
+    const d = 0.45 + i * 0.38;
+    tone('sine', 148, 90, 0.2, 0.036, d);
+    tone('triangle', 200, 108, 0.14, 0.014, d);
+    noise(0.1, 220, 0.02, 'lowpass', d);
+  }
+}
 function tone(type, f0, f1, dur, vol, delay = 0) {
   if (!actx) return; const t = actx.currentTime + delay;
   const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
@@ -6435,7 +6460,7 @@ function loop() {
     for (const e of entities) if (!e.isPlayer) updateBot(e, dt);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
     updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); tickNight(dt); if (survivalMode()) survivalPrompt();
-    if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => tone('sine', 988, 988, 0.09, 0.04));
+    if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { sleighTune(); hohoho(); flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; });
     if (!online && !exploreMode() && gameTime >= matchLimit()) endGame();
   } else if (state === 'menu') {
     menuT += dt * 0.25; danceT += dt;

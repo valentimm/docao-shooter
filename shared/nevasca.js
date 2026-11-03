@@ -38,10 +38,44 @@ export function rideShift(pos, t, dt) {
   return null;
 }
 
+// Passagem a cada 30 s, 11 s no ar. A curva sai só do tempo da partida.
+export const SLEIGH = { cycle: 30, flight: 11, linger: 3.5 };
+const SLEIGH_X = [-44, -8, 16, 46];
+const SLEIGH_Z = [-8, 20, 18, -4];
+
+function bez(p, t) {
+  const u = 1 - t;
+  return u * u * u * p[0] + 3 * u * u * t * p[1] + 3 * u * t * t * p[2] + t * t * t * p[3];
+}
+function dbez(p, t) {
+  const u = 1 - t;
+  return 3 * u * u * (p[1] - p[0]) + 6 * u * t * (p[2] - p[1]) + 3 * t * t * (p[3] - p[2]);
+}
+
+export function sleighClock(t) {
+  const u = ((t % SLEIGH.cycle) + SLEIGH.cycle) % SLEIGH.cycle;
+  return { u, k: u / SLEIGH.flight, flying: u <= SLEIGH.flight, cycle: Math.round((t - u) / SLEIGH.cycle) };
+}
+
+// k em 0..1. Sobe e desce, e o XZ é uma Bézier (não é reta).
+export function sleighAt(k) {
+  const t = Math.min(1, Math.max(0, k));
+  const dx = dbez(SLEIGH_X, t), dz = dbez(SLEIGH_Z, t);
+  const dy = 6.5 * Math.PI * Math.cos(t * Math.PI);
+  const horiz = Math.hypot(dx, dz) || 1;
+  return {
+    x: bez(SLEIGH_X, t),
+    y: 16.5 + Math.sin(t * Math.PI) * 6.5,
+    z: bez(SLEIGH_Z, t),
+    k: t,
+    yaw: Math.atan2(-dz, dx),
+    pitch: Math.atan2(dy, horiz) * 0.55,
+    roll: Math.sin(t * Math.PI) * 0.05,
+  };
+}
+
 export function sleighPose(t) {
-  const CYCLE = 30, FLIGHT = 8;
-  const u = ((t % CYCLE) + CYCLE) % CYCLE;
-  if (u > FLIGHT) return null;
-  const k = u / FLIGHT;
-  return { x: -52 + k * 104, y: 36 + Math.sin(k * Math.PI) * 2.2, z: -22 + k * 46, k };
+  const c = sleighClock(t);
+  if (!c.flying) return null;
+  return sleighAt(c.k);
 }
