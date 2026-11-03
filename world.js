@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
 import { toon, outline, makeCup, canvasTex, drawLogo } from './docao.js';
 import { visualOffsets } from './world-offsets.js';
+import { mountNevasca } from './nevasca-show.js';
+import { elevatorPose, gondolaPose } from './shared/nevasca.js';
 // camadas finas no chão (piso xadrez, asfalto, meio-fio, faixa) ficam a 1–2 cm do chão: de longe a profundidade não separa e pisca.
 // polygonOffset empurra cada camada pra frente no depth buffer (camada maior = mais na frente), sem mexer na posição.
 function decal(m, layer) { m.polygonOffset = true; m.polygonOffsetFactor = -1 * layer; m.polygonOffsetUnits = -4 * layer; return m; }
@@ -626,7 +628,25 @@ export function renderThumb(map, w = 320, h = 180) {
   applyPalette(scene, hemi, sun, map); scene.fog = null; sun.intensity = Math.max(sun.intensity, 1.15);
   if (map.palette.stars) hemi.intensity = map.palette.hemi[2] * 2.2; // noturno: um pouco mais claro na miniatura
   const { group } = buildWorld(map); scene.add(group);
-  if (group.userData.weather) group.remove(group.userData.weather.pts);
+  if (map.id === 'posto-nevasca') {
+    // A capa usa o mesmo renderThumb das outras, mas o Natal, os bondinhos e a neve
+    // não estão nas caixas do mapa: entram pelo show, parados num instante legível.
+    const show = mountNevasca(group, map);
+    const t = 3;
+    for (let i = 0; i < 2; i++) {
+      const p = gondolaPose(t, i);
+      show.cabins[i].position.set(p.x, p.y, p.z);
+      show.cabins[i].rotation.y = i === 0 ? 0 : Math.PI;
+      const e = elevatorPose(t, i);
+      show.lifts[i].position.set(e.x, e.y, e.z);
+      show.lifts[i].rotation.y = i === 0 ? 0 : Math.PI;
+    }
+    if (show.sled) show.sled.visible = false;
+    if (show.trail) show.trail.visible = false;
+    if (show.cloud) show.cloud.visible = false;
+    const flakes = group.userData.weather && group.userData.weather.pts;
+    if (flakes) { flakes.material.size = 0.55; flakes.material.opacity = 0.92; }
+  } else if (group.userData.weather) group.remove(group.userData.weather.pts);
   if (group.userData.haze) group.remove(group.userData.haze);
   const [hx, hz] = map.size, long = Math.max(hx, hz);
   const cam = new THREE.PerspectiveCamera(36, w / h, 1, 600);

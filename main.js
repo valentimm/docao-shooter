@@ -7671,7 +7671,16 @@ function refreshMenuMode() {
   const showDiff = v !== 'explore' && v !== TRAIN.mode;
   $('botDiffLabel').classList.toggle('hidden', !showDiff);
   $('botDiffNote').classList.toggle('hidden', !showDiff);
-  if ($('survLabel')) $('survLabel').classList.toggle('hidden', !inv);
+  if ($('survLabel')) {
+    $('survLabel').classList.toggle('hidden', !inv);
+    if (inv) {
+      const el = $('survLabel');
+      const box = el.getBoundingClientRect();
+      const scroller = el.closest('.menu-content');
+      const view = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+      if (box.height && (box.bottom > view.bottom - 4 || box.top < view.top + 4)) el.scrollIntoView({ block: 'nearest' });
+    }
+  }
   if ($('survNote')) $('survNote').classList.toggle('hidden', !inv);
   if (showDiff) paintDiffNote();
   if (inv) paintSurvNote();

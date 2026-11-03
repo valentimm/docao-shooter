@@ -594,7 +594,8 @@ body.bombpick #score,body.bombpick #nades,body.bombpick #tac,body.bombpick #slot
 #menu button.mapcard b{font-size:23px;line-height:1.15}
 #menu button.mapcard .mchange{position:absolute;left:calc(47% + 18px);bottom:8px;font:900 10px var(--font);letter-spacing:.4px;padding:0}
 #menu button.mapcard .mchange::after{display:none}
-#menu .match-options label:first-child{flex:1.6}
+#menu .match-options label:first-child{flex:1.6 1 180px;min-width:168px}
+#menu #survLabel{flex:1 1 148px;min-width:140px}
 #menu .match-options label{margin-block:4px 8px}
 #menu .match-options select{padding:8px 5px;font-size:13px;min-height:36px}
 #menu .menu-footer{border-width:11px;border-color:#2c4032;padding:10px 30px 22px;background:#f1dfb6;box-shadow:5px 7px #31241b}
