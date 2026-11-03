@@ -471,8 +471,10 @@ function reducedAnims() {
 function setReducedAnims(on) {
   reducedAnimUser = !!on;
   try { localStorage.setItem('docao.reducedAnim', on ? '1' : '0'); } catch (e) { /* sem storage */ }
+  document.body.classList.toggle('reduced-motion', reducedAnims());
   document.querySelectorAll('[data-reduced-anim]').forEach((o) => { o.checked = reducedAnims(); });
 }
+document.body.classList.toggle('reduced-motion', reducedAnims());
 document.querySelectorAll('[data-reduced-anim]').forEach((el) => {
   el.checked = reducedAnims();
   el.addEventListener('change', () => setReducedAnims(el.checked));
@@ -3189,7 +3191,8 @@ function updateHud(dt) {
     const watchingKiller = !!(deathCamState.on && deathCamState.killer);
     if (p.alive || !watchingKiller || x1Mode() || armsMode()) killcamGuns = false;
     const pastHold = !p.alive && gameTime - p.deathAt >= DEATHCAM_HOLD;
-    const gunsOpen = watchingKiller && killcamGuns;
+    const closingGuns = $('deathpick') && $('deathpick').classList.contains('is-closing');
+    const gunsOpen = (watchingKiller && killcamGuns) || !!closingGuns;
     const cover = !armsMode() && ((pastHold && !watchingKiller) || gunsOpen);
     document.body.classList.toggle('deadgray', !p.alive);
     document.body.classList.toggle('killcam', watchingKiller && !gunsOpen);
@@ -3197,14 +3200,20 @@ function updateHud(dt) {
     const dp = $('deathpick');
     dp.classList.toggle('hidden', !(pastHold || gunsOpen));
     dp.classList.toggle('x1', x1Mode() || armsMode());
+    const fullBoard = !dp.classList.contains('hidden') && !document.body.classList.contains('killcam') && !dp.classList.contains('x1');
+    dp.classList.toggle('guns-on', fullBoard);
+    if (!killcamGuns) dp.classList.remove('is-closing');
     document.body.classList.toggle('dead', cover);
     if (wasDead === !cover) placeSocialHud();
-    const gunHint = $('deathGunHint');
-    if (gunHint) {
-      const showHint = watchingKiller && !x1Mode() && !armsMode() && (pastHold || gunsOpen);
-      gunHint.classList.toggle('hidden', !showHint);
-      const gunTxt = gunsOpen ? 'B ou Esc — fecha' : 'B — armas';
-      if (gunHint.textContent !== gunTxt) gunHint.textContent = gunTxt;
+    const armsBtn = $('deathArmsBtn');
+    if (armsBtn) {
+      const can = watchingKiller && !x1Mode() && !armsMode() && (pastHold || gunsOpen);
+      armsBtn.classList.toggle('hidden', !can);
+      armsBtn.classList.toggle('is-open', !!gunsOpen);
+      armsBtn.setAttribute('aria-expanded', gunsOpen ? 'true' : 'false');
+      const label = gunsOpen ? '← Voltar' : 'Armas';
+      const name = armsBtn.querySelector('b');
+      if (name && name.textContent !== label) name.textContent = label;
     }
     if (!p.alive) updateRespawnBtn(p);
   } crossEl.style.visibility = p.alive && !(predator && predator.phase === 'fly') ? '' : 'hidden';
@@ -5422,8 +5431,8 @@ function renderWardrobePreview() {
 }
 let selectedSkin = getSkin(localStorage.getItem('docao.skin') || DEFAULT_SKIN).id, preview = null;
 // Cinco classes no navegador. A última usada é a que nasce. docao.primary continua espelhando a classe armada.
-let classes = [], classIndex = 0, spawnedClass = 0, benchOn = false, benchWeapon = 0, benchSlot = 'optic', benchLook = '', arsenalFocus = -1, pauseArmTab = 'rajada';
-const DEATH_HINT = '1–5 escolhe a classe. Clique no arsenal pra gravar qualquer arma nela. U volta pra última · Espaço nasce. O tracinho branco é a arma de fábrica.';
+let classes = [], classIndex = 0, spawnedClass = 0, benchOn = false, benchWeapon = 0, benchSlot = 'optic', benchLook = '', arsenalFocus = -1, pauseArmTab = 'rajada', deathArmTab = 'rajada';
+const DEATH_HINT = '1–5 escolhe a classe. O arsenal grava a arma nela. U volta na última · Espaço nasce.';
 const LIVE_HINT = '1–5 escolhe a classe. O arsenal troca a arma agora e o pente não enche sozinho. U volta pra última. O tracinho branco é a arma de fábrica.';
 let selectedPrimary = 0, selectedSecondary = PISTOL, selectedMelee = KNIFE;
 function bootClasses() {
@@ -6122,8 +6131,8 @@ function refreshModeHud() {
   document.body.classList.toggle('armsmode', armsMode());
   if (armsMode()) { closePauseClass(); closeBombPick(); invClosePick(); killcamGuns = false; }
   $('domhud').classList.toggle('hidden', mode !== 'dom'); $('bombhud').classList.toggle('hidden', mode !== 'bomb'); document.body.classList.toggle('bombmode', mode === 'bomb');
-  const hint = document.querySelector('#deathpick .cls-headline p');
-  if (hint) hint.textContent = x1Mode() ? 'A arma é a mesma pros dois e troca quando alguém cai' : '1–5 a classe · o arsenal grava a arma nela · U volta na última';
+  const hint = $('deathSub');
+  if (hint) hint.textContent = x1Mode() ? 'A arma é a mesma pros dois e troca quando alguém cai' : '';
   if (teamMode() && player) { $('myTeam').textContent = `Você: Time ${TEAM_NAMES[player.team] || '?'}`; $('myTeam').style.color = TEAM_COLORS[player.team] || '#fff'; }
   $('winner').dataset.tone = '';
 }
@@ -6821,7 +6830,10 @@ function sheetSpec(hint) {
 }
 function paintPair(listId, gunId, hint) {
   const list = $(listId), gun = $(gunId);
-  if (list && gun) fillSheet(list, gun, sheetSpec(hint));
+  if (list && gun) {
+    fillSheet(list, gun, sheetSpec(hint));
+    if (listId === 'deathList') { gun.classList.remove('is-fresh'); void gun.offsetWidth; gun.classList.add('is-fresh'); }
+  }
 }
 function armChip(i, kind, on, onPick) {
   const w = WEAPONS[i];
@@ -6845,8 +6857,7 @@ function armChip(i, kind, on, onPick) {
   b.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); onPick(i); };
   return b;
 }
-function paintPauseArms() {
-  const host = $('pauseArms');
+function paintTabbedArms(host, which) {
   if (!host) return;
   const cats = CATEGORIES.map((c) => ({ ...c, weapons: pool(c.weapons) })).filter((c) => c.weapons.length);
   host.innerHTML = '';
@@ -6857,7 +6868,9 @@ function paintPauseArms() {
     host.appendChild(empty);
     return;
   }
-  if (!cats.some((c) => c.id === pauseArmTab)) pauseArmTab = cats[0].id;
+  let tab = which === 'death' ? deathArmTab : pauseArmTab;
+  if (!cats.some((c) => c.id === tab)) tab = cats[0].id;
+  if (which === 'death') deathArmTab = tab; else pauseArmTab = tab;
   const tabs = document.createElement('div');
   tabs.className = 'arm-tabs';
   tabs.setAttribute('role', 'tablist');
@@ -6865,15 +6878,19 @@ function paintPauseArms() {
   for (const cat of cats) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'arm-tab' + (cat.id === pauseArmTab ? ' on' : '');
+    b.className = 'arm-tab' + (cat.id === tab ? ' on' : '');
     b.setAttribute('role', 'tab');
-    b.setAttribute('aria-selected', cat.id === pauseArmTab ? 'true' : 'false');
+    b.setAttribute('aria-selected', cat.id === tab ? 'true' : 'false');
     b.textContent = cat.title;
-    b.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); pauseArmTab = cat.id; paintPauseArms(); };
+    b.onclick = (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      if (which === 'death') deathArmTab = cat.id; else pauseArmTab = cat.id;
+      paintTabbedArms(host, which);
+    };
     tabs.appendChild(b);
   }
   host.appendChild(tabs);
-  const cat = cats.find((c) => c.id === pauseArmTab);
+  const cat = cats.find((c) => c.id === tab);
   const list = document.createElement('div');
   list.className = 'arm-list';
   list.setAttribute('role', 'listbox');
@@ -6884,10 +6901,12 @@ function paintPauseArms() {
   for (const i of cat.weapons) list.appendChild(armChip(i, cat.pick, i === cur, pick));
   host.appendChild(list);
 }
+function paintPauseArms() { paintTabbedArms($('pauseArms'), 'pause'); }
 function paintArms() {
   const pack = classes[classIndex] ? classLoad(classes[classIndex], activeWeapons()) : null;
   paintPauseArms();
-  for (const id of ['deathArms', 'bLoadArms', 'iLoadArms']) {
+  paintTabbedArms($('deathArms'), 'death');
+  for (const id of ['bLoadArms', 'iLoadArms']) {
     const host = $(id);
     if (!host) continue;
     host.innerHTML = '';
@@ -7045,16 +7064,38 @@ function benchKey(e) {
   }
   return false;
 }
+let deathGunsTimer = 0;
+function toggleDeathGuns(force) { // B na kill cam: abre e fecha a mesma ficha da pausa, por cima de quem matou.
+  if (state !== 'playing' || !player || player.alive || x1Mode() || armsMode()) return;
+  if (!(deathCamState.on && deathCamState.killer)) return;
+  const next = force == null ? !killcamGuns : !!force;
+  const dp = $('deathpick');
+  if (deathGunsTimer) { clearTimeout(deathGunsTimer); deathGunsTimer = 0; }
+  if (!next && killcamGuns && dp && !reducedAnims()) {
+    dp.classList.add('is-closing');
+    deathGunsTimer = setTimeout(() => {
+      deathGunsTimer = 0;
+      killcamGuns = false;
+      if (dp) dp.classList.remove('is-closing');
+      if (deathCamState.on && deathCamState.killer) document.body.classList.add('killcam');
+    }, 170);
+    return;
+  }
+  killcamGuns = next;
+  if (dp) dp.classList.remove('is-closing');
+  if (next) {
+    deathUnlock = true;
+    document.body.classList.remove('killcam');
+    if (dp) dp.classList.add('guns-on');
+    if (document.pointerLockElement) document.exitPointerLock();
+  } else if (deathCamState.on && deathCamState.killer) document.body.classList.add('killcam');
+}
 function killcamGunKey(e) { // B é o arsenal (Invasão e Bomba). Morto, na kill cam, abre e fecha a ficha.
   if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return false;
   if (state !== 'playing' || !player || player.alive || x1Mode() || armsMode()) return false;
   if (!(deathCamState.on && deathCamState.killer)) return false;
-  if (e.code === 'KeyB') {
-    killcamGuns = !killcamGuns;
-    if (killcamGuns) { deathUnlock = true; if (document.pointerLockElement) document.exitPointerLock(); }
-    return true;
-  }
-  if (e.code === 'Escape' && killcamGuns) { killcamGuns = false; return true; }
+  if (e.code === 'KeyB') { toggleDeathGuns(); return true; }
+  if (e.code === 'Escape' && (killcamGuns || ( $('deathpick') && $('deathpick').classList.contains('is-closing')))) { toggleDeathGuns(false); return true; }
   return false;
 }
 function classMenuOn() {
@@ -7214,18 +7255,25 @@ function deathLine(p) {
 function updateRespawnBtn(p) {
   const b = $('respawnBtn'), ok = respawnReady(p) && !rsSent;
   const left = Number.isFinite(p.respawnAt) ? Math.max(0, p.respawnAt - gameTime) : respawnDelay();
-  const nome = (classes[classIndex] && classes[classIndex].name) || 'a classe';
-  const ultima = classIndex === spawnedClass;
-  const txt = armsMode() ? (rsSent ? 'Nascendo...' : ok ? 'Renascer' : `Renascer em ${left.toFixed(1).replace('.', ',')}s`) : invMeOut() ? 'Sem vidas' : rsSent ? 'Nascendo...' : ok ? `Nasce com ${nome}` : Number.isFinite(p.respawnAt) ? `Nascer em ${left.toFixed(1).replace('.', ',')}s` : 'Aguarde...';
-  const sub = armsMode() ? 'Espaço · mantém sua etapa e arma' : invMeOut() ? 'Espere a ressurreição' : `Espaço · classe ${nome}${ultima ? ', a última' : ''}`;
+  const secs = left.toFixed(1).replace('.', ',');
+  let txt = 'Aguarde…';
+  let sub = 'Espaço';
+  if (armsMode()) { txt = rsSent ? 'Nascendo…' : ok ? 'Renascer' : `Renascer em ${secs}s`; sub = 'Espaço'; }
+  else if (invMeOut()) { txt = 'Sem vidas'; sub = 'Espere a Ressurreição'; }
+  else if (rsSent) txt = 'Nascendo…';
+  else if (ok) txt = 'Nasce';
+  else if (Number.isFinite(p.respawnAt)) txt = `Nascer em ${secs}s`;
   const main = b && b.querySelector('b'), small = b && b.querySelector('small');
   if (b) { if (b.disabled === ok) b.disabled = !ok; b.classList.toggle('ready', ok); }
   if (main) { if (main.textContent !== txt) main.textContent = txt; }
   else if (b && b.textContent !== txt) b.textContent = txt;
   if (small && small.textContent !== sub) small.textContent = sub;
-  const clock = $('classClockTxt'), bar = $('classClockBar');
-  if (clock) { const ct = invMeOut() ? 'Sem vidas' : rsSent ? 'Nascendo' : ok ? 'Pode nascer' : `Renasce em ${left.toFixed(1).replace('.', ',')}s`; if (clock.textContent !== ct) clock.textContent = ct; }
-  if (bar) bar.style.width = (!Number.isFinite(p.respawnAt) ? 0 : ok || rsSent ? 100 : (1 - left / respawnDelay()) * 100).toFixed(1) + '%';
+  const fill = $('respawnFill');
+  if (fill) {
+    const pct = !Number.isFinite(p.respawnAt) ? 0 : ok || rsSent ? 100 : (1 - left / Math.max(0.05, respawnDelay())) * 100;
+    const w = Math.max(0, Math.min(100, pct)).toFixed(1) + '%';
+    if (fill.style.width !== w) fill.style.width = w;
+  }
 }
 function requestRespawn() {
   const p = player; if (state !== 'playing' || !respawnReady(p) || rsSent) return false;
@@ -7234,6 +7282,7 @@ function requestRespawn() {
   return true;
 }
 $('respawnBtn').onclick = (ev) => { ev.stopPropagation(); requestRespawn(); };
+if ($('deathArmsBtn')) $('deathArmsBtn').onclick = (ev) => { ev.stopPropagation(); toggleDeathGuns(); };
 function onPlayerDeath(opts) { clearHitMarks(); noclipOn = false; paintNoclip(); if (player) { player.flinch = null; player.mgWant = false; player.mgSpin = 0; player.mgFiring = false; } rsSent = false; resetRewards(true); if (!(opts && opts.keepAim) && document.pointerLockElement) { deathUnlock = true; document.exitPointerLock(); } mouseDown = false; rightDown = false; if (player) player.bowDraw = player.eggDraw = 0; }
 let lastRespawnMs = -1e9;
 function onPlayerRespawn() { if (player) resetRecoil(player); clearHitMarks(); rsSent = false; lastRespawnMs = performance.now(); if (gunner) endGunner(false); if (predator) clearPredator(); closeBench(); // nada de mira guiada nem bancada sobrando da vida anterior (travava o andar)

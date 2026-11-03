@@ -110,24 +110,29 @@
   </div>
   <div id="powermeter" class="hidden"><div id="powertext">Força do arremesso</div><div id="powerbar"><div id="powerfill"></div></div></div>
     <div id="deathpick" class="cls-screen hidden">
-      <header class="cls-top">
-        <div class="cls-clockbox">
-          <p id="deathGunHint" class="death-gun-hint hidden">B — armas</p>
-          <div id="classClock" class="cls-clock" aria-hidden="true"><span id="classClockTxt">Renasce em 5,0s</span><i id="classClockBar"></i></div>
+      <div class="death-frame">
+        <aside class="death-side">
+          <p class="death-kicker">Classes</p>
+          <div id="deathList" class="cls-list" role="listbox" aria-label="Classes"></div>
+        </aside>
+        <div class="death-main">
+          <header class="death-top">
+            <div class="death-headline">
+              <h2 id="deathWho">Você foi pururucado</h2>
+              <p id="deathSub"></p>
+            </div>
+            <div class="death-actions">
+              <button type="button" id="deathArmsBtn" aria-expanded="false" aria-controls="deathBoard"><b>Armas</b><kbd>B</kbd></button>
+              <button type="button" id="respawnBtn" disabled><i id="respawnFill" aria-hidden="true"></i><span><b>Nascer em 5,0s</b><small>Espaço</small></span></button>
+            </div>
+          </header>
+          <div class="death-panels" id="deathBoard">
+            <div class="death-gunpanel">
+              <div id="classGun" class="cls-gun"></div>
+            </div>
+            <div id="deathArms" class="death-arms" aria-label="Arsenal"></div>
+          </div>
         </div>
-        <div class="cls-headline">
-          <h2 id="deathWho">Você foi pururucado</h2>
-          <p>1–5 a classe · o arsenal grava a arma nela · U volta na última</p>
-        </div>
-      </header>
-      <div class="cls-pig" aria-hidden="true"></div>
-      <div class="cls-sheet">
-        <div id="deathList" class="cls-list" role="listbox" aria-label="Classes"></div>
-        <div class="cls-main">
-          <div id="classGun" class="cls-gun"></div>
-          <button id="respawnBtn" disabled><b>Nascer em 5,0s</b><small>Espaço</small></button>
-        </div>
-        <div id="deathArms" class="cls-arms" aria-label="Arsenal"></div>
       </div>
     </div>
   <div id="tabboard" class="board hidden"></div>
