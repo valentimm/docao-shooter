@@ -1,4 +1,6 @@
 // Voz da sala: o áudio vai de navegador a navegador (WebRTC). O servidor só apresenta os jogadores.
+// O mesmo AudioContext do jogo. Um segundo contexto deixa o Safari mudo.
+import { sharedAudio, unlockAudio } from './audio.js';
 const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const $ = (id) => document.getElementById(id);
 
@@ -145,8 +147,8 @@ function armLocal() {
   const src = c.createMediaStreamSource(stream);
   const an = c.createAnalyser(); an.fftSize = 512; src.connect(an); localAn = an;
 }
-function resume() { const c = audio(); if (c && c.state === 'suspended') c.resume(); }
-function audio() { if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); } return actx; }
+function resume() { actx = unlockAudio() || actx; }
+function audio() { actx = sharedAudio(); return actx; }
 
 function reaches(fromId, toId) {
   const a = roster.get(fromId); if (!a || a.scope === 'off' || fromId === toId) return false;
