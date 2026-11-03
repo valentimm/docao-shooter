@@ -1345,7 +1345,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     wps.push([0, 0.3, sz * 20.5], [0, 0.3, sz * 31.5], [sz * 8, 0.3, sz * 28]);
   }
   // Colisor da árvore, sem malha. O pinheiro desenhado está em nevasca-show.js.
-  boxes.push({ b: [-1.85, 0, -1.85, 1.85, 6.6, 1.85], hide: true, c: '#1d4a28' });
+  boxes.push({ b: [-1.55, 0, -1.55, 1.55, 5.7, 1.55], hide: true, c: '#1d4a28' });
   // Guarda do vão da escada no mezanino, do lado do salão. A árvore ocupa o vão do centro.
   const holeRail = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2, H));
   holeRail(-10.2, -7.85, -6.4, -7.7);
@@ -1432,7 +1432,6 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   const props = [
     { t: 'pine', x: -6, z: 20, s: 1.15 }, { t: 'pine', x: 6, z: 20, s: 1.15 },
     { t: 'pine', x: -6, z: -20, s: 1.15 }, { t: 'pine', x: 6, z: -20, s: 1.15 },
-    { t: 'pine', x: 0, z: 18, y: 6.8, s: 0.9 },
     { t: 'keg', x: -8.5, z: 3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: 3.3, r: 0.42, h: 0.95 },
     { t: 'keg', x: -8.5, z: -3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: -3.3, r: 0.42, h: 0.95 },
     { t: 'keg', x: -5.4, z: 5.1, r: 0.36, h: 0.8, c: '#6e5438' }, { t: 'keg', x: 5.4, z: -5.1, r: 0.36, h: 0.8, c: '#6e5438' },

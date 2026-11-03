@@ -34,19 +34,20 @@ function xmasTree() {
   const g = new THREE.Group();
   const wood = new THREE.MeshToonMaterial({ color: 0x5c3a22 });
   const green = new THREE.MeshToonMaterial({ color: 0x1d6b32 });
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.55, 1.35, 7), wood);
-  trunk.position.y = 0.68; g.add(trunk);
-  for (let i = 0; i < 6; i++) {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.15 - i * 0.26, 1.35, 8), green);
-    cone.position.y = 1.55 + i * 0.85; g.add(cone);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.5, 1.1, 7), wood);
+  trunk.position.y = 0.55; g.add(trunk);
+  // A laje do teto começa em 6,45. A estrela fica abaixo disso.
+  for (let i = 0; i < 5; i++) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(1.85 - i * 0.26, 1.15, 8), green);
+    cone.position.y = 1.35 + i * 0.78; g.add(cone);
   }
-  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.38), emissive(0xffe27a));
-  star.position.y = 6.85; g.add(star);
+  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.32), emissive(0xffe27a));
+  star.position.y = 5.55; g.add(star);
   const cols = [0xff2a2a, 0xf2c94c, 0x4aa3ff, 0xff7ad1, 0xffffff];
-  for (let i = 0; i < 22; i++) {
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), emissive(cols[i % cols.length]));
-    const h = 1.7 + (i % 5) * 0.85;
-    const r = 1.35 - (i % 5) * 0.18;
+  for (let i = 0; i < 18; i++) {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5), emissive(cols[i % cols.length]));
+    const h = 1.5 + (i % 4) * 0.85;
+    const r = 1.2 - (i % 4) * 0.2;
     const a = i * 2.4;
     ball.position.set(Math.cos(a) * r, h, Math.sin(a) * r);
     g.add(ball);
@@ -77,20 +78,6 @@ function liftCar() {
   back.position.set(0, wall / 2, hz - thick / 2); g.add(back);
   const gate = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, wall, thick), metal);
   gate.position.set(0, wall / 2, -hz + thick / 2); gate.name = 'gate'; g.add(gate);
-  return g;
-}
-
-function tree() {
-  const g = new THREE.Group();
-  const wood = new THREE.MeshToonMaterial({ color: 0x6b4423 });
-  const green = new THREE.MeshToonMaterial({ color: 0x1f6b32 });
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 1.2, 6), wood); trunk.position.y = 0.6; g.add(trunk);
-  for (let i = 0; i < 5; i++) {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.4 - i * 0.38, 1.7, 7), green);
-    cone.position.y = 1.5 + i * 1.15; g.add(cone);
-  }
-  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), emissive(0xffe27a));
-  star.position.y = 7.5; g.add(star);
   return g;
 }
 
@@ -357,7 +344,7 @@ function summit() {
     lamp.position.set(hx, 2.2, hz + 1.85); town.add(lamp);
   }
   town.position.set(-112, -57.7, 28); g.add(town);
-  const bulbs = [[-128, -54.2, 24], [-112, -53.6, 36], [-98, -54, 26], [-120, -53.4, 42]];
+  const bulbs = [[-128, -53.3, 24], [-112, -53.1, 36], [-98, -53.2, 26], [-120, -53.2, 42]];
   for (const [x, y, z] of bulbs) {
     const b = new THREE.Mesh(new THREE.SphereGeometry(0.28, 5, 4), new THREE.MeshBasicMaterial({ color: 0xff4a4a, toneMapped: false }));
     b.position.set(x, y, z); g.add(b);
@@ -404,20 +391,24 @@ function festive(root) {
     const sock = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.38, 0.08), red);
     add(sock, sx * 4.2, 2.15, sz * 11.35, sz > 0 ? 0 : Math.PI);
     const bell = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), gold);
-    add(bell, sx * 5.2, 6.45, sz * 4.2);
-    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.18), emissive(0xffe27a));
-    add(star, sx * 3.4, 3.05, sz * 4.5);
+    add(bell, sx * 5.2, 6.05, sz * 4.2);
+    const cord = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.4, 0.03), new THREE.MeshToonMaterial({ color: 0x2a3138 }));
+    add(cord, sx * 5.2, 6.25, sz * 4.2);
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.16), emissive(0xffe27a));
+    add(star, sx * 3.4, 2.55, sz * 4.5);
+    const cord2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.55, 0.03), new THREE.MeshToonMaterial({ color: 0x2a3138 }));
+    add(cord2, sx * 3.4, 2.9, sz * 4.5);
   }
   // pingentes no beiral
   const ice = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.28, 4), white, 48);
   const dummy = new THREE.Object3D();
   let n = 0;
   for (const z of [-12.15, 12.15]) for (let i = 0; i < 12; i++) {
-    dummy.position.set(-10 + i * 1.8, 6.55, z); dummy.rotation.x = Math.PI; dummy.updateMatrix();
+    dummy.position.set(-10 + i * 1.8, 6.28, z); dummy.rotation.x = Math.PI; dummy.updateMatrix();
     ice.setMatrixAt(n++, dummy.matrix);
   }
   for (const x of [-11.15, 11.15]) for (let i = 0; i < 12; i++) {
-    dummy.position.set(x, 6.55, -10 + i * 1.8); dummy.rotation.x = Math.PI; dummy.updateMatrix();
+    dummy.position.set(x, 6.28, -10 + i * 1.8); dummy.rotation.x = Math.PI; dummy.updateMatrix();
     ice.setMatrixAt(n++, dummy.matrix);
   }
   root.add(ice);
@@ -458,36 +449,47 @@ export function mountNevasca(group, map) {
   cabins.forEach((c) => root.add(c));
   const lifts = [liftCar(), liftCar()];
   lifts.forEach((c) => root.add(c));
-  const big = tree(); big.position.set(0, 6.9, 0); root.add(big);
   root.add(xmasTree());
 
   const bulbs = [];
-  const pushLine = (x0, y0, z0, x1, y1, z1, n) => {
-    for (let i = 0; i <= n; i++) bulbs.push([x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, z0 + (z1 - z0) * i / n]);
+  const wire = new THREE.MeshToonMaterial({ color: 0x2a3138 });
+  const down = new THREE.Vector3(0, 0, 1);
+  // Cada varal ganha um cabo. A bolinha pende 16 cm abaixo dele, nunca solta.
+  const hang = (x0, y0, z0, x1, y1, z1, n) => {
+    for (let i = 0; i <= n; i++) {
+      const k = i / n;
+      bulbs.push([x0 + (x1 - x0) * k, y0 + (y1 - y0) * k - 0.16, z0 + (z1 - z0) * k]);
+    }
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    const len = Math.hypot(dx, dy, dz);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, len), wire);
+    mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    mesh.quaternion.setFromUnitVectors(down, new THREE.Vector3(dx / len, dy / len, dz / len));
+    root.add(mesh);
   };
-  // beiral da Sala Fria, guarda das passarelas e o cabo dos bondinhos
-  pushLine(-11, 7.15, -12, 11, 7.15, -12, 16);
-  pushLine(-11, 7.15, 12, 11, 7.15, 12, 16);
-  pushLine(-11, 7.15, -12, -11, 7.15, 12, 16);
-  pushLine(11, 7.15, -12, 11, 7.15, 12, 16);
-  pushLine(-11, 4.5, -12, 11, 4.5, -12, 14);
-  pushLine(-11, 4.5, 12, 11, 4.5, 12, 14);
-  pushLine(-17.7, 4.45, -28, -17.7, 4.45, 28, 22);
-  pushLine(17.7, 4.45, -28, 17.7, 4.45, 28, 22);
-  pushLine(-16.5, 4.45, -28, -16.5, 4.45, 28, 22);
-  pushLine(16.5, 4.45, -28, 16.5, 4.45, 28, 22);
-  pushLine(GONDOLA.x[0], 12.7, 32, GONDOLA.x[0], 12.7, -32, 26);
-  pushLine(GONDOLA.x[1], 12.7, 32, GONDOLA.x[1], 12.7, -32, 26);
-  // varais por dentro, no beiral do mezanino e na plataforma do bondinho
-  pushLine(-9, 3.15, -9, 9, 3.15, -9, 14);
-  pushLine(-9, 3.15, 9, 9, 3.15, 9, 14);
-  pushLine(-9, 3.15, -9, -9, 3.15, 9, 12);
-  pushLine(9, 3.15, -9, 9, 3.15, 9, 12);
-  pushLine(-9, 6.35, -9, 9, 6.35, -9, 12);
-  pushLine(-9, 6.35, 9, 9, 6.35, 9, 12);
+  // Beiral: logo abaixo da laje (o teto vai de 6,45 a 6,80), encostado na parede.
+  hang(-11.2, 6.35, -12.22, 11.2, 6.35, -12.22, 16);
+  hang(-11.2, 6.35, 12.22, 11.2, 6.35, 12.22, 16);
+  hang(-11.22, 6.35, -12.2, -11.22, 6.35, 12.2, 16);
+  hang(11.22, 6.35, -12.2, 11.22, 6.35, 12.2, 16);
+  hang(-11.2, 4.35, -12.22, 11.2, 4.35, -12.22, 14);
+  hang(-11.2, 4.35, 12.22, 11.2, 4.35, 12.22, 14);
+  hang(-17.75, 4.32, -28, -17.75, 4.32, 28, 22);
+  hang(17.75, 4.32, -28, 17.75, 4.32, 28, 22);
+  hang(-16.45, 4.32, -28, -16.45, 4.32, 28, 22);
+  hang(16.45, 4.32, -28, 16.45, 4.32, 28, 22);
+  hang(GONDOLA.x[0], 12.55, 32, GONDOLA.x[0], 12.55, -32, 26);
+  hang(GONDOLA.x[1], 12.55, 32, GONDOLA.x[1], 12.55, -32, 26);
+  // Por dentro: embaixo do mezanino (laje em 3,10) e embaixo do teto.
+  hang(-9, 2.95, -9, 9, 2.95, -9, 14);
+  hang(-9, 2.95, 9, 9, 2.95, 9, 14);
+  hang(-9, 2.95, -9, -9, 2.95, 9, 12);
+  hang(9, 2.95, -9, 9, 2.95, 9, 12);
+  hang(-9, 6.2, -9, 9, 6.2, -9, 12);
+  hang(-9, 6.2, 9, 9, 6.2, 9, 12);
   for (const s of [1, -1]) {
-    pushLine(-4.6, 11.7, s * 31.2, 4.6, 11.7, s * 31.2, 10);
-    pushLine(s * 4.8, 11.7, s * 29.6, s * 4.8, 11.7, s * 33.4, 6);
+    hang(-4.6, 11.55, s * 31.5, 4.6, 11.55, s * 31.5, 10);
+    hang(s * 4.9, 11.55, s * 29.5, s * 4.9, 11.55, s * 33.6, 6);
   }
   for (const p of map.props || []) if (p.t === 'pine') {
     const s = p.s || 1, y = (p.y || 0) + 3.2 * s;
@@ -579,7 +581,7 @@ export function mountNevasca(group, map) {
   const puffCore = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff3c4, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }));
   cloud.add(puffCore); root.add(cloud);
   group.add(root);
-  return { root, cabins, lifts, bulbs: mesh, bulbN: bulbs.length, sled: rig.group, bob: rig.bob, deer: rig.deer, wave: rig.wave, burst: rig.burst, starMat: rig.starMat, glowMat: rig.glowMat, trail, trailN: TRAIL_N, cloud, puffMat, puffCore, big };
+  return { root, cabins, lifts, bulbs: mesh, bulbN: bulbs.length, sled: rig.group, bob: rig.bob, deer: rig.deer, wave: rig.wave, burst: rig.burst, starMat: rig.starMat, glowMat: rig.glowMat, trail, trailN: TRAIL_N, cloud, puffMat, puffCore };
 }
 
 const dummy = new THREE.Object3D();
