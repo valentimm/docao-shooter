@@ -40,6 +40,7 @@ import { initBacon, spawnBacon, updateBacon, clearBacon, popModel, baconStats, a
 import { Net, createRoom, roomInfo } from './net.js';
 import { initChat, chatTyping, chatShown, chatRoomOn, chatConsumeUnlock, chatNoteLocked, openChat, closeChat, chatSeed, chatPush, chatSetRoom, chatSetTeam, chatClear, chatUseAll, chatRefresh } from './chat.js';
 import { initVoice, voicePtt, voiceCycle, voiceReset, voiceRoster, voiceSignal, voiceTalking, voiceMuted, voiceToggleMute, voiceRefresh } from './voice.js';
+import { armAudioGestures, audioRunning, noteAudio, safeExpRamp, safeSet, unlockAudio, watchMaster, withAudioTag } from './audio.js';
 import { SEND_HZ, INTERP_DELAY } from './config.js';
 import { cleanName, NAME_MAX } from './shared/names.js';
 import { createPhysics, mapSolids, rayHitboxes } from './shared/physics.js';
@@ -333,17 +334,36 @@ const center = (e, y = 1.0) => new V3(e.pos.x, e.pos.y + y * stanceScale(e.crouc
 
 // ---------------- Áudio sintetizado ----------------
 let actx = null, master = null, noiseBuf = null, menuMuted = false;
+let sleighQueued = false, sleighTries = 0;
 function initAudio() {
-  if (actx) { actx.resume(); return; }
+  const c = unlockAudio();
+  if (!c) return;
+  if (actx && master) {
+    try { if (c.state === 'suspended' || c.state === 'interrupted') c.resume(); } catch (e) { /* o próximo gesto retoma */ }
+    master.gain.value = menuMuted ? 0 : 0.4;
+    return;
+  }
   try {
-    actx = new (window.AudioContext || window.webkitAudioContext)();
-    master = actx.createGain(); master.gain.value = menuMuted ? 0 : 0.4; master.connect(actx.destination);
-    noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+    actx = c;
+    master = c.createGain();
+    master.gain.value = menuMuted ? 0 : 0.4;
+    master.connect(c.destination);
+    watchMaster(master);
+    const rate = c.sampleRate > 0 ? c.sampleRate : 44100;
+    noiseBuf = c.createBuffer(1, rate, rate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     saberSfx.bind(actx, master); bindGrenadeVoice(actx, master); sniperSfx.bind(actx, master);
-  } catch (e) { actx = null; }
+    if (!c.__sleighHook) {
+      c.__sleighHook = true;
+      c.addEventListener('statechange', () => { try { flushSleigh(); } catch (e) { /* espera o próximo quadro */ } });
+    }
+  } catch (e) {
+    try { if (master) master.disconnect(); } catch (e2) { /* solto */ }
+    actx = null; master = null;
+  }
 }
 function connectOut(node, pan = 0) {
+  if (!master) return;
   if (!pan) { node.connect(master); return; }
   try {
     const p = actx.createStereoPanner();
@@ -352,61 +372,206 @@ function connectOut(node, pan = 0) {
   } catch (e) { node.connect(master); }
 }
 function noise(dur, freq, vol, type = 'lowpass', delay = 0, pan = 0) {
-  if (!actx) return; const t = actx.currentTime + delay;
-  const s = actx.createBufferSource(); s.buffer = noiseBuf;
-  const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
-  const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f); f.connect(g); connectOut(g, pan); s.start(t); s.stop(t + dur + 0.02);
+  if (!actx || !master || !noiseBuf) return;
+  const volN = Number(vol), durN = Number(dur), freqN = Number(freq), delayN = Number(delay);
+  if (!(volN > 0) || !(durN > 0) || !(freqN > 0)) return;
+  try {
+    const t = actx.currentTime + (Number.isFinite(delayN) ? Math.max(0, delayN) : 0);
+    const end = t + durN;
+    if (!(end > t)) return;
+    const s = actx.createBufferSource(); s.buffer = noiseBuf;
+    const f = actx.createBiquadFilter();
+    const kinds = ['lowpass', 'highpass', 'bandpass', 'lowshelf', 'highshelf', 'peaking', 'notch', 'allpass'];
+    f.type = kinds.includes(type) ? type : 'lowpass';
+    const nyquist = (actx.sampleRate || 44100) * 0.45;
+    safeSet(f.frequency, Math.min(freqN, nyquist), t);
+    const g = actx.createGain();
+    safeSet(g.gain, volN, t);
+    safeExpRamp(g.gain, 0.001, end);
+    s.connect(f); f.connect(g); connectOut(g, pan); s.start(t); s.stop(end + 0.02);
+    noteAudio(undefined, 'noise');
+  } catch (e) { /* um ruído falho não cala o resto */ }
 }
-function sleighBell(f, dur, delay) {
-  tone('sine', f, f, dur, 0.026, delay);
-  tone('triangle', f * 2.4, f * 1.35, Math.min(0.11, dur * 0.45), 0.009, delay);
-  noise(0.03, 4600, 0.008, 'highpass', delay);
+// Uma linha só (um oscilador), com tempos estritamente crescentes.
+// O trenó antigo abria dezenas de osciladores no mesmo quadro. No Safari isso cala o contexto.
+function spacedNotes(notes) {
+  const out = [];
+  let end = -1;
+  for (const [f, dur, when] of notes) {
+    if (!(f > 0) || !(dur > 0) || !Number.isFinite(when)) continue;
+    const start = Math.max(when, end + 0.03);
+    const d = Math.max(0.08, dur);
+    out.push([f, d, start]);
+    end = start + d;
+  }
+  return out;
+}
+function playLine(type, notes, vol, kind, fall = 1) {
+  if (!audioRunning() || !master || !(vol > 0)) return false;
+  const seq = spacedNotes(notes);
+  if (!seq.length) return false;
+  try {
+    const base = actx.currentTime + 0.08;
+    const o = actx.createOscillator();
+    const kinds = ['sine', 'square', 'sawtooth', 'triangle'];
+    o.type = kinds.includes(type) ? type : 'sine';
+    const g = actx.createGain();
+    // Sem este piso, o ganho fica em 1 até a primeira nota e o Safari estoura o volume.
+    let last = -1;
+    if (seq[0][2] > 0.02) {
+      g.gain.setValueAtTime(0.0001, base);
+      o.frequency.setValueAtTime(seq[0][0], base);
+      last = base;
+    }
+    for (const [f, dur, when] of seq) {
+      const a = base + when;
+      if (!(a > last)) continue;
+      const atk = Math.min(0.04, dur * 0.3);
+      const c = a + dur;
+      g.gain.setValueAtTime(0.0001, a);
+      g.gain.linearRampToValueAtTime(vol, a + atk);
+      g.gain.linearRampToValueAtTime(0.0001, c);
+      o.frequency.setValueAtTime(f, a);
+      if (fall > 0 && fall < 0.98) o.frequency.linearRampToValueAtTime(Math.max(1, f * fall), c);
+      last = c;
+    }
+    if (!(last > base)) return false;
+    o.connect(g); g.connect(master);
+    o.start(base); o.stop(last + 0.05);
+    noteAudio(kind, 'osc');
+    return true;
+  } catch (e) { return false; }
+}
+function playTicks(notes, vol, kind) {
+  if (!audioRunning() || !master || !noiseBuf || !(vol > 0)) return false;
+  const seq = spacedNotes(notes);
+  if (!seq.length) return false;
+  try {
+    const base = actx.currentTime + 0.08;
+    const s = actx.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+    const f = actx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2800;
+    const g = actx.createGain();
+    let last = -1;
+    if (seq[0][2] > 0.02) {
+      g.gain.setValueAtTime(0.0001, base);
+      last = base;
+    }
+    for (const [, dur, when] of seq) {
+      const a = base + when;
+      if (!(a > last)) continue;
+      const tick = Math.min(0.045, dur * 0.4);
+      const c = a + tick;
+      g.gain.setValueAtTime(0.0001, a);
+      g.gain.linearRampToValueAtTime(vol, a + 0.008);
+      g.gain.linearRampToValueAtTime(0.0001, c);
+      last = c;
+    }
+    if (!(last > base)) return false;
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(base); s.stop(last + 0.02);
+    noteAudio(kind, 'noise');
+    return true;
+  } catch (e) { return false; }
 }
 // Primeira frase de Jingle Bells (melodia de 1857, domínio público) em sininhos. Sem amostra.
+const JINGLE = [
+  [659, 0.16, 0], [659, 0.16, 0.2], [659, 0.3, 0.4],
+  [659, 0.16, 0.68], [659, 0.16, 0.88], [659, 0.3, 1.08],
+  [659, 0.16, 1.4], [784, 0.16, 1.6], [523, 0.16, 1.8], [587, 0.16, 2],
+  [659, 0.42, 2.24],
+  [784, 0.18, 3.35], [659, 0.26, 3.9],
+];
 function sleighTune() {
-  const q = 0.2;
-  const seq = [
-    [659, 0.16, 0], [659, 0.16, q], [659, 0.3, q * 2],
-    [659, 0.16, q * 3.4], [659, 0.16, q * 4.4], [659, 0.3, q * 5.4],
-    [659, 0.16, q * 7], [784, 0.16, q * 8], [523, 0.16, q * 9], [587, 0.16, q * 10],
-    [659, 0.42, q * 11.2],
-    [784, 0.18, 3.35], [659, 0.26, 3.9],
-  ];
-  for (const [f, d, when] of seq) sleighBell(f, d, when);
+  if (!audioRunning()) return false;
+  const bell = playLine('sine', JINGLE, 0.14, 'jingle');
+  playLine('triangle', JINGLE.map(([f, d, w]) => [Math.min(f * 2.2, 1600), Math.min(d, 0.1), w]), 0.04, 'jingle');
+  playTicks(JINGLE, 0.03, 'jingle');
+  return bell;
 }
 function hohoho() {
-  for (let i = 0; i < 3; i++) {
-    const d = 0.45 + i * 0.38;
-    tone('sine', 148, 90, 0.2, 0.036, d);
-    tone('triangle', 200, 108, 0.14, 0.014, d);
-    noise(0.1, 220, 0.02, 'lowpass', d);
-  }
+  if (!audioRunning()) return false;
+  const notes = [[156, 0.24, 0.45], [142, 0.26, 0.95], [118, 0.34, 1.5]];
+  const low = playLine('sine', notes, 0.18, 'hohoho', 0.62);
+  playLine('triangle', notes.map(([f, d, w]) => [f * 1.5, d * 0.65, w]), 0.05, 'hohoho', 0.7);
+  return low;
+}
+function queueSleigh() {
+  sleighQueued = true; sleighTries = 0;
+  try { flushSleigh(); } catch (e) { /* toca no quadro seguinte */ }
+}
+function flushSleigh() {
+  if (!sleighQueued) return;
+  if (!audioRunning() || !master) return;
+  let ok = false;
+  try { ok = sleighTune() || ok; } catch (e) { /* sininho falho */ }
+  try { ok = hohoho() || ok; } catch (e) { /* HO HO HO falho */ }
+  if (ok || ++sleighTries > 8) { sleighQueued = false; sleighTries = 0; }
 }
 function tone(type, f0, f1, dur, vol, delay = 0, pan = 0) {
-  if (!actx) return; const t = actx.currentTime + delay;
-  const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
-  const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g); connectOut(g, pan); o.start(t); o.stop(t + dur + 0.02);
+  if (!actx || !master) return;
+  const volN = Number(vol), durN = Number(dur), f0n = Number(f0), f1n = Number(f1), delayN = Number(delay);
+  if (!(volN > 0) || !(durN > 0) || !Number.isFinite(f0n)) return;
+  try {
+    const t = actx.currentTime + (Number.isFinite(delayN) ? Math.max(0, delayN) : 0);
+    const end = t + durN;
+    if (!(end > t)) return;
+    const o = actx.createOscillator();
+    const kinds = ['sine', 'square', 'sawtooth', 'triangle'];
+    o.type = kinds.includes(type) ? type : 'sine';
+    safeSet(o.frequency, Math.max(Math.abs(f0n), 1), t);
+    safeExpRamp(o.frequency, Math.max(Math.abs(Number.isFinite(f1n) ? f1n : f0n), 1), end);
+    const g = actx.createGain();
+    safeSet(g.gain, volN, t);
+    safeExpRamp(g.gain, 0.001, end);
+    o.connect(g); connectOut(g, pan); o.start(t); o.stop(end + 0.02);
+    noteAudio(undefined, 'osc');
+  } catch (e) { /* um tom falho não cala o resto */ }
 }
+armAudioGestures();
+window.__audio._onstate = () => { try { flushSleigh(); } catch (e) { /* quadro seguinte */ } };
+window.__audio.master = () => (master ? master.gain.value : null);
+window.__audio.jingle = () => { try { return sleighTune(); } catch (e) { return false; } };
+window.__audio.hoho = () => { try { return hohoho(); } catch (e) { return false; } };
+window.__audio.bad = () => {
+  const c = actx || unlockAudio();
+  if (!c) return { state: 'none', threw: true };
+  const g = c.createGain();
+  let threw = false;
+  try {
+    g.gain.value = 0;
+    safeExpRamp(g.gain, 0, c.currentTime + 0.05);
+    safeSet(g.gain, NaN, c.currentTime);
+    safeExpRamp(g.gain, Infinity, NaN);
+  } catch (e) { threw = true; }
+  try { g.disconnect(); } catch (e) { /* solto */ }
+  return { state: c.state, threw, master: master ? master.gain.value : null };
+};
 let stepSide = 0;
 // Camada de blaster por cima do tiro da arma que passou na Papada. Oscilador descendo + ring mod + ressonador. Sem sample.
 function blasterLayer(vol = 1, tier = 1) {
-  if (!actx || vol < 0.02) return;
-  const t0 = actx.currentTime, k = 0.65 + tier * 0.28;
-  const o = actx.createOscillator(); o.type = 'sawtooth';
-  o.frequency.setValueAtTime(980 * k + 420, t0);
-  o.frequency.exponentialRampToValueAtTime(120, t0 + 0.1 + tier * 0.02);
-  const mod = actx.createOscillator(); mod.type = 'square'; mod.frequency.value = 60 + tier * 45;
-  const ring = actx.createGain(); ring.gain.value = 0; mod.connect(ring.gain); o.connect(ring);
-  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 640 + tier * 240; bp.Q.value = 5 + tier * 2;
-  const g = actx.createGain(); g.gain.setValueAtTime(0.15 * vol * k, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15 + tier * 0.02);
-  ring.connect(bp); bp.connect(g); g.connect(master);
-  o.start(t0); mod.start(t0); o.stop(t0 + 0.22); mod.stop(t0 + 0.22);
+  if (!actx || !master || !(vol > 0.02)) return;
+  try {
+    const t0 = actx.currentTime, k = 0.65 + tier * 0.28;
+    const o = actx.createOscillator(); o.type = 'sawtooth';
+    safeSet(o.frequency, 980 * k + 420, t0);
+    safeExpRamp(o.frequency, 120, t0 + 0.1 + tier * 0.02);
+    const mod = actx.createOscillator(); mod.type = 'square'; mod.frequency.value = 60 + tier * 45;
+    const ring = actx.createGain(); ring.gain.value = 0; mod.connect(ring.gain); o.connect(ring);
+    const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 640 + tier * 240; bp.Q.value = 5 + tier * 2;
+    const g = actx.createGain();
+    safeSet(g.gain, Math.max(0.15 * vol * k, 0.001), t0);
+    safeExpRamp(g.gain, 0.001, t0 + 0.15 + tier * 0.02);
+    ring.connect(bp); bp.connect(g); g.connect(master);
+    o.start(t0); mod.start(t0); o.stop(t0 + 0.22); mod.stop(t0 + 0.22);
+  } catch (e) { /* blaster falho não cala o tiro */ }
 }
 function gunShot(w, vol, dist, pan, tier = 0) {
-  if (w && sfx[w.key]) sfx[w.key](vol, dist, pan);
-  if (tier > 0) blasterLayer(vol == null ? 1 : vol, tier);
+  withAudioTag('shot', () => {
+    try {
+      if (w && sfx[w.key]) sfx[w.key](vol, dist, pan);
+      if (tier > 0) blasterLayer(vol == null ? 1 : vol, tier);
+    } catch (e) { /* um tiro falho não cala o resto */ }
+  });
 }
 const shotTier = (e, w) => (survOn() && e && e.pap ? (e.pap[w] | 0) : 0);
 const sfx = {
@@ -609,7 +774,12 @@ const nightAmb = createNightAmbience();
 let inv = null, invNet = null; // offline: InvasionCore local · online: estado lido do snapshot (parseState)
 const invGfx = { hal: null, fog: null, drops: new Map(), projs: new Map(), rings: [], cones: new Map(), inv: [], sel: 0 };
 let invZid = 1000, invMusic = null; // trilha de terror procedural (invasion-music.js)
-function invMusicOn(on) { if (on) { if (!actx) initAudio(); if (!actx) return; if (!invMusic) invMusic = createInvMusic(actx, master); invMusic.start(); } else if (invMusic) invMusic.stop(); }
+function invMusicOn(on) {
+  try {
+    if (on) { if (!actx) initAudio(); if (!actx || !master) return; if (!invMusic) invMusic = createInvMusic(actx, master); invMusic.start(); noteAudio('music', 'osc'); }
+    else if (invMusic) invMusic.stop();
+  } catch (e) { /* trilha falha não cala o jogo */ }
+}
 const friends = (a, b) => (invMode() ? !!(a && b && a !== b && !a.zt === !b.zt) : teamMode() && a && b && a !== b && a.team === b.team && a.team >= 0);
 let online = null; // modo online: { net, code, myId, hostId, ents: Map(id → entidade), evq, ... } (ver seção Online)
 let ads = 0; // 0 = normal, 1 = mirando (zoom)
@@ -3985,7 +4155,13 @@ function applyPersonality(p, w, dt, moving, inspectK) {
 function updateFP(dt) {
   [fp.kr, fp.kpiv] = fp.knifeRigs[player && player.weapon === GOLD_KNIFE ? 1 : 0];
   const p = player, moving = Math.hypot(p.vel.x, p.vel.z) > 1 && p.onGround;
-  if (moving) fp.bob += dt * 10;
+  if (moving) {
+    const prevBob = fp.bob;
+    fp.bob += dt * 10;
+    if (Math.floor(prevBob / Math.PI) !== Math.floor(fp.bob / Math.PI)) {
+      try { withAudioTag('step', () => sfx.step(0.85)); } catch (e) { /* passo falho não trava o quadro */ }
+    }
+  }
   const wKick = WEAPONS[p.weapon];
   const plain = reducedAnims();
   fp.kick = Math.max(0, fp.kick - dt * (plain ? 6 : recoilRecover(wKick.key))); // cada arma volta do coice no seu tempo; a mira (pitch) não usa isso. Reduzidas: a curva antiga (6).
@@ -6699,7 +6875,8 @@ function loop() {
     updateFootsteps(dt);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
     updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt();
-    if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { sleighTune(); hohoho(); flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; });
+    try { flushSleigh(); } catch (e) { /* trenó espera o contexto */ }
+    if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; queueSleigh(); });
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
   } else if (state === 'menu') {
     menuT += dt * 0.25; danceT += dt;
