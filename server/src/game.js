@@ -39,7 +39,7 @@ import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStami
 const CHAL_WEAPONS = { shotgun: 'w_shot', semi: 'w_shot', sniper: 'w_snip', canhao: 'w_snip', carabina: 'w_snip', besta: 'w_bow', arco: 'w_bow', estilingue: 'w_bow', sabre: 'w_saber', sabre2: 'w_saber', bazooka: 'w_boom', milho: 'w_boom' }; // grupos de armas dos desafios
 const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isTraining(m) || isInvasion(m) || isX1(m) ? m : 'dm');
 
-export const MAX_PLAYERS = 10;
+export const MAX_PLAYERS = 30;
 const RS_SAFETY = 60; // s: cliente antigo que nunca manda 'rs' renasce sozinho depois disso
 const PX_COOLDOWN = 10; // s: mínimo entre duas trocas de arma na pausa que derrubam o jogador (fora Treino e Invasão)
 const PENDING_WAIT = 60; // s de relógio de parede pra escolher o time ao entrar no meio; depois vai no Automático
