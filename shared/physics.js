@@ -8,6 +8,17 @@ import { GRAV, STEP, RADIUS, HEIGHT, NADE, POKE } from './rules.js';
 import { stanceHeight, stanceScale } from './stance.js';
 
 export const WALL_COLLIDE_H = 40;
+export const FALL_FLOOR = -40; // chão fantasma do abismo; a morte acontece bem antes (map.fall.y)
+// map.fall = { y, margin?, rects?: [[x0,z0,x1,z1]], basins?: [[x0,z0,x1,z1,piso]] }
+export function baselineY(fall, x, z, hx, hz) {
+  if (!fall) return 0;
+  if (fall.basins) for (const r of fall.basins) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return r[4];
+  const abyss = fall.abyss ?? FALL_FLOOR;
+  if (fall.margin && (Math.abs(x) > hx - fall.margin || Math.abs(z) > hz - fall.margin)) return abyss;
+  if (fall.rects) for (const r of fall.rects) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return abyss;
+  return 0;
+}
+export function fellOff(fall, y) { return !!(fall && y < fall.y); }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const box = (x0, y0, z0, x1, y1, z1, ramp = null) => ({ min: { x: x0, y: y0, z: z0 }, max: { x: x1, y: y1, z: z1 }, ramp });
 
@@ -47,18 +58,32 @@ export function mapSolids(map) {
       case 'stall': add(p.x - 1.2, y, p.z - 0.6, p.x + 1.2, y + 1.0, p.z + 0.6); add(p.x - 1.6, y + 2.6, p.z - 1.1, p.x + 1.6, y + 2.72, p.z + 1.1); break;
       case 'awning': add(p.x0, p.y, p.z0, p.x1, p.y + 0.12, p.z1); break;
       case 'jar': add(p.x - 0.4, y, p.z - 0.4, p.x + 0.4, y + 1.1, p.z + 0.4); break;
-      default: break; // placas, neon, rua, água, estandarte: sem colisão
+      case 'pine': if (!(p.y < -2)) add(p.x - 0.4, y, p.z - 0.4, p.x + 0.4, y + 3.1, p.z + 0.4); break;
+      case 'drift': { const r = p.r || 1.1, h = p.h || 0.8; add(p.x - r * 0.45, y, p.z - r * 0.45, p.x + r * 0.45, y + h * 0.5, p.z + r * 0.45); break; }
+      case 'dome': { const r = p.r || 2.2, h = (p.h || 1.3) + r * 0.55; add(p.x - r, y, p.z - r, p.x + r, y + h, p.z + r); break; }
+      case 'tank': { const r = p.r || 1.15, h = p.h || 2.5; add(p.x - r, y, p.z - r, p.x + r, y + h, p.z + r); break; }
+      default: break; // placas, neon, rua, água, estandarte, vidro: sem colisão
     }
   }
   return out;
 }
 
-export function createPhysics(solids, size) {
+export function createPhysics(solids, size, fall = null) {
+  const [hx, hz] = size;
   const GRID = 4, grid = new Map(), NONE = [];
   const key = (ix, iz) => ix * 100003 + iz;
   for (const s of solids) for (let ix = Math.floor((s.min.x - 1) / GRID); ix <= Math.floor((s.max.x + 1) / GRID); ix++)
     for (let iz = Math.floor((s.min.z - 1) / GRID); iz <= Math.floor((s.max.z + 1) / GRID); iz++) { const k = key(ix, iz); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(s); }
-  const solidsAt = (x, z) => grid.get(key(Math.floor(x / GRID), Math.floor(z / GRID))) || NONE;
+  // Sólidos móveis (bondinho e elevador). Poucos, testados direto, fora da grade.
+  let movers = [];
+  const setMovers = (list) => { movers = list || []; };
+  const solidsAt = (x, z) => {
+    const base = grid.get(key(Math.floor(x / GRID), Math.floor(z / GRID))) || NONE;
+    if (!movers.length) return base;
+    let extra = null;
+    for (const s of movers) if (x + 1.4 > s.min.x && x - 1.4 < s.max.x && z + 1.4 > s.min.z && z - 1.4 < s.max.z) (extra || (extra = base.slice())).push(s);
+    return extra || base;
+  };
   function topAt(s, x, z) {
     if (!s.ramp) return s.max.y;
     let t = s.ramp.axis === 'x' ? (x - s.min.x) / (s.max.x - s.min.x) : (z - s.min.z) / (s.max.z - s.min.z);
@@ -75,10 +100,9 @@ export function createPhysics(solids, size) {
     }
     return null;
   }
-  // chão sob o corpo: mesma pegada (RADIUS) da colisão — antes era 60% do raio, e quem saía de uma borda
-  // caía "dentro" da lateral da caixa (parede, rampa, telhado) e ficava preso. r menor só pra objetos pontuais.
+  // chão sob o corpo: mesma pegada (RADIUS) da colisão. Em mapa com abismo, o piso de referência pode ser o fundo do penhasco ou uma bacia.
   function groundAt(x, z, y, r = RADIUS * 0.6) {
-    let g = 0;
+    let g = baselineY(fall, x, z, hx, hz);
     for (const s of solidsAt(x, z)) if (over(s, x, z, r)) {
       const top = topAt(s, clamp(x, s.min.x, s.max.x), clamp(z, s.min.z, s.max.z)); if (top <= y + STEP && top > g) g = top;
     }
@@ -121,7 +145,6 @@ export function createPhysics(solids, size) {
     }
     return !overlapping(e.pos.x, e.pos.y, e.pos.z, 0, height);
   }
-  const [hx, hz] = size;
   // Movimento (mesmo código no cliente e no servidor): eixo a eixo (x, depois z) = desliza em paredes e quinas;
   // sub-passos ≤ 0,25 m (empurrões fortes não atravessam parede fina); se já estiver dentro de algo, sai primeiro.
   function moveEntity(e, dt) {
@@ -146,7 +169,10 @@ export function createPhysics(solids, size) {
   // raio contra o mundo: chão (y=0) + caixas; rampas são cunhas (resolve a interseção com o plano inclinado)
   function rayWorld(o, d, far) {
     let best = far, hit = false;
-    if (d.y < -1e-6) { const t = -o.y / d.y; if (t > 0 && t < best) { best = t; hit = true; } }
+    if (d.y < -1e-6) for (const fy of [0, FALL_FLOOR]) {
+      const t = (fy - o.y) / d.y; if (t <= 0 || t >= best) continue;
+      if (baselineY(fall, o.x + d.x * t, o.z + d.z * t, hx, hz) === fy) { best = t; hit = true; }
+    }
     // percorre as células da grade ao longo do raio (passos de meia célula) coletando caixas candidatas
     const seen = new Set(); const n = Math.ceil(far / (GRID * 0.5)) + 1;
     for (let i = 0; i <= n; i++) {
@@ -156,6 +182,7 @@ export function createPhysics(solids, size) {
         const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; }
       }
     }
+    for (const s of movers) { const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; } }
     return hit ? best : null;
   }
   function rayBox(o, d, s) {
@@ -180,6 +207,7 @@ export function createPhysics(solids, size) {
       const t = Math.min(far, i * GRID * 0.5); if (t > best + GRID) break;
       for (const s of solidsAt(o.x + d.x * t, o.z + d.z * t)) { if (seen.has(s)) continue; seen.add(s); const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; hs = s; } }
     }
+    for (const s of movers) { const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; hs = s; } }
     return hit ? { t: best, s: hs } : null;
   }
   // igual ao rayWorld, mas devolve também a normal da superfície atingida (disco quica nela). { t, n } ou null
@@ -195,6 +223,7 @@ export function createPhysics(solids, size) {
         best = r; n = boxNormal(o, d, s, r);
       }
     }
+    for (const s of movers) { const r = rayBox(o, d, s); if (r === null || r >= best) continue; best = r; n = boxNormal(o, d, s, r); }
     return n ? { t: best, n } : null;
   }
   function boxNormal(o, d, s, t) {
@@ -235,7 +264,7 @@ export function createPhysics(solids, size) {
       n.physicsLeft = Math.max(0, n.physicsLeft - NADE.step);
     }
   }
-  return { solids, solidsAt, topAt, collides, overlapping, depenetrate, groundAt, ceilingAt, moveEntity, rayWorld, rayWorldN, rayWorldS, losClear, nadeBlocked, stepNade, advanceNade };
+  return { solids, solidsAt, topAt, collides, overlapping, depenetrate, groundAt, ceilingAt, moveEntity, rayWorld, rayWorldN, rayWorldS, losClear, nadeBlocked, stepNade, advanceNade, setMovers };
 }
 
 export function raySphere(o, d, c, r) {

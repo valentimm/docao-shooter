@@ -242,14 +242,25 @@ button.saberchip.active{outline:3px solid #ffd27a}
 #deathList{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;max-width:960px}
 #deathList button.primchip{width:auto;min-width:72px;font-size:12px}
 /* luneta do sniper */
-#scope{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at center,rgba(120,200,255,.06) 0,rgba(120,200,255,.06) 42vh,#050505 42.4vh)}
+/* luneta do sniper: fora do círculo é vidro fosco escuro; dentro fica o zoom nítido */
+#scope{position:fixed;inset:0;pointer-events:none;background:none;--hole:42vh}
+#scope .frost{
+  position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:rgba(6,8,10,.62);
+  -webkit-backdrop-filter:blur(14px) saturate(.72);
+  backdrop-filter:blur(14px) saturate(.72);
+  -webkit-mask-image:radial-gradient(circle at center, transparent 0 var(--hole), rgba(0,0,0,.4) calc(var(--hole) + .35vh), #000 calc(var(--hole) + 1.3vh));
+  mask-image:radial-gradient(circle at center, transparent 0 var(--hole), rgba(0,0,0,.4) calc(var(--hole) + .35vh), #000 calc(var(--hole) + 1.3vh));
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+}
+#scope .lens,#scope .hair,#scope .dot{z-index:1}
 #scope .lens{position:absolute;left:50%;top:50%;width:85vh;height:85vh;transform:translate(-50%,-50%);border-radius:50%;box-shadow:inset 0 0 6vh rgba(0,0,0,.85),0 0 0 6px #111}
 #scope .hair{position:absolute;background:#0a0a0a}
 #scope .hair.h{left:calc(50% - 42vh);width:84vh;top:50%;height:2px;margin-top:-1px}
 #scope .hair.v{top:8vh;height:84vh;left:50%;width:2px;margin-left:-1px}
 #scope .dot{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#e63946;box-shadow:0 0 4px #ff6b6b}
 /* Sniper Torresmo: círculo médio, cruz fina preta, mil-dot, lente ciano */
-#scope.torresmo{background:radial-gradient(circle at center,rgba(150,230,245,.12) 0,rgba(90,190,210,.07) 42vh,#05080a 42.45vh)}
+#scope.torresmo{--hole:42vh;background:none}
 #scope.torresmo .lens{width:84vh;height:84vh;background:radial-gradient(circle at 50% 45%,rgba(170,235,245,.18),rgba(40,90,110,.1) 58%,rgba(0,0,0,.3));box-shadow:inset 0 0 8vh rgba(80,190,210,.32),inset 0 0 2vh rgba(0,0,0,.5),0 0 0 5px #0c1012}
 #scope.torresmo .hair{background:#111}
 #scope.torresmo .hair.h{height:1px;margin-top:0}
@@ -257,14 +268,14 @@ button.saberchip.active{outline:3px solid #ffd27a}
 #scope.torresmo .dot{width:4px;height:4px;margin:-2px 0 0 -2px;background:#111;box-shadow:none}
 #scope.torresmo:after{content:"";position:absolute;left:50%;top:50%;width:5px;height:5px;transform:translate(-50%,-50%);border-radius:50%;background:transparent;pointer-events:none;box-shadow:0 -10vh 0 #141414,0 -20vh 0 #141414,0 -30vh 0 #141414,0 10vh 0 #141414,0 20vh 0 #141414,0 30vh 0 #141414,-10vh 0 0 #141414,-20vh 0 0 #141414,-30vh 0 0 #141414,10vh 0 0 #141414,20vh 0 0 #141414,30vh 0 0 #141414}
 /* Canhão do Barril: círculo amplo (abaixo da carabina), anel grosso, chevron âmbar, lente verde escura */
-#scope.canhao{background:radial-gradient(circle at center,rgba(16,34,14,.4) 0,rgba(8,22,10,.5) 47vh,#040604 47.5vh)}
+#scope.canhao{--hole:47vh;background:none}
 #scope.canhao .lens{width:94vh;height:94vh;background:radial-gradient(circle at 50% 42%,rgba(86,120,58,.38),rgba(8,20,10,.82) 72%);box-shadow:inset 0 0 0 10px #e09a1a,inset 0 0 0 14px #1a1208,inset 0 0 8vh rgba(0,0,0,.62)}
 #scope.canhao .hair,#scope.canhao .dot{display:none}
 #scope.canhao .lens:before,#scope.canhao .lens:after{content:"";position:absolute;top:50%;left:50%;width:20%;height:10px;background:linear-gradient(#ffc14d,#d4840f);border-radius:3px;box-shadow:0 0 8px rgba(240,160,32,.65)}
 #scope.canhao .lens:before{transform-origin:right center;transform:translate(-108%,-50%) rotate(-34deg)}
 #scope.canhao .lens:after{transform-origin:left center;transform:translate(8%,-50%) rotate(34deg)}
 /* Carabina da Granja: círculo maior, cruz fina clara, lente quente, máscara leve */
-#scope.carabina{background:radial-gradient(circle at center,rgba(255,214,170,.08) 0,rgba(255,196,140,.05) 52vh,rgba(12,8,6,.4) 53vh)}
+#scope.carabina{--hole:52vh;background:none}
 #scope.carabina .lens{width:104vh;height:104vh;background:radial-gradient(circle at 50% 48%,rgba(255,220,180,.16),rgba(255,170,110,.05) 62%,transparent 80%);box-shadow:inset 0 0 12vh rgba(255,186,120,.22)}
 #scope.carabina .hair{background:rgba(255,246,230,.92)}
 #scope.carabina .hair.h{left:calc(50% - 52vh);width:104vh;height:1px;margin-top:0}

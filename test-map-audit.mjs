@@ -13,10 +13,10 @@ const fails = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + '
 let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 for (const id of ids) {
   const map = MAPS.find((m) => m.id === id); console.log(`\n=== ${id} (${map.name})`);
-  const solids = mapSolids(map), P = createPhysics(solids, map.size);
+  const solids = mapSolids(map), P = createPhysics(solids, map.size, map.fall || null);
   const spawns = map.spawns.map(([x, z, y = 0]) => ({ x, y: P.groundAt(x, z, y + 0.3), z }));
   const t0 = performance.now();
-  const nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: P.collides, groundAt: P.groundAt, solids, topAt: P.topAt, seeds: spawns.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [] });
+  const nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: P.collides, groundAt: P.groundAt, solids, topAt: P.topAt, seeds: spawns.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [], avoid: map.navAvoid || [] });
   const navMs = performance.now() - t0, good = nav.good;
   const roofed = (n) => P.ceilingAt(n.x, n.z, n.y + 2.0) < n.y + 6; // tem algo em cima (dentro de prédio / debaixo de laje)
   const hi = good.filter((n) => n.y > 2.5), inside = good.filter(roofed);

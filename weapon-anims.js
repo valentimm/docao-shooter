@@ -254,6 +254,20 @@ const FLAIR = {
     inspectCue: [['tap', 0.3], ['tap', 0.42], ['tap', 0.54]],
     rareCue: 'tap',
   },
+  // Ray Gun: pulso curto, sem cápsula. A arma é compacta e quase não sobe.
+  ray: {
+    draw: D(P(0, -0.025, 0, -0.08, 0.12, 0.08), P(0, -0.01, 0, 0.02, 0.2, 0)),
+    recoil: { pitch: 0.45, z: 0.22, yaw: 0.02, roll: 0.03, recover: 9, wobble: 8 },
+    bob: 0.75, loco: 0.02, jump: 0.04,
+    rare: P(0, 0.01, 0, 0.02, 0.06, 0),
+    kill: P(0, 0.008, 0, 0.02, 0.04, 0),
+    inspect: P(0, 0.02, 0.02, -0.06, 0, 0),
+    reload: { dip: 0.03, tilt: 0.04, pitch: 0.05, yaw: 0.04, slap: 0.72, slapPitch: 0.06 },
+    brass: null, heat: false, egg: 'a câmara pisca e assenta',
+    drawCue: [['hum', 0.35], ['boop', 0.62]],
+    inspectCue: [['hum', 0.4]],
+    rareCue: 'hum',
+  },
   // Disco Voador: o disco sobe girando até o berço.
   disco: {
     draw: D(P(0, -0.03, 0, -0.1, 0.2, 0.15), P(0, -0.02, 0, 0, 0.5, 0)),

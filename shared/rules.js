@@ -57,9 +57,9 @@ export function decayFlinch(f, dt) {
 }
 
 // Red dot dos fuzis de assalto (cat: 'ar'). adsFov 63 com FOV base 75 ≈ 1,19×.
-// recoil 0 = some o kick da câmera mirando. visual = tremor do modelo, sem deslocar o ponto.
-// No quadril o recoil da arma continua o de sempre.
-export const RED_DOT = { adsFov: 63, adsSpread: 0.02, recoil: 0, visual: 0.12, ads: 0.85 };
+// recoil 0,35 = mirando, o coice real da câmera (subida, lateral, padrão) fica em 35% (−65%). Não zera.
+// visual = tremor do modelo, sem deslocar o ponto. No quadril o recoil da arma continua o de sempre.
+export const RED_DOT = { adsFov: 63, adsSpread: 0.02, recoil: 0.35, visual: 0.12, ads: 0.85 };
 
 // Armas. Primárias (menu): 0 Fuzil, 22 Commando, 21 Metralhadora do Chiqueiro, 1 Calibre 12 (pump), 12 Semi, 2 Sniper Torresmo, 5 Canhão, 6 Carabina, 3 Bazuca. Faca 7, sabre 8. Secundária: 4 pistola, 11 furadeira, 13 besta, 14 arco, 19 estilingue. 18 lança-milho, 20 minigun (só código). A besta e o arco são fracas de propósito: um tiro no corpo não mata.
 // cat 'ar' = fuzil de assalto (Fuzil, FAMAS, Commando). O menu 'rajada' também tem SMG e LMG; isso não é AR.
@@ -79,9 +79,9 @@ export const WEAPONS = [
   // Pesada: pouca bala, dano alto, luneta forte (ref. Barrett).
   { key: 'canhao', name: 'Canhão do Barril', short: 'Canhão do Barril', chip: 'Canhão', mag: 3, reserve: 12, dmg: 180, headMul: 1, rate: 1.85, auto: false, pellets: 1, spread: 0.045, reload: 3.1, range: 260, recoil: 0.1, adsFov: 8, adsSpread: 0, flashZ: -1.25,
     scope: true, bolt: true, beam: true, scopeStyle: 'canhao', desc: 'Ferrolho lento · 3/12 · mata em qualquer lugar · luneta pesada' },
-  // Leve: ferrolho rápido, 5 no pente e 40 na reserva. Antes do flinch não havia adsIn: a Granja usava os 0,15 s globais. adsIn 0,1725 s = só +15% sobre esse original (o 0,24 s era +60%). scopeAt: a lente só abre com a arma já no lugar.
+  // Leve: ferrolho rápido, 5 no pente e 40 na reserva. Antes do flinch não havia adsIn: a Granja usava os 0,15 s globais. adsIn 0,19125 s = +27,5% sobre esse original (o 0,24 s era +60%). scopeAt: a lente só abre com a arma já no lugar.
   { key: 'carabina', name: 'Carabina da Granja', short: 'Carabina da Granja', chip: 'Carabina', mag: 5, reserve: 40, dmg: 55, headMul: 2.2, rate: 0.58, auto: false, pellets: 1, spread: 0.09, reload: 2.9, range: 180, recoil: 0.04, adsFov: 24, adsSpread: 0, flashZ: -0.95,
-    scope: true, bolt: true, beam: true, scopeStyle: 'carabina', adsIn: 0.15 * 1.15, scopeAt: 0.97, desc: 'Ferrolho rápido · 5/40 · luneta mais lenta · recarrega mais lento · fraca no corpo · luneta aberta' },
+    scope: true, bolt: true, beam: true, scopeStyle: 'carabina', adsIn: 0.15 * 1.275, scopeAt: 0.97, desc: 'Ferrolho rápido · 5/40 · luneta mais lenta · recarrega mais lento · fraca no corpo · luneta aberta' },
   // 7 · Faca de churrasqueiro: corpo a corpo, sempre no slot 3 (sem munição). Regras de acerto em shared/melee.js
   { key: 'knife', name: 'Faca de churrasqueiro', short: 'Faca', chip: 'Faca', mag: 0, reserve: 0, dmg: 40, headMul: 1, rate: 0.42, auto: true, pellets: 0, spread: 0, reload: 0, range: 1.6, recoil: 0, adsFov: 75, adsSpread: 1, flashZ: 0,
     melee: true, desc: 'Golpe 40 · estocada no botão direito · pelas costas mata' },
@@ -149,6 +149,13 @@ export const WEAPONS = [
 // Exclusiva da Corrida Armada: ID próprio, fora do arsenal e das classes.
 export const GOLD_KNIFE = WEAPONS.length;
 WEAPONS.push({ ...WEAPONS[7], key: 'faca-dourada', name: 'Faca Dourada', short: 'Faca Dourada', chip: 'Ouro', noAds: true, desc: 'Corrida Armada · uma eliminação válida vence a partida' });
+// 27 · Ray Gun: só a Barraca da Sorte no Survival. Fora de PRIMARIES, SECONDARIES, categorias, bots, parede e X1.
+// dmg é o centro do estouro (raio e auto-dano em shared/ray.js). Não é hitscan.
+export const RAY = WEAPONS.length;
+WEAPONS.push({
+  key: 'ray', name: 'Ray Gun', short: 'Ray Gun', chip: 'Ray', mag: 20, reserve: 160, dmg: 260, headMul: 1, rate: 0.22, auto: true, pellets: 0, spread: 0.006, reload: 1.7, range: 0, recoil: 0.028, adsFov: 58, adsSpread: 0.35, flashZ: -0.55,
+  ray: true, inspect: 'ray', desc: 'Survival · Barraca da Sorte · pulso que quica 3 vezes · estouro curto · 20/160',
+});
 export const isKnife = (i) => i === 7 || i === GOLD_KNIFE;
 
 // Penetração e collateral (regra em shared/penetration.js). pen = metros de parede fina por bala (caixote conta 45%);
@@ -168,7 +175,7 @@ export const REV2 = 24; // Dois Capatazes (akimbo)
 export const TAMPA = 25; // Tampa do Tacho (escudo). 23 e 24 são os revólveres.
 export const isSaber = (i) => !!(WEAPONS[i] && WEAPONS[i].saber); // Sabre (8) ou Sabre Duplo (17)
 export const isAssault = (i) => !!(WEAPONS[i] && WEAPONS[i].cat === 'ar');
-export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1;
+export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1, W_FALL = -3;
 export const SECONDARIES = [PISTOL, NAIL, CROSS, BOW, EGG_W, REV, REV2];
 export const MELEES = [KNIFE, SABER, SABER2];
 export const BOT_PRIMARIES = [0, COMMANDO, LMG, UZI, P90, FAMAS, 1, SEMI, 2, 5, 6, 3, CORN_W];
@@ -199,7 +206,6 @@ export const SABER_COLORS = [
   { id: 'amarelo', hex: '#ffe14a' },
   { id: 'branco', hex: '#f4fbff' },
 ];
-
 // Copo Bomba (granada)
 export const NADE = { max: 3, spawnWith: 1, fuse: 2.5, charge: 1.2, step: 1 / 120, radius: 6, maxDmg: 130, selfMul: 0.4, grav: -20, r: 0.14, pickupRespawn: 20, knock: 14, lift: 7 };
 // Pokébola (código "pokebola" no chat): joga no Q no lugar do copo; ao abrir engole todo inimigo no raio (com linha livre).
@@ -207,10 +213,10 @@ export const POKE = { fuse: 1.4, radius: 5.5, max: 3 };
 export const isPokeCode = (text) => /pok[eé]\s*bola/i.test(String(text || ''));
 // Minigun (código "minigun" no chat): troca a primária pela minigun até morrer
 export const isMiniCode = (text) => /\bmini\s*-?\s*gun\b/i.test(String(text || ''));
-export const WEAPON_SHORT = (i) => (i === W_NADE ? 'Copo Bomba' : WEAPONS[i] ? WEAPONS[i].short : '?');
+export const WEAPON_SHORT = (i) => (i === W_NADE ? 'Copo Bomba' : i === W_FALL ? 'Penhasco' : WEAPONS[i] ? WEAPONS[i].short : '?');
 export const BOT_DEFS = [
   { name: 'Farofa' }, { name: 'Pipoca' }, { name: 'Trufa' }, { name: 'Bolota' }, { name: 'Torresmo' }, { name: 'Paçoca' }, { name: 'Linguiça' }, { name: 'Quindim' }, { name: 'Coxinha' }, { name: 'Pururuca' },
 ];
 
-export const BOT_RANGE = [14, 4.5, 26, 14, 10, 34, 18, 1.2, 2.2, 8, 12, 6, 6, 16, 14, 20, 12, 2.2, 9, 14, 16, 16, 18, 10, 6, 4, 1.2]; // 23 revólver (como a pistola), 24 akimbo (cola), 25 tampa (chega perto pra porrada), 26 faca dourada (cola, igual a faca)
+export const BOT_RANGE = [14, 4.5, 26, 14, 10, 34, 18, 1.2, 2.2, 8, 12, 6, 6, 16, 14, 20, 12, 2.2, 9, 14, 16, 16, 18, 10, 6, 4, 1.2, 14]; // 23 revólver (como a pistola), 24 akimbo (cola), 25 tampa (chega perto pra porrada), 26 faca dourada (cola, igual a faca), 27 Ray Gun (não entra no sorteio dos bots)
 export const TAG_COLORS = ['#7DF9FF', '#ffd27a', '#ff9fb6', '#9be37a', '#c9a4ff', '#ffb36b', '#9fd0ff', '#ffa3d8', '#b8f2e6', '#ffe9a8'];

@@ -19,6 +19,7 @@ const P = {
   arco: 'M14 1c10 3 10 11 0 14l-1-1c8-3 8-9 0-12zM14 2v12M14 8h30l-4-2v4z',
   famas: 'M2 6h36v3H2zM10 3h20v2H10zM12 5h2v1h-2zM26 5h2v1h-2zM38 7h8v1h-8zM18 9h3v5h-4zM8 9h6v4H8z',
   disco: 'M2 10c8-6 36-6 44 0-8 4-36 4-44 0zM18 6c2-5 10-5 12 0z',
+  ray: 'M6 8h8v5H8l1-3H6zM14 6h14v4H14zM28 4h6v2h-6zM28 10h6v2h-6zM32 6h8l6 2-6 2h-8z',
   sabre2: 'M2 3h10v3H2zM12 3h2v3h-2zM14 4h22v1H14zM2 10h10v3H2zM12 10h2v3h-2zM14 11h22v1H14z',
   estilingue: 'M2 7h12v2H2zM14 6l8-5h3l-9 6zM14 10l8 5h3l-9-6zM24 2h1v12h-1zM31 8a5 4 0 1 0 10 0a5 4 0 1 0-10 0z', // forquilha + elástico + ovo
   milho: 'M2 6h7v5H2zM9 4h20a4.5 4.5 0 0 1 0 9H9zM29 6h11v4H29zM40 5h3v6h-3zM15 1h8l-1 3h-6zM17 13h3v3h-4zM46 3a1.6 1.6 0 1 0 .1 0zM46 11a1.6 1.6 0 1 0 .1 0z', // pipoqueira com espiga e pipocas na frente

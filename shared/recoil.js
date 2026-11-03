@@ -26,18 +26,20 @@ export function cancelRecoilReturn(p) {
 }
 export function kickRecoil(p, w, now, ads = 0, scoped = ads >= 0.85) {
   if (!(w.recoil > 0) || w.melee || w.saber) return;
-  // Red dot no ADS: o ponto fica no alvo. O coice do quadril (ads baixo) continua.
-  if (w.redDot && ads >= (w.redDotAds ?? 0.85)) return;
   const prof = recoilProfile(w, scoped);
   if (!p.recoil || p.recoil.key !== w.key) resetRecoil(p);
   const r = p.recoil ||= { key: w.key, shots: 0, last: -Infinity, pitch: 0, yaw: 0, profile: prof };
   if (now - r.last > prof.reset) r.shots = 0;
   const shot = r.shots++, horizontal = prof.pattern[shot % prof.pattern.length];
   const control = (1 - 0.25 * clamp(ads, 0, 1)) * (1 - 0.15 * clamp(p.crouch || 0, 0, 1));
+  // Red dot no ADS fechado: 35% do coice real (subida, lateral e padrão) que a arma aplicaria nesse estado.
+  // Abaixo do limiar, e no quadril, o multiplicador é 1.
+  const dotMul = w.redDot && ads >= (w.redDotAds ?? 0.85) ? (Number.isFinite(w.adsRecoil) ? w.adsRecoil : 0.35) : 1;
+  const kick = w.recoil * prof.gain * control * dotMul;
   const climb = prof.automatic ? 0.8 + Math.min(shot, 8) * 0.07 : 1;
-  const vertical = Math.min(w.recoil * prof.gain * climb * control, Math.max(0, prof.pitchCap - r.pitch));
+  const vertical = Math.min(kick * climb, Math.max(0, prof.pitchCap - r.pitch));
   const pitch = clamp(p.pitch + vertical, -1.5, 1.5) - p.pitch;
-  const yaw = clamp(r.yaw + w.recoil * prof.gain * horizontal * control, -prof.yawCap, prof.yawCap) - r.yaw;
+  const yaw = clamp(r.yaw + kick * horizontal, -prof.yawCap, prof.yawCap) - r.yaw;
   p.pitch += pitch; p.yaw += yaw; r.pitch += pitch; r.yaw += yaw;
   r.last = now; r.profile = prof;
 }

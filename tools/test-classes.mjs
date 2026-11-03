@@ -160,11 +160,12 @@ ok(await G(() => {
   return window.__docao.state === 'paused' && window.__docao.player.alive && pausa && listaFora && semFicha && morteFora && !document.body.classList.contains('dead');
 }), 'a pausa abre o modal, sem a ficha da morte por trás');
 await page.screenshot({ path: `${SHOTS}/pausa-desktop.png` });
-await page.click('#pauseClassBtn');
+ok(await G(() => document.querySelectorAll('#pauseGuns .clsrow').length === 5 && document.getElementById('pauseClasses') && !document.getElementById('pauseClasses').classList.contains('hidden')), 'as 5 classes já estão na faixa da pausa');
+await page.click('#pauseGuns .clsrow.on');
 await wait(250);
-ok(await G(() => !document.getElementById('pauseClass').classList.contains('hidden') && document.querySelectorAll('#pauseGuns .clsrow').length === 5 && window.__docao.player.alive), 'Trocar classe abre a ficha inteira e não derruba');
+ok(await G(() => document.getElementById('pause').classList.contains('loadout-on') && document.querySelector('#pauseGun .wthumb.is-big') && document.querySelectorAll('#pauseArms .arm-tab').length >= 4 && window.__docao.player.alive), 'a classe abre o detalhe e o arsenal em abas, sem derrubar');
 await page.screenshot({ path: `${SHOTS}/pausa-classes.png` });
-await page.click('#pauseClassBack');
+await page.keyboard.press('Escape');
 await wait(200);
 await page.click('#quitBtn');
 await until(() => window.__docao.state === 'menu', 8000);

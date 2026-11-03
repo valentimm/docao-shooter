@@ -1,3 +1,6 @@
+import { addHotmilkNoite } from './maps-hotmilk-noite.js';
+import { morroLeitao } from './favela-map.js';
+import { DECK, ELEVATOR } from './shared/nevasca.js';
 // ============================================================
 //  MAPAS DO DOCÃO SHOOTER: só dados (geometria original).
 //  Cada mapa: id, name (pt-BR), desc, size [meia-largura X, meia-profundidade Z], wallH (muro do limite),
@@ -92,17 +95,17 @@ export function slab(x0, z0, x1, z1, y, th, c, holes = []) {
 //  roof: true = laje no topo (y = floors·H) com mureta; roofHoles/roofGaps: vãos na laje/mureta (escada pro telhado)
 //  inner: paredes internas [{ axis: 'x'|'z', s0, s1, line, f, ops: [{ a, b, k }] }]
 export function building(x0, z0, x1, z1, o) {
-  const { col, floors = 2, H = 3.5, t = 0.5, ops = [], stairs = [], roof = true, parapet = 1.0, roofGaps = [], inner = [], noWall = [], floorHoles = {} } = o, out = [];
+  const { col, floors = 2, H = 3.5, t = 0.5, ops = [], stairs = [], roof = true, parapet = 1.0, roofGaps = [], inner = [], noWall = [], floorHoles = {}, y0 = 0 } = o, out = [];
   const opening = (op, f) => {
     if (op.k === 'win') return win(op.a, op.b, op.lo ?? 1.0, op.hi ?? 2.2);
     if (op.k === 'wide') return { a: op.a, b: op.b, y0: 0, y1: H - 0.3 };
     return door(op.a, op.b, op.hi ?? 2.6);
   };
   const doorWp = (axis, line, a, b, y) => { const c = (a + b) / 2; for (const d of [-1.0, 0, 1.0]) out.push({ wp: axis === 'x' ? [c, y, line + d] : [line + d, y, c] }); };
-  for (const q of ops) if (q.k !== 'win') { const y = (q.f ?? 0) * H; if (q.s === 'n') doorWp('x', z0 + t / 2, q.a, q.b, y); if (q.s === 's') doorWp('x', z1 - t / 2, q.a, q.b, y); if (q.s === 'w') doorWp('z', x0 + t / 2, q.a, q.b, y); if (q.s === 'e') doorWp('z', x1 - t / 2, q.a, q.b, y); }
-  for (const w of inner) for (const q of w.ops || []) if (q.k !== 'win') doorWp(w.axis, w.line, q.a, q.b, (w.f ?? 0) * H);
+  for (const q of ops) if (q.k !== 'win') { const y = y0 + (q.f ?? 0) * H; if (q.s === 'n') doorWp('x', z0 + t / 2, q.a, q.b, y); if (q.s === 's') doorWp('x', z1 - t / 2, q.a, q.b, y); if (q.s === 'w') doorWp('z', x0 + t / 2, q.a, q.b, y); if (q.s === 'e') doorWp('z', x1 - t / 2, q.a, q.b, y); }
+  for (const w of inner) for (const q of w.ops || []) if (q.k !== 'win') doorWp(w.axis, w.line, q.a, q.b, y0 + (w.f ?? 0) * H);
   for (let f = 0; f < floors; f++) {
-    const y = f * H, h = H, of = (side) => ops.filter((q) => q.s === side && (q.f ?? 0) === f).map((q) => opening(q, f));
+    const y = y0 + f * H, h = H, of = (side) => ops.filter((q) => q.s === side && (q.f ?? 0) === f).map((q) => opening(q, f));
     if (!noWall.includes('n' + f)) out.push(...wallX(x0, x1, z0 + t / 2, t, h, col.wall, of('n'), y));
     if (!noWall.includes('s' + f)) out.push(...wallX(x0, x1, z1 - t / 2, t, h, col.wall, of('s'), y));
     if (!noWall.includes('w' + f)) out.push(...wallZ(z0 + t, z1 - t, x0 + t / 2, t, h, col.wall2 || col.wall, of('w'), y));
@@ -110,10 +113,10 @@ export function building(x0, z0, x1, z1, o) {
     if (f > 0) out.push(...slab(x0 + t, z0 + t, x1 - t, z1 - t, y, 0.3, col.floor, [...stairs.filter((st) => st.f === f - 1).map((st) => st.r), ...(floorHoles[f] || [])]));
     if (f > 0 && col.trim) out.push(B(x0 - 0.12, z0 - 0.12, x1 + 0.12, z0 + 0.1, 0.22, col.trim, y - 0.3), B(x0 - 0.12, z1 - 0.1, x1 + 0.12, z1 + 0.12, 0.22, col.trim, y - 0.3));
   }
-  for (const w of inner) { const y = (w.f ?? 0) * H, ops2 = (w.ops || []).map((q) => opening(q)); out.push(...(w.axis === 'x' ? wallX(w.s0, w.s1, w.line, 0.3, H - 0.3, col.inner || col.wall, ops2, y) : wallZ(w.s0, w.s1, w.line, 0.3, H - 0.3, col.inner || col.wall, ops2, y))); }
-  for (const st of stairs) { const [a0, b0, a1, b1] = st.r; out.push(R(a0, b0, a1, b1, st.f * H, (st.f + 1) * H, st.axis, st.dir, col.stair)); }
+  for (const w of inner) { const y = y0 + (w.f ?? 0) * H, ops2 = (w.ops || []).map((q) => opening(q)); out.push(...(w.axis === 'x' ? wallX(w.s0, w.s1, w.line, 0.3, H - 0.3, col.inner || col.wall, ops2, y) : wallZ(w.s0, w.s1, w.line, 0.3, H - 0.3, col.inner || col.wall, ops2, y))); }
+  for (const st of stairs) { const [a0, b0, a1, b1] = st.r; out.push(R(a0, b0, a1, b1, y0 + st.f * H, y0 + (st.f + 1) * H, st.axis, st.dir, col.stair)); }
   if (roof) {
-    const Y = floors * H;
+    const Y = y0 + floors * H;
     out.push(...slab(x0, z0, x1, z1, Y, 0.35, col.roof, stairs.filter((st) => st.f === floors - 1).map((st) => st.r)));
     if (parapet > 0) {
       const g = (side) => roofGaps.filter((q) => q.s === side).map((q) => ({ a: q.a, b: q.b, y0: 0, y1: 9 }));
@@ -1274,13 +1277,290 @@ function flipHotmilkZ(part, cz) {
   }
 }
 
+addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
+
+
+// ---------- 8) Posto Nevasca ----------
+// Três rotas simétricas entre o spawn norte e o sul: passarela oeste, Sala Fria por dentro, passarela leste.
+// Espelhado em X e em Z. Fora da Sala Fria, no meio do mapa, não existe chão.
+{
+  const SNOW = '#E8EDF2', ROCK = '#4A4E54', METAL = '#8A8D8F', METAL2 = '#6E7378';
+  const WOOD = '#6E5438', CONC = '#9C9A94', FLOOR = '#8A8680', IN = '#B7B2A8';
+  const H = 3.4;
+  const col = { wall: METAL, wall2: METAL2, inner: IN, floor: FLOOR, roof: SNOW, roof2: '#A9B6C4', stair: METAL, trim: '#BFDDEB' };
+  const boxes = [];
+  const wps = [];
+  // Degrau fino (cabe no passo). Embaixo, só fecha com parede visível onde não dá pra passar em pé.
+  const flight = (x0, x1, z0, z1, y0, y1) => {
+    const alongZ = Math.abs(z1 - z0) >= Math.abs(x1 - x0);
+    const xa = Math.min(x0, x1), xb = Math.max(x0, x1), za = Math.min(z0, z1), zb = Math.max(z0, z1);
+    const yLo = alongZ ? (z0 <= z1 ? y0 : y1) : (x0 <= x1 ? y0 : y1);
+    const yHi = alongZ ? (z0 <= z1 ? y1 : y0) : (x0 <= x1 ? y1 : y0);
+    const dir = yHi >= yLo ? 1 : -1;
+    const rise = Math.abs(yHi - yLo), yb = Math.min(yLo, yHi);
+    const n = Math.max(3, Math.round(rise / 0.17)), stepH = rise / n;
+    const tread = (xA, xB, zA, zB, yBase) => {
+      boxes.push(B(xA, zA, xB, zB, stepH, METAL, yBase));
+      const mx = (Math.min(xA, xB) + Math.max(xA, xB)) / 2, mz = (Math.min(zA, zB) + Math.max(zA, zB)) / 2;
+      if (yBase > 0.04 && yBase < 2.08 && Math.abs(mx) < 11.9 && Math.abs(mz) < 35.8) boxes.push(B(xA, zA, xB, zB, yBase, METAL, 0));
+    };
+    // A sobra do degrau aponta sempre ladeira acima, nos dois espelhos.
+    if (alongZ) {
+      const run = (zb - za) / n;
+      for (let i = 0; i < n; i++) {
+        const z0s = dir > 0 ? za + i * run : zb - (i + 1) * run;
+        const z1s = z0s + run;
+        tread(xa, xb, dir > 0 ? z0s : z0s - 0.02, dir > 0 ? z1s + 0.02 : z1s, yb + i * stepH);
+      }
+    } else {
+      const run = (xb - xa) / n;
+      for (let i = 0; i < n; i++) {
+        const x0s = dir > 0 ? xa + i * run : xb - (i + 1) * run;
+        const x1s = x0s + run;
+        tread(dir > 0 ? x0s : x0s - 0.02, dir > 0 ? x1s + 0.02 : x1s, za, zb, yb + i * stepH);
+      }
+    }
+    wps.push([(x0 + x1) / 2, y0 + 0.25, (z0 + z1) / 2], [(x0 + x1) / 2, y1 + 0.25, (z0 + z1) / 2]);
+  };
+
+  // Abismo em tudo que não é platô norte, platô sul ou o chão de dentro da Sala Fria.
+  // As faixas coladas na parede leste e oeste fecham o corredor por fora do prédio.
+  const voids = [
+    [-160, -160, -12.15, 160],
+    [12.15, -160, 160, 160],
+    [-12.15, 36.2, 12.15, 160],
+    [-12.15, -160, 12.15, -36.2],
+    [-12.15, -12.05, -10.95, 12.05],
+    [10.95, -12.05, 12.15, 12.05],
+  ];
+
+  // Sala Fria no centro. Portas norte e sul pro spawn. Laterais pro térreo (meio) e pro mezanino (dois lados).
+  boxes.push(...building(-11, -12, 11, 12, {
+    col, floors: 2, H, parapet: 1.7,
+    ops: [
+      { s: 's', a: -3.2, b: 3.2, k: 'wide' },
+      { s: 'n', a: -3.2, b: 3.2, k: 'wide' },
+      { s: 'w', a: -1.7, b: 1.7, k: 'wide' },
+      { s: 'e', a: -1.7, b: 1.7, k: 'wide' },
+      { s: 'w', a: -7.6, b: -3.2, f: 1, k: 'wide' },
+      { s: 'w', a: 3.2, b: 7.6, f: 1, k: 'wide' },
+      { s: 'e', a: -7.6, b: -3.2, f: 1, k: 'wide' },
+      { s: 'e', a: 3.2, b: 7.6, f: 1, k: 'wide' },
+    ],
+    // Vãos só em cima das escadas em L, longe das portas norte e sul.
+    floorHoles: { 1: [[-10.5, -10.8, -6.05, -7.65], [-10.5, 7.65, -6.05, 10.8], [6.05, -10.8, 10.5, -7.65], [6.05, 7.65, 10.5, 10.8], [-2.05, -2.05, 2.05, 2.05]] },
+  }));
+  // Escada em L encostada na parede leste ou oeste, com patamar. Não cruza a porta nem o eixo.
+  const posts = (x0, z0, x1, z1, y0, y1, n) => {
+    for (let i = 0; i <= n; i++) {
+      const k = i / n, x = x0 + (x1 - x0) * k, z = z0 + (z1 - z0) * k, y = y0 + (y1 - y0) * k;
+      boxes.push(B(x - 0.045, z - 0.045, x + 0.045, z + 0.045, 1.15, METAL2, y));
+    }
+    for (let i = 0; i < n; i++) {
+      const a = i / n, b = (i + 1) / n;
+      const xa = x0 + (x1 - x0) * a, za = z0 + (z1 - z0) * a, ya = y0 + (y1 - y0) * a + 0.82;
+      const xb = x0 + (x1 - x0) * b, zb = z0 + (z1 - z0) * b, yb = y0 + (y1 - y0) * b + 0.82;
+      boxes.push(B(Math.min(xa, xb) - 0.04, Math.min(za, zb) - 0.04, Math.max(xa, xb) + 0.04, Math.max(za, zb) + 0.04, 0.08, METAL, Math.min(ya, yb)));
+    }
+  };
+  const lStair = (sx, sz) => {
+    // A boca fica no salão, com chão livre na frente. O corrimão começa depois dela.
+    const xWall = sx * 10.15, xOpen = sx * 8.35, xOut = sx * 6.2;
+    const zMouth = sz * 7.55, zHead = sz * 10.15;
+    flight(Math.min(xWall, xOpen), Math.max(xWall, xOpen), zMouth, zHead, 0, 1.7);
+    const zFar = sz * 10.55, zNear = sz * 8.95;
+    boxes.push(B(Math.min(xWall, sx * 7.1), Math.min(zHead, zFar), Math.max(xWall, sx * 7.1), Math.max(zHead, zFar), 1.54, METAL, 0));
+    boxes.push(B(Math.min(xWall, sx * 7.1), Math.min(zHead, zFar), Math.max(xWall, sx * 7.1), Math.max(zHead, zFar), 0.16, METAL, 1.54));
+    flight(xOpen, xOut, sz * 10.35, zNear, 1.7, H);
+    posts(sx * 8.2, sz * 8.2, sx * 8.2, sz * 9.35, 0.45, 1.15, 3);
+    posts(sx * 7.6, sz * 8.78, sx * 6.2, sz * 8.78, 2.15, 3.15, 3);
+    wps.push([sx * 9.2, 0.25, sz * 6.9], [sx * 9.25, 1.85, sz * 10.2], [sx * 5.8, H + 0.25, sz * 9.6]);
+  };
+  lStair(-1, -1); lStair(-1, 1); lStair(1, -1); lStair(1, 1);
+  // Dois pilares no térreo, espelhados. Não fecham a rota norte-sul.
+  boxes.push(B(-4.35, -0.3, -3.85, 0.3, 2.3, METAL2), B(3.85, -0.3, 4.35, 0.3, 2.3, METAL2));
+  const wraps = ['#c0392b', '#1f6b32', '#3d7ec4', '#f2c94c'];
+  let wi = 0;
+  const present = (x, z, w, d, h, y = 0) => {
+    const paper = wraps[wi++ % wraps.length];
+    boxes.push(B(x - w / 2, z - d / 2, x + w / 2, z + d / 2, h, paper, y));
+    boxes.push(B(x - w / 2 - 0.02, z - 0.05, x + w / 2 + 0.02, z + 0.05, h + 0.04, '#f2c94c', y));
+    boxes.push(B(x - 0.05, z - d / 2 - 0.02, x + 0.05, z + d / 2 + 0.02, h + 0.04, '#f2c94c', y));
+  };
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    present(sx * 7.5, sz * 4.15, 1.15, 0.8, 0.72);
+    present(sx * 7.7, sz * 4.15, 0.7, 0.55, 0.48, 0.72);
+    present(sx * 6.15, sz * 3.55, 0.85, 0.7, 0.55);
+  }
+
+  // Spawn aberto: uma mureta baixa e clara de cada lado da escada, mais dois montes de neve.
+  const band = (z, depth, x0, x1, h, c, y = 0) => boxes.push(B(x0, z - depth / 2, x1, z + depth / 2, h, c, y));
+  for (const sz of [1, -1]) {
+    band(sz * 22.4, 0.18, -5.2, -2.6, 1.05, '#d5dbe2');
+    band(sz * 22.4, 0.18, 2.6, 5.2, 1.05, '#d5dbe2');
+    wps.push([0, 0.3, sz * 20.5], [0, 0.3, sz * 31.5], [sz * 8, 0.3, sz * 28]);
+  }
+  // Colisor da árvore, sem malha. O pinheiro desenhado está em nevasca-show.js.
+  boxes.push({ b: [-1.55, 0, -1.55, 1.55, 5.7, 1.55], hide: true, c: '#1d4a28' });
+  // Tronco da árvore do telhado. A base encosta na laje (y = 6,8). Sem malha.
+  boxes.push({ b: [-0.85, 6.8, -0.85, 0.85, 12.4, 0.85], hide: true, c: '#1d4a28' });
+  // Guarda do vão da escada no mezanino, do lado do salão. A árvore ocupa o vão do centro.
+  const holeRail = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2, H));
+  holeRail(-10.2, -7.85, -6.4, -7.7);
+  holeRail(-10.2, 7.7, -6.4, 7.85);
+  holeRail(6.4, -7.85, 10.2, -7.7);
+  holeRail(6.4, 7.7, 10.2, 7.85);
+  holeRail(-2.2, -2.2, 2.2, -2.05);
+  holeRail(-2.2, 2.05, 2.2, 2.2);
+  holeRail(-2.2, -2.05, -2.05, 2.05);
+  holeRail(2.05, -2.05, 2.2, 2.05);
+  // Borda do platô. A boca da escada da passarela fica aberta; a passarela em si continua sem guarda.
+  const lip = (x0, z0, x1, z1) => {
+    boxes.push(B(x0, z0, x1, z1, 1.15, '#d5dbe2'));
+    boxes.push(B(x0, z0, x1, z1, 0.1, '#c0392b', 1.15));
+  };
+  for (const s of [1, -1]) {
+    lip(s * 11.92, s > 0 ? 12.35 : -35.85, s * 12.08, s > 0 ? 23.85 : -27.95);
+    lip(s * 11.92, s > 0 ? 27.95 : -23.85, s * 12.08, s > 0 ? 35.85 : -12.35);
+    lip(-11.85, s * 35.9, -1.5, s * 36.08);
+    lip(1.5, s * 35.9, 11.85, s * 36.08);
+  }
+
+  // Passarela: piso na cota do mezanino. Guarda nos dois lados, alto o bastante para o pulo (1,50 m) não passar.
+  const span = (sign) => {
+    const x0 = sign < 0 ? -18.9 : 16.3, x1 = sign < 0 ? -16.3 : 18.9, y = H, zA = -28, zB = 28;
+    boxes.push(B(x0, zA, x1, zB, 0.16, WOOD, y - 0.16));
+    for (let z = -26; z <= 26; z += 8) {
+      boxes.push(B(x0 + 0.02, z, x0 + 0.14, z + 0.12, y + 18, METAL2, -18));
+      boxes.push(B(x1 - 0.14, z, x1 - 0.02, z + 0.12, y + 18, METAL2, -18));
+    }
+    const rail = (xa, za, xb, zb) => {
+      const xA = Math.min(xa, xb), xB = Math.max(xa, xb), zA0 = Math.min(za, zb), zB0 = Math.max(za, zb);
+      boxes.push(B(xA, zA0, xB, zB0, 0.1, WOOD, y + 0.9));
+      boxes.push(B(xA, zA0, xB, zB0, 0.12, '#d5dbe2', y + 1.92));
+      boxes.push(B(xA, zA0, xB, zB0, 0.08, '#c0392b', y + 2.04));
+    };
+    const post = (x, z) => boxes.push(B(x - 0.06, z - 0.06, x + 0.06, z + 0.06, 2.12, WOOD, y));
+    const outerX = sign < 0 ? x0 + 0.06 : x1 - 0.06;
+    const innerX = sign < 0 ? x1 - 0.06 : x0 + 0.06;
+    rail(outerX - 0.05, zA, outerX + 0.05, zB);
+    rail(x0, zA, x1, zA + 0.1);
+    rail(x0, zB - 0.1, x1, zB);
+    for (let z = zA + 1.6; z < zB; z += 2.4) post(outerX, z);
+    // O lado de dentro abre na ponte, na escada da porta e nas escadas das pontas.
+    const gaps = [[-27.6, -24.2], [-7.6, -3.2], [-1.7, 1.7], [3.2, 7.6], [24.2, 27.6]];
+    let gz = zA;
+    for (const [a, b] of gaps) {
+      if (a > gz + 0.3) rail(innerX - 0.05, gz, innerX + 0.05, a);
+      gz = Math.max(gz, b);
+    }
+    if (gz < zB - 0.3) rail(innerX - 0.05, gz, innerX + 0.05, zB);
+    for (let z = zA + 1.6; z < zB; z += 2.4) {
+      if (!gaps.some(([a, b]) => z > a && z < b)) post(innerX, z);
+    }
+    const wall = sign < 0 ? -11.05 : 11.05;
+    const edge = sign < 0 ? x1 : x0;
+    for (const zc of [-5.4, 5.4]) {
+      const bx0 = Math.min(wall, edge), bx1 = Math.max(wall, edge);
+      boxes.push(B(bx0, zc - 2.05, bx1, zc + 2.05, 0.16, METAL, y - 0.16));
+      rail(bx0, zc - 2.05, bx1, zc - 1.9);
+      rail(bx0, zc + 1.9, bx1, zc + 2.05);
+      wps.push([sign * 13.6, y + 0.2, zc], [sign * 11.3, y + 0.2, zc]);
+    }
+    // Pé na boca da porta (y = 0) e topo na passarela. No leste o x menor é a porta, então o y sobe com o x.
+    const doorX = sign < 0 ? -11.15 : 11.15, deckX = sign < 0 ? -16.55 : 16.55;
+    if (sign < 0) flight(deckX, doorX, -1.35, 1.35, y, 0);
+    else flight(doorX, deckX, -1.35, 1.35, 0, y);
+    posts(doorX, -1.42, deckX, -1.42, 0, y, 4);
+    posts(doorX, 1.42, deckX, 1.42, 0, y, 4);
+    wps.push([sign * 12.2, 0.3, 0], [sign * 16.2, y + 0.2, 0]);
+    // sobe do platô (x ±12) até a passarela, no norte e no sul
+    flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, 24.5, 27.3, sign < 0 ? y : 0, sign < 0 ? 0 : y);
+    flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, -27.3, -24.5, sign < 0 ? y : 0, sign < 0 ? 0 : y);
+    const xLo = sign < 0 ? -16.25 : 12, xHi = sign < 0 ? -12 : 16.25, yLo = sign < 0 ? y : 0, yHi = sign < 0 ? 0 : y;
+    for (const zEdge of [24.42, 27.38, -24.42, -27.38]) posts(xLo, zEdge, xHi, zEdge, yLo, yHi, 4);
+    wps.push([sign * 17.6, y + 0.2, 0], [sign * 17.6, 0.3, 35.2], [sign * 17.6, 0.3, -35.2]);
+  };
+  span(-1); span(1);
+
+  // Plataforma larga do bondinho, com guarda. A passarela lateral não entra aqui.
+  const deckRail = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2, DECK.y));
+  const station = (s) => {
+    const zIn = s * DECK.zIn, zOut = s * DECK.zOut;
+    const x0 = -DECK.x, x1 = DECK.x;
+    boxes.push(B(x0, Math.min(zIn, zOut), x1, Math.max(zIn, zOut), 0.22, METAL, DECK.y - 0.22));
+    deckRail(x0, zIn - s * 0.12, -1.3, zIn);
+    deckRail(1.3, zIn - s * 0.12, x1, zIn);
+    deckRail(x0, zOut, -1.45, zOut + s * 0.12);
+    deckRail(1.45, zOut, x1, zOut + s * 0.12);
+    deckRail(x0, Math.min(zIn, zOut), x0 + 0.12, Math.max(zIn, zOut));
+    deckRail(x1 - 0.12, Math.min(zIn, zOut), x1, Math.max(zIn, zOut));
+    const zGround = zIn - s * 12.4;
+    flight(-1.2, 1.2, zIn, zGround, DECK.y, 0);
+    posts(-1.28, zIn, -1.28, zGround, DECK.y, 0, 8);
+    posts(1.28, zIn, 1.28, zGround, DECK.y, 0, 8);
+    wps.push([0, DECK.y + 0.2, s * 32], [0, 0.3, zGround]);
+  };
+  station(1); station(-1);
+  // Moldura do elevador, fora da cabine. A abertura de baixo e a de cima ficam do lado da plataforma.
+  for (const st of ELEVATOR.stations) {
+    const C = ELEVATOR.car, open = st.open;
+    const z0 = st.z - C.hz - 0.08, z1 = st.z + C.hz + 0.08;
+    boxes.push(B(st.x - C.hx - 0.16, z0, st.x - C.hx - 0.04, z1, 12.2, ROCK));
+    boxes.push(B(st.x + C.hx + 0.04, z0, st.x + C.hx + 0.16, z1, 12.2, ROCK));
+    const back = st.z - open * (C.hz + 0.06);
+    boxes.push(B(st.x - C.hx - 0.16, back, st.x + C.hx + 0.16, back - open * 0.12, 12.2, ROCK));
+    const mouth = st.z + open * (C.hz + 0.02);
+    boxes.push(B(st.x - C.hx + 0.15, mouth, st.x + C.hx - 0.15, mouth + open * 0.14, 7.35, ROCK, 2.3));
+  }
+
+  const props = [
+    { t: 'pine', x: -6, z: 20, s: 1.15 }, { t: 'pine', x: 6, z: 20, s: 1.15 },
+    { t: 'pine', x: -6, z: -20, s: 1.15 }, { t: 'pine', x: 6, z: -20, s: 1.15 },
+    { t: 'drift', x: -7.4, z: 25.2, r: 1.25, h: 0.72 }, { t: 'drift', x: 7.4, z: 25.2, r: 1.05, h: 0.58 },
+    { t: 'drift', x: -7.4, z: -25.2, r: 1.25, h: 0.72 }, { t: 'drift', x: 7.4, z: -25.2, r: 1.05, h: 0.58 },
+    { t: 'keg', x: -8.5, z: 3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: 3.3, r: 0.42, h: 0.95 },
+    { t: 'keg', x: -8.5, z: -3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: -3.3, r: 0.42, h: 0.95 },
+    { t: 'keg', x: -5.4, z: 5.1, r: 0.36, h: 0.8, c: '#6e5438' }, { t: 'keg', x: 5.4, z: -5.1, r: 0.36, h: 0.8, c: '#6e5438' },
+  ];
+  const roofs = [[-11, -12, 11, 12, 6.8]];
+  MAPS.push({
+    id: 'posto-nevasca', name: 'Posto Nevasca',
+    desc: 'Três rotas simétricas: passarela oeste, Sala Fria por dentro, passarela leste. Natal no cume.',
+    size: [24, 40], wallH: 0.9, wallColor: [ROCK, ROCK], openMax: 11, laneMin: 36,
+    navAvoid: [],
+    fall: { y: -46, abyss: -70, haze: false, rects: voids, slopes: [], openWest: true, openEast: true, openNorth: true, openSouth: true, pit: '#1c2830', floor: -80, slopeColor: '#9AA6B0' },
+    thumb: { x: 0, y: 16, z: 22, tx: 0, ty: 4, tz: 0 },
+    palette: { sky: '#8eafc9', fog: ['#c5d4e2', 70, 360], hemi: ['#ffe6c8', '#6a7a88', 1.45], sun: ['#ffe0b0', 0.85], ground: SNOW, tiles: null, clouds: false, mountains: false,
+      lights: [['#fff6e4', 0, 4.2, 0, 18, 14], ['#fff6e4', 0, 2.4, 26, 14, 10], ['#fff6e4', 0, 2.4, -26, 14, 10], ['#ffd9a0', -17.6, 4.6, 0, 16, 8], ['#ffd9a0', 17.6, 4.6, 0, 16, 8]] },
+    weather: { kind: 'snow', n: 900, fall: 6, wind: [1.2, 0, 0.4], top: 28, color: 0xF7FBFF, size: 0.14, roofs },
+    ...fin([...boxes, ...wps.map((p) => ({ wp: p }))]), props,
+    spawns: [[-6, 25.4], [6, 25.4], [-8, 31.4], [8, 31.4], [0, 14.8], [5.8, 27.2], [-5.8, 27.2], [-6, -25.4], [6, -25.4], [-8, -31.4], [8, -31.4], [0, -14.8], [5.8, -27.2], [-5.8, -27.2]],
+    pickups: [
+      ['health', 5, 22], ['health', -5, 22], ['health', 5, -22], ['health', -5, -22],
+      ['ammo', -8, 28], ['ammo', 8, 28], ['ammo', -8, -28], ['ammo', 8, -28],
+      ['grenade', 3.5, 2.2, H], ['grenade', -3.5, -2.2, H],
+    ],
+    showcase: [0, 0, 22], view: [0, 8, 20, Math.PI, -0.15],
+    test: {
+      stairs: { from: [0, 0.2, 16], to: [0, H, 4], level: H, via: [[-9.3, 10.5], [-9.4, 8.7], [-6.6, 8.55]] },
+      roof: { from: [-17.6, H + 0.2, 8], to: [-6.6, H, 5.4], level: H },
+    },
+  });
+}
+
+// ---------- 9) Morro do Leitão: gerado em favela-map.js (rodada 3) ----------
+MAPS.push(morroLeitao());
+
 export const getMap = (id) => MAPS.find((m) => m.id === id) || MAPS[0];
 // mapas jogáveis nas listas/rodízio (o Estande só abre no modo Treino; os currais do X1 só abrem no X1)
 // Modo Invasão: o Rodízio do Docão e a Fazenda Mal-Assombrada só abrem na Invasão (os outros modos continuam com os mapas de sempre)
+// Survival: HOTMILK à Noite é survivalOnly — não entra no rodízio de nenhum outro modo (shared/survival.js)
 const INV_ONLY = new Set(['rodizio', 'fazenda-assombrada']);
-export const PLAY_MAPS = MAPS.filter((m) => !m.training && !m.invasionOnly && !m.x1 && !INV_ONLY.has(m.id));
+export const PLAY_MAPS = MAPS.filter((m) => !m.training && !m.invasionOnly && !m.survivalOnly && !m.x1 && !INV_ONLY.has(m.id));
 export const X1_MAPS = MAPS.filter((m) => m.x1);
 // mapas da Invasão: os dois feitos pra ela primeiro, depois os de sempre (com decoração de Halloween só nesse modo)
 // mapas do Modo Bomba: só os com sites/spawns feitos à mão (o Rodízio, que na Invasão é exclusivo, vale aqui: foi feito pra Bomba); Pátio Ferrugem é pequeno demais e o Estande é do Treino
-export const BOMB_MAPS = MAPS.filter((m) => m.bomb && !m.training && !m.invasionOnly);
+export const BOMB_MAPS = MAPS.filter((m) => m.bomb && !m.training && !m.invasionOnly && !m.survivalOnly);
 export const INV_MAPS = [...MAPS.filter((m) => INV_ONLY.has(m.id)), ...PLAY_MAPS];
+export const SURVIVAL_MAPS = MAPS.filter((m) => m.survivalOnly);
