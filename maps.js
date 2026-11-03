@@ -1388,8 +1388,8 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     rail(x0, zA, x1, zA + 0.1);
     rail(x0, zB - 0.1, x1, zB);
     for (let z = zA + 1.6; z < zB; z += 2.4) post(outerX, z);
-    // O lado de dentro abre só na ponte, na escada lateral e nas escadas das pontas.
-    const gaps = [[-27.6, -24.2], [-7.6, -3.2], [3.2, 7.6], [8.8, 11.6], [24.2, 27.6]];
+    // O lado de dentro abre na ponte, na escada da porta e nas escadas das pontas.
+    const gaps = [[-27.6, -24.2], [-7.6, -3.2], [-1.7, 1.7], [3.2, 7.6], [24.2, 27.6]];
     let gz = zA;
     for (const [a, b] of gaps) {
       if (a > gz + 0.3) rail(innerX - 0.05, gz, innerX + 0.05, a);
@@ -1408,16 +1408,13 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
       rail(bx0, zc + 1.9, bx1, zc + 2.05);
       wps.push([sign * 13.6, y + 0.2, zc], [sign * 11.3, y + 0.2, zc]);
     }
-    // Patamar reto na boca da porta. A escada começa mais à frente, longe da parede e da visão.
-    const near = sign < 0 ? -11.55 : 11.55, far = sign < 0 ? -15.2 : 15.2;
-    boxes.push(B(Math.min(near, far), -2.15, Math.max(near, far), 2.15, 0.22, METAL, -0.22));
-    boxes.push(B(Math.min(near, sign < 0 ? -12.7 : 12.7), 2.15, Math.max(near, sign < 0 ? -12.7 : 12.7), 9.4, 0.22, METAL, -0.22));
-    boxes.push(B(Math.min(near, sign < 0 ? -13.4 : 13.4), 8.6, Math.max(near, sign < 0 ? -13.4 : 13.4), 11.5, 0.22, METAL, -0.22));
-    const sx0 = sign < 0 ? -16.25 : 16.25, sx1 = sign < 0 ? -13.05 : 13.05;
-    flight(sx0, sx1, 9.35, 11.25, y, 0);
-    posts(sx0, 9.26, sign < 0 ? -14.8 : 14.8, 9.26, y, y * 0.45, 2);
-    posts(sx0, 11.34, sx1, 11.34, y, 0, 3);
-    wps.push([sign * 13.2, 0.3, 0], [sign * 13.2, 0.3, 8.6], [sign * 14.5, y + 0.2, 9.5]);
+    // Pé na boca da porta (y = 0) e topo na passarela. No leste o x menor é a porta, então o y sobe com o x.
+    const doorX = sign < 0 ? -11.15 : 11.15, deckX = sign < 0 ? -16.55 : 16.55;
+    if (sign < 0) flight(deckX, doorX, -1.35, 1.35, y, 0);
+    else flight(doorX, deckX, -1.35, 1.35, 0, y);
+    posts(doorX, -1.42, deckX, -1.42, 0, y, 4);
+    posts(doorX, 1.42, deckX, 1.42, 0, y, 4);
+    wps.push([sign * 12.2, 0.3, 0], [sign * 16.2, y + 0.2, 0]);
     // sobe do platô (x ±12) até a passarela, no norte e no sul
     flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, 24.5, 27.3, sign < 0 ? y : 0, sign < 0 ? 0 : y);
     flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, -27.3, -24.5, sign < 0 ? y : 0, sign < 0 ? 0 : y);
