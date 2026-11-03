@@ -2,9 +2,9 @@
 // então o offline e todo cliente online veem a mesma coisa.
 export const GONDOLA = {
   x: [-1.35, 1.35],
-  y: 12,
-  zN: 47,
-  zS: -52,
+  y: 10,
+  zN: 32,
+  zS: -32,
   travel: 14,
   dwell: 3.4,
   hx: 1.02,

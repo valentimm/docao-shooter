@@ -1220,347 +1220,157 @@ function flipHotmilkZ(part, cz) {
 addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
 
 
-// ---------- 8) Posto Nevasca (Summit: base no cume, eixo N–S, 3 rotas) ----------
-// +Z norte (spawn do lab), −Z sul (spawn da estrada), −X penhasco, +X salas estreitas.
-// 1 unidade = 1 m. Pé-direito e portas folgados pro Docão (2,0 m): vão de porta ≥ 2,6 m, altura 2,6 m.
+// ---------- 8) Posto Nevasca ----------
+// Três rotas simétricas entre o spawn norte e o sul: passarela oeste, Sala Fria por dentro, passarela leste.
+// Espelhado em X e em Z. Fora da Sala Fria, no meio do mapa, não existe chão.
 {
-  const SNOW = '#E8EDF2', SNOW2 = '#A9B6C4', ROCK = '#4A4E54', METAL = '#8A8D8F', METAL2 = '#6E7378';
-  const CONC = '#9C9A94', RUST = '#8E2F2A', ICE = '#BFDDEB', FLOOR = '#8A8680', IN = '#B7B2A8';
+  const SNOW = '#E8EDF2', ROCK = '#4A4E54', METAL = '#8A8D8F', METAL2 = '#6E7378';
+  const WOOD = '#6E5438', CONC = '#9C9A94', FLOOR = '#8A8680', IN = '#B7B2A8';
   const H = 3.4;
-  const col = { wall: METAL, wall2: METAL2, inner: IN, floor: FLOOR, roof: SNOW, roof2: SNOW2, stair: METAL, trim: ICE };
-  const boxes = [], drifts = [], cables = [];
-  const mound = (x, z, s = 2, h = 0.75, y0 = 0) => {
-    drifts.push({ t: 'drift', x, z, y: y0, r: Math.max(0.7, s * 0.55), h: Math.min(1, Math.max(0.55, h)), c: SNOW });
-  };
-  const C = (x, z, s = 1.3, h = 1.15, c = METAL2, y0 = 0) => boxes.push(crate(x, z, s, h, c, y0));
-
-  // bordas contínuas: rocha 1,1 m sem degrau entre segmentos, colisor de 4 m, encosta de ~32° até −30 m.
-  const flat = (x0, z0, x1, z1, h, c, y0 = 0) => boxes.push({ b: [Math.min(x0, x1), y0, Math.min(z0, z1), Math.max(x0, x1), y0 + h, Math.max(z0, z1)], c, flat: true });
-  const voids = [], slopes = [];
-  flat(-26.15, -58, -25.45, 58, 1.1, ROCK);
-  flat(-26.22, -58, -25.38, 58, 0.22, SNOW, 0.92);
-  boxes.push({ b: [-26.45, 0, -58, -26.15, 4, 58], hide: true, c: ROCK });
-  flat(27.35, -58, 28.05, 58, 1.1, ROCK);
-  flat(27.28, -58, 28.12, 58, 0.22, SNOW, 0.92);
-  boxes.push({ b: [28.05, 0, -58, 28.35, 4, 58], hide: true, c: ROCK });
-  voids.push([-74, -70, -26.15, 70], [28.05, -70, 78, 70], [-40, 56.4, 40, 96], [-40, -96, 40, -59.35]);
-  // 48 m de projeção e 30 m de queda: ~32°. O plano da encosta cobre o vazio, senão o poço lê como chão.
-  slopes.push({ x0: -96, y0: -34, z0: -110, x1: -26.15, y1: 0.2, z1: 110, axis: 'x', dir: 1 });
-  slopes.push({ x0: -42, y0: -9.2, z0: -18, x1: -31.1, y1: 0.2, z1: 14, axis: 'x', dir: 1 });
-  slopes.push({ x0: 28.05, y0: 0.2, z0: -110, x1: 100, y1: -34, z1: 110, axis: 'x', dir: -1 });
-  // a encosta entra por baixo do platô, senão o corte do chão vira uma faixa preta
-  slopes.push({ x0: -96, y0: 0.2, z0: 56.0, x1: 96, y1: -34, z1: 116, axis: 'z', dir: -1 });
-  slopes.push({ x0: -96, y0: -34, z0: -116, x1: 96, y1: 0.2, z1: -59.0, axis: 'z', dir: 1 });
-  // mastro da placa, na borda do pico (edge em z=-2 é -29)
-  boxes.push(B(-28.85, -2.2, -28.55, -1.8, 2.55, METAL));
-  const rock = (x0, z0, x1, z1, h) => {
-    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, sx = (x1 - x0) / 2, sz = (z1 - z0) / 2;
-    boxes.push(B(x0, z0, x1, z1, Math.max(3.05, h * 0.72), ROCK));
-    boxes.push(B(cx - sx * 0.7, cz - sz * 0.7, cx + sx * 0.7, cz + sz * 0.7, h * 0.32, '#5c636c', h * 0.5));
-    boxes.push(B(cx - sx * 0.4, cz - sz * 0.4, cx + sx * 0.4, cz + sz * 0.4, h * 0.2, '#6a7078', h * 0.78));
-    boxes.push(B(cx - sx * 0.62, cz - sz * 0.55, cx + sx * 0.62, cz + sz * 0.55, 0.32, SNOW, h * 0.9));
-  };
-  // a borda leste é um corredor de ~100 m. Três rochas de 3,2 m cortam a visada e ainda deixam passagem a oeste.
-  for (const z of [-30, -2]) rock(23.4, z, 28.7, z + 3.4, 3.2);
-  rock(19.2, 29.5, 27.4, 33.2, 3.2);
-  boxes.push(B(17.2, 27.4, 20.6, 31.4, 4.2, ROCK));
-  rock(-24.4, 13, -16.2, 17, 4.2); rock(-26, -34, -12, -30, 4.2);
-  rock(-26, -10, -17, -6, 4.2); rock(-15.2, 41.2, -8.2, 45.6, 3.2); rock(-24, -54, -16.5, -50, 3.2);
-  rock(-24, 16, -17.2, 22, 3.4); rock(-11, -14, -3, -8, 3.4);
-  rock(16.8, 18.2, 24.6, 20.9, 2.4); rock(13.2, -15, 26, -10, 2.4); boxes.push(B(13.2, -15, 26, -10, 1.5, ROCK, -1.5)); rock(12.4, -50, 22, -44, 2.4);
-  rock(21.4, 44.2, 25.8, 47.8, 2.6);
-  boxes.push(B(10.2, -23.8, 13.6, -20.2, 3.8, '#6E5438', -1.5)); // contêiner: corta a linha de 78 m no chão, topo a +2,3 m
-  // o pátio sul é o meio de várias visadas de telhado. Dois mastros e um contêiner deixam a linha em ≤60 m e o pátio contornável.
-  boxes.push(B(7.6, -17.2, 16.6, -10.4, 7.2, METAL2, -1.5), B(7.4, -17.4, 16.8, -10.2, 0.4, METAL, 5.4));
-  boxes.push(B(19.6, -17.2, 22.3, -14.6, 5.4, ROCK, -1.5));
-  boxes.push(B(5.8, -17.2, 8.6, -14.2, 3.6, '#6E5438', -1.5));
-  boxes.push(B(16.4, -4.2, 21.6, -0.4, 4.6, ROCK));
-  boxes.push(B(18.4, -42.2, 23.2, -38.2, 3.8, '#6E5438'));
-  boxes.push(B(17.4, -24.2, 22.2, -20.2, 5.4, ROCK, -1.5));
-  boxes.push(B(-12.2, -19.6, -7.2, -16.2, 3.8, ROCK, -1.5)); // 2,2 m acima do chão alto, no meio da linha de 61 m
-  for (const z of [24, 10, -4, -18]) boxes.push(B(-23.4, z, -21.8, z + 1.5, 1.0, SNOW));
-
-  // spawn norte limpo: os três prédios (lab, bloco oeste, bloco leste) saíram. Cobertura e caixote, sem labirinto.
-  boxes.push(B(-7.2, 33.2, 8.4, 45.6, 0.16, SNOW, 2.72));
-  boxes.push(B(-0.2, 34.1, 0.2, 38.6, 1.2, METAL2, 2.88), B(-0.2, 40.4, 0.2, 45.1, 1.2, METAL2, 2.88));
-  // escada + plataforma baixa a leste do abrigo: dá um piso acima de 2,5 m ligado ao chão
-  {
-    const y1 = 2.7, z0 = 23.4, z1 = 29.2, x0 = 4.6, x1 = 7.4, n = Math.round(y1 / 0.18);
-    const rise = y1 / n, run = (z1 - z0) / n;
-    for (let i = 0; i < n; i++) {
-      const zA = z0 + i * run, top = (i + 1) * rise;
-      boxes.push(B(x0, zA, x1, zA + run + 0.02, rise, METAL, top - rise));
-    }
-    boxes.push({ b: [x0 + 0.08, 0, z0, x1 - 0.08, y1, z1], ramp: { axis: 'z', dir: 1 }, hide: true, c: '#888' });
-    boxes.push(B(4.7, 28.85, 7.3, 30.25, 0.16, SNOW, y1 - 0.16));
-    boxes.push({ wp: [6, 0.3, 23] }, { wp: [6, y1 + 0.2, 29.6] });
-  }
-  for (const [x, z] of [[-6.95, 33.4], [8.05, 33.4], [-6.95, 45.25], [8.05, 45.25]]) boxes.push(B(x, z, x + 0.28, z + 0.28, 2.72, METAL));
-  boxes.push(B(-1.15, 37.6, 2.15, 40.8, 1.15, CONC));
-  C(-3.4, 35.2, 1.45, 1.15, METAL); C(5.2, 42.4, 1.5, 1.2, '#6E5438'); C(11, 24, 1.35, 1.15, RUST);
-  C(-12.5, 28, 1.4, 1.2, METAL); C(12.5, 30, 1.5, 1.15, METAL2);
-  boxes.push(B(-14.2, 22.4, -11.4, 25.6, 1.25, CONC), B(8.2, 22.2, 11.6, 23.5, 1.2, METAL));
-  C(-2, 25.2, 1.7, 1.3, CONC); // caixote no vão do antigo bloco norte, sem virar piso largo
-  boxes.push(B(-4.2, 48.4, -1.2, 51.2, 1.2, CONC), B(6.4, 49.2, 9.6, 51.8, 1.25, METAL2));
-  boxes.push({ wp: [-2, 0.3, 40] }, { wp: [4, 0.3, 36] }, { wp: [0, 0.3, 28] }, { wp: [-10, 0.3, 34] });
-
-  // SALA FRIA: 28 × 22 m, x −16…12, z −6…16. Pesquisador: x 10…38, y 44…66. Mezanino a +3,4 m.
-  boxes.push(...building(-16, -6, 12, 16, { col: { ...col, wall: CONC, wall2: '#c8c2b6', inner: '#C4BFB4' }, floors: 2, H, roof: false,
-    ops: [{ s: 'w', a: 4.2, b: 9.4, k: 'wide' }, { s: 'e', a: 4.2, b: 9.4, k: 'wide' }, { s: 'n', a: -6, b: -2.4 }, { s: 's', a: -8, b: -4.4 }, { s: 's', a: 2, b: 5.6 },
-      { s: 's', a: -2, b: 2, k: 'win', lo: 1.0, hi: 2.15 },
-      { s: 'w', a: -3.5, b: 0, f: 1, k: 'win', lo: 0.8, hi: 1.4 }],
-    stairs: [{ f: 0, r: [-4.2, 9.2, 4.4, 12.2], axis: 'x', dir: 1 }],
-    floorHoles: { 1: [[-13.6, -4.4, 9.6, 8.55]] } }));
-  boxes.push(...slab(-16, -6, 12, 16, 2 * H, 0.35, SNOW, [[-12.2, -3.4, 8.2, 8.9]]));
-  // guarda-corpo tubular de 1 m no mezanino
-  const tube = (x0, z0, x1, z1) => {
-    boxes.push(B(Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1), Math.max(z0, z1), 0.07, METAL, H + 0.9));
-    boxes.push(B(Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1), Math.max(z0, z1), 0.05, METAL, H + 0.42));
-  };
-  tube(-13.4, 8.5, 9.4, 8.68); tube(-13.4, -4.48, 9.4, -4.3);
-  tube(9.45, -4.35, 9.62, 8.55); tube(-13.55, -4.35, -13.38, 8.55);
-  for (let x = -13; x <= 9; x += 2.2) { boxes.push(B(x, 8.48, x + 0.08, 8.72, 1.0, METAL, H)); boxes.push(B(x, -4.5, x + 0.08, -4.26, 1.0, METAL, H)); }
-  for (let z = -4; z <= 8.2; z += 2.2) { boxes.push(B(9.42, z, 9.66, z + 0.08, 1.0, METAL, H)); boxes.push(B(-13.58, z, -13.34, z + 0.08, 1.0, METAL, H)); }
-  boxes.push(R(-8.2, -2.6, -2.4, -0.6, 0.55, 1.15, 'z', 1, '#3e4852'), R(-8.2, 0.2, -2.4, 2.2, 0.55, 1.15, 'z', 1, '#3e4852'));
-  for (const [x, z] of [[-7.4, 1.85], [-5.6, 1.85], [-3.8, 1.85], [-7.4, 5.4], [-5.6, 5.4], [-3.8, 5.4]]) boxes.push(B(x, z, x + 0.85, z + 0.1, 0.48, '#5ee0c8', 0.82));
-  for (const [x, z] of [[9.6, -3.4], [9.6, -1.2], [9.6, 12.8], [9.6, 10.6], [-14.6, -2.8], [-14.6, 12.4]]) {
-    boxes.push(B(x, z, x + 0.7, z + 1.4, 2.0, '#8b949c'));
-    boxes.push(B(x + 0.08, z + 0.15, x + 0.62, z + 1.25, 0.07, '#e8eef3', 0.65), B(x + 0.08, z + 0.15, x + 0.62, z + 1.25, 0.07, '#e8eef3', 1.3));
-  }
-  C(-1, 13.2, 1.3, 1.05, METAL, H);
-  // a visada de 59 m entrava pela janela sul do mezanino. Anteparo de 2,3 m nesse vão.
-  boxes.push(B(-1.6, -6.25, 1.6, -4.4, 2.3, '#8b949c', 3.35));
-  // a linha no térreo entra pela porta sul e sai pela janela norte. Pilar no átrio.
-  boxes.push(B(-2.9, 0.4, -1.1, 3.4, 2.3, '#8b949c'));
-  const cabinet = (x0, z, x1) => {
-    boxes.push(B(x0, z, x1, z + 0.6, 2.0, '#9aa3aa'));
-    for (const yy of [0.45, 0.95, 1.45]) boxes.push(B(x0 - 0.02, z + 0.04, x1 + 0.02, z + 0.56, 0.05, '#6E7378', yy));
-  };
-  for (const z of [-3.4, 1.4, 11.8]) cabinet(-15.2, z, -14.6);
-  for (const z of [-2.2, 2.8, 12.6]) cabinet(10.7, z, 11.3);
-  for (let x = -15; x < 11; x += 1.7) boxes.push(B(x, 15.85, x + 0.12, 16.12, 3.1, METAL2, 0.2));
-  // beiral arredondado: faixa de neve 30 cm para fora, 32 cm abaixo da laje
-  boxes.push(B(-16.3, -6.3, -4.7, -6, 0.32, SNOW, 6.45), B(-0.7, -6.3, 12.3, -6, 0.32, SNOW, 6.45), B(-16.3, 16, 12.3, 16.3, 0.32, SNOW, 6.45));
-  boxes.push(B(-16.3, -6, -16, 16, 0.32, SNOW, 6.45), B(12, -6, 12.3, 16, 0.32, SNOW, 6.45));
-  boxes.push(B(-16.2, -6.2, -4.8, -5.9, 1.05, METAL, 6.8), B(-0.6, -6.2, 12.2, -5.9, 1.05, METAL, 6.8));
-  boxes.push(B(-16.2, -6, -15.9, 16, 1.85, METAL, 6.8), B(11.9, -6, 12.2, 16, 1.85, METAL, 6.8));
-  // escada externa: sobe do pátio sul (−1,5 m) e chega na laje já na altura dela, no vão da mureta
-  {
-    const y0 = -1.5, y1 = 6.8, z0 = -16.2, z1 = -6.55, x0 = -2.75, x1 = -0.9;
-    const n = Math.round((y1 - y0) / 0.17), rise = (y1 - y0) / n, run = (z1 - z0) / n;
-    for (let i = 0; i < n; i++) {
-      const zA = z0 + i * run;
-      boxes.push(B(x0, zA, x1, zA + run + 0.02, rise, METAL, y0 + i * rise));
-    }
-    boxes.push({ b: [x0 + 0.06, y0, z0, x1 - 0.06, y1, z1], ramp: { axis: 'z', dir: 1 }, hide: true, c: '#888' });
-    boxes.push(B(x0 - 0.1, z1 - 0.04, x1 + 0.1, -5.15, 0.16, METAL, y1 - 0.16));
-    boxes.push({ wp: [-1.8, y0 + 0.3, -15.6] }, { wp: [-1.8, y1 + 0.15, -4.6] });
-  }
-  boxes.push(B(-16.2, 15.9, 1.4, 16.2, 1.05, METAL, 6.8));
-  boxes.push(B(-12.2, -3.55, 8.2, -3.25, 0.9, METAL, 6.8), B(-12.2, 8.9, 8.2, 9.2, 0.9, METAL, 6.8));
-  boxes.push(B(-12.2, -3.25, -11.9, 8.9, 0.9, METAL, 6.8), B(7.9, -3.25, 8.2, 8.9, 0.9, METAL, 6.8));
-  boxes.push(B(-16.55, -6.55, -4.7, -6.25, 0.18, SNOW, 6.22), B(-0.7, -6.55, 12.55, -6.25, 0.18, SNOW, 6.22), B(-16.55, 16.25, 12.55, 16.55, 0.18, SNOW, 6.22));
-  boxes.push(B(-16.55, -6.25, -16.25, 16.25, 0.18, SNOW, 6.22), B(12.25, -6.25, 12.55, 16.25, 0.18, SNOW, 6.22));
-  boxes.push(B(2.3, 2.6, 3.7, 4.4, 0.55, RUST, 6.9)); // respiro vermelho ao lado da claraboia, entra no card
-
-  // salas estreitas a leste (CQB), parede oeste é a da sala fria
-  // alpendre leste: a entrada da direita do pátio atravessa reto, sem as salas internas
-  boxes.push(...building(12, -2, 18, 14, { col, floors: 1, H: 3.3, parapet: 0.4, noWall: ['w0'],
-    ops: [{ s: 'e', a: 4.2, b: 9.4, k: 'wide' }, { s: 's', a: 13.2, b: 16.2 }, { s: 'n', a: 13.2, b: 16.2 }] }));
-
-  // galpão sul + rampa pro telhado (antena)
-  boxes.push(...building(-12, -46, 12, -30, { col: { ...col, wall: CONC }, floors: 1, H: 3.6, parapet: 1.15,
-    ops: [{ s: 's', a: -3.2, b: 0.4 }, { s: 's', a: 4, b: 7.2 }, { s: 'n', a: -8.2, b: -5.2 }, { s: 'e', a: -40, b: -37 }],
-    roofGaps: [{ s: 'n', a: -2.6, b: 2.6 }] }));
-  boxes.push(B(-2.7, -49.4, 2.7, -46, 0.28, SNOW, 3.32), R(-2.2, -55.2, 2.2, -49.2, 0, 3.6, 'z', 1, METAL));
-  boxes.push(B(3.55, -38.45, 3.95, -38.05, 6.2, RUST, 3.6), B(3.2, -39.3, 4.3, -38.9, 0.35, RUST, 9.5));
-  boxes.push(B(-4.2, -44.2, 1.4, -39.6, 2.5, METAL2, 3.6)); // casa de máquina: corta a visada pelo telhado
-  for (let x = -11; x < 11; x += 1.5) boxes.push(B(x, -30.15, x + 0.1, -29.9, 2.4, METAL2, 0.4));
-  // pátio sul a −1,5 m. Lábio na borda norte e escada metálica vindo do galpão.
-  boxes.push(B(-14, -26, 18, -6, 0.28, '#9aa6b0', -1.78));
-  boxes.push(B(-14, -6.4, 18, -6, 1.5, ROCK));
-  // 9 degraus de 0,167 × 0,28 m, largura 2,4 m. Longarina e guarda são tubos, não cunha.
-  {
-    const n = 9, rise = 0.167, run = 0.28, x0 = -1.2, x1 = 1.2;
-    const zLo = -26.05, zHi = zLo - n * run;
-    for (let i = 0; i < n; i++) {
-      const zN = zLo - i * run, zS = zN - run, top = -1.5 + (i + 1) * rise;
-      boxes.push({ b: [x0 + 0.14, top - 0.07, zS, x1 - 0.14, top, zN], c: '#8A8D8F', flat: true });
-      if (i % 4 === 0 || i === n - 1) {
-        boxes.push(B(x0, zS + 0.06, x0 + 0.07, zS + 0.13, 1.02, '#8A8D8F', top));
-        boxes.push(B(x1 - 0.07, zS + 0.06, x1, zS + 0.13, 1.02, '#8A8D8F', top));
-      }
-    }
-    const yLoT = -1.5 + rise, yHiT = -1.5 + n * rise, zFoot = zLo - run;
-    for (const x of [x0, x1]) {
-      cables.push({ t: 'cable', x0: x, y0: yLoT - 0.12, z0: zFoot, x1: x, y1: yHiT - 0.12, z1: zHi, c: '#6E7378', r: 0.07 });
-      cables.push({ t: 'cable', x0: x, y0: yLoT + 1.0, z0: zFoot, x1: x, y1: yHiT + 1.0, z1: zHi, c: '#8A8D8F', r: 0.045 });
-    }
-    boxes.push({ b: [x0 + 0.16, -1.5, zHi, x1 - 0.16, 0.02, zLo], ramp: { axis: 'z', dir: -1 }, hide: true, c: '#888' });
-  }
-
-  // torre treliçada (+8,1 m), a oeste do bloco do meio, fora do corredor
-  boxes.push(R(-22.4, 22, -19.6, 30, 0, 4.05, 'z', 1, METAL), B(-22.8, 29.4, -19.2, 32.2, 0.24, METAL, 3.81));
-  boxes.push(R(-22.4, 31.6, -19.6, 40, 4.05, 8.15, 'z', 1, METAL));
-  boxes.push(B(-23.2, 39.2, -18.4, 44.6, 0.28, METAL, 7.87));
-  for (const [x, z] of [[-22.9, 39.4], [-18.7, 39.4], [-22.9, 44.2], [-18.7, 44.2]]) boxes.push(B(x, z, x + 0.32, z + 0.32, 13.2, '#9aa3aa'));
-  for (const y of [3.2, 6.4, 10.2, 12.6]) {
-    boxes.push(B(-22.9, 39.5, -18.5, 39.68, 0.16, '#c5ccd2', y), B(-22.9, 44.2, -18.5, 44.38, 0.16, '#c5ccd2', y));
-    boxes.push(B(-22.75, 39.5, -22.58, 44.4, 0.16, '#c5ccd2', y), B(-18.85, 39.5, -18.68, 44.4, 0.16, '#c5ccd2', y));
-  }
-  boxes.push(B(-23.2, 39.2, -18.4, 39.45, 1.75, METAL2, 8.15), B(-23.2, 44.35, -21.6, 44.6, 1.75, METAL2, 8.15), B(-19.6, 44.35, -18.4, 44.6, 1.75, METAL2, 8.15));
-  boxes.push(B(-23.2, 39.2, -22.95, 44.6, 1.75, METAL2, 8.15), B(-18.65, 39.2, -18.4, 44.6, 1.75, METAL2, 8.15));
-  // um painel contínuo de 1,1 m acompanha a rampa no flanco leste. A única abertura é a janela de 2 m no norte (z 42,2…44,2), voltada para N/NE.
-  const rail = (z0, z1, yBase) => flat(-19.72, z0, -19.22, z1, 1.1, METAL, yBase);
-  for (let i = 0; i < 17; i++) { const z0 = 22 + i * 0.5, y = Math.max(0, (Math.min(z0 + 0.55, 30) - 22) / 8 * 4.05 - 0.05); rail(z0, Math.min(z0 + 0.58, 30.2), y); }
-  rail(29.5, 32.5, 3.0);
-  for (let i = 0; i < 18; i++) { const z0 = 31.6 + i * 0.48, y = 4.05 + (Math.min(z0 + 0.55, 40) - 31.6) / 8.4 * 4.1 - 0.05; rail(z0, Math.min(z0 + 0.56, 40.15), y); }
-  rail(39.1, 42.2, 7.1);
-  // bloqueador alto ~30 m ao sul da rampa, no caminho da visada para o sudeste
-  // os mastros saíram do eixo da entrada. Ficam no sul do pátio, fora do corredor z 6,2…9.
-  boxes.push(B(-10.4, -1.6, -9.9, 2.2, 6.6, METAL2), B(-12.2, -0.4, -10.6, 2.6, 0.18, METAL, 6.15));
-  boxes.push(B(-9.2, 0.4, -8.7, 3.2, 6.6, METAL2));
-  // antena no pátio sul: corta a visada do telhado do galpão para o 2º piso do bloco oeste
-  boxes.push(B(-6.3, -16.4, -5.9, -15.5, 7.6, METAL2, -1.5), B(-4.3, -16.4, -3.9, -15.5, 7.6, METAL2, -1.5));
-  boxes.push(B(-6.4, -16.5, -3.8, -15.4, 1.3, METAL, 4.5));
-
-  // teleférico no rasgo do penhasco (piso a +2,37 m)
-  const gy = 2.37;
-  boxes.push(B(-25.95, 42.25, -22.65, 46.75, 0.2, RUST, 2.17));
-  boxes.push(...wallZ(42.45, 46.55, -25.75, 0.18, 2.6, RUST, [], gy));
-  boxes.push(...wallZ(42.45, 46.55, -22.8, 0.18, 2.6, RUST, [door(43.15, 45.85, 2.45)], gy));
-  boxes.push(...wallX(-25.7, -22.95, 42.4, 0.18, 2.6, RUST, [], gy));
-  boxes.push(...wallX(-25.7, -22.95, 46.6, 0.18, 2.6, RUST, [], gy));
-  boxes.push(B(-25.95, 42.25, -22.65, 46.75, 0.32, SNOW, gy + 2.55));
-  boxes.push(R(-22.65, 43.15, -17.6, 45.85, 0, gy, 'x', -1, METAL));
-  boxes.push({ wp: [-21.3, gy, 44.5] }, { wp: [-24.2, gy, 44.5] }, { wp: [-20.6, 8.15, 42] }, { wp: [-21, 4.05, 31] });
-  // dois cabos: cabine → torre → fora do mapa, para a neblina
-
-  // montes de neve (0,55–1,0 m) e caixotes de cobertura — pátio norte, vão central, pátio sul
-  for (const [x, z, s, h] of [[-17.4, 22, 1.8, 1], [-17.4, 27, 1.6, 0.9], [-17.2, 38, 1.7, 1], [-3.4, 33.4, 1.6, 1],
-    [12, 38.5, 1.8, 1], [-20.6, 3.4, 1.5, 1], [-18.4, -2, 1.6, 0.95], [22.5, -8, 1.5, 1]]) mound(x, z, s, h);
-  C(-12.4, 16.2, 1.4, 1.2, METAL); C(-8, -20, 1.5, 1.3, '#6E5438', -1.5); C(14, -20, 1.3, 1.15, METAL2, -1.5); C(-16, -21, 1.6, 1.3, METAL); C(-18.6, 10, 1.2, 1.05, METAL);
-  for (const [x, z, s, h] of [[-6, -14, 1.6, 0.8], [6, -18, 1.6, 0.7], [14, -16, 1.5, 0.9], [16, -22, 1.4, 0.75]]) mound(x, z, s, h, -1.5);
-
-  // estalactites de gelo nos beirais (acima da cabeça: y ≥ 2,6)
-  for (const [x, z, y] of [[-2, 16.05, 6.15], [12.05, 16, 6.15], [-10, -29.9, 2.9], [8, -29.9, 2.9], [0, -45.95, 2.9], [-8, -6.05, 6.15], [6, -6.05, 6.15], [-16.05, 4, 6.15], [12.05, 2, 6.15]]) {
-    boxes.push(B(x - 0.1, z - 0.1, x + 0.1, z + 0.1, 0.7, ICE, y));
-    boxes.push(B(x - 0.05, z - 0.05, x + 0.05, z + 0.05, 0.55, ICE, y - 0.5));
-  }
-
-  // Passarelas estreitas sobre o abismo, fora do lábio de rocha. Embaixo só o penhasco.
-  const span = (sign) => {
-    const x0 = sign < 0 ? -29.15 : 28.5, x1 = sign < 0 ? -26.55 : 30.55, y = 5.2, zA = 2, zB = 52.2;
-    boxes.push(B(x0, zA, x1, zB, 0.16, '#6E5438', y - 0.16));
-    boxes.push(B(x0, zA, x0 + 0.14, zB, 0.42, METAL2, y - 0.55));
-    boxes.push(B(x1 - 0.14, zA, x1, zB, 0.42, METAL2, y - 0.55));
-    const climbs = sign < 0
-      ? [{ z0: 10.05, z1: 12.15, xLo: -26.7, xHi: -17.0, dir: -1 }, { z0: 49.15, z1: 51.25, xLo: -26.7, xHi: -17.0, dir: -1 }]
-      : [{ z0: 15.55, z1: 17.65, xLo: 19.0, xHi: 28.6, dir: 1 }, { z0: 49.15, z1: 51.25, xLo: 19.0, xHi: 28.6, dir: 1 }];
-    const inClimb = (z) => climbs.some((c) => z < c.z1 + 0.15 && z + 3 > c.z0);
-    for (let z = 4; z <= 50; z += 6) {
-      if (!inClimb(z)) {
-        boxes.push(B(x0 + 0.04, z, x0 + 0.18, z + 0.16, y + 5.8, METAL2, -6));
-        boxes.push(B(x1 - 0.18, z, x1 - 0.04, z + 0.16, y + 5.8, METAL2, -6));
-        const railEnd = Math.min(zB - 0.2, z + 2.8);
-        boxes.push(B(x0, z, x0 + 0.08, railEnd, 0.7, METAL, y));
-        boxes.push(B(x1 - 0.08, z, x1, railEnd, 0.7, METAL, y));
-      }
-    }
-    for (const c of climbs) {
-      const n = Math.round(y / 0.17), rise = y / n, run = Math.abs(c.xHi - c.xLo) / n;
+  const col = { wall: METAL, wall2: METAL2, inner: IN, floor: FLOOR, roof: SNOW, roof2: '#A9B6C4', stair: METAL, trim: '#BFDDEB' };
+  const boxes = [];
+  const wps = [];
+  const flight = (x0, x1, z0, z1, y0, y1) => {
+    const alongZ = Math.abs(z1 - z0) >= Math.abs(x1 - x0);
+    const xa = Math.min(x0, x1), xb = Math.max(x0, x1), za = Math.min(z0, z1), zb = Math.max(z0, z1);
+    const yLo = alongZ ? (z0 <= z1 ? y0 : y1) : (x0 <= x1 ? y0 : y1);
+    const yHi = alongZ ? (z0 <= z1 ? y1 : y0) : (x0 <= x1 ? y1 : y0);
+    const dir = yHi >= yLo ? 1 : -1;
+    const rise = Math.abs(yHi - yLo), yb = Math.min(yLo, yHi), yt = Math.max(yLo, yHi);
+    const n = Math.max(3, Math.round(rise / 0.17)), step = rise / n;
+    if (alongZ) {
+      const run = (zb - za) / n;
       for (let i = 0; i < n; i++) {
-        const xa = c.dir > 0 ? c.xLo + i * run : c.xHi - (i + 1) * run;
-        boxes.push(B(xa, c.z0, xa + run + 0.02, c.z1, rise, METAL, i * rise));
+        const zA = dir > 0 ? za + i * run : za + (n - 1 - i) * run;
+        boxes.push(B(xa, zA, xb, zA + run + 0.02, step, METAL, yb + i * step));
       }
-      boxes.push({ b: [Math.min(c.xLo, c.xHi), 0, c.z0 + 0.06, Math.max(c.xLo, c.xHi), y, c.z1 - 0.06], ramp: { axis: 'x', dir: c.dir }, hide: true, c: '#888' });
-      const mid = (c.z0 + c.z1) / 2;
-      boxes.push({ wp: [c.dir > 0 ? c.xLo + 0.8 : c.xHi - 0.8, 0.3, mid] }, { wp: [c.dir > 0 ? c.xHi - 0.45 : c.xLo + 0.45, y + 0.2, mid] });
+      boxes.push({ b: [xa + 0.05, yb, za, xb - 0.05, yt, zb], ramp: { axis: 'z', dir }, hide: true, c: '#888' });
+    } else {
+      const run = (xb - xa) / n;
+      for (let i = 0; i < n; i++) {
+        const xA = dir > 0 ? xa + i * run : xa + (n - 1 - i) * run;
+        boxes.push(B(xA, za, xA + run + 0.02, zb, step, METAL, yb + i * step));
+      }
+      boxes.push({ b: [xa, yb, za + 0.05, xb, yt, zb - 0.05], ramp: { axis: 'x', dir }, hide: true, c: '#888' });
     }
+    wps.push([(x0 + x1) / 2, y0 + 0.25, (z0 + z1) / 2], [(x0 + x1) / 2, y1 + 0.25, (z0 + z1) / 2]);
+  };
+
+  // Abismo em tudo que não é platô norte, platô sul ou o chão de dentro da Sala Fria.
+  // As faixas coladas na parede leste e oeste fecham o corredor por fora do prédio.
+  const voids = [
+    [-160, -160, -12.15, 160],
+    [12.15, -160, 160, 160],
+    [-12.15, 36.2, 12.15, 160],
+    [-12.15, -160, 12.15, -36.2],
+    [-12.15, -12.05, -10.95, 12.05],
+    [10.95, -12.05, 12.15, 12.05],
+  ];
+
+  // Sala Fria no centro. Portas norte e sul pro spawn. Laterais pro térreo (meio) e pro mezanino (dois lados).
+  boxes.push(...building(-11, -12, 11, 12, {
+    col, floors: 2, H, parapet: 1.05,
+    ops: [
+      { s: 's', a: -3.2, b: 3.2, k: 'wide' },
+      { s: 'n', a: -3.2, b: 3.2, k: 'wide' },
+      { s: 'w', a: -1.7, b: 1.7, k: 'wide' },
+      { s: 'e', a: -1.7, b: 1.7, k: 'wide' },
+      { s: 'w', a: -7.6, b: -3.2, f: 1, k: 'wide' },
+      { s: 'w', a: 3.2, b: 7.6, f: 1, k: 'wide' },
+      { s: 'e', a: -7.6, b: -3.2, f: 1, k: 'wide' },
+      { s: 'e', a: 3.2, b: 7.6, f: 1, k: 'wide' },
+    ],
+    floorHoles: { 1: [[-8.0, 7.5, -4.8, 11.3], [-8.0, -11.3, -4.8, -7.5], [4.8, 7.5, 8.0, 11.3], [4.8, -11.3, 8.0, -7.5]] },
+  }));
+  flight(-7.6, -5.2, 7.4, 11.05, 0, H);
+  flight(-7.6, -5.2, -7.4, -11.05, 0, H);
+  flight(5.2, 7.6, 7.4, 11.05, 0, H);
+  flight(5.2, 7.6, -7.4, -11.05, 0, H);
+  // Dois pilares no térreo, espelhados. Não fecham a rota norte-sul.
+  boxes.push(B(-4.35, -0.3, -3.85, 0.3, 2.3, METAL2), B(3.85, -0.3, 4.35, 0.3, 2.3, METAL2));
+  const box = (x, z, y = 0) => boxes.push(B(x - 0.42, z - 0.42, x + 0.42, z + 0.42, 1.05, WOOD, y));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * 7.6, sz * 2.4);
+
+  // Cobertura igual nos dois spawns.
+  for (const sz of [1, -1]) {
+    boxes.push(B(-1.15, sz * 23.6, 1.15, sz * 25.5, 1.15, METAL2));
+    boxes.push(B(-7.4, sz * 30.2, -5.8, sz * 31.6, 1.1, WOOD));
+    boxes.push(B(5.8, sz * 30.2, 7.4, sz * 31.6, 1.1, WOOD));
+    wps.push([0, 0.3, sz * 22], [0, 0.3, sz * 33], [sz * 8, 0.3, sz * 28]);
+  }
+
+  // Passarela: piso na cota do mezanino, guarda contínuo, postes no vazio.
+  const span = (sign) => {
+    const x0 = sign < 0 ? -18.9 : 16.3, x1 = sign < 0 ? -16.3 : 18.9, y = H, zA = -28, zB = 28;
+    boxes.push(B(x0, zA, x1, zB, 0.16, WOOD, y - 0.16));
+    const outer = sign < 0 ? x0 : x1 - 0.1, inner = sign < 0 ? x1 - 0.1 : x0;
+    boxes.push(B(outer, zA, outer + 0.1, zB, 0.9, METAL, y));
+    const gaps = [[-27.5, -24.4], [-7.6, -3.2], [-1.7, 1.7], [3.2, 7.6], [24.4, 27.5]];
+    let gz = zA;
+    for (const [a, b] of gaps) {
+      if (a > gz + 0.2) boxes.push(B(inner, gz, inner + 0.1, a, 0.9, METAL, y));
+      gz = b;
+    }
+    if (gz < zB) boxes.push(B(inner, gz, inner + 0.1, zB, 0.9, METAL, y));
+    for (let z = -26; z <= 26; z += 8) {
+      boxes.push(B(x0 + 0.02, z, x0 + 0.14, z + 0.12, y + 18, METAL2, -18));
+      boxes.push(B(x1 - 0.14, z, x1 - 0.02, z + 0.12, y + 18, METAL2, -18));
+    }
+    const wall = sign < 0 ? -11.05 : 11.05;
+    const edge = sign < 0 ? x1 : x0;
+    for (const zc of [-5.4, 5.4]) {
+      boxes.push(B(Math.min(wall, edge), zc - 2.05, Math.max(wall, edge), zc + 2.05, 0.16, METAL, y - 0.16));
+      wps.push([sign * 13.6, y + 0.2, zc], [sign * 11.3, y + 0.2, zc]);
+    }
+    // escada do térreo, só na porta do meio. O patamar não segue pra norte nem pra sul.
+    flight(sign < 0 ? -16.3 : 11.2, sign < 0 ? -11.2 : 16.3, -1.35, 1.35, y, 0);
+    // sobe do platô (x ±12) até a passarela, no norte e no sul
+    flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, 24.5, 27.3, sign < 0 ? y : 0, sign < 0 ? 0 : y);
+    flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, -27.3, -24.5, sign < 0 ? y : 0, sign < 0 ? 0 : y);
+    wps.push([sign * 17.6, y + 0.2, 0], [sign * 17.6, 0.3, 35.2], [sign * 17.6, 0.3, -35.2]);
   };
   span(-1); span(1);
-  // Estações do bondinho, uma em cada spawn. Piso na cota da cabine e escada até o chão.
+
+  // Bondinho simétrico, estações espelhadas no eixo.
   const station = (z) => {
-    boxes.push(B(-3.6, z - 2.2, 3.6, z + 2.2, 0.22, METAL, 11.78));
-    boxes.push(B(-3.7, z - 2.2, -3.35, z + 2.2, 1.15, METAL2, 12));
-    for (const zs of [[z + 1.95, z + 2.2], [z - 2.2, z - 1.95]]) {
-      boxes.push(B(-3.6, zs[0], -2.95, zs[1], 1.15, METAL2, 12));
-      boxes.push(B(2.95, zs[0], 3.6, zs[1], 1.15, METAL2, 12));
-    }
-    const xLo = 3.3, xHi = 15.2, n = 28, rise = 12 / n, run = (xHi - xLo) / n;
-    for (let i = 0; i < n; i++) {
-      const xA = xHi - (i + 1) * run;
-      boxes.push(B(xA, z - 1.05, xA + run + 0.02, z + 1.05, rise, METAL, i * rise));
-    }
-    boxes.push({ b: [xLo, 0, z - 0.9, xHi, 12, z + 0.9], ramp: { axis: 'x', dir: -1 }, hide: true, c: '#888' });
-    boxes.push({ wp: [14.6, 0.3, z] }, { wp: [0, 12.15, z] });
+    const dir = z > 0 ? -1 : 1;
+    boxes.push(B(-2.4, z - 1.8, 2.4, z + 1.8, 0.2, METAL, 9.8));
+    boxes.push(B(-2.5, z - 1.8, -2.15, z + 1.8, 1.1, METAL2, 10));
+    boxes.push(B(2.15, z - 1.8, 2.5, z + 1.8, 1.1, METAL2, 10));
+    const lip = z > 0 ? z - 1.85 : z + 1.85;
+    flight(-1.05, 1.05, lip, lip + dir * 12.2, 10, 0);
+    wps.push([0, 10.2, z], [0, 0.3, z + dir * 12]);
   };
-  station(47);
-  station(-52);
-  // presentes: cobertura baixa, fora do corredor do pátio e das escadas
-  for (const [x, z] of [[-11, 27], [15, 33], [-9, -38], [7, 50], [18, -8]]) {
-    boxes.push(B(x - 0.42, z - 0.32, x + 0.42, z + 0.32, 0.5, '#c0392b'));
-    boxes.push(B(x - 0.22, z - 0.22, x + 0.22, z + 0.22, 0.38, '#1f6b32', 0.5));
-  }
+  station(32); station(-32);
 
   const props = [
-    { t: 'dome', x: 6.5, z: 1.6, r: 1.7, h: 1.05, c: METAL, cap: SNOW },
-    { t: 'tank', x: -8.2, z: -16.5, y: -1.5, r: 0.75, h: 2.2, c: METAL, cap: SNOW, band: RUST },
-    { t: 'tank', x: 16.5, z: -10, y: -1.5, r: 0.85, h: 1.8, c: RUST, cap: SNOW2 },
-    { t: 'truck', x: 1.5, z: -18.5, y: -1.5, c: '#4A4E54' },
-    { t: 'pine', x: -21.2, z: -56, s: 1.15 }, { t: 'pine', x: 23.4, z: 48.6, s: 1.25 }, { t: 'pine', x: 23.2, z: 2.2, s: 1.05 },
-    { t: 'pine', x: 22.4, z: -27, s: 1.1 }, { t: 'pine', x: -16.2, z: 26.5, s: 0.95 }, { t: 'pine', x: 18.5, z: -52, s: 1.2 },
-    { t: 'sign', x: -2, y: 4.5, z: 16.35, w: 6.2, h: 1.35, rot: 0, text: 'SALA FRIA', bg: RUST, fg: '#F2D9A0' },
-    { t: 'sign', x: -28.7, y: 2.45, z: -2, w: 2.3, h: 1.05, rot: Math.PI / 2, text: 'PENHASCO', bg: RUST, fg: '#fff' },
-    { t: 'sign', x: 0, y: 3.2, z: -29.6, w: 5.5, h: 1.2, rot: Math.PI, text: 'GALPÃO', bg: '#3E4248', fg: SNOW },
-    { t: 'sign', x: -6.2, y: 1.7, z: 15.35, w: 2.4, h: 0.7, rot: Math.PI, text: '09:40', bg: '#1c242c', fg: '#F2D9A0' },
-    { t: 'clock', x: -2, y: 1.7, z: 15.35, w: 2.4, h: 0.7, rot: Math.PI },
-    { t: 'sign', x: 2.2, y: 1.7, z: 15.35, w: 2.4, h: 0.7, rot: Math.PI, text: '18:10', bg: '#1c242c', fg: '#F2D9A0' },
-    { t: 'sign', x: 1.2, y: 2.15, z: 33.05, w: 3.2, h: 0.85, rot: Math.PI, text: 'ABRIGO', bg: '#1c242c', fg: '#F2D9A0' },
-    { t: 'cable', x0: -24.3, y0: 5.2, z0: 43.6, x1: -21.4, y1: 13.4, z1: 40.8, c: '#1a1e22', r: 0.16 },
-    { t: 'cable', x0: -24.3, y0: 5.2, z0: 45.4, x1: -21.4, y1: 13.4, z1: 42.8, c: '#1a1e22', r: 0.16 },
-    { t: 'cable', x0: -21.4, y0: 13.4, z0: 40.8, x1: -42, y1: 24, z1: 18, c: '#1a1e22', r: 0.12 },
-    { t: 'cable', x0: -21.4, y0: 13.4, z0: 42.8, x1: -40, y1: 26, z1: 62, c: '#1a1e22', r: 0.12 },
-    { t: 'pane', x0: -25.5, z0: 43.3, x1: -25.5, z1: 46.2, y: 3.7, h: 1.3, axis: 'z', c: 0xBFDDEB, o: 0.4 },
-    { t: 'dish', x: -6, y: 4.3, z: -38, r: 1.15 }, { t: 'dish', x: 8, y: 4.4, z: -34, r: 0.9 },
-    { t: 'heli', x: -70, y: 4, z: -8, rot: 0.6 },
-    { t: 'pine', x: -32.2, z: 44, y: -3.6, s: 1.75 }, { t: 'pine', x: -37, z: 36, y: -6.6, s: 1.6 },
-    { t: 'pine', x: -46, z: 28, y: -12.4, s: 1.8 }, { t: 'pine', x: -54, z: 16, y: -17.4, s: 1.45 },
-    { t: 'pine', x: -36, z: 4, y: -6.1, s: 1.85 }, { t: 'pine', x: -48, z: -12, y: -13.6, s: 1.5 },
-    { t: 'pine', x: -42, z: -28, y: -9.9, s: 1.65 }, { t: 'pine', x: -58, z: -42, y: -20, s: 1.4 },
-    { t: 'pine', x: 34.2, z: 10, y: -3.7, s: 1.75 }, { t: 'pine', x: 39, z: 2, y: -6.7, s: 1.6 },
-    { t: 'pine', x: 48, z: -6, y: -12.5, s: 1.8 }, { t: 'pine', x: 56, z: 8, y: -17.5, s: 1.45 },
-    { t: 'pine', x: 34, z: 22, y: -3.7, s: 1.9 }, { t: 'pine', x: 44, z: 36, y: -10, s: 1.6 },
-    { t: 'pine', x: 52, z: 48, y: -15, s: 1.5 }, { t: 'pine', x: 38, z: 6, y: -6.2, s: 1.75 },
-    { t: 'pine', x: -36, z: 54, y: -5.2, s: 1.7 }, { t: 'pine', x: -44, z: 50, y: -10, s: 1.45 },
-    { t: 'pine', x: 36, z: 55, y: -5.1, s: 1.65 }, { t: 'pine', x: 46, z: 50, y: -11, s: 1.5 },
-    { t: 'decal', x0: -1.55, z0: -25.2, x1: -0.7, z1: -8.2, y: -1.47, c: 0x3a4148 },
-    { t: 'decal', x0: 0.85, z0: -25.2, x1: 1.7, z1: -8.6, y: -1.47, c: 0x3a4148 },
-    { t: 'keg', x: -18.5, z: 14 }, { t: 'keg', x: 22, z: 30 }, { t: 'keg', x: 22, z: 14 },
-    { t: 'keg', x: -8.1, z: -14, y: -1.5 }, { t: 'keg', x: 6, z: -16, y: -1.5 }, { t: 'keg', x: -19.3, z: 11 },
-    ...drifts, ...cables,
+    { t: 'pine', x: -6, z: 20, s: 1.15 }, { t: 'pine', x: 6, z: 20, s: 1.15 },
+    { t: 'pine', x: -6, z: -20, s: 1.15 }, { t: 'pine', x: 6, z: -20, s: 1.15 },
+    { t: 'pine', x: 0, z: 18, y: 6.8, s: 0.9 },
   ];
-  const roofs = [[-7.2, 33.2, 8.4, 45.6, 2.88],
-    [-16, -6, 12, 16, 6.8],
-    [12, -2, 18, 14, 3.3], [-12, -46, 12, -30, 3.6], [-25.9, 42.2, -22.6, 46.8, 5.25], [-23.2, 39.2, -18.4, 44.6, 8.15]];
+  const roofs = [[-11, -12, 11, 12, 6.8]];
   MAPS.push({
     id: 'posto-nevasca', name: 'Posto Nevasca',
-    desc: 'Base no cume, com passarelas sobre o penhasco, bondinho entre os spawns e Natal.',
-    size: [31, 60], wallH: 0.85, wallColor: [ROCK, ROCK], openMax: 9.5, laneMin: 40,
-    navAvoid: [[-29.4, 1.8, -26.2, 52.4], [28.2, 1.8, 30.9, 52.4], [-28.2, 9.9, -24.2, 12.3], [-28.2, 48.9, -24.2, 51.5], [26.0, 15.3, 30.9, 17.9], [26.0, 48.9, 30.9, 51.5]],
-    fall: { y: -50, abyss: -62, haze: true, rects: voids, cuts: [[-16, -28.9, 20, -5.6]], slopes, openWest: true, openEast: true, openNorth: true, openSouth: true, basins: [[-14, -26, 18, -6, -1.5]], pit: '#12161a', floor: -40, slopeColor: '#9AA6B0',
-      slopeBands: ['#F7FBFF', '#C5CED6', '#A8B3BD', '#8E99A3', '#7A848C', '#6A737C', '#5C656C', '#4A4E54', '#40464C', '#3A4046', '#343A40', '#2E343A'] },
-    thumb: { x: 4.5, y: 12.5, z: -7, tx: -1.5, ty: 5.4, tz: 4 },
-    palette: { sky: '#d5e4ee', fog: ['#e7e0d4', 36, 150], fogExp: ['#e4ddd2', 0.008], hemi: ['#ffe6c8', '#8a7060', 1.45], sun: ['#ffe0b0', 0.85], ground: SNOW, tiles: null, clouds: true, mountains: true,
-      lights: [['#F2D9A0', -4, 2.6, 2, 16, 12], ['#F2D9A0', 2, 2.6, 6, 16, 12], ['#F2D9A0', -2, 5.4, 8, 14, 10], ['#F2D9A0', -6, 5.4, 2, 12, 9], ['#F2D9A0', -8, 2.4, 24, 12, 10], ['#F2D9A0', 6, 2.4, 24, 12, 10], ['#F2D9A0', -1, 2.2, -31, 10, 8], ['#F2D9A0', 6, 2.2, -31, 10, 8], ['#fff6e4', -10, 2.6, 22.8, 18, 11]] },
-    weather: { kind: 'snow', n: 1400, fall: 6.2, wind: [2.3, 0, 0.55], top: 34, color: 0xF7FBFF, size: 0.15, roofs },
-    ...fin(boxes), props,
-    spawns: [[-4.2, 41.2], [3.4, 36.2], [16.5, 46], [-12, 36], [8, 28], [-0.4, 18.2], [15, 22], [-8, -52], [0, -56], [8, -50], [-4, -58], [6, -44], [-14, -50]],
-    pickups: [['health', 4, 2], ['health', -4.6, 39.2], ['health', -11, -22, -1.5], ['health', 3.2, 43.5], ['health', -16.4, 30],
-      ['ammo', -23.4, -1], ['ammo', 15.2, 6], ['ammo', -8, 30], ['ammo', 0, -38, 3.6],
-      ['grenade', 10, 26], ['grenade', 0, -22, -1.5], ['grenade', -10, 11.2, H]],
-    showcase: [-2, 0, 4], view: [-16, 1.6, 2, -0.35, -0.04],
-    test: { stairs: { from: [-6.2, 0, 10.7], to: [5.2, H, 10.7], level: H }, roof: { from: [0, 0, -56.2], to: [0, 3.6, -38], level: 3.6 }, under: { from: [15.2, 0, 1], to: [15.2, 0, 7.5], ceil: 3.0 } },
+    desc: 'Três rotas simétricas: passarela oeste, Sala Fria por dentro, passarela leste. Natal no cume.',
+    size: [24, 40], wallH: 0.9, wallColor: [ROCK, ROCK], openMax: 11, laneMin: 36,
+    navAvoid: [],
+    fall: { y: -46, abyss: -70, haze: true, rects: voids, slopes: [], openWest: true, openEast: true, openNorth: true, openSouth: true, pit: '#1a2228', floor: -80, slopeColor: '#9AA6B0' },
+    thumb: { x: 0, y: 16, z: 22, tx: 0, ty: 4, tz: 0 },
+    palette: { sky: '#d5e4ee', fog: ['#e7e0d4', 28, 120], fogExp: ['#e4ddd2', 0.012], hemi: ['#ffe6c8', '#8a7060', 1.45], sun: ['#ffe0b0', 0.85], ground: SNOW, tiles: null, clouds: true, mountains: true,
+      lights: [['#fff6e4', 0, 4.2, 0, 18, 14], ['#fff6e4', 0, 2.4, 26, 14, 10], ['#fff6e4', 0, 2.4, -26, 14, 10], ['#ffd9a0', -17.6, 4.6, 0, 16, 8], ['#ffd9a0', 17.6, 4.6, 0, 16, 8]] },
+    weather: { kind: 'snow', n: 900, fall: 6, wind: [1.2, 0, 0.4], top: 28, color: 0xF7FBFF, size: 0.14, roofs },
+    ...fin([...boxes, ...wps.map((p) => ({ wp: p }))]), props,
+    spawns: [[-6, 26.4], [6, 26.4], [-8, 32.4], [8, 32.4], [0, 34.4], [4.2, 30.2], [-4.2, 30.2], [-6, -26.4], [6, -26.4], [-8, -32.4], [8, -32.4], [0, -34.4], [4.2, -30.2], [-4.2, -30.2]],
+    pickups: [
+      ['health', 5, 22], ['health', -5, 22], ['health', 5, -22], ['health', -5, -22],
+      ['ammo', -8, 28], ['ammo', 8, 28], ['ammo', -8, -28], ['ammo', 8, -28],
+      ['grenade', 0, 2, H], ['grenade', 0, -2, H],
+    ],
+    showcase: [0, 0, 22], view: [0, 8, 20, Math.PI, -0.15],
+    test: {
+      stairs: { from: [0, 0.2, 16], to: [0, H, 4], level: H, via: [[-6.6, 8]] },
+      roof: { from: [-17.6, H + 0.2, 8], to: [-6.6, H, 5.4], level: H },
+    },
   });
 }
 

@@ -181,23 +181,25 @@ export function mountNevasca(group, map) {
   const root = new THREE.Group(); root.name = 'nevasca-show';
   const cabins = [cabin(), cabin()];
   cabins.forEach((c) => root.add(c));
-  const big = tree(); big.position.set(0, 6.85, 12.4); root.add(big);
+  const big = tree(); big.position.set(0, 6.9, 0); root.add(big);
 
   const bulbs = [];
   const pushLine = (x0, y0, z0, x1, y1, z1, n) => {
     for (let i = 0; i <= n; i++) bulbs.push([x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, z0 + (z1 - z0) * i / n]);
   };
-  // telhados, passarelas e o cabo dos bondinhos
-  pushLine(-16, 7.15, -6, 12, 7.15, -6, 18);
-  pushLine(-16, 7.15, 16, 12, 7.15, 16, 18);
-  pushLine(-16, 7.15, -6, -16, 7.15, 16, 14);
-  pushLine(12, 7.15, -6, 12, 7.15, 16, 14);
-  pushLine(-12, 4.05, -46, 12, 4.05, -46, 12);
-  pushLine(-7.2, 3.05, 45.6, 8.4, 3.05, 45.6, 8);
-  pushLine(-27.85, 5.55, 2.4, -27.85, 5.55, 51.6, 22);
-  pushLine(29.5, 5.55, 2.4, 29.5, 5.55, 51.6, 22);
-  pushLine(-1.35, 14.3, 47, -1.35, 14.3, -52, 30);
-  pushLine(1.35, 14.3, 47, 1.35, 14.3, -52, 30);
+  // beiral da Sala Fria, guarda das passarelas e o cabo dos bondinhos
+  pushLine(-11, 7.15, -12, 11, 7.15, -12, 16);
+  pushLine(-11, 7.15, 12, 11, 7.15, 12, 16);
+  pushLine(-11, 7.15, -12, -11, 7.15, 12, 16);
+  pushLine(11, 7.15, -12, 11, 7.15, 12, 16);
+  pushLine(-11, 4.5, -12, 11, 4.5, -12, 14);
+  pushLine(-11, 4.5, 12, 11, 4.5, 12, 14);
+  pushLine(-17.7, 4.45, -28, -17.7, 4.45, 28, 22);
+  pushLine(17.7, 4.45, -28, 17.7, 4.45, 28, 22);
+  pushLine(-16.5, 4.45, -28, -16.5, 4.45, 28, 22);
+  pushLine(16.5, 4.45, -28, 16.5, 4.45, 28, 22);
+  pushLine(-1.35, 12.7, 32, -1.35, 12.7, -32, 26);
+  pushLine(1.35, 12.7, 32, 1.35, 12.7, -32, 26);
   for (const p of map.props || []) if (p.t === 'pine') {
     const s = p.s || 1, y = (p.y || 0) + 3.2 * s;
     for (let k = 0; k < 4; k++) bulbs.push([p.x + Math.cos(k) * 0.45 * s, y - k * 0.45, p.z + Math.sin(k) * 0.45 * s]);
@@ -220,8 +222,8 @@ export function mountNevasca(group, map) {
     bow.position.y = -0.38; g.add(bow);
     return g;
   };
-  for (const [x, z, rot] of [[-16.2, 7.6, Math.PI / 2], [18.15, 7.6, -Math.PI / 2], [-2, -6.15, 0], [4, -29.9, Math.PI]]) {
-    const w = wreath(); w.position.set(x, 1.7, z); w.rotation.y = rot; root.add(w);
+  for (const [x, z, rot, y] of [[-4.2, 12.2, 0, 2.3], [4.2, -12.2, Math.PI, 2.3], [-11.15, 2.15, Math.PI / 2, 2.2], [11.15, -2.15, -Math.PI / 2, 2.2], [-11.15, 7.9, Math.PI / 2, 5.1], [11.15, -7.9, -Math.PI / 2, 5.1], [-11.15, -2.6, Math.PI / 2, 5.1], [11.15, 2.6, -Math.PI / 2, 5.1]]) {
+    const w = wreath(); w.position.set(x, y, z); w.rotation.y = rot; w.scale.setScalar(y > 3 ? 1.15 : 1.35); root.add(w);
   }
   // boneco, bengala, quebra-nozes e poste — poucos, fora das rotas
   const deco = (fn, x, y, z) => { const m = fn(); m.position.set(x, y, z); root.add(m); };
@@ -259,8 +261,13 @@ export function mountNevasca(group, map) {
     glow.position.y = 3.25; g.add(glow);
     return g;
   };
-  deco(snowman, -14, 0, 22); deco(snowman, 14, -1.5, -18); deco(cane, -10, 0, 30); deco(cane, 9, 0, -40);
-  deco(nut, 6, 0, 34); deco(nut, -6, 0, -42); deco(lamp, -9, 0, -8); deco(lamp, 9, 0, 20); deco(lamp, 0, 12, 40); deco(lamp, 0, 12, -48);
+  for (const sz of [1, -1]) {
+    deco(snowman, -8.2, 0, sz * 22.5); deco(snowman, 8.2, 0, sz * 22.5);
+    deco(cane, -3.4, 0, sz * 29.2); deco(cane, 3.4, 0, sz * 29.2);
+    deco(nut, sz * 9.2, 0, sz * 27.4);
+    deco(lamp, -9.4, 0, sz * 18.5); deco(lamp, 9.4, 0, sz * 18.5);
+    deco(lamp, 0, 10.05, sz * 32);
+  }
 
   const rig = sleighRig(); root.add(rig.group);
   const TRAIL_N = 72;
