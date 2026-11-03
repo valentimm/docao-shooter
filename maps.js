@@ -1280,23 +1280,87 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
       { s: 'e', a: -7.6, b: -3.2, f: 1, k: 'wide' },
       { s: 'e', a: 3.2, b: 7.6, f: 1, k: 'wide' },
     ],
-    floorHoles: { 1: [[-8.0, 7.5, -4.8, 11.3], [-8.0, -11.3, -4.8, -7.5], [4.8, 7.5, 8.0, 11.3], [4.8, -11.3, 8.0, -7.5]] },
+    // Vãos só em cima das escadas em L, longe das portas norte e sul.
+    floorHoles: { 1: [[-10.55, -11.35, -5.9, -7.7], [-10.55, 7.7, -5.9, 11.35], [5.9, -11.35, 10.55, -7.7], [5.9, 7.7, 10.55, 11.35]] },
   }));
-  flight(-7.6, -5.2, 7.4, 11.05, 0, H);
-  flight(-7.6, -5.2, -7.4, -11.05, 0, H);
-  flight(5.2, 7.6, 7.4, 11.05, 0, H);
-  flight(5.2, 7.6, -7.4, -11.05, 0, H);
+  // Escada em L encostada na parede leste ou oeste, com patamar. Não cruza a porta nem o eixo.
+  const posts = (x0, z0, x1, z1, y0, y1, n) => {
+    for (let i = 0; i <= n; i++) {
+      const k = i / n, x = x0 + (x1 - x0) * k, z = z0 + (z1 - z0) * k, y = y0 + (y1 - y0) * k;
+      boxes.push(B(x - 0.045, z - 0.045, x + 0.045, z + 0.045, 0.9, METAL2, y));
+    }
+    for (let i = 0; i < n; i++) {
+      const a = i / n, b = (i + 1) / n;
+      const xa = x0 + (x1 - x0) * a, za = z0 + (z1 - z0) * a, ya = y0 + (y1 - y0) * a + 0.82;
+      const xb = x0 + (x1 - x0) * b, zb = z0 + (z1 - z0) * b, yb = y0 + (y1 - y0) * b + 0.82;
+      boxes.push(B(Math.min(xa, xb) - 0.04, Math.min(za, zb) - 0.04, Math.max(xa, xb) + 0.04, Math.max(za, zb) + 0.04, 0.08, METAL, Math.min(ya, yb)));
+    }
+  };
+  const lStair = (sx, sz) => {
+    const xW = sx * 10.4, xA = sx * 8.55, xT = sx * 6.05;
+    const zLo = sz * 11.2, zHi = sz * 9.2, zLand = sz * 7.75;
+    flight(Math.min(xW, xA), Math.max(xW, xA), zLo, zHi, 0, 1.7);
+    boxes.push(B(Math.min(xW, sx * 7.2), Math.min(zHi, zLand), Math.max(xW, sx * 7.2), Math.max(zHi, zLand), 0.16, METAL, 1.54));
+    flight(xA, xT, sz * 9.3, sz * 7.9, 1.7, H);
+    posts(sx * 8.48, zLo, sx * 8.48, zHi, 0, 1.7, 4);
+    posts(xA, sz * 7.95, xT, sz * 7.95, 1.7, H, 4);
+    wps.push([sx * 9.4, 0.3, sz * 10.2], [sx * 9.2, 1.9, sz * 8.6], [sx * 6.4, H + 0.2, sz * 8.6]);
+  };
+  lStair(-1, -1); lStair(-1, 1); lStair(1, -1); lStair(1, 1);
   // Dois pilares no térreo, espelhados. Não fecham a rota norte-sul.
   boxes.push(B(-4.35, -0.3, -3.85, 0.3, 2.3, METAL2), B(3.85, -0.3, 4.35, 0.3, 2.3, METAL2));
-  const box = (x, z, y = 0) => boxes.push(B(x - 0.42, z - 0.42, x + 0.42, z + 0.42, 1.05, WOOD, y));
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * 7.6, sz * 2.4);
+  // Caixotes de madeira e presentes no lugar das caixas lisas. Fora das portas.
+  const crate = (x, z, w, d, h, y = 0) => {
+    boxes.push(B(x - w / 2, z - d / 2, x + w / 2, z + d / 2, h, WOOD, y));
+    boxes.push(B(x - w / 2 - 0.04, z - 0.05, x + w / 2 + 0.04, z + 0.05, h + 0.05, '#c9a15a', y));
+    boxes.push(B(x - 0.05, z - d / 2 - 0.04, x + 0.05, z + d / 2 + 0.04, h + 0.05, '#c9a15a', y));
+  };
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    crate(sx * 7.5, sz * 4.15, 1.15, 0.8, 0.72);
+    crate(sx * 7.7, sz * 4.15, 0.7, 0.55, 0.48, 0.72);
+    crate(sx * 6.15, sz * 3.55, 0.85, 0.7, 0.55);
+  }
 
-  // Cobertura igual nos dois spawns.
+  // Cada spawn: mureta na frente (corta a reta até o outro lado), tenda e um muro do lado da passarela.
+  // O corredor do meio, ao lado da escada do bondinho, continua aberto. As laterais sobem pras passarelas.
+  const band = (z, depth, x0, x1, h, c, y = 0) => boxes.push(B(x0, z - depth / 2, x1, z + depth / 2, h, c, y));
   for (const sz of [1, -1]) {
-    boxes.push(B(-1.15, sz * 23.6, 1.15, sz * 25.5, 1.15, METAL2));
-    boxes.push(B(-7.4, sz * 30.2, -5.8, sz * 31.6, 1.1, WOOD));
-    boxes.push(B(5.8, sz * 30.2, 7.4, sz * 31.6, 1.1, WOOD));
-    wps.push([0, 0.3, sz * 22], [0, 0.3, sz * 33], [sz * 8, 0.3, sz * 28]);
+    band(sz * 23.55, 0.7, -11.5, -2.35, 2.3, ROCK);
+    band(sz * 23.55, 0.7, 2.35, 11.5, 2.3, ROCK);
+    band(sz * 23.55, 0.5, -11.4, -2.45, 0.22, SNOW, 2.3);
+    band(sz * 23.55, 0.5, 2.45, 11.4, 0.22, SNOW, 2.3);
+    band(sz * 20.35, 0.55, -4.7, -1.3, 2.05, ROCK);
+    band(sz * 20.35, 0.55, 1.3, 4.7, 2.05, ROCK);
+    band(sz * 27.35, 1.35, -10.55, -9.15, 3.15, ROCK);
+    band(sz * 27.35, 1.35, 9.15, 10.55, 3.15, ROCK);
+    // laje baixa no corredor da passarela e na frente do spawn: passa por baixo, o olhar do alto bate no teto
+    boxes.push(B(-12.05, sz * 24.25, -8.7, sz * 27.15, 0.12, ROCK, 2.52));
+    boxes.push(B(8.7, sz * 24.25, 12.05, sz * 27.15, 0.12, ROCK, 2.52));
+    boxes.push(B(-9.3, sz * 24.35, -2.5, sz * 28.5, 0.12, '#8e2f2a', 2.42));
+    boxes.push(B(2.5, sz * 24.35, 9.3, sz * 28.5, 0.12, '#8e2f2a', 2.42));
+    for (const sx of [-1, 1]) {
+      const x0 = sx < 0 ? -9.7 : 2.85, x1 = sx < 0 ? -2.85 : 9.7;
+      const z0 = sz * 28.2, z1 = sz * 34.1;
+      boxes.push(B(x0, Math.min(z0, z1), x1, Math.max(z0, z1), 0.12, '#8e2f2a', 2.48));
+      boxes.push(B(x0 + 0.1, Math.min(z0, z1) + 0.1, x1 - 0.1, Math.max(z0, z1) - 0.1, 0.1, SNOW, 2.6));
+      const ox = sx < 0 ? x0 : x1 - 0.16;
+      const wz0 = sz > 0 ? z0 + 1.15 : z1;
+      const wz1 = sz > 0 ? z1 : z0 - 1.15;
+      boxes.push(B(ox, Math.min(wz0, wz1), ox + 0.16, Math.max(wz0, wz1), 2.48, ROCK));
+      const ix = sx < 0 ? x1 - 0.16 : x0;
+      const iz0 = sz > 0 ? z0 + 1.25 : z1;
+      const iz1 = sz > 0 ? z1 - 0.15 : z0 - 1.25;
+      boxes.push(B(ix, Math.min(iz0, iz1), ix + 0.16, Math.max(iz0, iz1), 2.48, ROCK));
+      for (const px of [x0 + 0.08, x1 - 0.24]) for (const pz of [sz > 0 ? z0 + 0.12 : z1 + 0.12, sz > 0 ? z1 - 0.28 : z0 - 0.28]) {
+        boxes.push(B(px, pz, px + 0.16, pz + 0.16, 2.48, '#5c3a22'));
+      }
+    }
+    for (const sx of [-1, 1]) {
+      const mx = sx * 6.5, mz = sz * 25.2;
+      boxes.push(B(mx - 1.05, mz - 0.62, mx + 1.05, mz + 0.62, 0.62, ROCK));
+      boxes.push(B(mx - 0.68, mz - 0.4, mx + 0.68, mz + 0.4, 0.7, SNOW, 0.4));
+    }
+    wps.push([0, 0.3, sz * 22.2], [0, 0.3, sz * 33.2], [sz * 8, 0.3, sz * 29.2], [1.85, 0.3, sz * 18.6], [-1.85, 0.3, sz * 18.6]);
   }
 
   // Passarela: piso na cota do mezanino, guarda contínuo, postes no vazio.
@@ -1342,11 +1406,27 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     wps.push([0, 10.2, z], [0, 0.3, z + dir * 12]);
   };
   station(32); station(-32);
+  // Poço do elevador: três paredes altas e uma abertura embaixo e no topo, do lado da plataforma.
+  const shaft = (zSign) => {
+    const zc = zSign * 35.16, open = -zSign;
+    boxes.push(B(-1.28, zc - 1.08, -1.14, zc + 1.08, 12.3, ROCK));
+    boxes.push(B(1.14, zc - 1.08, 1.28, zc + 1.08, 12.3, ROCK));
+    const back = zc - open * 1.08;
+    boxes.push(B(-1.28, Math.min(back, back - open * 0.16), 1.28, Math.max(back, back - open * 0.16), 12.3, ROCK));
+    const lip = zc + open * 1.02;
+    boxes.push(B(-0.95, Math.min(lip, lip + open * 0.18), 0.95, Math.max(lip, lip + open * 0.18), 7.4, ROCK, 2.35));
+    const bridge = zc + open * 1.2;
+    boxes.push(B(-0.9, Math.min(bridge, zSign * 33.72), 0.9, Math.max(bridge, zSign * 33.72), 0.12, METAL, 9.9));
+  };
+  shaft(1); shaft(-1);
 
   const props = [
     { t: 'pine', x: -6, z: 20, s: 1.15 }, { t: 'pine', x: 6, z: 20, s: 1.15 },
     { t: 'pine', x: -6, z: -20, s: 1.15 }, { t: 'pine', x: 6, z: -20, s: 1.15 },
     { t: 'pine', x: 0, z: 18, y: 6.8, s: 0.9 },
+    { t: 'keg', x: -8.5, z: 3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: 3.3, r: 0.42, h: 0.95 },
+    { t: 'keg', x: -8.5, z: -3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: -3.3, r: 0.42, h: 0.95 },
+    { t: 'keg', x: -5.4, z: 5.1, r: 0.36, h: 0.8, c: '#6e5438' }, { t: 'keg', x: 5.4, z: -5.1, r: 0.36, h: 0.8, c: '#6e5438' },
   ];
   const roofs = [[-11, -12, 11, 12, 6.8]];
   MAPS.push({
@@ -1354,13 +1434,13 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     desc: 'Três rotas simétricas: passarela oeste, Sala Fria por dentro, passarela leste. Natal no cume.',
     size: [24, 40], wallH: 0.9, wallColor: [ROCK, ROCK], openMax: 11, laneMin: 36,
     navAvoid: [],
-    fall: { y: -46, abyss: -70, haze: true, rects: voids, slopes: [], openWest: true, openEast: true, openNorth: true, openSouth: true, pit: '#1a2228', floor: -80, slopeColor: '#9AA6B0' },
+    fall: { y: -46, abyss: -70, haze: false, rects: voids, slopes: [], openWest: true, openEast: true, openNorth: true, openSouth: true, pit: '#1c2830', floor: -80, slopeColor: '#9AA6B0' },
     thumb: { x: 0, y: 16, z: 22, tx: 0, ty: 4, tz: 0 },
-    palette: { sky: '#d5e4ee', fog: ['#e7e0d4', 28, 120], fogExp: ['#e4ddd2', 0.012], hemi: ['#ffe6c8', '#8a7060', 1.45], sun: ['#ffe0b0', 0.85], ground: SNOW, tiles: null, clouds: true, mountains: true,
+    palette: { sky: '#8eafc9', fog: ['#c5d4e2', 70, 360], hemi: ['#ffe6c8', '#6a7a88', 1.45], sun: ['#ffe0b0', 0.85], ground: SNOW, tiles: null, clouds: false, mountains: false,
       lights: [['#fff6e4', 0, 4.2, 0, 18, 14], ['#fff6e4', 0, 2.4, 26, 14, 10], ['#fff6e4', 0, 2.4, -26, 14, 10], ['#ffd9a0', -17.6, 4.6, 0, 16, 8], ['#ffd9a0', 17.6, 4.6, 0, 16, 8]] },
     weather: { kind: 'snow', n: 900, fall: 6, wind: [1.2, 0, 0.4], top: 28, color: 0xF7FBFF, size: 0.14, roofs },
     ...fin([...boxes, ...wps.map((p) => ({ wp: p }))]), props,
-    spawns: [[-6, 26.4], [6, 26.4], [-8, 32.4], [8, 32.4], [0, 34.4], [4.2, 30.2], [-4.2, 30.2], [-6, -26.4], [6, -26.4], [-8, -32.4], [8, -32.4], [0, -34.4], [4.2, -30.2], [-4.2, -30.2]],
+    spawns: [[-6, 26.4], [6, 26.4], [-8, 32.4], [8, 32.4], [0, 32.6], [4.2, 30.2], [-4.2, 30.2], [-6, -26.4], [6, -26.4], [-8, -32.4], [8, -32.4], [0, -32.6], [4.2, -30.2], [-4.2, -30.2]],
     pickups: [
       ['health', 5, 22], ['health', -5, 22], ['health', 5, -22], ['health', -5, -22],
       ['ammo', -8, 28], ['ammo', 8, 28], ['ammo', -8, -28], ['ammo', 8, -28],
@@ -1368,7 +1448,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     ],
     showcase: [0, 0, 22], view: [0, 8, 20, Math.PI, -0.15],
     test: {
-      stairs: { from: [0, 0.2, 16], to: [0, H, 4], level: H, via: [[-6.6, 8]] },
+      stairs: { from: [0, 0.2, 16], to: [0, H, 4], level: H, via: [[-9.3, 10.5], [-9.4, 8.7], [-6.6, 8.55]] },
       roof: { from: [-17.6, H + 0.2, 8], to: [-6.6, H, 5.4], level: H },
     },
   });

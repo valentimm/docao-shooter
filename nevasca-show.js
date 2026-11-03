@@ -1,29 +1,51 @@
 // Natal, bondinhos e trenó do Posto Nevasca. Luzes são instâncias emissivas, sem luz real extra.
 import * as THREE from 'three';
+import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
 import { makeDocao } from './docao.js';
-import { gondolaPose, sleighPose, sleighAt, sleighClock, SLEIGH } from './shared/nevasca.js';
+import { gondolaPose, elevatorPose, sleighPose, sleighAt, sleighClock, SLEIGH, CABIN, ELEVATOR } from './shared/nevasca.js';
 
 const COLORS = [0xff2a2a, 0x3d8f3d, 0xf2c94c, 0x4aa3ff, 0xff7ad1];
 const emissive = (hex) => new THREE.MeshBasicMaterial({ color: hex, toneMapped: false });
 
+function parapet(g, x, z, sx, sz, mat) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(sx, CABIN.wall, sz), mat);
+  m.position.set(x, CABIN.wall / 2, z); g.add(m);
+}
 function cabin() {
   const g = new THREE.Group();
   const metal = new THREE.MeshToonMaterial({ color: 0xc23b3b });
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.12, 2.15), new THREE.MeshToonMaterial({ color: 0x6e5438 }));
-  floor.position.y = 0.06; g.add(floor);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.1, 2.35), new THREE.MeshToonMaterial({ color: 0xf4f7fa }));
-  roof.position.y = 2.15; g.add(roof);
-  for (const x of [-0.98, 0.98]) {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.9, 2.15), metal);
-    w.position.set(x, 1.1, 0); g.add(w);
-  }
-  const back = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.9, 0.08), metal);
-  back.position.set(0, 1.1, -1.02); g.add(back);
-  // porta aberta no +X (vira pra plataforma)
-  const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.9, 0.5), metal);
-  jamb.position.set(0.98, 1.1, 0.8); g.add(jamb);
-  const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.3, 0.08), new THREE.MeshToonMaterial({ color: 0x2a3138 }));
-  hanger.position.set(0, 2.7, 0); g.add(hanger);
+  const wood = new THREE.MeshToonMaterial({ color: 0x6e5438 });
+  const { hx, hz, thick, door } = CABIN;
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, 0.1, hz * 2), wood);
+  floor.position.y = 0.02; g.add(floor);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(hx * 2 + 0.16, 0.08, hz * 2 + 0.16), new THREE.MeshToonMaterial({ color: 0xf4f7fa }));
+  roof.position.y = 2.35; g.add(roof);
+  parapet(g, 0, hz - thick / 2, hx * 2, thick, metal);
+  parapet(g, 0, -hz + thick / 2, hx * 2, thick, metal);
+  parapet(g, -hx + thick / 2, 0, thick, hz * 2, metal);
+  const jamb = (hz - door) / 2;
+  parapet(g, hx - thick / 2, hz - jamb / 2, thick, jamb, metal);
+  parapet(g, hx - thick / 2, -(hz - jamb / 2), thick, jamb, metal);
+  const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.15, 0.08), new THREE.MeshToonMaterial({ color: 0x2a3138 }));
+  hanger.position.set(0, 2.85, 0); g.add(hanger);
+  return g;
+}
+function liftCar() {
+  const g = new THREE.Group();
+  const metal = new THREE.MeshToonMaterial({ color: 0x8a9298 });
+  const wood = new THREE.MeshToonMaterial({ color: 0x6e5438 });
+  const { hx, hz, thick, wall } = ELEVATOR.car;
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(hx * 2 - 0.04, 0.1, hz * 2 - 0.04), wood);
+  floor.position.y = 0.04; g.add(floor);
+  const side = (x) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(thick, wall, hz * 2), metal);
+    m.position.set(x, wall / 2, 0); g.add(m);
+  };
+  side(-hx + thick / 2); side(hx - thick / 2);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, wall, thick), metal);
+  back.position.set(0, wall / 2, hz - thick / 2); g.add(back);
+  const gate = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, wall, thick), metal);
+  gate.position.set(0, wall / 2, -hz + thick / 2); gate.name = 'gate'; g.add(gate);
   return g;
 }
 
@@ -177,10 +199,167 @@ function sleighRig() {
   return { group: g, bob, deer, wave: rider.arms[1], burst, starMat, glowMat };
 }
 
+// Cenário do cume. Sem colisão: quem cai da passarela continua caindo até o plano de morte.
+function summit() {
+  const g = new THREE.Group();
+  g.name = 'summit';
+  const rock = [], ledge = [], snow = [];
+  const put = (bucket, x0, y0, z0, x1, y1, z1) => {
+    const geo = new THREE.BoxGeometry(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0));
+    geo.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    bucket.push(geo);
+  };
+  const gaps = [[-28.6, -23.2], [-8.1, -2.8], [-2.3, 2.3], [2.8, 8.1], [23.2, 28.6]];
+  const spans = (z0, z1) => {
+    const out = []; let z = z0;
+    for (const [a, b] of gaps) { if (a > z + 0.5) out.push([z, a]); z = Math.max(z, b); }
+    if (z1 > z + 0.5) out.push([z, z1]);
+    return out;
+  };
+  // Face externa contínua, bem embaixo da tábua. A interna abre onde tem escada e ponte.
+  put(rock, -20.6, -36, -36, -18.7, 3.35, 36);
+  put(rock, 18.7, -36, -36, 20.6, 3.35, 36);
+  for (const [za, zb] of spans(-34, 34)) {
+    put(rock, -16.6, -30, za, -16.1, 3.3, zb);
+    put(rock, 16.1, -30, za, 16.6, 3.3, zb);
+    put(rock, -12.6, -28, za, -12.05, 0.05, zb);
+    put(rock, 12.05, -28, za, 12.6, 0.05, zb);
+  }
+  put(rock, -16, -32, 36.3, 16, 0.05, 39.2);
+  put(rock, -16, -32, -39.2, 16, 0.05, -36.3);
+  // Ressaltos de rocha com capa de neve, descendo até o vale.
+  const shelves = [
+    [-34, -20.2, -48, 48, -8, -5.6], [20.2, 34, -48, 48, -8, -5.6],
+    [-52, -30, -62, 62, -20, -16.5], [30, 52, -62, 62, -20, -16.5],
+    [-78, -46, -78, 78, -36, -31], [46, 78, -78, 78, -36, -31],
+    [-22, 22, 39, 58, -12, -8], [-22, 22, -58, -39, -12, -8],
+    [-36, 36, 56, 86, -28, -22], [-36, 36, -86, -56, -28, -22],
+    [-90, -70, -40, 40, -50, -44], [70, 90, -40, 40, -50, -44],
+  ];
+  for (const [x0, x1, z0, z1, y0, y1] of shelves) {
+    put(ledge, x0, y0, z0, x1, y1, z1);
+    put(snow, x0 + 0.4, y1 - 0.35, z0 + 0.4, x1 - 0.4, y1 + 0.15, z1 - 0.4);
+  }
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 7; i++) {
+      const z = -30 + i * 10;
+      put(ledge, side * 24, -22 + (i % 3) * -4, z, side * 31, -6, z + 3.2);
+      put(rock, side * 21.2, -30, z + 1, side * 23.4, 1.2, z + 1.8);
+    }
+  }
+  const meshOf = (list, color) => {
+    if (!list.length) return;
+    const mesh = new THREE.Mesh(mergeGeometries(list, false), new THREE.MeshToonMaterial({ color }));
+    mesh.castShadow = mesh.receiveShadow = false;
+    g.add(mesh);
+  };
+  meshOf(rock, 0x3c4652);
+  meshOf(ledge, 0x596574);
+  meshOf(snow, 0xe4eef4);
+
+  const cone = new THREE.ConeGeometry(1, 1, 6); cone.translate(0, 0.5, 0);
+  const peaks = (rows, color) => {
+    const mesh = new THREE.InstancedMesh(cone, new THREE.MeshToonMaterial({ color }), rows.length);
+    const dummy = new THREE.Object3D();
+    rows.forEach(([x, z, base, h, r], i) => {
+      dummy.position.set(x, base, z); dummy.scale.set(r, h, r); dummy.rotation.y = i * 0.7; dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.castShadow = false; g.add(mesh);
+  };
+  // Perto (alguns picos acima do platô, outros abaixo), médio e longe. A base encosta na encosta ou na névoa.
+  // Base no vale (y=-58): o cone desce até o chão, não fica solto no céu. A ponta varia acima e abaixo do cume.
+  const near = [[-78, 28, -58, 78, 22], [-96, -36, -58, 64, 20], [-58, 78, -58, 72, 18], [70, 48, -58, 88, 24], [92, -30, -58, 60, 18], [46, -86, -58, 76, 20], [-30, -96, -58, 66, 18], [110, 12, -58, 54, 16]];
+  const mid = [[-140, 55, -58, 96, 32], [-168, -62, -58, 84, 28], [150, 72, -58, 108, 34], [172, -48, -58, 90, 30], [24, 168, -58, 100, 32], [-48, -176, -58, 86, 28], [128, -132, -58, 94, 30], [-155, 128, -58, 88, 26]];
+  const far = [[8, 230, -58, 112, 42], [190, 170, -58, 128, 46], [-200, 150, -58, 118, 44], [220, -70, -58, 100, 38], [-230, -50, -58, 122, 42], [90, -230, -58, 108, 40], [-80, 240, -58, 104, 38], [245, 30, -58, 96, 36]];
+  peaks(near, 0x6d7884);
+  peaks(near.map(([x, z, base, h, r]) => [x, z, base + h * 0.62, h * 0.42, r * 0.62]), 0xf2f7fb);
+  peaks(mid, 0x8b98a6);
+  peaks(mid.map(([x, z, base, h, r]) => [x, z, base + h * 0.66, h * 0.38, r * 0.58]), 0xe7eef5);
+  peaks(far, 0xb7c4d0);
+  peaks(far.map(([x, z, base, h, r]) => [x, z, base + h * 0.7, h * 0.34, r * 0.55]), 0xf7fbfe);
+
+  const pineGeo = (() => {
+    const trunk = new THREE.CylinderGeometry(0.18, 0.28, 1.3, 5); trunk.translate(0, 0.65, 0);
+    const a = new THREE.ConeGeometry(1.15, 2.4, 6); a.translate(0, 2.15, 0);
+    const b = new THREE.ConeGeometry(0.8, 1.7, 6); b.translate(0, 3.45, 0);
+    return mergeGeometries([trunk, a, b], false);
+  })();
+  const pines = [];
+  const addPine = (x, y, z, s) => pines.push([x, y, z, s]);
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 14; i++) {
+      const z = -42 + i * 6.4;
+      addPine(side * 27, -5.5, z, 0.9 + (i % 3) * 0.25);
+      addPine(side * 40, -16.2, z * 1.05, 1.1 + (i % 2) * 0.3);
+      addPine(side * 58, -30.6, z * 1.15, 1.3);
+    }
+  }
+  for (let i = 0; i < 10; i++) {
+    addPine(-18 + i * 4, -7.8, 48, 1);
+    addPine(-18 + i * 4, -7.8, -48, 1);
+  }
+  // Vale: floresta, lago congelado e vilinha. Fica abaixo do plano em que a queda mata.
+  const valley = new THREE.Mesh(new THREE.CircleGeometry(230, 28), new THREE.MeshToonMaterial({ color: 0x2d4a3c }));
+  valley.rotation.x = -Math.PI / 2; valley.position.y = -58; valley.receiveShadow = false; g.add(valley);
+  const lake = new THREE.Mesh(new THREE.CircleGeometry(28, 20), new THREE.MeshToonMaterial({ color: 0xd5e3ea }));
+  lake.rotation.x = -Math.PI / 2; lake.position.set(-96, -57.6, 12); g.add(lake);
+  const lake2 = lake.clone(); lake2.position.set(102, -57.6, -18); lake2.scale.set(0.7, 1, 1.3); g.add(lake2);
+  const river = new THREE.Mesh(new THREE.PlaneGeometry(70, 4.5), new THREE.MeshToonMaterial({ color: 0xc5d6e0 }));
+  river.rotation.x = -Math.PI / 2; river.position.set(-55, -57.55, 8); river.rotation.z = 0.4; g.add(river);
+  for (let i = 0; i < 36; i++) {
+    const a = i / 36 * Math.PI * 2;
+    const rad = 78 + (i % 5) * 14;
+    addPine(Math.cos(a) * rad, -57.7, Math.sin(a) * rad * 0.85, 1.4 + (i % 3) * 0.35);
+  }
+  const town = new THREE.Group();
+  const wall = new THREE.MeshToonMaterial({ color: 0x8d6848 });
+  const roofM = new THREE.MeshToonMaterial({ color: 0x8e2f2a });
+  const win = new THREE.MeshBasicMaterial({ color: 0xffe1a0, toneMapped: false });
+  for (let i = 0; i < 7; i++) {
+    const hx = (i % 4) * 7, hz = Math.floor(i / 4) * 8;
+    const house = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.2, 3.6), wall);
+    house.position.set(hx, 1.6, hz); town.add(house);
+    const rf = new THREE.Mesh(new THREE.ConeGeometry(3.3, 2.1, 4), roofM);
+    rf.position.set(hx, 4.1, hz); rf.rotation.y = Math.PI / 4; town.add(rf);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.35, 6, 5), win);
+    lamp.position.set(hx, 2.2, hz + 1.85); town.add(lamp);
+  }
+  town.position.set(-112, -57.7, 28); g.add(town);
+  const bulbs = [[-128, -54.2, 24], [-112, -53.6, 36], [-98, -54, 26], [-120, -53.4, 42]];
+  for (const [x, y, z] of bulbs) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.28, 5, 4), new THREE.MeshBasicMaterial({ color: 0xff4a4a, toneMapped: false }));
+    b.position.set(x, y, z); g.add(b);
+  }
+  const pineMesh = new THREE.InstancedMesh(pineGeo, new THREE.MeshToonMaterial({ color: 0x1c4a30 }), pines.length);
+  const dummy = new THREE.Object3D();
+  pines.forEach(([x, y, z, s], i) => { dummy.position.set(x, y, z); dummy.scale.setScalar(s); dummy.rotation.y = i; dummy.updateMatrix(); pineMesh.setMatrixAt(i, dummy.matrix); });
+  pineMesh.castShadow = false; g.add(pineMesh);
+
+  const puff = new THREE.MeshToonMaterial({ color: 0xf7fbff });
+  for (const [x, y, z, sc] of [[-46, -12, 24, 1], [54, -16, -18, 1.2], [-78, -8, -6, 0.8], [24, -20, 62, 1.3], [-18, -14, -74, 1.1], [86, -11, 36, 0.9], [-96, -18, 48, 1.15], [8, -22, -96, 1.4], [64, -9, -58, 0.85], [-58, -15, 70, 1]]) {
+    const cl = new THREE.Group();
+    for (let k = 0; k < 3; k++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(7, 8, 6), puff);
+      s.position.set(k * 8 - 8, 0, (k % 2) * 3); cl.add(s);
+    }
+    cl.position.set(x, y, z); cl.scale.set(sc, sc * 0.32, sc); g.add(cl);
+  }
+  const fogMat = (opacity) => new THREE.MeshBasicMaterial({ color: 0xd5e4ee, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+  for (const [y, op, rad] of [[-48, 0.28, 200], [-40, 0.16, 160]]) {
+    const fog = new THREE.Mesh(new THREE.CircleGeometry(rad, 24), fogMat(op));
+    fog.rotation.x = -Math.PI / 2; fog.position.y = y; g.add(fog);
+  }
+  return g;
+}
+
 export function mountNevasca(group, map) {
   const root = new THREE.Group(); root.name = 'nevasca-show';
+  root.add(summit());
   const cabins = [cabin(), cabin()];
   cabins.forEach((c) => root.add(c));
+  const lifts = [liftCar(), liftCar()];
+  lifts.forEach((c) => root.add(c));
   const big = tree(); big.position.set(0, 6.9, 0); root.add(big);
 
   const bulbs = [];
@@ -284,7 +463,7 @@ export function mountNevasca(group, map) {
   const puffCore = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff3c4, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }));
   cloud.add(puffCore); root.add(cloud);
   group.add(root);
-  return { root, cabins, bulbs: mesh, bulbN: bulbs.length, sled: rig.group, bob: rig.bob, deer: rig.deer, wave: rig.wave, burst: rig.burst, starMat: rig.starMat, glowMat: rig.glowMat, trail, trailN: TRAIL_N, cloud, puffMat, puffCore, big };
+  return { root, cabins, lifts, bulbs: mesh, bulbN: bulbs.length, sled: rig.group, bob: rig.bob, deer: rig.deer, wave: rig.wave, burst: rig.burst, starMat: rig.starMat, glowMat: rig.glowMat, trail, trailN: TRAIL_N, cloud, puffMat, puffCore, big };
 }
 
 const dummy = new THREE.Object3D();
@@ -294,6 +473,12 @@ export function updateNevasca(show, t, dt, onPass) {
   for (let i = 0; i < 2; i++) {
     const p = gondolaPose(t, i);
     show.cabins[i].position.set(p.x, p.y, p.z);
+    show.cabins[i].rotation.y = i === 0 ? 0 : Math.PI;
+    const e = elevatorPose(t, i);
+    show.lifts[i].position.set(e.x, e.y, e.z);
+    show.lifts[i].rotation.y = i === 0 ? 0 : Math.PI;
+    const gate = show.lifts[i].getObjectByName('gate');
+    if (gate) gate.visible = e.phase === 'up' || e.phase === 'down';
   }
   const phase = Math.floor(t * 2.2);
   if (phase !== show._phase) {

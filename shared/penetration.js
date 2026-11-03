@@ -12,7 +12,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const at = (o, d, t) => ({ x: o.x + d.x * t, y: o.y + d.y * t, z: o.z + d.z * t });
 // 'thin' (parede fina, mureta, guarda-corpo, poste), 'wood' (caixote, barril, banco) ou null (segura qualquer bala)
 export function solidKind(s) {
-  if (s.ramp) return null; const dx = s.max.x - s.min.x, dy = s.max.y - s.min.y, dz = s.max.z - s.min.z, m = Math.min(dx, dz);
+  if (s.ramp || s.cover) return null; const dx = s.max.x - s.min.x, dy = s.max.y - s.min.y, dz = s.max.z - s.min.z, m = Math.min(dx, dz);
   if (m <= PEN.thin && dy >= m) return 'thin';
   if (Math.max(dx, dz) <= PEN.crate && dy <= PEN.crate) return 'wood';
   return null;

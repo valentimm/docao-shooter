@@ -50,7 +50,7 @@ import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStami
 import { DOM, TEAM_NAMES, TEAM_COLORS, TEAM_HEX, TEAM_DARK, pickZone, newZoneState, zoneCounts, stepZone, inZone, smallerTeam } from './shared/domination.js';
 import { BACON_ITEM, noteHurt, resetRegen, regenStep, W_FALL } from './shared/rules.js';
 import { fellOff } from './shared/physics.js';
-import { rideShift } from './shared/nevasca.js';
+import { rideShift, nevascaSolids } from './shared/nevasca.js';
 import { mountNevasca, updateNevasca } from './nevasca-show.js';
 import { BOMB, W_BOMB, SIDE_NAMES, SITE_NAMES, attackTeam, sideOf, bombLayout, newBombState, startRound, stepBomb, blastVictims, unpackBomb, spawnList, botObjective, bombFrozen, bombCanUse, plantNow, siteAt } from './shared/bomb.js';
 import { makeBotijao, makeSiteMark } from './bomb-gfx.js';
@@ -177,7 +177,21 @@ const topAt = (s, x, z) => PHYS.topAt(s, x, z);
 const collides = (x, y, z) => PHYS.collides(x, y, z);
 const groundAt = (x, z, y) => PHYS.groundAt(x, z, y);
 const ceilingAt = (x, z, headY) => PHYS.ceilingAt(x, z, headY);
-const moveEntity = (e, dt) => PHYS.moveEntity(e, dt);
+function syncNevasca(t) {
+  if (!PHYS.setMovers) return;
+  PHYS.setMovers(currentMap && currentMap.id === 'posto-nevasca' ? nevascaSolids(t) : []);
+}
+const moveEntity = (e, dt) => {
+  const blocked = PHYS.moveEntity(e, dt);
+  if (currentMap && currentMap.id === 'posto-nevasca' && dt > 0 && e.pos) {
+    const ride = rideShift(e.pos, gameTime, dt);
+    if (ride) {
+      e.pos.set(ride.x, ride.floor ? ride.y : Math.max(ride.y, e.pos.y), ride.z);
+      if (ride.floor) { e.vel.y = 0; e.onGround = true; }
+    }
+  }
+  return blocked;
+};
 function checkFall(e) {
   if (noclipOn && e === player) return; // exploração: voando, penhasco e queda não matam
   if (!e.alive || !currentMap || !fellOff(currentMap.fall, e.pos.y)) return;
@@ -4703,10 +4717,6 @@ function updatePlayer(dt) {
   if (!guiding && jumpPressed && p.onGround && !bombLock(p)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
   moveEntity(p, dt);
-  if (currentMap && currentMap.id === 'posto-nevasca') {
-    const ride = rideShift(p.pos, gameTime, dt);
-    if (ride) { p.pos.set(ride.x, ride.floor ? ride.y : Math.max(ride.y, p.pos.y), ride.z); if (ride.floor) { p.vel.y = 0; p.onGround = true; } }
-  }
   checkFall(p); if (!p.alive) return;
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
   stepRecoil(p, dt, gameTime);
@@ -6453,6 +6463,7 @@ function loop() {
   if (window.__stopAt != null) dt = Math.max(0, Math.min(dt, window.__stopAt - gameTime)); // testes/screenshots: congela o tempo de jogo num instante exato
   if (state === 'playing' || (online && state === 'paused' && player)) { // online o jogo não pausa
     gameTime += dt;
+    syncNevasca(gameTime);
     if (exploreMode() && player && player.alive) refillExplore(player);
     if (state === 'playing') updatePlayer(dt); else if (player.alive) { stepCrouch(player, 0, dt, PHYS); player.vel.x = player.vel.z = 0; moveEntity(player, dt); }
     if (emote.on && state === 'playing') stepEmote(dt);

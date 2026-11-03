@@ -18,6 +18,7 @@ import { EARN, knifeKind, sniperKind, parseGuns } from '../../shared/closet.js';
 import { CHAL_MODES } from '../../shared/challenges.js';
 import { cleanName, uniqueName, NAME_MAX } from '../../shared/names.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, JUMP, SPEED, BOT_SPEED, EYE, WEAPONS, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE, SABER, SABER2, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, UZI, P90, DISC_W, CORN_W, EGG_W, NAIL, SEMI, MELEE, W_NADE, W_FALL, NADE, BACON_ITEM, noteHurt, resetRegen, regenStep, BOT_DEFS, BOT_RANGE, TAG_COLORS, TAMPA, RAY } from '../../shared/rules.js';
+import { rideShift, nevascaSolids } from '../../shared/nevasca.js';
 import { normBotDiff, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot as noteGunshot, scopeDelay } from '../../shared/bot-difficulty.js';
 import { SHIELD, isShieldW, shieldRaised, resetShield, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from '../../shared/shield.js';
 import { normWeapons, normPowers, clampLoadout, botPool, weaponOn, powerOn } from '../../shared/loadout.js';
@@ -1082,6 +1083,7 @@ startMsg() {
   // ---------- combate ----------
   // bala: atravessa parede leve e corpos (collateral) pela regra de shared/penetration.js (a mesma do cliente offline)
   hitscan(shooter, o, dirs, w, rewindT = this.T, mul = 1) {
+    if (this.mapId === 'posto-nevasca' && this.P.setMovers) this.P.setMovers(nevascaSolids(this.T));
     this.hearGunshot(o, shooter);
     const W = this.resolvedW(shooter, w), hits = new Map(), ends = [], holes = [], heliDmg = new Map(); const heliT = this.T - (shooter.bot ? 0 : clamp(shooter.ping / 1000, 0, 0.4));
     const scale = W.key === 'arco' ? clamp(Number(mul) || 1, 0.35, 1.3) : 1;
@@ -1472,6 +1474,7 @@ startMsg() {
     if (this.state !== 'playing') return;
     const t = this.now(); let dt = clamp(t - this.lastTick, 0, 0.25); this.lastTick = t;
     this.T = t - this.t0; this.purge();
+    if (this.mapId === 'posto-nevasca' && this.P.setMovers) this.P.setMovers(nevascaSolids(this.T));
     while (dt > 1e-4) { const h = Math.min(TICK, dt); dt -= h; for (const e of this.ents.values()) if (e.bot && !e.zt) this.updateBot(e, h); this.stepSabers(h); if (this.inv) this.inv.step(h); this.stepProjectiles(h); this.stepHelis(h); this.stepGunships(); }
     this.stepNukes();
     for (const e of this.ents.values()) {
@@ -1772,6 +1775,13 @@ startMsg() {
     else if (dashing) { const rate = (b.saber.dashDist || 0) / Math.max(0.05, b.saber.dashDur || 0.16); b.vel.x = b.saber.dashDir.x * rate; b.vel.z = b.saber.dashDir.z * rate; }
     else { const acc = b.onGround ? 10 : 3; b.vel.x += (mx - b.vel.x) * Math.min(1, acc * dt); b.vel.z += (mz - b.vel.z) * Math.min(1, acc * dt); }
     const blocked = this.P.moveEntity(b, dt);
+    if (this.mapId === 'posto-nevasca') {
+      const ride = rideShift(b.pos, this.T, dt);
+      if (ride) {
+        b.pos.x = ride.x; b.pos.y = ride.floor ? ride.y : Math.max(ride.y, b.pos.y); b.pos.z = ride.z;
+        if (ride.floor) { b.vel.y = 0; b.onGround = true; }
+      }
+    }
     if (b.alive && fellOff(this.fall, b.pos.y)) { this.kill(b, null, W_FALL, false); return; }
     if (blocked) { b.stuck += dt; if (b.onGround) b.vel.y = JUMP; if (b.stuck > 1.2) { b.wp = this.randomWaypoint(); b.path = null; b.lastSeenAt = -99; b.strafeDir *= -1; b.stuck = 0; b.stuckCount = (b.stuckCount || 0) + 1; } }
     else b.stuck = Math.max(0, b.stuck - dt);

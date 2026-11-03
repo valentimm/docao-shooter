@@ -74,7 +74,16 @@ export function createPhysics(solids, size, fall = null) {
   const key = (ix, iz) => ix * 100003 + iz;
   for (const s of solids) for (let ix = Math.floor((s.min.x - 1) / GRID); ix <= Math.floor((s.max.x + 1) / GRID); ix++)
     for (let iz = Math.floor((s.min.z - 1) / GRID); iz <= Math.floor((s.max.z + 1) / GRID); iz++) { const k = key(ix, iz); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(s); }
-  const solidsAt = (x, z) => grid.get(key(Math.floor(x / GRID), Math.floor(z / GRID))) || NONE;
+  // Sólidos móveis (bondinho e elevador). Poucos, testados direto, fora da grade.
+  let movers = [];
+  const setMovers = (list) => { movers = list || []; };
+  const solidsAt = (x, z) => {
+    const base = grid.get(key(Math.floor(x / GRID), Math.floor(z / GRID))) || NONE;
+    if (!movers.length) return base;
+    let extra = null;
+    for (const s of movers) if (x + 1.4 > s.min.x && x - 1.4 < s.max.x && z + 1.4 > s.min.z && z - 1.4 < s.max.z) (extra || (extra = base.slice())).push(s);
+    return extra || base;
+  };
   function topAt(s, x, z) {
     if (!s.ramp) return s.max.y;
     let t = s.ramp.axis === 'x' ? (x - s.min.x) / (s.max.x - s.min.x) : (z - s.min.z) / (s.max.z - s.min.z);
@@ -173,6 +182,7 @@ export function createPhysics(solids, size, fall = null) {
         const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; }
       }
     }
+    for (const s of movers) { const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; } }
     return hit ? best : null;
   }
   function rayBox(o, d, s) {
@@ -197,6 +207,7 @@ export function createPhysics(solids, size, fall = null) {
       const t = Math.min(far, i * GRID * 0.5); if (t > best + GRID) break;
       for (const s of solidsAt(o.x + d.x * t, o.z + d.z * t)) { if (seen.has(s)) continue; seen.add(s); const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; hs = s; } }
     }
+    for (const s of movers) { const r = rayBox(o, d, s); if (r !== null && r < best) { best = r; hit = true; hs = s; } }
     return hit ? { t: best, s: hs } : null;
   }
   // igual ao rayWorld, mas devolve também a normal da superfície atingida (disco quica nela). { t, n } ou null
@@ -212,6 +223,7 @@ export function createPhysics(solids, size, fall = null) {
         best = r; n = boxNormal(o, d, s, r);
       }
     }
+    for (const s of movers) { const r = rayBox(o, d, s); if (r === null || r >= best) continue; best = r; n = boxNormal(o, d, s, r); }
     return n ? { t: best, n } : null;
   }
   function boxNormal(o, d, s, t) {
@@ -252,7 +264,7 @@ export function createPhysics(solids, size, fall = null) {
       n.physicsLeft = Math.max(0, n.physicsLeft - NADE.step);
     }
   }
-  return { solids, solidsAt, topAt, collides, overlapping, depenetrate, groundAt, ceilingAt, moveEntity, rayWorld, rayWorldN, rayWorldS, losClear, nadeBlocked, stepNade, advanceNade };
+  return { solids, solidsAt, topAt, collides, overlapping, depenetrate, groundAt, ceilingAt, moveEntity, rayWorld, rayWorldN, rayWorldS, losClear, nadeBlocked, stepNade, advanceNade, setMovers };
 }
 
 export function raySphere(o, d, c, r) {
