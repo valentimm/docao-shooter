@@ -58,6 +58,8 @@ import { KS_KILL_NAME, heliPos, GUNNER, heliOrbit, AC130 } from './shared/killst
 import { DISC, stepDisc } from './shared/disc.js';
 import { RAY as RAY_MOVE, stepRay, raySplash } from './shared/ray.js';
 import { traceShot } from './shared/penetration.js';
+import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from './shared/gas.js';
+import { createGasView } from './gas-view.js';
 import { CORN, cornDirs, cornAim, stepCorn, popChain, popOpts } from './shared/corn.js';
 import { EGG, eggSpeed, eggDmg, stepEgg } from './shared/egg.js';
 import { killIcon, weaponSvg } from './killfeed-icons.js';
@@ -1258,6 +1260,7 @@ function blast(c, owner, o, direct = null) {
     applyShieldHurt(e, met.shield, met.blocked);
     if (met.dmg > 0) damage(e, met.dmg, owner, o.wIdx, false, false, 0, c);
   }
+  splashGasClient(c, owner, o);
 }
 // partículas: confete vermelho/ciano + espuma + gotas âmbar + clarão + onda
 const confGeo = new THREE.PlaneGeometry(0.12, 0.07), foamGeo = new THREE.SphereGeometry(0.16, 8, 6), dropGeo = new THREE.SphereGeometry(0.05, 6, 5);
@@ -1614,6 +1617,8 @@ function launchRocket(e, origin, dir) {
   if (!online && e) hearGunshot(entities, origin, e, gameTime);
   if (online && e.isPlayer) { netEv(['r', v3a(origin), v3a(dir), +(performance.now() / 1000).toFixed(3)]); return null; } // o servidor cria o foguete
   const near = wallDistance(origin, dir, 0.7); // colado na parede/chão: explode na hora
+  const gHit = gasSim ? gasSim.ray(origin, dir, near ? near.distance : 0.7) : null;
+  if (gHit && (!near || gHit.t <= near.distance)) { blast(origin.clone().addScaledVector(dir, Math.max(0, gHit.t - 0.05)), e, { ...R, wIdx: 3 }); return null; }
   if (near) { blast(near.point.clone().addScaledVector(dir, -0.12), e, { ...R, wIdx: 3 }); return null; }
   const start = origin.clone().addScaledVector(dir, 0.6);
   const mesh = makeRocket(1.5); scene.add(mesh); mesh.position.copy(start); mesh.lookAt(start.clone().add(dir));
@@ -1637,6 +1642,8 @@ function updateRockets(dt) {
       if (t !== null && (hitT === null || t < hitT)) { const blocked = classifyRay(e, modelYaw(e), r.pos, r.dir, t).block; hitT = t; hitE = blocked ? null : e; hitLid = blocked ? e : null; } // face da tampa para o foguete; pé, borda e fresta levam o direto
     }
     if (wh && (hitE || hitLid) && wh.distance < hitT) { hitE = null; hitLid = null; }
+    const gHit = gasSim ? gasSim.ray(r.pos, r.dir, (hitT ?? step + 0.1) + 0.02) : null;
+    if (gHit && (hitT === null || gHit.t < hitT)) { hitT = gHit.t; hitE = null; hitLid = null; }
     if (hitT !== null || gameTime - r.born > 6) {
       window.__lastBlast = { c: r.pos.clone().addScaledVector(r.dir, Math.max(0, (hitT ?? 0) - 0.05)).toArray(), hit: hitE ? hitE.name : (hitLid ? hitLid.name : null) };
       blast(r.pos.clone().addScaledVector(r.dir, Math.max(0, (hitT ?? 0) - 0.05)), r.owner, { ...R, wIdx: 3 }, hitE);
@@ -1667,13 +1674,16 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   const w = shooter && shooter.isPlayer ? gunOf(shooter, wIdx) : WEAPONS[wIdx]; const res = { hit: false, kill: false, kills: 0, wall: false };
   if (shooter && shooter.model) setExpression(shooter.model, 'angry', 0.5); // cara de brava ao atirar
   const scale = wIdx === BOW ? clamp(Number(mul) || 1, 0.35, 1.3) : 1;
-  const hitsBy = new Map(), lids = new Map(), bags = new Map(), dirs = [], heliDmg = new Map(), skies = shooter === player ? [] : [...skyHelis(), ...gunshipList().filter((h) => h.owner !== shooter)];
+  const hitsBy = new Map(), lids = new Map(), bags = new Map(), dirs = [], heliDmg = new Map(), gasAcc = new Map(), skies = shooter === player ? [] : [...skyHelis(), ...gunshipList().filter((h) => h.owner !== shooter)];
   const targets = entities.filter((e) => e !== shooter && e.alive && !friends(e, shooter)).map((e) => ({ e, p: e.pos, crouch: e.crouch || 0, size: e.zt ? e.size : 1 })); // zumbi grande: hitbox escalada; // time: bala atravessa o companheiro; agachado achata o corpo
   const helis = skies.map((sh) => ({ h: sh, c: sh.pos, r: heliR(sh) }));
   const shotW = invMode() ? { ...w, pierce: 8, pierceMul: 0.82 } : w; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
   for (let p = 0; p < w.pellets; p++) {
     const d = dir.clone(); d.x += (Math.random() - 0.5) * 2 * spread; d.y += (Math.random() - 0.5) * 2 * spread; d.z += (Math.random() - 0.5) * 2 * spread; d.normalize(); dirs.push(d);
-    const tr = traceShot(PHYS, origin, d, shotW, targets, helis, scale), end = origin.clone().addScaledVector(d, tr.end), vis = p < 4 || shooter.isPlayer;
+    const tr = traceShot(PHYS, origin, d, shotW, targets, helis, scale);
+    const gHit = gasSim ? gasSim.ray(origin, d, tr.end) : null;
+    if (gHit) { clipTrace(tr, origin, d, gHit); gasAcc.set(gHit.c, (gasAcc.get(gHit.c) || 0) + pelletOnGas(w, gHit.t, scale)); }
+    const end = origin.clone().addScaledVector(d, tr.end), vis = p < 4 || shooter.isPlayer;
     if (vis) tracer(muzzle, end, !!w.beam);
     for (const h of tr.holes) bulletHole(h, vis);
     if (tr.holes.length && vis) sfx.wallPen(shooter.isPlayer ? 0.8 : distVol(end) * 0.6);
@@ -1688,7 +1698,7 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
       const a = hitsBy.get(h.e) || { dmg: 0, head: false, fx: 0 }; a.dmg += h.dmg; a.head = a.head || h.head; a.fx |= (h.walls ? 1 : 0) | (h.bodies ? 2 : 0); hitsBy.set(h.e, a);
       const bag = bags.get(h.e) || []; bag.push(h.dmg); bags.set(h.e, bag);
     }
-    if (tr.heli) { heliDmg.set(tr.heli.h, (heliDmg.get(tr.heli.h) || 0) + tr.heli.dmg); puff(end, 0xffe08a); } else if (tr.stop === 'wall') puff(end);
+    if (tr.heli) { heliDmg.set(tr.heli.h, (heliDmg.get(tr.heli.h) || 0) + tr.heli.dmg); puff(end, 0xffe08a); } else if (tr.stop === 'gas') puff(end, 0xffb020); else if (tr.stop === 'wall') puff(end);
     if (shooter.isPlayer) window.__lastTrace = { dir: d.toArray(), end: +tr.end.toFixed(3), stop: tr.stop, holes: tr.holes.length, hits: tr.hits.map((h) => ({ name: h.e.name, dmg: +h.dmg.toFixed(2), head: h.head, walls: h.walls, bodies: h.bodies })) };
   }
   for (const [sh, dmg] of heliDmg) { hurtHeli(dmg, sh); res.hit = true; if (shooter && shooter.isPlayer) sfx.hit(); }
@@ -1711,6 +1721,7 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   const hurt = new Set(); for (const [e, h] of hitsBy) { if (h.dmg <= 0) continue; res.hit = true; res.wall = res.wall || !!(h.fx & 1); const hp0 = e.hp; if (damage(e, h.dmg, shooter, wIdx, h.head, false, h.fx)) { res.kill = true; res.kills++; } if (e.hp < hp0) hurt.add(e); }
   if (w.knock) for (const [e, h] of hitsBy) { if (!e.alive || e.dummy || !hurt.has(e)) continue; const v = shotKnock(w, origin, e.pos, h.dmg, e.zt); if (!v) continue; e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; if (e.isPlayer) lastKnock = gameTime; } // Calibre 12: empurrão (mesma conta do servidor)
   if (shooter.isPlayer && res.kills >= 2) feedbackMedal('Collateral', `${res.kills} de uma bala só`);
+  if (!online) for (const [c, dmg] of gasAcc) if (noteGasHit(c, dmg, shooter)) res.hit = true;
   return res;
 }
 
@@ -3144,10 +3155,11 @@ const KILL_PHRASES = [
 ];
 const SELF_PHRASES = [(t) => `${t} se pururucou`, (t) => `${t} virou bacon sozinho`, (t) => `${t} se jogou na frigideira`, (t) => `${t} fritou no próprio óleo`];
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
-function showStamp(wIdx) { const s = $('stamp'); s.textContent = isKnife(wIdx) ? 'MOGGADO!' : wIdx === TAMPA ? 'AMASSADO!' : wIdx === W_BOMB ? 'EXPLODIDO!' : wIdx === EGG_W ? 'OMELETADO!' : 'PURURUCADO!'; s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
+function showStamp(wIdx) { const s = $('stamp'); s.textContent = isKnife(wIdx) ? 'MOGGADO!' : wIdx === TAMPA ? 'AMASSADO!' : (wIdx === W_BOMB || wIdx === W_GAS) ? 'EXPLODIDO!' : wIdx === EGG_W ? 'OMELETADO!' : 'PURURUCADO!'; s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
 function addKillFeed(a, t, wIdx, head, back = false, label = null, fx = 0) {
   if (wIdx === W_FALL) { addFeedLine(`${escapeHtml(t.name)} despencou do penhasco`, `${t.name} despencou`); return; }
   if (wIdx === W_BOMB) { const n = `<b class="${t.isPlayer ? 'me' : ''}">${escapeHtml(t.name)}</b>`; addFeedLine(pick(BOOM_PHRASES)(n), `${t.name} explodiu com o botijão`); return; }
+  if (wIdx === W_GAS && !label) label = 'Botijão';
   const div = document.createElement('div'); div.className = 'kf' + (isKnife(wIdx) ? ' knife' : '');
   const nm = (e) => `<b class="${e.isPlayer ? 'me' : ''}">${escapeHtml(e.name)}</b>`;
   const knife = isKnife(wIdx) && a && a !== t; // faca: frase fixa "moggou"
@@ -3155,7 +3167,7 @@ function addKillFeed(a, t, wIdx, head, back = false, label = null, fx = 0) {
   const zk = a && a.zt, fogK = (a && a.fog) || label === 'Névoa Assombrada'; // Invasão: zumbi / névoa
   div.innerHTML = zk ? `${nm(a)} pegou ${nm(t)} <i>[🧟 ${zk === 'boss' ? 'Chefão' : 'Zumbi'}]</i>` : fogK ? `${nm(t)} sumiu na <i>[🌫 Névoa Assombrada]</i>` : knife ? `${nm(a)} moggou ${nm(t)} ${killIcon('knife')} <i>Faca${back ? ' · pelas costas!' : ''}</i>`
     : lidKill ? `${nm(a)} amassou ${nm(t)} na tampa ${killIcon('tampa')} <i>Tampa do Tacho</i>`
-    : a && a !== t ? `${pick(KILL_PHRASES)(nm(a), nm(t))} ${killIcon(wIdx === W_NADE ? 'nade' : WEAPONS[wIdx] && WEAPONS[wIdx].key, label, head, fx)} <i>${label || WEAPON_SHORT(wIdx)}${fx & 1 ? ' · pela parede' : ''}${fx & 2 ? ' · collateral' : ''}${head ? ' · no focinho!' : ''}</i>` : pick(SELF_PHRASES)(nm(t));
+    : a && a !== t ? `${pick(KILL_PHRASES)(nm(a), nm(t))} ${killIcon(wIdx === W_GAS ? 'gas' : wIdx === W_NADE ? 'nade' : WEAPONS[wIdx] && WEAPONS[wIdx].key, label, head, fx)} <i>${label || WEAPON_SHORT(wIdx)}${fx & 1 ? ' · pela parede' : ''}${fx & 2 ? ' · collateral' : ''}${head ? ' · no focinho!' : ''}</i>` : pick(SELF_PHRASES)(nm(t));
   // log canônico p/ testes (o texto exibido varia; faca é fixo)
   { const L = (window.__feedLog ||= []); L.push(knife ? `${a.name} moggou ${t.name} [Faca${back ? ' · pelas costas!' : ''}]` : lidKill ? `${a.name} amassou ${t.name} na tampa [Tampa do Tacho]` : a && a !== t ? `${a.name} pururucou ${t.name} [${label || WEAPON_SHORT(wIdx)}]${fx & 1 ? ' +parede' : ''}${fx & 2 ? ' +colat' : ''}` : `${t.name} se pururucou`); if (L.length > 20) L.shift(); }
   const kf = $('killfeed'); kf.prepend(div); while (kf.children.length > 6) kf.lastChild.remove();
@@ -5838,9 +5850,47 @@ function pickShowcaseCam() {
   }
   showCamYaw = 0;
 }
+let gasSim = null, gasView = null;
+function ensureGasView() {
+  if (gasView) return gasView;
+  gasView = createGasView(scene, { hiss(vol) { if (!(vol > 0.02)) return; noise(0.12, 2400, vol * 0.55, 'highpass'); tone('triangle', 720, 540, 0.09, vol * 0.12); } });
+  return gasView;
+}
+function bindGas(mapId, pack) {
+  ensureGasView().mount(mapId);
+  gasSim = createGasSim(mapId);
+  if (pack) gasSim.apply(pack);
+  gasView.syncAll(gasSim.list);
+}
+function boomGasClient(c, attacker) {
+  if (gasView) gasView.sync(c);
+  const p = gasCenter(c);
+  blast(new V3(p.x, p.y, p.z), attacker, { radius: GAS.blast.radius, maxDmg: GAS.blast.maxDmg, selfMul: GAS.blast.selfMul, knock: GAS.blast.knock, lift: GAS.blast.lift, wIdx: W_GAS, kind: 'g', gasId: c.id });
+}
+function noteGasHit(c, dmg, shooter) {
+  if (!gasSim || online) return false;
+  const r = gasSim.hurt(c, dmg, gameTime, shooter);
+  if (gasView) gasView.sync(c);
+  if (r === 'boom') gasSim.detonate(c, gameTime, shooter, (ev) => boomGasClient(ev.c, ev.attacker));
+  return !!r;
+}
+function stepGasLocal() {
+  if (!gasSim || online) return;
+  gasSim.step(gameTime, {
+    boom: (c, credit) => gasSim.detonate(c, gameTime, credit, (ev) => boomGasClient(ev.c, ev.attacker)),
+    sync: (c) => { if (gasView) gasView.sync(c); },
+  });
+}
+function splashGasClient(pos, owner, o) {
+  if (!gasSim || online || !gasSim.list.length) return;
+  gasSim.splash(pos, o, gameTime, owner, {
+    boom: (c, credit) => gasSim.detonate(c, gameTime, credit, (ev) => boomGasClient(ev.c, ev.attacker)),
+    sync: (c) => { if (gasView) gasView.sync(c); },
+  });
+}
 function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de munição (map.invPickups)
   const map = getMap(id);
-  if (currentMap === map && worldGroup) return map;
+  if (currentMap === map && worldGroup) { bindGas(map.id); return map; }
   if (worldGroup) { scene.remove(worldGroup); disposeWorld(worldGroup); }
   for (const p of pickups) scene.remove(p.mesh); pickups.length = 0;
   const w = buildWorld(map); worldGroup = w.group; scene.add(worldGroup);
@@ -5856,7 +5906,7 @@ function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de muniçã
   nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides, groundAt, solids, topAt, seeds: SPAWNS.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [], avoid: map.navAvoid || [] });
   navMs = performance.now() - t0;
   showcase.position.set(...map.showcase); showBaseY = map.showcase[1]; pickShowcaseCam();
-  currentMap = map; return map;
+  currentMap = map; bindGas(map.id); return map;
 }
 // Survival: folhas fechadas entram na colisão e saem quando a porta abre. O grafo dos zumbis refaz junto.
 function syncSurvivalSpace() {
@@ -6458,6 +6508,8 @@ function loop() {
     if (emote.on && state === 'playing') stepEmote(dt);
     if (online) netTick(dt);
     for (const e of entities) if (!e.isPlayer) updateBot(e, dt);
+    if (gasSim && !online) stepGasLocal();
+    if (gasView) gasView.update(dt, gameTime, player ? player.pos : null);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
     updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); tickNight(dt); if (survivalMode()) survivalPrompt();
     if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { sleighTune(); hohoho(); flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; });
@@ -7508,9 +7560,10 @@ function startOnlineMatch(m) {
   const o = online; stopInspect(true);
   if (o.inMatch && o.mapId === m.map && state !== 'over' && player) { // reconexão no meio da partida: só ressincroniza
     for (const info of m.ents) if (!o.ents.has(info.id) && info.id !== o.myId) remoteEnt(info);
+    if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); }
     return;
   }
-  clearMatchEnding(); resetAds(); loadMap(m.map, isInvasion(m.mode) || isSurvivalMode(m.mode, m)); clearBots(); gameTime = m.T; o.mapId = m.map; o.inMatch = true; o.ents.clear(); o.tmap = [];
+  clearMatchEnding(); resetAds(); loadMap(m.map, isInvasion(m.mode) || isSurvivalMode(m.mode, m)); if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); } clearBots(); gameTime = m.T; o.mapId = m.map; o.inMatch = true; o.ents.clear(); o.tmap = [];
   mode = MODE_OK(m.mode); matchVariant = m.variant === 'survival' || m.mode === 'survival' ? 'survival' : ''; survLive = !!m.surv || matchVariant === 'survival'; armsWinner = null; if (x1Mode()) x1Gun = m.gun ?? 0; inv = null; invNet = m.iv ? parseState(m.iv) : null; window.__capLog = []; o.limit = m.limit > 0 ? m.limit : 0; endBomb(); survClear();
   matchLimits = { weapons: (o.cfg && o.cfg.weapons) || null, powers: o.cfg && o.cfg.powers != null ? o.cfg.powers : null }; rulesLive = true;
   zone = m.zone ? newZoneState({ x: m.zone[0], y: m.zone[1], z: m.zone[2] }) : null; teamScore = m.zone ? [m.zone[8], m.zone[9]] : [0, 0];
@@ -7640,7 +7693,7 @@ function netEvent(ev) {
   } else if (k === 'k') {
     // ev[7] (servidor novo): 1 = faca, 2 = faca pelas costas. ev[3] vem como pistola pra clientes antigos.
     // ev[8] (servidor novo): killstreak 'p' míssil, 'h' Gavião, 'x' nuke. Gavião e nuke não contam pra sequência (Gavião vale 25 pts).
-    const [, aid, tid, w0, head, aK, tD, mk, ks, fx = 0] = ev; const a = entOf(aid), t = entOf(tid); if (!t) return; const w = mk === 3 ? W_BOMB : mk ? KNIFE : w0, back = mk === 2; // ev[9]: 1 pela parede, 2 collateral; mk 3 = botijão
+    const [, aid, tid, w0, head, aK, tD, mk, ks, fx = 0] = ev; const a = entOf(aid), t = entOf(tid); if (!t) return; const w = mk === 4 ? W_GAS : mk === 3 ? W_BOMB : mk ? KNIFE : w0, back = mk === 2; // ev[9]: 1 pela parede, 2 collateral; mk 3 = botijão da Bomba, mk 4 = botijão do mapa
     if (t.zt) { // Invasão: zumbi caiu (sem bacon; feed só pro chefão)
       if (a) a.kills = aK; t.alive = false; t.hp = 0; t.deathAt = gameTime; t.respawnAt = Infinity; sfx.die(distVol(t.pos) * 0.7);
       if (t.zt === 'boss') addKillFeed(a, t, w, head, back);
@@ -7710,6 +7763,14 @@ function netEvent(ev) {
   } else if (k === 'bm' && ev[2] === 'c') { // pipoca do Lança-Milho (o servidor já deu o dano)
     const [, pid, , c] = ev; const i = pid ? corns.findIndex((x) => x.pid === pid) : -1; if (i >= 0) { scene.remove(corns[i].mesh); corns.splice(i, 1); }
     popFx(a3v(c));
+  } else if (k === 'cy') {
+    const c = gasSim && gasSim.list[ev[1]]; if (!c) return;
+    c.phase = ev[2]; c.hp = ev[3];
+    if (c.phase === 1) c.explodeAt = ev[4]; else if (c.phase === 2) c.respawnAt = ev[4]; else { c.explodeAt = 0; c.respawnAt = 0; }
+    if (gasView) gasView.sync(c);
+  } else if (k === 'bm' && ev[2] === 'g') {
+    const at = a3v(ev[3]); blastFx(at, GAS.blast.radius);
+    const c = gasSim && gasSim.list[ev[4]]; if (c) { c.phase = 2; c.hp = 0; if (gasView) gasView.sync(c); }
   } else if (k === 'bm') {
     const [, pid, kind, c] = ev;
     const list = kind === 'n' ? grenades : rockets; const i = list.findIndex((x) => x.pid === pid && pid); if (i >= 0) { scene.remove(list[i].mesh); list.splice(i, 1); }
@@ -8544,7 +8605,7 @@ function invEndText() {
 // ganchos para testes automatizados
 window.__docao = { get state() { return state; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
   set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible }; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get noclip() { return noclipLive(); }, get noclipSpeed() { return noclipSpeed; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); },
-  MAPS, loadMap, selectMap, get map() { return currentMap; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
+  MAPS, loadMap, selectMap, get map() { return currentMap; }, get gas() { return gasSim ? gasSim.list.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, r: c.r, h: c.h, hp: +c.hp.toFixed(1), phase: c.phase, explodeAt: +c.explodeAt.toFixed(2), respawnAt: +c.respawnAt.toFixed(2) })) : []; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
   get online() { return online; }, joinRoom, leaveOnline, netEv,
   get mode() { return mode; }, get botDiff() { return botDiff; }, get zone() { return zone; }, set zone(v) { zone = v; }, get teamScore() { return teamScore; }, get spawnHold() { return spawnHold; }, get selectedPrimary() { return selectedPrimary; },
   ARMS_STAGES, GOLD_KNIFE, equipArmsLocal, get armsWinner() { return armsWinner; }, DOM, applyTeam, damage, respawn: (e) => respawn(e), get discs() { return discs; }, get rays() { return rays; }, armRay: (tier = 0) => { const p = player; if (!p) return; if (!p.slotOn) p.slotOn = [1, 1, 1]; p.slotOn[1] = 1; p.slots[1] = RAY; p.secondary = RAY; if (!p.pap) p.pap = {}; p.pap[RAY] = tier | 0; if (!p.mag || p.mag.length < WEAPONS.length) p.mag = WEAPONS.map((w) => w.mag); if (!p.reserve || p.reserve.length < WEAPONS.length) p.reserve = WEAPONS.map((w) => w.reserve); const g = withPap(WEAPONS[RAY], tier | 0); p.mag[RAY] = g.mag; p.reserve[RAY] = g.reserve; switchWeapon(p, RAY); setWeapon(p, RAY); p.switchEnd = gameTime; }, showBox: (w) => { survBox = { phase: 'offer', weapon: w, until: gameTime + 40, owner: player ? player.id : 0 }; }, get survLayout() { return survGfx && survGfx.layout; }, shootRay: () => { if (!player) return; const dir = new V3(0, 0, -1).applyQuaternion(camera.quaternion); launchRay(player, camera.localToWorld(new V3(0.06, -0.04, -0.15)), dir); }, fire, get lastTrace() { return window.__lastTrace; }, get holeCount() { return holes.length; }, get PHYS() { return PHYS; }, bulletHole, get eggs() { return eggs; }, get eggStains() { return eggStains.length; }, get eggSplat() { return Math.max(0, eggSplatUntil - gameTime); }, launchEgg: (e, o, d, k) => launchEgg(e, new V3(...o), new V3(...d).normalize(), k), fpGunNames: () => fp.guns.map((g) => g.name || ''), EGG_W, get effects() { return effects; }, fpGunEgg: () => { const e = fp.sling.userData.egg; return { vis: e.visible, y: +e.position.y.toFixed(3), z: +e.position.z.toFixed(3), pouchZ: +fp.sling.userData.pouch.position.z.toFixed(3) }; }, grantPokeball, get pokeFx() { return pokeFx; }, grantMinigun: () => grantMinigun(), MINIGUN, get mini() { const p = player; return p ? { spin: p.mgSpin || 0, heat: p.mgHeat || 0, hot: !!p.mgHot, firing: !!p.mgFiring, rot: fp.mini ? fp.mini.barrels.rotation.z : 0, glow: fp.mini ? fp.mini.glowMat.opacity : 0, glowOn: !!(fp.mini && fp.mini.glow.visible), shots: window.__mgShots || 0, steam: window.__mgSteam || 0, fov: camera.fov, guns: fp.guns.length, drops: fp.drops.length, hud: !document.getElementById('mgHud')?.hidden } : null; }, setMgHeat: (h) => { if (player) player.mgHeat = h; }, get fpSaberSide() { return fp.saberSide || 0; }, inspect: () => startInspect(player), stopInspect: () => stopInspect(true), get inspecting() { const s = fp.ins; return s ? { t: s.t, wpn: s.wpn, kind: s.kind, out: s.out, fade: s.fade, hold: s.hold } : null; },

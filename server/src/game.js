@@ -27,6 +27,7 @@ import { meleeHit, MELEE_KINDS } from '../../shared/melee.js';
 import { mapSolids, createPhysics, raySphere, HITBOXES, rayHitboxes, fellOff, FALL_FLOOR } from '../../shared/physics.js';
 import { stanceScale, stanceHeight, stepCrouch } from '../../shared/stance.js';
 import { traceShot } from '../../shared/penetration.js';
+import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from '../../shared/gas.js';
 import { DISC, stepDisc } from '../../shared/disc.js';
 import { stepRay, raySplash } from '../../shared/ray.js';
 import { CORN, cornDirs, cornAim, stepCorn, popChain, popOpts } from '../../shared/corn.js';
@@ -69,7 +70,7 @@ export class Game {
     this.io = io; // { send(id, obj), broadcast(obj), startLoop(), stopLoop() }
     this.ents = new Map(); this.nextId = 1; this.hostId = 0;
     this.state = 'lobby'; this.mapId = null; this.T = 0; this.t0 = 0;
-    this.events = []; this.personal = new Map(); this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.pickups = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.projId = 1;
+    this.events = []; this.personal = new Map(); this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.pickups = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = null; this.projId = 1;
     this.forcedWinTeam = null; this.nukeWinner = 0; this.x1Gun = 0; this.x1Hold = 0; // max de antes do X1, pra voltar ao sair
   }
   now() { return Date.now() / 1000; }
@@ -252,7 +253,7 @@ export class Game {
     this.nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds: navSeeds, extra: map.waypoints || [], avoid: map.navAvoid || [] });
     const rawPicks = this.invasion && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups;
     this.pickups = (this.x1Mode ? rawPicks.filter((p) => p[0] === 'ammo') : rawPicks).map(([type, x, z, y]) => { const on = (!this.armsMode || type === 'ammo' || type === 'health') && powerOn(type, this.cfg.powers); return { type, pos: { x, y: this.P.groundAt(x, z, (y || 0) + 0.3), z }, active: on, respawnAt: on ? 0 : 1e9 }; });
-    this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.events = []; this.personal.clear();
+    this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = createGasSim(id); this.events = []; this.personal.clear();
     this.state = 'playing'; this.t0 = this.now(); this.T = 0; this.lastTick = this.now();
     this.curLimit = this.cfgLimit;
     for (const e of this.ents.values()) { e.ck = 0; e.cpaid = 0; e.jt = 0; e.cpl = 0; e.cdf = 0; e.vu = e.voice && e.voice !== 'off' ? 1 : 0;
@@ -304,7 +305,7 @@ export class Game {
   zoneArr() { const z = this.zone; return z ? [r2(z.x), r2(z.y), r2(z.z), +z.progress.toFixed(3), z.team, z.contested ? 1 : 0, z.counts[0], z.counts[1], this.teamScore[0], this.teamScore[1]] : null; }
 startMsg() {
     const doors = this.surv ? { open: [...this.surv.open], areas: [...this.surv.areas] } : undefined;
-    return { t: 'start', mode: this.cfg.mode, variant: this.cfg.variant || undefined, surv: this.survival ? 1 : 0, stations: this.stations || undefined, doors, iv: this.inv ? this.inv.stateArr() : undefined, drops: this.inv ? this.inv.drops.map((d) => [d.id, DROP_KEYS.indexOf(d.kind), [r2(d.x), r2(d.y), r2(d.z)]]) : undefined, zone: this.zoneArr(), bomb: this.bomb ? { sites: this.bombL.sites.map((s) => [r2(s.x), r2(s.y), r2(s.z)]), atk: this.bombL.atk, def: this.bombL.def, pts: this.bombL.pts ? this.bombL.pts.map((p) => [r2(p.x), r2(p.y), r2(p.z)]) : undefined, s: packBomb(this.bomb) } : undefined, win: DOM.WIN_CAPS, map: this.mapId, T: r2(this.T), limit: Number.isFinite(this.timeLimit) ? this.timeLimit : 0, kills: this.x1Mode ? X1.KILLS : KILL_LIMIT, gun: this.x1Mode ? this.x1Gun : undefined, hostId: this.hostId, ents: [...this.ents.values()].filter((e) => e.bot || e.connected).map((e) => this.entInfo(e)), pk: this.pickups.map((p) => (p.active ? 1 : 0)) };
+    return { t: 'start', mode: this.cfg.mode, variant: this.cfg.variant || undefined, surv: this.survival ? 1 : 0, stations: this.stations || undefined, doors, iv: this.inv ? this.inv.stateArr() : undefined, drops: this.inv ? this.inv.drops.map((d) => [d.id, DROP_KEYS.indexOf(d.kind), [r2(d.x), r2(d.y), r2(d.z)]]) : undefined, zone: this.zoneArr(), bomb: this.bomb ? { sites: this.bombL.sites.map((s) => [r2(s.x), r2(s.y), r2(s.z)]), atk: this.bombL.atk, def: this.bombL.def, pts: this.bombL.pts ? this.bombL.pts.map((p) => [r2(p.x), r2(p.y), r2(p.z)]) : undefined, s: packBomb(this.bomb) } : undefined, win: DOM.WIN_CAPS, map: this.mapId, gas: this.gas ? this.gas.pack() : undefined, T: r2(this.T), limit: Number.isFinite(this.timeLimit) ? this.timeLimit : 0, kills: this.x1Mode ? X1.KILLS : KILL_LIMIT, gun: this.x1Mode ? this.x1Gun : undefined, hostId: this.hostId, ents: [...this.ents.values()].filter((e) => e.bot || e.connected).map((e) => this.entInfo(e)), pk: this.pickups.map((p) => (p.active ? 1 : 0)) };
   }
   // ranking: soma abates/mortes (e partida/vitória no fim) das contas. Treino não conta. Falha de gravação nunca derruba a sala.
   // Docoins (moeda do jogo): o SERVIDOR calcula tudo aqui. Abates contam na hora (e.ck); fim de partida/vitória/waves só no flush final ou na saída.
@@ -1089,9 +1090,11 @@ startMsg() {
     const helis = []; for (const hl of this.helis) if (hl.alive && this.heliFoe(hl, shooter)) helis.push({ h: hl, c: this.heliAt(hl, heliT), r: this.heliR(hl) }, { h: hl, c: this.heliAt(hl, rewindT), r: this.heliR(hl) }); // o cliente desenha o Gavião sem atraso: vale o ping ou o rewind
     for (const hl of this.gunships) if (hl.alive && this.heliFoe(hl, shooter)) helis.push({ h: hl, c: this.heliAt(hl, heliT), r: AC130.hit }, { h: hl, c: this.heliAt(hl, rewindT), r: AC130.hit }); // Grelha: mesma esfera do helicóptero, raio do avião
     const shotW = this.inv ? { ...W, pierce: 8, pierceMul: 0.82 } : W; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
-    const lids = new Map(), raw = new Map();
+    const lids = new Map(), raw = new Map(), gasAcc = new Map();
     for (const d of dirs) {
       const tr = traceShot(this.P, o, d, shotW, targets, helis, scale);
+      const gHit = this.gas ? this.gas.ray(o, d, tr.end) : null;
+      if (gHit) { clipTrace(tr, o, d, gHit); gasAcc.set(gHit.c, (gasAcc.get(gHit.c) || 0) + pelletOnGas(W, gHit.t, scale)); }
       ends.push([r2(o.x + d.x * tr.end), r2(o.y + d.y * tr.end), r2(o.z + d.z * tr.end), tr.hits.length ? 1 : 0]);
       for (const h of tr.holes) if (holes.length < 12) holes.push([r2(h.p.x), r2(h.p.y), r2(h.p.z), h.n.x, h.n.y, h.n.z, h.out ? 1 : 0]);
       if (tr.heli) heliDmg.set(tr.heli.h, (heliDmg.get(tr.heli.h) || 0) + tr.heli.dmg);
@@ -1123,6 +1126,7 @@ startMsg() {
       if (t.bot) { t.vel.x += v.x; t.vel.z += v.z; t.vel.y = Math.max(t.vel.y, v.y); t.onGround = false; } else this.toMe(t, ['kn', arr3(v)]);
     }
     if (kills >= 2) { this.events.push(['mk', shooter.id, kills]); if (!this.inv) this.cq(shooter, 'col'); } // collateral: várias mortes num tiro só
+    for (const [c, dmg] of gasAcc) this.hurtGas(c, dmg, shooter);
     return hits;
   }
   friends(a, b) { if (this.invasion) return !!(a && b && a !== b && !a.zt === !b.zt); return this.teamMode && a && b && a !== b && a.team === b.team && a.team >= 0; }
@@ -1150,8 +1154,8 @@ startMsg() {
     }
     t.ksKills = 0; t.ksMissile = null; // morreu: sequência zera (míssil no ar cai junto); os streaks já ganhos (ksBank) continuam guardados
     // faca: ev[3] = pistola (clientes antigos não conhecem a arma 5) e ev[7] = 1 (faca) / 2 (pelas costas)
-    const knifeKill = isKnife(w);
-    const ev = ['k', a ? a.id : 0, t.id, knifeKill ? PISTOL : w === W_BOMB ? W_NADE : w, head ? 1 : 0, a ? a.kills : 0, t.deaths]; if (knifeKill) ev.push(back ? 2 : 1); else if (w === W_BOMB) ev.push(3); // 3 = botijão (clientes antigos veem Copo Bomba). Faca dourada usa o mesmo sinal da faca.
+    const knifeKill = isKnife(w), gasKill = w === W_GAS;
+    const ev = ['k', a ? a.id : 0, t.id, knifeKill ? PISTOL : (w === W_BOMB || gasKill) ? W_NADE : w, head ? 1 : 0, a ? a.kills : 0, t.deaths]; if (knifeKill) ev.push(back ? 2 : 1); else if (w === W_BOMB) ev.push(3); else if (gasKill) ev.push(4); // 3 = botijão da Bomba, 4 = botijão do mapa (clientes antigos veem Copo Bomba). Faca dourada usa o mesmo sinal da faca.
     if (ks || fx) { while (ev.length < 8) ev.push(0); ev.push(ks || 0); } if (fx) ev.push(fx); // ev[9]: 1 pela parede, 2 collateral
     this.events.push(ev);
     // vira bacon que cura: fica no chão onde morreu pelo mesmo tempo que o bacon aparece no cliente
@@ -1174,7 +1178,7 @@ startMsg() {
     const g = CHAL_WEAPONS[WEAPONS[w] ? WEAPONS[w].key : '']; if (g) this.cq(a, g);
   }
   blast(c, owner, o, direct = null) {
-    this.events.push(['bm', o.pid || 0, o.kind, arr3(c)]);
+    const bm = ['bm', o.pid || 0, o.kind, arr3(c)]; if (o.gasId >= 0) bm.push(o.gasId); this.events.push(bm);
     for (const hl of this.helis) { // explosão perto do Gavião (mesma conta do offline)
       if (!hl.alive || !this.heliFoe(hl, owner)) continue;
       const d = dist(c, this.heliAt(hl)), reach = o.radius + this.heliR(hl) * 0.4; if (d < reach) this.hurtHeli(hl, o.maxDmg * (0.35 + 0.65 * (1 - d / reach)), owner);
@@ -1193,7 +1197,28 @@ startMsg() {
       this.payShield(e, met.shield, met.blocked);
       if (met.dmg > 0) this.damage(e, met.dmg, owner, o.wIdx, false, false, o.ks || null, 0, c);
     }
+    if (this.gas && this.gas.list.length) this.splashGas(c, owner, o);
     return hits;
+  }
+  pushGas(c) { this.events.push(['cy', c.id, c.phase, Math.round(c.hp), r2(c.phase === 1 ? c.explodeAt : c.phase === 2 ? c.respawnAt : 0)]); }
+  boomGas(c, credit) {
+    this.gas.detonate(c, this.T, credit, (ev) => {
+      this.pushGas(ev.c);
+      const p = gasCenter(ev.c);
+      this.blast(p, ev.attacker, { radius: GAS.blast.radius, maxDmg: GAS.blast.maxDmg, selfMul: GAS.blast.selfMul, knock: GAS.blast.knock, lift: GAS.blast.lift, wIdx: W_GAS, kind: 'g', gasId: ev.c.id });
+    });
+  }
+  splashGas(pos, owner, o) {
+    this.gas.splash(pos, o, this.T, owner, { boom: (c, credit) => this.boomGas(c, credit || owner), sync: (c) => this.pushGas(c) });
+  }
+  hurtGas(c, dmg, shooter) {
+    const r = this.gas.hurt(c, dmg, this.T, shooter);
+    if (r === 'boom') this.boomGas(c, shooter);
+    else if (r) this.pushGas(c);
+    return r;
+  }
+  stepGas() {
+    this.gas.step(this.T, { boom: (c, credit) => this.boomGas(c, credit), sync: (c) => this.pushGas(c) });
   }
   throwNade(e, o, v, poke = false) {
     const n = { id: this.projId++, owner: e, pos: { ...o }, vel: { ...v }, explodeAt: this.T + (poke ? POKE.fuse : NADE.fuse), poke };
@@ -1203,7 +1228,9 @@ startMsg() {
   launchRocket(e, o, d) {
     this.hearGunshot(o, e);
     const R = (this.resolvedW(e, 3).rocket) || WEAPONS[3].rocket, near = this.P.rayWorld(o, d, 0.7);
+    const gNear = this.gas ? this.gas.ray(o, d, near == null ? 0.7 : near) : null;
     this.events.push(['sh', e.id, 3, arr3(o), []]);
+    if (gNear && (near === null || gNear.t <= near)) { const t = Math.max(0, gNear.t - 0.05); this.blast({ x: o.x + d.x * t, y: o.y + d.y * t, z: o.z + d.z * t }, e, { ...R, wIdx: 3, kind: 'r' }); return; }
     if (near !== null) { const t = Math.max(0, near - 0.12); this.blast({ x: o.x + d.x * t, y: o.y + d.y * t, z: o.z + d.z * t }, e, { ...R, wIdx: 3, kind: 'r' }); return; }
     const r = { id: this.projId++, owner: e, pos: { x: o.x + d.x * 0.6, y: o.y + d.y * 0.6, z: o.z + d.z * 0.6 }, dir: d, born: this.T };
     this.rockets.push(r); this.events.push(['rk', r.id, e.id, arr3(r.pos), arr3(d)]);
@@ -1356,6 +1383,8 @@ startMsg() {
           hitT = t; hitE = blocked ? null : e; hitLid = blocked ? e : null; // face da tampa para o foguete; pé, borda e fresta levam o direto
         }
       }
+      const gHit = this.gas ? this.gas.ray(r.pos, r.dir, (hitT ?? step + 0.1) + 0.02) : null;
+      if (gHit && (hitT === null || gHit.t < hitT)) { hitT = gHit.t; hitE = null; hitLid = null; }
       if (hitT !== null || this.T - r.born > 6) {
         const t = Math.max(0, (hitT ?? 0) - 0.05); this.rockets.splice(i, 1);
         this.blast({ x: r.pos.x + r.dir.x * t, y: r.pos.y + r.dir.y * t, z: r.pos.z + r.dir.z * t }, r.owner, { ...R, wIdx: 3, kind: 'r', pid: r.id }, hitE);
@@ -1473,7 +1502,7 @@ startMsg() {
     const t = this.now(); let dt = clamp(t - this.lastTick, 0, 0.25); this.lastTick = t;
     this.T = t - this.t0; this.purge();
     while (dt > 1e-4) { const h = Math.min(TICK, dt); dt -= h; for (const e of this.ents.values()) if (e.bot && !e.zt) this.updateBot(e, h); this.stepSabers(h); if (this.inv) this.inv.step(h); this.stepProjectiles(h); this.stepHelis(h); this.stepGunships(); }
-    this.stepNukes();
+    this.stepNukes(); if (this.gas) this.stepGas();
     for (const e of this.ents.values()) {
       if (!e.alive && (e.bot || e.connected) && this.T >= e.respawnAt && !(e.needRs && !e.rsReq && this.T < e.respawnAt + RS_SAFETY) && !(e.pendingTeam && this.now() - (e.pendingSince || 0) < PENDING_WAIT)) { if (e.pendingTeam) { e.pendingTeam = false; this.syncBots(); } this.spawn(e); }
       if (e.bot) this.pushHist(e);
