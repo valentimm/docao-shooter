@@ -440,6 +440,25 @@ function festive(root) {
   stripe(-6.4, 11.42, 0, 0xc0392b); stripe(6.4, 11.42, 0, 0x1f6b32);
   stripe(-6.4, -11.42, Math.PI, 0x1f6b32); stripe(6.4, -11.42, Math.PI, 0xc0392b);
   stripe(-11.42, 5.5, Math.PI / 2, 0xf2c94c); stripe(11.42, -5.5, -Math.PI / 2, 0xf2c94c);
+  // Paredes internas bem coloridas, encostadas na alvenaria, sem fechar porta nem escada.
+  const panel = (x, y, z, w, h, rot, hex) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshToonMaterial({ color: hex, side: THREE.DoubleSide }));
+    m.position.set(x, y, z); m.rotation.y = rot; root.add(m);
+  };
+  for (const sz of [-1, 1]) {
+    panel(-6.6, 2.5, sz * 11.32, 3.4, 3.1, sz < 0 ? Math.PI : 0, 0xc0392b);
+    panel(6.6, 2.5, sz * 11.32, 3.4, 3.1, sz < 0 ? Math.PI : 0, 0x1f6b32);
+    panel(sz * 10.85, 2.5, 6.2, 3.0, 3.1, sz < 0 ? Math.PI / 2 : -Math.PI / 2, 0x3d7ec4);
+    panel(sz * 10.85, 2.5, -6.2, 3.0, 3.1, sz < 0 ? Math.PI / 2 : -Math.PI / 2, 0xf2c94c);
+    panel(sz * 10.85, 5.0, 0, 2.2, 1.6, sz < 0 ? Math.PI / 2 : -Math.PI / 2, sz < 0 ? 0xc0392b : 0x1f6b32);
+  }
+  for (const [x, z] of [[-7.8, 6.6], [7.8, -6.6], [-6.4, -7.6], [6.4, 7.6]]) {
+    const pile = gift(0.9, 0.55, 0.7, x * z > 0 ? 0xc0392b : 0x3d7ec4);
+    const top = gift(0.55, 0.4, 0.45, 0x1f6b32);
+    top.position.y = 0.48;
+    const g = new THREE.Group(); g.add(pile); g.add(top);
+    add(g, x, 0.28, z, 0.4);
+  }
 }
 
 export function mountNevasca(group, map) {
@@ -488,8 +507,8 @@ export function mountNevasca(group, map) {
   hang(-9, 6.2, -9, 9, 6.2, -9, 12);
   hang(-9, 6.2, 9, 9, 6.2, 9, 12);
   for (const s of [1, -1]) {
-    hang(-4.6, 11.55, s * 31.5, 4.6, 11.55, s * 31.5, 10);
-    hang(s * 4.9, 11.55, s * 29.5, s * 4.9, 11.55, s * 33.6, 6);
+    hang(-6.8, 11.55, s * 31.5, 6.8, 11.55, s * 31.5, 12);
+    hang(s * 6.9, 11.55, s * 29.5, s * 6.9, 11.55, s * 33.6, 6);
   }
   for (const p of map.props || []) if (p.t === 'pine') {
     const s = p.s || 1, y = (p.y || 0) + 3.2 * s;
@@ -562,7 +581,8 @@ export function mountNevasca(group, map) {
     deco(nut, sz * 9.2, 0, sz * 27.4);
     deco(lamp, -9.4, 0, sz * 18.5); deco(lamp, 9.4, 0, sz * 18.5);
     deco(lamp, 0, 10.05, sz * 32);
-    const bigCane = cane(); bigCane.scale.setScalar(1.7); bigCane.position.set(sz * 5.4, 0, sz * 13.6); root.add(bigCane);
+    const bigCane = cane(); bigCane.scale.setScalar(2.6); bigCane.position.set(sz * 8.6, 0, sz * 15.4); root.add(bigCane);
+    const man = snowman(); man.scale.setScalar(1.45); man.position.set(sz * 9.3, 0, sz * 18.6); root.add(man);
   }
   festive(root);
 

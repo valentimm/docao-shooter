@@ -14,7 +14,7 @@ export const GONDOLA = {
 // Mureta acima do pulo (1,50) e abaixo do olho em pé (1,62): não entra pulando, atira por cima.
 export const CABIN = { hx: 1.08, hz: 1.14, thick: 0.1, wall: 1.56, door: 0.5 };
 // Plataforma larga. O elevador abre na borda de fora, com um vão de 0,3 m que o passo atravessa.
-export const DECK = { x: 5.05, zIn: 29.25, zOut: 33.75, y: 10 };
+export const DECK = { x: 7.2, zIn: 29.25, zOut: 33.75, y: 10 };
 export const ELEVATOR = {
   y0: 0, y1: 10, travel: 3.2, dwellTop: 4.8, dwellBot: 3.2,
   car: { hx: 1.28, hz: 1.18, thick: 0.1, wall: 1.56 },
@@ -61,6 +61,11 @@ export function rideShift(pos, t, dt) {
   if (!(dt > 0)) return null;
   for (let i = 0; i < 2; i++) {
     const hit = carry(pos, gondolaPose(t - dt, i), gondolaPose(t, i), GONDOLA.hx, GONDOLA.hz, GONDOLA.head);
+    if (hit) return hit;
+  }
+  const C = ELEVATOR.car;
+  for (let i = 0; i < 2; i++) {
+    const hit = carry(pos, elevatorPose(t - dt, i), elevatorPose(t, i), C.hx - 0.22, C.hz - 0.22, 2.15);
     if (hit) return hit;
   }
   return null;

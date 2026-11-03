@@ -1320,28 +1320,25 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   lStair(-1, -1); lStair(-1, 1); lStair(1, -1); lStair(1, 1);
   // Dois pilares no térreo, espelhados. Não fecham a rota norte-sul.
   boxes.push(B(-4.35, -0.3, -3.85, 0.3, 2.3, METAL2), B(3.85, -0.3, 4.35, 0.3, 2.3, METAL2));
-  // Caixotes de madeira e presentes no lugar das caixas lisas. Fora das portas.
-  const crate = (x, z, w, d, h, y = 0) => {
-    boxes.push(B(x - w / 2, z - d / 2, x + w / 2, z + d / 2, h, WOOD, y));
-    boxes.push(B(x - w / 2 - 0.04, z - 0.05, x + w / 2 + 0.04, z + 0.05, h + 0.05, '#c9a15a', y));
-    boxes.push(B(x - 0.05, z - d / 2 - 0.04, x + 0.05, z + d / 2 + 0.04, h + 0.05, '#c9a15a', y));
+  const wraps = ['#c0392b', '#1f6b32', '#3d7ec4', '#f2c94c'];
+  let wi = 0;
+  const present = (x, z, w, d, h, y = 0) => {
+    const paper = wraps[wi++ % wraps.length];
+    boxes.push(B(x - w / 2, z - d / 2, x + w / 2, z + d / 2, h, paper, y));
+    boxes.push(B(x - w / 2 - 0.02, z - 0.05, x + w / 2 + 0.02, z + 0.05, h + 0.04, '#f2c94c', y));
+    boxes.push(B(x - 0.05, z - d / 2 - 0.02, x + 0.05, z + d / 2 + 0.02, h + 0.04, '#f2c94c', y));
   };
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    crate(sx * 7.5, sz * 4.15, 1.15, 0.8, 0.72);
-    crate(sx * 7.7, sz * 4.15, 0.7, 0.55, 0.48, 0.72);
-    crate(sx * 6.15, sz * 3.55, 0.85, 0.7, 0.55);
+    present(sx * 7.5, sz * 4.15, 1.15, 0.8, 0.72);
+    present(sx * 7.7, sz * 4.15, 0.7, 0.55, 0.48, 0.72);
+    present(sx * 6.15, sz * 3.55, 0.85, 0.7, 0.55);
   }
 
-  // Spawn aberto: só uma mureta baixa de cada lado da escada e dois montes de neve.
+  // Spawn aberto: uma mureta baixa e clara de cada lado da escada, mais dois montes de neve.
   const band = (z, depth, x0, x1, h, c, y = 0) => boxes.push(B(x0, z - depth / 2, x1, z + depth / 2, h, c, y));
   for (const sz of [1, -1]) {
-    band(sz * 22.4, 0.28, -5.6, -2.4, 1.05, METAL2);
-    band(sz * 22.4, 0.28, 2.4, 5.6, 1.05, METAL2);
-    for (const sx of [-1, 1]) {
-      const mx = sx * 7.2, mz = sz * 24.8;
-      boxes.push(B(mx - 0.9, mz - 0.55, mx + 0.9, mz + 0.55, 0.38, SNOW));
-      boxes.push(B(mx - 0.5, mz - 0.32, mx + 0.5, mz + 0.32, 0.42, SNOW, 0.22));
-    }
+    band(sz * 22.4, 0.18, -5.2, -2.6, 1.05, '#d5dbe2');
+    band(sz * 22.4, 0.18, 2.6, 5.2, 1.05, '#d5dbe2');
     wps.push([0, 0.3, sz * 20.5], [0, 0.3, sz * 31.5], [sz * 8, 0.3, sz * 28]);
   }
   // Colisor da árvore, sem malha. O pinheiro desenhado está em nevasca-show.js.
@@ -1352,8 +1349,15 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   holeRail(-10.2, 7.7, -6.4, 7.85);
   holeRail(6.4, -7.85, 10.2, -7.7);
   holeRail(6.4, 7.7, 10.2, 7.85);
+  holeRail(-2.2, -2.2, 2.2, -2.05);
+  holeRail(-2.2, 2.05, 2.2, 2.2);
+  holeRail(-2.2, -2.05, -2.05, 2.05);
+  holeRail(2.05, -2.05, 2.2, 2.05);
   // Borda do platô. A boca da escada da passarela fica aberta; a passarela em si continua sem guarda.
-  const lip = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2));
+  const lip = (x0, z0, x1, z1) => {
+    boxes.push(B(x0, z0, x1, z1, 1.15, '#d5dbe2'));
+    boxes.push(B(x0, z0, x1, z1, 0.1, '#c0392b', 1.15));
+  };
   for (const s of [1, -1]) {
     lip(s * 11.92, s > 0 ? 12.35 : -35.85, s * 12.08, s > 0 ? 23.85 : -27.95);
     lip(s * 11.92, s > 0 ? 27.95 : -23.85, s * 12.08, s > 0 ? 35.85 : -12.35);
@@ -1365,15 +1369,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   const span = (sign) => {
     const x0 = sign < 0 ? -18.9 : 16.3, x1 = sign < 0 ? -16.3 : 18.9, y = H, zA = -28, zB = 28;
     boxes.push(B(x0, zA, x1, zB, 0.16, WOOD, y - 0.16));
-    const outer = sign < 0 ? x0 : x1 - 0.1, inner = sign < 0 ? x1 - 0.1 : x0;
-    boxes.push(B(outer, zA, outer + 0.1, zB, 0.9, METAL, y));
-    const gaps = [[-27.5, -24.4], [-7.6, -3.2], [-1.7, 1.7], [3.2, 7.6], [24.4, 27.5]];
-    let gz = zA;
-    for (const [a, b] of gaps) {
-      if (a > gz + 0.2) boxes.push(B(inner, gz, inner + 0.1, a, 0.9, METAL, y));
-      gz = b;
-    }
-    if (gz < zB) boxes.push(B(inner, gz, inner + 0.1, zB, 0.9, METAL, y));
+    // Sem guarda: as duas passarelas laterais são a rota perigosa. Cair delas mata.
     for (let z = -26; z <= 26; z += 8) {
       boxes.push(B(x0 + 0.02, z, x0 + 0.14, z + 0.12, y + 18, METAL2, -18));
       boxes.push(B(x1 - 0.14, z, x1 - 0.02, z + 0.12, y + 18, METAL2, -18));
@@ -1383,8 +1379,6 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     for (const zc of [-5.4, 5.4]) {
       const bx0 = Math.min(wall, edge), bx1 = Math.max(wall, edge);
       boxes.push(B(bx0, zc - 2.05, bx1, zc + 2.05, 0.16, METAL, y - 0.16));
-      boxes.push(B(bx0, zc - 2.05, bx1, zc - 1.9, 1.65, METAL2, y));
-      boxes.push(B(bx0, zc + 1.9, bx1, zc + 2.05, 1.65, METAL2, y));
       wps.push([sign * 13.6, y + 0.2, zc], [sign * 11.3, y + 0.2, zc]);
     }
     // escada do térreo, só na porta do meio. O patamar não segue pra norte nem pra sul.
@@ -1432,6 +1426,8 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   const props = [
     { t: 'pine', x: -6, z: 20, s: 1.15 }, { t: 'pine', x: 6, z: 20, s: 1.15 },
     { t: 'pine', x: -6, z: -20, s: 1.15 }, { t: 'pine', x: 6, z: -20, s: 1.15 },
+    { t: 'drift', x: -7.4, z: 25.2, r: 1.25, h: 0.72 }, { t: 'drift', x: 7.4, z: 25.2, r: 1.05, h: 0.58 },
+    { t: 'drift', x: -7.4, z: -25.2, r: 1.25, h: 0.72 }, { t: 'drift', x: 7.4, z: -25.2, r: 1.05, h: 0.58 },
     { t: 'keg', x: -8.5, z: 3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: 3.3, r: 0.42, h: 0.95 },
     { t: 'keg', x: -8.5, z: -3.3, r: 0.42, h: 0.95 }, { t: 'keg', x: 8.5, z: -3.3, r: 0.42, h: 0.95 },
     { t: 'keg', x: -5.4, z: 5.1, r: 0.36, h: 0.8, c: '#6e5438' }, { t: 'keg', x: 5.4, z: -5.1, r: 0.36, h: 0.8, c: '#6e5438' },
