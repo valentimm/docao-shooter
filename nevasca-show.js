@@ -37,7 +37,7 @@ function xmasTree() {
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.55, 1.35, 7), wood);
   trunk.position.y = 0.68; g.add(trunk);
   for (let i = 0; i < 6; i++) {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(1.85 - i * 0.24, 1.35, 8), green);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.15 - i * 0.26, 1.35, 8), green);
     cone.position.y = 1.55 + i * 0.85; g.add(cone);
   }
   const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.38), emissive(0xffe27a));
@@ -384,6 +384,73 @@ function summit() {
   return g;
 }
 
+function festive(root) {
+  const red = new THREE.MeshToonMaterial({ color: 0xc0392b });
+  const green = new THREE.MeshToonMaterial({ color: 0x1f6b32 });
+  const gold = new THREE.MeshToonMaterial({ color: 0xf2c94c });
+  const white = new THREE.MeshToonMaterial({ color: 0xf7fbff });
+  const add = (mesh, x, y, z, rot = 0) => { mesh.position.set(x, y, z); mesh.rotation.y = rot; root.add(mesh); };
+  const gift = (w, h, d, hex) => {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshToonMaterial({ color: hex })));
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, h * 1.02, 0.07), gold);
+    g.add(rib);
+    return g;
+  };
+  // presentes e meias encostados na parede, fora da reta e das escadas
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const pile = gift(0.7, 0.45, 0.5, sx * sz > 0 ? 0xc0392b : 0x3d7ec4);
+    add(pile, sx * 5.6, 0.22, sz * 10.7);
+    const sock = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.38, 0.08), red);
+    add(sock, sx * 4.2, 2.15, sz * 11.35, sz > 0 ? 0 : Math.PI);
+    const bell = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), gold);
+    add(bell, sx * 5.2, 6.45, sz * 4.2);
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.18), emissive(0xffe27a));
+    add(star, sx * 3.4, 3.05, sz * 4.5);
+  }
+  // pingentes no beiral
+  const ice = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.28, 4), white, 48);
+  const dummy = new THREE.Object3D();
+  let n = 0;
+  for (const z of [-12.15, 12.15]) for (let i = 0; i < 12; i++) {
+    dummy.position.set(-10 + i * 1.8, 6.55, z); dummy.rotation.x = Math.PI; dummy.updateMatrix();
+    ice.setMatrixAt(n++, dummy.matrix);
+  }
+  for (const x of [-11.15, 11.15]) for (let i = 0; i < 12; i++) {
+    dummy.position.set(x, 6.55, -10 + i * 1.8); dummy.rotation.x = Math.PI; dummy.updateMatrix();
+    ice.setMatrixAt(n++, dummy.matrix);
+  }
+  root.add(ice);
+  // renas de enfeite no pátio, longe das portas
+  for (const [x, z] of [[9.2, 16.5], [-9.2, -16.5]]) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.38, 0.32), new THREE.MeshToonMaterial({ color: 0x8d6a43 }));
+    body.position.y = 0.55; g.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 0.22), new THREE.MeshToonMaterial({ color: 0xa86b3a }));
+    head.position.set(0.55, 0.78, 0); g.add(head);
+    add(g, x, 0, z, x > 0 ? -0.4 : 2.6);
+  }
+  // placa fora da porta norte, ao lado, sem cruzar o vão
+  const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, 512, 180);
+  ctx.strokeStyle = '#f2c94c'; ctx.lineWidth = 18; ctx.strokeRect(14, 14, 484, 152);
+  ctx.fillStyle = '#fff6d8'; ctx.font = 'bold 78px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('FELIZ NATAL', 256, 96);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas) }));
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), new THREE.MeshToonMaterial({ color: 0x5c3a22 }));
+  post.position.set(7.4, 1.1, 13.5); root.add(post);
+  sign.position.set(7.4, 2.45, 13.55); root.add(sign);
+  // faixa colorida na parede interna, só visual
+  const stripe = (x, z, rot, hex) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.3), new THREE.MeshToonMaterial({ color: hex }));
+    m.position.set(x, 1.8, z); m.rotation.y = rot; root.add(m);
+  };
+  stripe(-6.4, 11.42, 0, 0xc0392b); stripe(6.4, 11.42, 0, 0x1f6b32);
+  stripe(-6.4, -11.42, Math.PI, 0x1f6b32); stripe(6.4, -11.42, Math.PI, 0xc0392b);
+  stripe(-11.42, 5.5, Math.PI / 2, 0xf2c94c); stripe(11.42, -5.5, -Math.PI / 2, 0xf2c94c);
+}
+
 export function mountNevasca(group, map) {
   const root = new THREE.Group(); root.name = 'nevasca-show';
   root.add(summit());
@@ -411,6 +478,17 @@ export function mountNevasca(group, map) {
   pushLine(16.5, 4.45, -28, 16.5, 4.45, 28, 22);
   pushLine(GONDOLA.x[0], 12.7, 32, GONDOLA.x[0], 12.7, -32, 26);
   pushLine(GONDOLA.x[1], 12.7, 32, GONDOLA.x[1], 12.7, -32, 26);
+  // varais por dentro, no beiral do mezanino e na plataforma do bondinho
+  pushLine(-9, 3.15, -9, 9, 3.15, -9, 14);
+  pushLine(-9, 3.15, 9, 9, 3.15, 9, 14);
+  pushLine(-9, 3.15, -9, -9, 3.15, 9, 12);
+  pushLine(9, 3.15, -9, 9, 3.15, 9, 12);
+  pushLine(-9, 6.35, -9, 9, 6.35, -9, 12);
+  pushLine(-9, 6.35, 9, 9, 6.35, 9, 12);
+  for (const s of [1, -1]) {
+    pushLine(-4.6, 11.7, s * 31.2, 4.6, 11.7, s * 31.2, 10);
+    pushLine(s * 4.8, 11.7, s * 29.6, s * 4.8, 11.7, s * 33.4, 6);
+  }
   for (const p of map.props || []) if (p.t === 'pine') {
     const s = p.s || 1, y = (p.y || 0) + 3.2 * s;
     for (let k = 0; k < 4; k++) bulbs.push([p.x + Math.cos(k) * 0.45 * s, y - k * 0.45, p.z + Math.sin(k) * 0.45 * s]);
@@ -444,6 +522,10 @@ export function mountNevasca(group, map) {
     const b = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), white); b.position.y = 1.25; g.add(b);
     const nose = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 5), new THREE.MeshToonMaterial({ color: 0xe67e22 }));
     nose.rotation.x = Math.PI / 2; nose.position.set(0, 1.28, 0.4); g.add(nose);
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.46, 6), new THREE.MeshToonMaterial({ color: 0xc0392b }));
+    hat.position.y = 1.72; g.add(hat);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.08, 6), new THREE.MeshToonMaterial({ color: 0xf7fbff }));
+    brim.position.y = 1.5; g.add(brim);
     return g;
   };
   const cane = () => {
@@ -478,7 +560,9 @@ export function mountNevasca(group, map) {
     deco(nut, sz * 9.2, 0, sz * 27.4);
     deco(lamp, -9.4, 0, sz * 18.5); deco(lamp, 9.4, 0, sz * 18.5);
     deco(lamp, 0, 10.05, sz * 32);
+    const bigCane = cane(); bigCane.scale.setScalar(1.7); bigCane.position.set(sz * 5.4, 0, sz * 13.6); root.add(bigCane);
   }
+  festive(root);
 
   const rig = sleighRig(); root.add(rig.group);
   const TRAIL_N = 72;
