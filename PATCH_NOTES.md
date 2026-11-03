@@ -4,6 +4,42 @@ Jogue em **https://docao.mvalentim.dev**
 
 ---
 
+## Próxima versão — Survival na HOTMILK à Noite
+
+🎃 **SÓ NA HOTMILK À NOITE.** O modo **Survival** no seletor abre direto nesse mapa. Ele não entra no mata-mata, na Invasão padrão, na Bomba nem no X1. Todo mundo nasce de **pistola e faca** no saguão.
+
+🌙 **MAPA.** Campus da HOTMILK de madrugada: saguão do Bloco 01, cozinha, estoque, andares, telhado, Bloco 02, garagem e a Rua do Leite. Piso próprio no térreo e na garagem, sem sombra de sol no interior.
+
+🚪 **PORTAS.** E compra a folha (750 e sobe até 3250). Abre pra todo mundo e a área nova passa a soltar zumbi.
+
+🔥 **PAPADA, BARRACA E PAREDE.** Segure **F**. Papada em 3 tiers (10.000 / 25.000 / 50.000). Barraca da Sorte por 1.250, de onde sai a **Ray Gun**. Armas de parede no saguão e nas áreas. Munição cheia avisa e não cobra de novo.
+
+🪙 **PONTOS.** 500 pra começar. Não é Docoin. Acerto +10, abate 120/90/140/240/700 e +50 no focinho. O mesmo saldo paga porta, parede, barraca e Papada. Nas waves 1 a 3 cabem poucos zumbis vivos e o corredor entra de verdade na wave 5. A HUD diz **F usa a loja**.
+
+---
+
+## Próxima versão — Tiro de sniper de verdade
+
+🔭 **CADA LUNETA TEM A PRÓPRIA VOZ.** O estalo das três snipers estava ruim e parecido. Agora cada uma dispara do jeito do próprio ferrolho. Síntese nova, feita no projeto (`tools/synth-sniper-audio.py`) — sem sample de jogo e sem áudio de terceiros.
+
+- **Carabina da Granja:** seca e rápida. Estalo agudo, grave mais curto e ferrolho miúdo. Na recarga ainda escapa um assobio baixinho da granja.
+- **Sniper Torresmo:** crack crocante (o torresmo mesmo) em cima de um boom de sniper média. O corpo decai e acaba — sem eco.
+- **Canhão do Barril:** anti-material. Boom enorme e grave, o mais pesado dos três. De longe fica abafado, sem cauda de sala.
+
+O ferrolho continua grudado na animação: abre, puxa, solta a cápsula e fecha. Cada tiro muda um fio de tom e de volume pra não virar metrônomo. Quem está longe ouve mais grave e mais abafado, sem eco. As outras armas não mudaram de som.
+
+O primeiro passe ainda soava pequeno: o filtro de DC comia tudo abaixo de ~150 Hz, um waveshaper travava o volume e a cauda de sala deixava o tiro numa caixinha. Saiu o eco. Ficou o thump (40–120 Hz), o crack e um ganho mais alto que o fuzil — o Canhão é o mais pesado.
+
+Fora da luneta não é mais um preto chapado: fica um vidro fosco escuro, e o zoom continua nítido dentro do círculo. Vale pras três snipers e pro modo zumbi.
+
+## Próxima versão — Pausa na chapa, de lado
+
+⏸ **ESC ABRE A FAIXA.** A pausa saiu do cartão do meio e foi pra coluna da esquerda, no jeito de menu de missão: Continuar em destaque, Trocar classe, Opções e, lá embaixo, Sair pro menu. Setas e Enter andam na lista. Esc fecha.
+
+As vozes da granada, as animações, o chat e a dança ficam no papel de Opções, do lado. À direita, a partida: modo, mapa, objetivo, tempo, K/D e placar. O jogo atrás fica escuro e desfocado.
+
+As **5 classes** ficam na faixa, sem botão no meio. Clicou numa, o centro mostra a arma grande, os acessórios e as barras, e a direita vira o arsenal em abas. Continua valendo na próxima vida, sem derrubar. 1–5 escolhe a classe. Esc volta pra partida e, de novo, fecha a pausa. Em tela larga o cartão da partida encosta na direita, e a ficha da classe ocupa o resto da chapa.
+
 ## v1.33 — Docão Escondido V2 🔒🐷
 
 🗺️ **Mapa grande.** O Docão Escondido agora roda sempre no **Rodízio do Docão** (o maior mapa), com muito mais lugar pra se esconder.
@@ -22,7 +58,7 @@ Jogue em **https://docao.mvalentim.dev**
 
 ## Próxima versão — Luneta da Carabina
 
-🔭 **CARABINA DA GRANJA.** A luneta demora **0,1725 s** pra entrar: 15% mais lenta que os **0,15 s** de antes do flinch. Os 0,24 s (60% mais lentos) ficaram longos demais. Pente, recuo e as outras armas continuam iguais. A lente ainda só cobre a tela quando a arma já chegou no ombro.
+🔭 **CARABINA DA GRANJA.** A luneta demora **0,19125 s** pra entrar: 27,5% mais lenta que os **0,15 s** de antes do flinch. Os 0,24 s (60% mais lentos) ficaram longos demais. Pente, recuo e as outras armas continuam iguais. A lente ainda só cobre a tela quando a arma já chegou no ombro.
 
 ## Próxima versão — Corrida Armada
 - Dois times, progresso individual e sequência fixa de armas. Duas eliminações por etapa; a faca padrão rouba uma etapa e a faca dourada decide a vitória.

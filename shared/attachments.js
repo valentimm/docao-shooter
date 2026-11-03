@@ -63,7 +63,7 @@ const MIRA = [
 ];
 const RED_DOT_PIECE = {
   id: 'reddot', name: 'Red dot da granja',
-  blurb: 'Ponto vermelho no trilho. Mirando, o coice da câmera some e o zoom fica curto. No quadril, o fuzil recua como sempre.',
+  blurb: 'Ponto vermelho no trilho. Mirando, o coice da câmera cai 65%. No quadril, o fuzil recua como sempre.',
 };
 const LUNETA = [
   { id: '', name: 'Luneta da casa', blurb: 'A lente que a arma já tinha.' },
@@ -233,7 +233,7 @@ export function compare(before, after) {
   pushDiff(rows, 'quadril', before.spread, after.spread, 3);
   pushDiff(rows, 'parede', before.pen || 0, after.pen || 0, 2);
   pushDiff(rows, 'recuo', before.recoil, after.recoil, 3);
-  if (!!before.redDot !== !!after.redDot) rows.push({ label: 'coice mirando', now: before.redDot ? 'some' : 'normal', next: after.redDot ? 'some' : 'normal' });
+  if (!!before.redDot !== !!after.redDot) rows.push({ label: 'coice mirando', now: before.redDot ? '65% menos' : 'normal', next: after.redDot ? '65% menos' : 'normal' });
   pushDiff(rows, 'passo', before.move ?? 1, after.move ?? 1, 2);
   pushDiff(rows, 'pente', before.mag, after.mag, 0);
   pushDiff(rows, 'recarga', before.reload, after.reload, 2);

@@ -19,6 +19,7 @@ const P = {
   arco: 'M14 1c10 3 10 11 0 14l-1-1c8-3 8-9 0-12zM14 2v12M14 8h30l-4-2v4z',
   famas: 'M2 6h36v3H2zM10 3h20v2H10zM12 5h2v1h-2zM26 5h2v1h-2zM38 7h8v1h-8zM18 9h3v5h-4zM8 9h6v4H8z',
   disco: 'M2 10c8-6 36-6 44 0-8 4-36 4-44 0zM18 6c2-5 10-5 12 0z',
+  ray: 'M6 8h8v5H8l1-3H6zM14 6h14v4H14zM28 4h6v2h-6zM28 10h6v2h-6zM32 6h8l6 2-6 2h-8z',
   sabre2: 'M2 3h10v3H2zM12 3h2v3h-2zM14 4h22v1H14zM2 10h10v3H2zM12 10h2v3h-2zM14 11h22v1H14z',
   estilingue: 'M2 7h12v2H2zM14 6l8-5h3l-9 6zM14 10l8 5h3l-9-6zM24 2h1v12h-1zM31 8a5 4 0 1 0 10 0a5 4 0 1 0-10 0z', // forquilha + elástico + ovo
   milho: 'M2 6h7v5H2zM9 4h20a4.5 4.5 0 0 1 0 9H9zM29 6h11v4H29zM40 5h3v6h-3zM15 1h8l-1 3h-6zM17 13h3v3h-4zM46 3a1.6 1.6 0 1 0 .1 0zM46 11a1.6 1.6 0 1 0 .1 0z', // pipoqueira com espiga e pipocas na frente
@@ -30,6 +31,7 @@ const P = {
   capataz2: 'M4 3h4v4H5l1-2H4zM8 3h12v2H8zM18 2h2v4h-2zM4 10h4v4H5l1-2H4zM8 10h12v2H8zM18 9h2v4h-2z', // dois revólveres, um em cima do outro
   // granada e killstreaks
   nade: 'M18 3h12l-2 12h-8zM17 2h14v2H17z',
+  gas: 'M2 3h8v2H8v1h6v8H2V6h6V5H2zM4 8h4v2H4zM18 8l4-6 2 4 5-1-3 5 4 2-5 1 1 4-4-3-3 4 1-5-5-1 4-2z',
   missile: 'M4 6h30l8 2-8 2H4zM4 4l6 2H4zM4 12l6-2H4z',
   heli: 'M4 3h40v1H4zM23 4h2v2h-2zM14 6h18c3 0 5 2 5 4s-2 3-5 3H14zM2 8h12v2H2zM16 14h16v1H16z',
   gunner: 'M4 3h40v1H4zM23 4h2v2h-2zM12 6h18c3 0 5 2 5 4s-2 3-5 3H12zM2 8h10v2H2zM35 10h11v1H35zM35 12h11v1H35z',

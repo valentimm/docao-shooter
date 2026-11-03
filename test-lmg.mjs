@@ -9,7 +9,7 @@ import { createPhysics } from './shared/physics.js';
 const fails = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 // ---- regras ----
 const W = WEAPONS[21];
-ok(LMG === 21 && W && W.key === 'lmg' && WEAPONS.length === 27 && WEAPONS[22] && WEAPONS[22].key === 'commando' && WEAPONS[23] && WEAPONS[23].key === 'capataz' && WEAPONS[24] && WEAPONS[24].key === 'capataz2' && WEAPONS[25] && WEAPONS[25].key === 'tampa' && WEAPONS[26] && WEAPONS[26].key === 'faca-dourada' && WEAPONS.every(Boolean), `WEAPONS[21] = lmg, [22] = commando, [23] = capataz, [24] = capataz2, [25] = tampa, [26] = faca dourada, sem buraco (${WEAPONS.length})`);
+ok(LMG === 21 && W && W.key === 'lmg' && WEAPONS.length === 28 && WEAPONS[22] && WEAPONS[22].key === 'commando' && WEAPONS[23] && WEAPONS[23].key === 'capataz' && WEAPONS[24] && WEAPONS[24].key === 'capataz2' && WEAPONS[25] && WEAPONS[25].key === 'tampa' && WEAPONS[26] && WEAPONS[26].key === 'faca-dourada' && WEAPONS[27] && WEAPONS[27].key === 'ray' && !PRIMARIES.includes(27) && WEAPONS.every(Boolean), `WEAPONS[21] = lmg, [22] = commando, [23] = capataz, [24] = capataz2, [25] = tampa, [26] = faca dourada, [27] = ray fora do arsenal, sem buraco (${WEAPONS.length})`);
 ok(W.mag === 100 && W.reserve === 300 && W.dmg === 15 && W.rate === 0.08 && W.auto === true && W.move === 0.95, `números: fita 100/300, 15 de dano, 0,08 s, anda 95% (${W.mag}/${W.reserve}, ${W.dmg}, ${W.rate}, ${W.move})`);
 ok(Math.ceil(100 / W.dmg) === 7 && Math.abs((Math.ceil(100 / W.dmg) - 1) * W.rate - 0.48) < 1e-9, 'dano original: 7 tiros no corpo e TTK de 0,48 s');
 // O traçado compartilhado é usado no cliente offline e pelo hitscan do servidor.

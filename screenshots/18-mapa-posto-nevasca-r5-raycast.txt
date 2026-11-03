@@ -1,0 +1,22 @@
+Posto Nevasca — raycast da rodada 5
+Grade de 1,25 m. Nós alcançáveis a partir dos spawns. Olho a 1,60 m do pé.
+Nós: 3772. Linhas livres com 32 m ou mais: 50810. Acima de 60 m: 0.
+
+A linha de 59,42 m da rodada 4 saía do telhado do galpão (pés a 3,6 m, z −44) e entrava na Sala Fria pela janela do mezanino na face sul (lado n do prédio, z −6, vão x −4…0,4, entre y 4,15 e 5,55). O destino era o mezanino, não o telhado. Essa janela foi fechada com um anteparo de 2,3 m. Não era uma abertura de jogo.
+
+Cinco maiores agora:
+1. 58.56 m
+   origem  motor x -16.35  y 1.6  z -59.10   pesquisador x 9.6, y 119.1, olho 1.6 m (pés 0.0)
+   destino motor x -7.60  y 1.6  z -1.60   pesquisador x 18.4, y 61.6, olho 8.4 m (pés 6.8)
+2. 58.38 m
+   origem  motor x -16.35  y 1.6  z -59.10   pesquisador x 9.6, y 119.1, olho 1.6 m (pés 0.0)
+   destino motor x -8.85  y 1.6  z -1.60   pesquisador x 17.1, y 61.6, olho 8.4 m (pés 6.8)
+3. 58.24 m
+   origem  motor x -16.35  y 1.6  z -59.10   pesquisador x 9.6, y 119.1, olho 1.6 m (pés 0.0)
+   destino motor x -10.10  y 1.6  z -1.60   pesquisador x 15.9, y 61.6, olho 8.4 m (pés 6.8)
+4. 58.24 m
+   origem  motor x -15.10  y 1.6  z -59.10   pesquisador x 10.9, y 119.1, olho 1.6 m (pés 0.0)
+   destino motor x -8.85  y 1.6  z -1.60   pesquisador x 17.1, y 61.6, olho 8.4 m (pés 6.8)
+5. 58.12 m
+   origem  motor x -16.35  y 1.6  z -59.10   pesquisador x 9.6, y 119.1, olho 1.6 m (pés 0.0)
+   destino motor x -11.35  y 1.6  z -1.60   pesquisador x 14.6, y 61.6, olho 8.4 m (pés 6.8)

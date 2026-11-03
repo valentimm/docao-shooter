@@ -1,0 +1,21 @@
+Morro do Leitão — medidas da rodada 3
+Escala da planta: 0,18 m/px. Origem no noroeste, x para leste, y para o sul.
+Área jogável: 130 × 90 m. Lotes: 186. Área dos lotes: 5662 m² (48% do 130×90).
+
+Main Street: faixa de 9,6 m (meia-largura 4,8 m) em torno de y = 73 + 3,1·sen(x·0,075), de x 0 a 118.
+Comprimento do eixo: 119.5 m.
+Travessia leste–oeste a 6,5 m/s: 18.4 s (alvo ~20 s).
+
+Becos (largura de projeto, vão livre entre fachadas):
+- beco do meio, x 46, y 26–42: 2,5 m
+- beco do fruit stand, x 70, y 20–38: 2,6 m
+- beco leste, x 98, y 34–52: 2,6 m
+Nenhum beco abaixo de 2 m. Cotovelos a cada 8–15 m nas polilinhas do gerador.
+
+Escadarias (largura livre entre os corrimãos):
+- Side Street na cota 0 → 1,52 m: 2,6 m
+- Side Street na cota 1,52 → 2,66 m: 2,6 m
+- Subida da Main no centro (x 72): 2,7 m
+Degrau 0,19 × 0,28 m, com rampa invisível por baixo.
+
+High point: Grifter's, 3 andares sobre o patamar de 1,52 m, laje a 10,5 m.

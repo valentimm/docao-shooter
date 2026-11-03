@@ -8,7 +8,7 @@ import { inspectKind } from './inspect.js';
 const fails = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 
 const S = WEAPONS[REV], D = WEAPONS[REV2];
-ok(REV === 23 && REV2 === 24 && S.key === 'capataz' && D.key === 'capataz2' && WEAPONS.length === 27 && WEAPONS[25].key === 'tampa' && WEAPONS[26].key === 'faca-dourada' && WEAPONS.every(Boolean), `índices 23/24 sem buraco, tampa no 25, faca dourada no 26 (${WEAPONS.length})`);
+ok(REV === 23 && REV2 === 24 && S.key === 'capataz' && D.key === 'capataz2' && WEAPONS.length === 28 && WEAPONS[25].key === 'tampa' && WEAPONS[26].key === 'faca-dourada' && WEAPONS[27].key === 'ray' && WEAPONS.every(Boolean), `índices 23/24 sem buraco, tampa no 25, faca dourada no 26, ray no 27 (${WEAPONS.length})`);
 ok(SECONDARIES.includes(REV) && SECONDARIES.includes(REV2) && !SECONDARIES.includes(0), 'os dois entram na secundária e não na primária');
 ok(CATEGORIES.some((c) => c.id === 'secundaria' && c.weapons.includes(REV) && c.weapons.includes(REV2)), 'categoria Secundária lista os dois');
 ok(BOT_RANGE.length === WEAPONS.length && BOT_RANGE[REV] === 10 && BOT_RANGE[REV2] === 6, 'BOT_RANGE cobre o revólver (10 m) e o akimbo (6 m)');

@@ -95,7 +95,7 @@ const morte = await G((nome) => {
   return {
     rows: document.querySelectorAll('#deathList .clsrow').length,
     foto: /url\(/.test((foto && foto.style.backgroundImage) || ''),
-    clock: document.getElementById('classClockTxt').textContent,
+    clock: document.getElementById('respawnBtn').querySelector('b').textContent,
     nome: document.querySelector('#deathList .clsrow.on .clsmeta b').textContent,
     who: document.getElementById('deathWho').textContent,
     opaco: st.opacity === '1' && st.backgroundColor !== 'rgba(0, 0, 0, 0)',
@@ -115,7 +115,7 @@ const morte = await G((nome) => {
     feed: getComputedStyle(document.getElementById('killfeed')).display !== 'none',
   };
 }, matador);
-ok(morte.rows === 5 && morte.foto && /Renasce em/.test(morte.clock) && morte.nome === 'Arame', `ficha da morte: ${morte.rows} classes, foto ${morte.foto}, "${morte.clock}", ${morte.nome}`);
+ok(morte.rows === 5 && morte.foto && /Nascer em/.test(morte.clock) && morte.nome === 'Arame', `ficha da morte: ${morte.rows} classes, foto ${morte.foto}, "${morte.clock}", ${morte.nome}`);
 ok(morte.who === `Você foi pururucado por ${matador}` && !/^\?|por \?\?\?/.test(morte.who), `o cabeçalho diz quem matou: "${morte.who}"`);
 ok(morte.killcam && !morte.cobre && !morte.armas && morte.centroLivre && morte.score && morte.chat && morte.feed, `kill cam sem menu de armas (killcam ${morte.killcam}, cobre ${morte.cobre}, armas ${morte.armas}, centro ${morte.centroLivre}, score ${morte.score}, chat ${morte.chat}, feed ${morte.feed})`);
 ok(!morte.armas, `a ficha de arma não aparece na kill cam ("${morte.slot}", ${morte.slotAlto.toFixed(0)}px)`);
@@ -139,7 +139,7 @@ const grade = await G(() => {
   };
 });
 ok(!grade.col && grade.foto === 0, `lista e foto da arma ficam fora da kill cam (foto ${grade.foto}px, fundo ${grade.fundo})`);
-ok(/Arial Black|Impact/i.test(grade.fonte) && Number(grade.peso) >= 800, `título em negrito (${grade.fonte}, ${grade.peso})`);
+ok(/Fredoka/i.test(grade.fonte) && Number(grade.peso) >= 800, `título em negrito (${grade.fonte}, ${grade.peso})`);
 await page.screenshot({ path: `${SHOTS}/morte-desktop.png` });
 await page.keyboard.press('Digit2');
 await wait(200);
@@ -160,11 +160,12 @@ ok(await G(() => {
   return window.__docao.state === 'paused' && window.__docao.player.alive && pausa && listaFora && semFicha && morteFora && !document.body.classList.contains('dead');
 }), 'a pausa abre o modal, sem a ficha da morte por trás');
 await page.screenshot({ path: `${SHOTS}/pausa-desktop.png` });
-await page.click('#pauseClassBtn');
+ok(await G(() => document.querySelectorAll('#pauseGuns .clsrow').length === 5 && document.getElementById('pauseClasses') && !document.getElementById('pauseClasses').classList.contains('hidden')), 'as 5 classes já estão na faixa da pausa');
+await page.click('#pauseGuns .clsrow.on');
 await wait(250);
-ok(await G(() => !document.getElementById('pauseClass').classList.contains('hidden') && document.querySelectorAll('#pauseGuns .clsrow').length === 5 && window.__docao.player.alive), 'Trocar classe abre a ficha inteira e não derruba');
+ok(await G(() => document.getElementById('pause').classList.contains('loadout-on') && document.querySelector('#pauseGun .wthumb.is-big') && document.querySelectorAll('#pauseArms .arm-tab').length >= 4 && window.__docao.player.alive), 'a classe abre o detalhe e o arsenal em abas, sem derrubar');
 await page.screenshot({ path: `${SHOTS}/pausa-classes.png` });
-await page.click('#pauseClassBack');
+await page.keyboard.press('Escape');
 await wait(200);
 await page.click('#quitBtn');
 await until(() => window.__docao.state === 'menu', 8000);

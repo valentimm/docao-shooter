@@ -572,6 +572,15 @@ export function makeDocao(skinOrId, opts = {}) {
     rv2.userData.extra = rvR; rv2.userData.twin = rvL; guns.push(rv2); // 24 = Dois Capatazes
     const tp = makeWorldShield(); tp.name = 'tampa'; tp.position.set(0, 0.98, 0.62); g.add(tp); guns.push(tp); // 25 = Tampa do Tacho
     const goldKnife = makeKnife(1.7, 0.006, true); goldKnife.position.copy(kn.position); goldKnife.rotation.copy(kn.rotation); goldKnife.visible = false; arms[0].add(goldKnife); guns.push(goldKnife); // 26 = Faca Dourada
+    const ry = new THREE.Group(); ry.name = 'ray'; ry.position.copy(r.position); g.add(ry);
+    mesh(new THREE.BoxGeometry(0.09, 0.1, 0.26), toon('#24302a'), ry, 0.008);
+    mesh(new THREE.BoxGeometry(0.1, 0.035, 0.1), toon('#c45a2a'), ry, 0.004).position.set(0, 0.04, 0.02);
+    mesh(new THREE.SphereGeometry(0.055, 12, 8), toon('#141a16'), ry, 0.005).position.set(0, 0.01, 0.08);
+    const ryCore = mesh(new THREE.SphereGeometry(0.032, 10, 8), new THREE.MeshBasicMaterial({ color: 0x39ff6a }), ry, 0); ryCore.position.set(0, 0.01, 0.08);
+    const ryb = mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.16, 8), toon('#1a1c22'), ry, 0.004); ryb.rotation.x = Math.PI / 2; ryb.position.set(0, 0.01, 0.22);
+    const ryd = mesh(new THREE.TorusGeometry(0.04, 0.008, 6, 12), new THREE.MeshBasicMaterial({ color: 0x7dff6a }), ry, 0); ryd.position.set(0, 0.01, 0.3);
+    mesh(new THREE.BoxGeometry(0.04, 0.1, 0.04), toon('#141a16'), ry, 0.004).position.set(0, -0.08, -0.04);
+    ry.visible = false; guns.push(ry); // 27 = Ray Gun
     backLid = makeWorldShield(); backLid.name = 'tampa-costas'; backLid.position.set(0, 1.15, -0.32); backLid.rotation.y = Math.PI; backLid.visible = false; g.add(backLid);
     for (const o of [sg, sn, bz, ps, cn, cb, kn, hold, uz, p9, nl, sm, xb, bw, fm, dk, d2r, d2l, mh, es, mg, lm, cd, rv, rv2, rvR, rvL, tp]) o.visible = false;
   }

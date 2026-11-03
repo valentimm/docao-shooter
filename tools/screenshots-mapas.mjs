@@ -10,6 +10,23 @@ const V = { // [câmera x,y,z, alvo x,y,z]
   'torres-do-barril': { 'visao-geral': [34, 46, 0, 0, 0, 0], predio: [-27.5, 5.1, 37, -4, 2, 14], telhado: [0, 10.2, 62.5, 0, 3, 20] },
   'vizinhanca-cheers': { 'visao-geral': [0, 50, 42, 0, 0, -1], predio: [-15, 5.1, -17.5, -4, 4.3, -9], telhado: [-14, 8.7, -17.5, 6, 4, 10] },
   'bar-cheers': { 'visao-geral': [0, 42, 32, 0, 0, -2], predio: [-12, 4.9, -16.5, 2, 1, 6], telhado: [17, 8.3, -18.5, -4, 1, 8] },
+  'posto-nevasca': {
+    alas: [-4, 7, 26, -5, 3, 38],
+    telhado: [10, 9, 8, 6, 3.4, 17],
+    'escada-meio': [-2, 1.8, 22.6, -11, 2.2, 22.6],
+    escada: [7, 2.4, -26, 0, -0.6, -26],
+    'sala-fria': [3, 2.3, 0, -5, 2.2, 10],
+    'borda-oeste': [-23, 4, 6, -36, -10, -2],
+    'borda-leste': [22, 4.5, 4, 42, -12, 8],
+  },
+  'morro-leitao': {
+    'visao-geral': [0, 150, 18, 0, 0, -6],
+    rua: [-30, 9, -18, 20, 1.2, -31],
+    campinho: [18, 12, 6, 40, 1.4, 24],
+    plato: [-28, 14, 16, -8, 5, 38],
+    lajes: [-4, 6, -2, 16, 5, 6],
+    viela: [-40, 6, -12, -22, 2, 8],
+  },
 };
 const ids = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(V);
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

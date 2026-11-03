@@ -10,6 +10,7 @@ export const INSPECT_PROFILES = {
   knife: { a: P(0.3, 0.2, 0.06, -0.05, 0.04, 0.02), b: P(-0.2, -0.3, 0.1, -0.03, 0.05, 0.02), flip: true }, // churrasqueira: gira no dedo. Os outros modelos trocam esse giro (knifeInspectLocal)
   saber: { a: P(0.35, 0.25, 0.05, -0.05, 0.03, 0), b: P(-0.3, -0.3, 0.08, -0.03, 0.04, 0), twist: 1.2 }, // torce o cabo
   disc: { a: P(0.7, 0.3, -0.15, -0.07, 0.06, 0.04), b: P(-0.45, -0.6, 0.2, -0.05, 0.07, 0.03) },
+  ray: { a: P(0.55, 0.22, -0.08, -0.04, 0.04, 0.02), b: P(-0.35, -0.4, 0.12, -0.03, 0.05, 0.02) },
   heavy: { a: P(0.45, 0.2, -0.05, -0.05, -0.03, 0), b: P(-0.25, -0.35, 0.12, -0.03, -0.01, 0), spin: true }, // minigun: pesada, gira pouco
   lmg: { a: P(-1.25, 0.14, 0.06, -0.02, -0.04, 0.02), b: P(0.7, -0.18, 0.05, 0.03, -0.035, 0.02) }, // giro largo pro lado da caixa de fita e do cano; baixada leve
   shield: { a: P(0.55, 0.4, 0.08, -0.04, 0.02, 0.06), b: P(-0.7, -0.25, 0.12, 0.02, 0.04, 0.04) }, // tampa: mostra a fresta e o aro de latão
@@ -19,7 +20,7 @@ export const INSPECT_PROFILES = {
 export function inspectKind(w) {
   if (!w) return 'rifle';
   if (w.inspect && INSPECT_PROFILES[w.inspect]) return w.inspect;
-  if (w.saber) return 'saber'; if (w.melee) return 'knife'; if (w.rocket) return 'rocket'; if (w.scope) return 'sniper'; if (w.disc) return 'disc';
+  if (w.saber) return 'saber'; if (w.melee) return 'knife'; if (w.rocket) return 'rocket'; if (w.scope) return 'sniper'; if (w.ray) return 'ray'; if (w.disc) return 'disc';
   if (w.heavy || w.spin) return 'heavy';
   if (w.key === 'arco' || w.key === 'besta' || w.egg) return 'bow'; // estilingue usa as mesmas mãos do arco
   if (w.key === 'pistol' || w.key === 'prego') return 'pistol';

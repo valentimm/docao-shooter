@@ -1,0 +1,15 @@
+Raycast. Mesma amostra do auditor: seed 7, 6000 pares, olho a 1,6 m acima dos pés.
+
+Rodada 3, antes do corte
+Máximo: 77,8 m. Passa pelo chão, não pelos telhados.
+Origem: x 23,9  z −59,1  pés 0,0  olho 1,6
+Destino: x −0,1  z 14,9  pés 0,0  olho 1,6
+Pesquisador (x+26, 60−z): origem x 49,9 y 119,1; destino x 25,9 y 45,1
+Corte: contêiner no pátio sul, a ~39 m da origem (x 10,2…13,6, z −23,8…−20,2), topo a +2,3 m.
+
+Rodada 4, depois do corte
+A linha de 77,8 m não está mais livre.
+Novo máximo: 57,3 m. Passa pelo nível dos telhados.
+Origem: x 5,9  z −45,1  pés 3,6  olho 5,2
+Destino: x −6,1  z 10,9  pés 3,4  olho 5,0
+A amostra do auditor imprime 56 m.

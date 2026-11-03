@@ -26,36 +26,46 @@ import { mountStreakUi, setStreakCount, setStreakCycle, setStreakReady, openStri
 import { makeTablet, poseTablet, makeLaptop, poseLaptop, makeRadio, poseRadio } from './fp-gear.js';
 import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
-import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, getMap, BOMB_MAP } from './maps.js';
+import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap, BOMB_MAP } from './maps.js';
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit } from './shared/invasion.js';
+import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL } from './shared/survival.js';
+import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
+import { createNightAmbience } from './night-ambience.js';
 import { createInvMusic } from './invasion-music.js';
 import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook } from './invasion-gfx.js';
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
-import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh } from './world.js';
+import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
 import { buildNav } from './nav.js';
 import { initBacon, spawnBacon, updateBacon, clearBacon, popModel, baconStats, activeBacons, edibleBacons, eatBacon, BACON } from './bacon.js';
 import { Net, createRoom, roomInfo } from './net.js';
 import { initChat, chatTyping, chatShown, chatRoomOn, chatConsumeUnlock, chatNoteLocked, openChat, closeChat, chatSeed, chatPush, chatSetRoom, chatSetTeam, chatClear, chatUseAll, chatRefresh } from './chat.js';
 import { initVoice, voicePtt, voiceCycle, voiceReset, voiceRoster, voiceSignal, voiceTalking, voiceMuted, voiceToggleMute, voiceRefresh } from './voice.js';
+import { armAudioGestures, audioRunning, noteAudio, safeExpRamp, safeSet, unlockAudio, watchMaster, withAudioTag } from './audio.js';
 import { SEND_HZ, INTERP_DELAY } from './config.js';
 import { cleanName, NAME_MAX } from './shared/names.js';
-import { createPhysics, rayHitboxes } from './shared/physics.js';
+import { createPhysics, mapSolids, rayHitboxes } from './shared/physics.js';
 import { CROUCH, crouchAmount, stanceScale, eyeHeight, stepCrouch } from './shared/stance.js';
 import { footstepVolume, takeFootstep } from './shared/footsteps.js';
 import { explosionHits, rayCapsule, ROCKET_PAD, sniperSpread, shotKnock } from './shared/combat.js';
 import { meleeHit, MELEE_KINDS } from './shared/melee.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, commitSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc, aimForward } from './shared/saber.js';
 import { DOM, TEAM_NAMES, TEAM_COLORS, TEAM_HEX, TEAM_DARK, pickZone, newZoneState, zoneCounts, stepZone, inZone, smallerTeam } from './shared/domination.js';
-import { BACON_ITEM, noteHurt, resetRegen, regenStep } from './shared/rules.js';
+import { BACON_ITEM, noteHurt, resetRegen, regenStep, W_FALL } from './shared/rules.js';
+import { fellOff } from './shared/physics.js';
+import { rideShift, nevascaSolids } from './shared/nevasca.js';
+import { mountNevasca, updateNevasca } from './nevasca-show.js';
 import { BOMB, W_BOMB, SIDE_NAMES, SITE_NAMES, attackTeam, sideOf, bombLayout, newBombState, startRound, stepBomb, blastVictims, unpackBomb, spawnList, botObjective, bombFrozen, bombCanUse, plantNow, siteAt } from './shared/bomb.js';
 import { makeBotijao, makeSiteMark } from './bomb-gfx.js';
 import { KS_KILL_NAME, heliPos, GUNNER, heliOrbit, AC130 } from './shared/killstreaks.js';
 import { DISC, stepDisc } from './shared/disc.js';
+import { RAY as RAY_MOVE, stepRay, raySplash } from './shared/ray.js';
 import { traceShot } from './shared/penetration.js';
+import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from './shared/gas.js';
+import { createGasView } from './gas-view.js';
 import { CORN, cornDirs, cornAim, stepCorn, popChain, popOpts } from './shared/corn.js';
 import { EGG, eggSpeed, eggDmg, stepEgg } from './shared/egg.js';
 import { killIcon, weaponSvg } from './killfeed-icons.js';
-import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, GRAV, JUMP, SPEED, BOT_SPEED, STEP, RADIUS, HEIGHT, EYE, WEAPONS, PRIMARIES, BOT_PRIMARIES, SECONDARIES, MELEES, CATEGORIES, PISTOL, KNIFE, SABER, UZI, P90, NAIL, SEMI, CROSS, BOW, FAMAS, DISC_W, SABER2, CORN_W, EGG_W, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, LMG, COMMANDO, REV, REV2, TAMPA, MELEE, SABER_COLORS, W_NADE, NADE, WEAPON_SHORT, BOT_DEFS, BOT_RANGE, TAG_COLORS, RED_DOT, applyFlinch, decayFlinch, GOLD_KNIFE, isKnife } from './shared/rules.js';
+import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, GRAV, JUMP, SPEED, BOT_SPEED, STEP, RADIUS, HEIGHT, EYE, WEAPONS, PRIMARIES, BOT_PRIMARIES, SECONDARIES, MELEES, CATEGORIES, PISTOL, KNIFE, SABER, UZI, P90, NAIL, SEMI, CROSS, BOW, FAMAS, DISC_W, SABER2, CORN_W, EGG_W, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, LMG, COMMANDO, REV, REV2, TAMPA, MELEE, SABER_COLORS, W_NADE, NADE, WEAPON_SHORT, BOT_DEFS, BOT_RANGE, TAG_COLORS, RED_DOT, applyFlinch, decayFlinch, GOLD_KNIFE, isKnife, RAY } from './shared/rules.js';
 import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, resetArmsRace, equipArmsRace, armsRaceKill } from './shared/arms-race.js';
 import { HIDE, isHide, HIDE_PROPS, PROP_NAMES, ROLE_NAMES, hiderTeam, newHideState, startHideRound, stepHide, hideFrozen, hidersAlive, nextProp, propsForMap } from './shared/hide.js';
 import { X1, isX1, rollX1Weapon, x1SpawnSide } from './shared/x1.js';
@@ -91,6 +101,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.autoClear = false;
 
 const scene = new THREE.Scene();
@@ -191,17 +202,120 @@ function placeNameTags() {
 }
 
 // ---------------- Mapa (dados em maps.js, construção em world.js) ----------------
-let solids = [], worldMeshes = [], SPAWNS = [], nav = null, currentMap = null, worldGroup = null, mapBounds = [36, 36];
+let solids = [], worldMeshes = [], SPAWNS = [], nav = null, currentMap = null, worldGroup = null, mapBounds = [36, 36], nevascaShow = null;
 // Física/colisão: a MESMA implementação do servidor (shared/physics.js) — a predição online bate com o servidor.
 let PHYS = createPhysics([], mapBounds);
-function indexSolids() { PHYS = createPhysics(solids, mapBounds); } // broadphase em grade 4 m + movimento compartilhado
+function indexSolids(map = currentMap) { PHYS = createPhysics(solids, mapBounds, map && map.fall); } // broadphase em grade 4 m + movimento compartilhado
 const solidsAt = (x, z) => PHYS.solidsAt(x, z);
 const topAt = (s, x, z) => PHYS.topAt(s, x, z);
 // AABB completo: só bloqueia se o corpo (pés..cabeça) cruza a caixa; dá pra andar debaixo de lajes e 2º andar
 const collides = (x, y, z) => PHYS.collides(x, y, z);
 const groundAt = (x, z, y) => PHYS.groundAt(x, z, y);
 const ceilingAt = (x, z, headY) => PHYS.ceilingAt(x, z, headY);
-const moveEntity = (e, dt) => PHYS.moveEntity(e, dt);
+function syncNevasca(t) {
+  if (!PHYS.setMovers) return;
+  PHYS.setMovers(currentMap && currentMap.id === 'posto-nevasca' ? nevascaSolids(t) : []);
+}
+const moveEntity = (e, dt) => {
+  const blocked = PHYS.moveEntity(e, dt);
+  if (currentMap && currentMap.id === 'posto-nevasca' && dt > 0 && e.pos) {
+    const ride = rideShift(e.pos, gameTime, dt);
+    if (ride) {
+      e.pos.set(ride.x, ride.floor ? ride.y : Math.max(ride.y, e.pos.y), ride.z);
+      if (ride.floor) { e.vel.y = 0; e.onGround = true; }
+    }
+  }
+  return blocked;
+};
+function checkFall(e) {
+  if (noclipOn && e === player) return; // exploração: voando, penhasco e queda não matam
+  if (!e.alive || !currentMap || !fellOff(currentMap.fall, e.pos.y)) return;
+  if (online && e.isPlayer) return; // online quem mata é o servidor, pra não contar duas vezes
+  kill(e, null, W_FALL, false);
+}
+// Noclip só na Exploração offline. V continua sendo a faca rápida.
+let noclipOn = false, noclipSpeed = 22, spaceHold = false;
+const NOCLIP_MIN = 6, NOCLIP_MAX = 80, NOCLIP_SHIFT = 6;
+function noclipLive() { return noclipOn && exploreMode() && !online && state === 'playing' && player && player.alive; }
+function paintNoclip() {
+  const el = $('noclipHud'); if (!el) return;
+  el.classList.toggle('hidden', !noclipLive());
+}
+function noclipInsideMap(x, z) {
+  if (!currentMap) return false;
+  const [hx, hz] = currentMap.size;
+  return Math.abs(x) <= hx - RADIUS - 0.35 && Math.abs(z) <= hz - RADIUS - 0.35;
+}
+function noclipFloor(x, z, y) {
+  if (!noclipInsideMap(x, z)) return null;
+  const g = groundAt(x, z, Math.max(y, 0) + 6);
+  const fallY = currentMap.fall && currentMap.fall.y;
+  if (fallY != null && g < fallY + 0.8) return null;
+  if (collides(x, g, z)) return null;
+  return g;
+}
+function nearestNoclipFloor(from) {
+  let best = null, bd = 1e9;
+  const consider = (x, z) => {
+    const g = noclipFloor(x, z, from.y);
+    if (g == null) return;
+    const d = Math.hypot(x - from.x, z - from.z) + Math.abs(g - from.y) * 0.04;
+    if (d < bd) { bd = d; best = { x, y: g, z }; }
+  };
+  consider(from.x, from.z);
+  for (let r = 1; r <= 42; r += 1.4) {
+    const n = Math.max(8, Math.round(r * 3));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      consider(from.x + Math.cos(a) * r, from.z + Math.sin(a) * r);
+    }
+    if (best && bd <= r + 1.5) break;
+  }
+  if (!best && currentMap && currentMap.spawns && currentMap.spawns.length) {
+    const s = currentMap.spawns[0];
+    const x = s[0], z = s[1];
+    const g = groundAt(x, z, (s[2] || 0) + 4);
+    best = { x, y: g, z };
+  }
+  return best;
+}
+function releaseNoclip() {
+  noclipOn = false;
+  const p = player;
+  if (!p) { paintNoclip(); return; }
+  p.vel.set(0, 0, 0);
+  const floor = noclipFloor(p.pos.x, p.pos.z, p.pos.y);
+  const free = !collides(p.pos.x, p.pos.y, p.pos.z);
+  if (free && floor != null && Math.abs(p.pos.y - floor) < 0.45) { p.pos.y = floor; p.onGround = true; }
+  else if (free && floor != null && p.pos.y > floor) p.onGround = false; // ar livre: a gravidade desce até esse chão
+  else {
+    const spot = nearestNoclipFloor(p.pos);
+    if (spot) { p.pos.set(spot.x, spot.y, spot.z); p.onGround = true; }
+  }
+  paintNoclip();
+}
+function toggleNoclip() {
+  if (!exploreMode() || online || state !== 'playing' || !player || !player.alive) return;
+  if (noclipOn) { releaseNoclip(); flashMsg('Noclip desligado'); return; }
+  noclipOn = true; player.vel.set(0, 0, 0); player.onGround = false; player.crouch = 0;
+  paintNoclip();
+  flashMsg('Noclip · WASD na mira · Espaço sobe · Ctrl ou C desce · Shift acelera · rodinha a velocidade');
+}
+function flyNoclip(p, dt) {
+  const look = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const side = new V3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const wish = new V3();
+  if (keys.KeyW || keys.ArrowUp) wish.add(look);
+  if (keys.KeyS || keys.ArrowDown) wish.sub(look);
+  if (keys.KeyD || keys.ArrowRight) wish.add(side);
+  if (keys.KeyA || keys.ArrowLeft) wish.sub(side);
+  if (spaceHold) wish.y += 1;
+  if (keys.ControlLeft || keys.ControlRight || keys.KeyC) wish.y -= 1;
+  if (wish.lengthSq() > 1e-8) wish.normalize();
+  const fast = !!(keys.ShiftLeft || keys.ShiftRight);
+  p.pos.addScaledVector(wish, noclipSpeed * (fast ? NOCLIP_SHIFT : 1) * dt);
+  p.vel.set(0, 0, 0); p.onGround = false; p.crouch = 0;
+}
 
 const raycaster = new THREE.Raycaster();
 function wallDistance(o, d, far) {
@@ -222,17 +336,36 @@ const center = (e, y = 1.0) => new V3(e.pos.x, e.pos.y + y * stanceScale(e.crouc
 
 // ---------------- Áudio sintetizado ----------------
 let actx = null, master = null, noiseBuf = null, menuMuted = false;
+let sleighQueued = false, sleighTries = 0;
 function initAudio() {
-  if (actx) { actx.resume(); return; }
+  const c = unlockAudio();
+  if (!c) return;
+  if (actx && master) {
+    try { if (c.state === 'suspended' || c.state === 'interrupted') c.resume(); } catch (e) { /* o próximo gesto retoma */ }
+    master.gain.value = menuMuted ? 0 : 0.4;
+    return;
+  }
   try {
-    actx = new (window.AudioContext || window.webkitAudioContext)();
-    master = actx.createGain(); master.gain.value = menuMuted ? 0 : 0.4; master.connect(actx.destination);
-    noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+    actx = c;
+    master = c.createGain();
+    master.gain.value = menuMuted ? 0 : 0.4;
+    master.connect(c.destination);
+    watchMaster(master);
+    const rate = c.sampleRate > 0 ? c.sampleRate : 44100;
+    noiseBuf = c.createBuffer(1, rate, rate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     saberSfx.bind(actx, master); bindGrenadeVoice(actx, master); sniperSfx.bind(actx, master);
-  } catch (e) { actx = null; }
+    if (!c.__sleighHook) {
+      c.__sleighHook = true;
+      c.addEventListener('statechange', () => { try { flushSleigh(); } catch (e) { /* espera o próximo quadro */ } });
+    }
+  } catch (e) {
+    try { if (master) master.disconnect(); } catch (e2) { /* solto */ }
+    actx = null; master = null;
+  }
 }
 function connectOut(node, pan = 0) {
+  if (!master) return;
   if (!pan) { node.connect(master); return; }
   try {
     const p = actx.createStereoPanner();
@@ -241,19 +374,208 @@ function connectOut(node, pan = 0) {
   } catch (e) { node.connect(master); }
 }
 function noise(dur, freq, vol, type = 'lowpass', delay = 0, pan = 0) {
-  if (!actx) return; const t = actx.currentTime + delay;
-  const s = actx.createBufferSource(); s.buffer = noiseBuf;
-  const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
-  const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f); f.connect(g); connectOut(g, pan); s.start(t); s.stop(t + dur + 0.02);
+  if (!actx || !master || !noiseBuf) return;
+  const volN = Number(vol), durN = Number(dur), freqN = Number(freq), delayN = Number(delay);
+  if (!(volN > 0) || !(durN > 0) || !(freqN > 0)) return;
+  try {
+    const t = actx.currentTime + (Number.isFinite(delayN) ? Math.max(0, delayN) : 0);
+    const end = t + durN;
+    if (!(end > t)) return;
+    const s = actx.createBufferSource(); s.buffer = noiseBuf;
+    const f = actx.createBiquadFilter();
+    const kinds = ['lowpass', 'highpass', 'bandpass', 'lowshelf', 'highshelf', 'peaking', 'notch', 'allpass'];
+    f.type = kinds.includes(type) ? type : 'lowpass';
+    const nyquist = (actx.sampleRate || 44100) * 0.45;
+    safeSet(f.frequency, Math.min(freqN, nyquist), t);
+    const g = actx.createGain();
+    safeSet(g.gain, volN, t);
+    safeExpRamp(g.gain, 0.001, end);
+    s.connect(f); f.connect(g); connectOut(g, pan); s.start(t); s.stop(end + 0.02);
+    noteAudio(undefined, 'noise');
+  } catch (e) { /* um ruído falho não cala o resto */ }
+}
+// Uma linha só (um oscilador), com tempos estritamente crescentes.
+// O trenó antigo abria dezenas de osciladores no mesmo quadro. No Safari isso cala o contexto.
+function spacedNotes(notes) {
+  const out = [];
+  let end = -1;
+  for (const [f, dur, when] of notes) {
+    if (!(f > 0) || !(dur > 0) || !Number.isFinite(when)) continue;
+    const start = Math.max(when, end + 0.03);
+    const d = Math.max(0.08, dur);
+    out.push([f, d, start]);
+    end = start + d;
+  }
+  return out;
+}
+function playLine(type, notes, vol, kind, fall = 1) {
+  if (!audioRunning() || !master || !(vol > 0)) return false;
+  const seq = spacedNotes(notes);
+  if (!seq.length) return false;
+  try {
+    const base = actx.currentTime + 0.08;
+    const o = actx.createOscillator();
+    const kinds = ['sine', 'square', 'sawtooth', 'triangle'];
+    o.type = kinds.includes(type) ? type : 'sine';
+    const g = actx.createGain();
+    // Sem este piso, o ganho fica em 1 até a primeira nota e o Safari estoura o volume.
+    let last = -1;
+    if (seq[0][2] > 0.02) {
+      g.gain.setValueAtTime(0.0001, base);
+      o.frequency.setValueAtTime(seq[0][0], base);
+      last = base;
+    }
+    for (const [f, dur, when] of seq) {
+      const a = base + when;
+      if (!(a > last)) continue;
+      const atk = Math.min(0.04, dur * 0.3);
+      const c = a + dur;
+      g.gain.setValueAtTime(0.0001, a);
+      g.gain.linearRampToValueAtTime(vol, a + atk);
+      g.gain.linearRampToValueAtTime(0.0001, c);
+      o.frequency.setValueAtTime(f, a);
+      if (fall > 0 && fall < 0.98) o.frequency.linearRampToValueAtTime(Math.max(1, f * fall), c);
+      last = c;
+    }
+    if (!(last > base)) return false;
+    o.connect(g); g.connect(master);
+    o.start(base); o.stop(last + 0.05);
+    noteAudio(kind, 'osc');
+    return true;
+  } catch (e) { return false; }
+}
+function playTicks(notes, vol, kind) {
+  if (!audioRunning() || !master || !noiseBuf || !(vol > 0)) return false;
+  const seq = spacedNotes(notes);
+  if (!seq.length) return false;
+  try {
+    const base = actx.currentTime + 0.08;
+    const s = actx.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+    const f = actx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2800;
+    const g = actx.createGain();
+    let last = -1;
+    if (seq[0][2] > 0.02) {
+      g.gain.setValueAtTime(0.0001, base);
+      last = base;
+    }
+    for (const [, dur, when] of seq) {
+      const a = base + when;
+      if (!(a > last)) continue;
+      const tick = Math.min(0.045, dur * 0.4);
+      const c = a + tick;
+      g.gain.setValueAtTime(0.0001, a);
+      g.gain.linearRampToValueAtTime(vol, a + 0.008);
+      g.gain.linearRampToValueAtTime(0.0001, c);
+      last = c;
+    }
+    if (!(last > base)) return false;
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(base); s.stop(last + 0.02);
+    noteAudio(kind, 'noise');
+    return true;
+  } catch (e) { return false; }
+}
+// Primeira frase de Jingle Bells (melodia de 1857, domínio público) em sininhos. Sem amostra.
+const JINGLE = [
+  [659, 0.16, 0], [659, 0.16, 0.2], [659, 0.3, 0.4],
+  [659, 0.16, 0.68], [659, 0.16, 0.88], [659, 0.3, 1.08],
+  [659, 0.16, 1.4], [784, 0.16, 1.6], [523, 0.16, 1.8], [587, 0.16, 2],
+  [659, 0.42, 2.24],
+  [784, 0.18, 3.35], [659, 0.26, 3.9],
+];
+function sleighTune() {
+  if (!audioRunning()) return false;
+  const bell = playLine('sine', JINGLE, 0.14, 'jingle');
+  playLine('triangle', JINGLE.map(([f, d, w]) => [Math.min(f * 2.2, 1600), Math.min(d, 0.1), w]), 0.04, 'jingle');
+  playTicks(JINGLE, 0.03, 'jingle');
+  return bell;
+}
+function hohoho() {
+  if (!audioRunning()) return false;
+  const notes = [[156, 0.24, 0.45], [142, 0.26, 0.95], [118, 0.34, 1.5]];
+  const low = playLine('sine', notes, 0.18, 'hohoho', 0.62);
+  playLine('triangle', notes.map(([f, d, w]) => [f * 1.5, d * 0.65, w]), 0.05, 'hohoho', 0.7);
+  return low;
+}
+function queueSleigh() {
+  sleighQueued = true; sleighTries = 0;
+  try { flushSleigh(); } catch (e) { /* toca no quadro seguinte */ }
+}
+function flushSleigh() {
+  if (!sleighQueued) return;
+  if (!audioRunning() || !master) return;
+  let ok = false;
+  try { ok = sleighTune() || ok; } catch (e) { /* sininho falho */ }
+  try { ok = hohoho() || ok; } catch (e) { /* HO HO HO falho */ }
+  if (ok || ++sleighTries > 8) { sleighQueued = false; sleighTries = 0; }
 }
 function tone(type, f0, f1, dur, vol, delay = 0, pan = 0) {
-  if (!actx) return; const t = actx.currentTime + delay;
-  const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
-  const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g); connectOut(g, pan); o.start(t); o.stop(t + dur + 0.02);
+  if (!actx || !master) return;
+  const volN = Number(vol), durN = Number(dur), f0n = Number(f0), f1n = Number(f1), delayN = Number(delay);
+  if (!(volN > 0) || !(durN > 0) || !Number.isFinite(f0n)) return;
+  try {
+    const t = actx.currentTime + (Number.isFinite(delayN) ? Math.max(0, delayN) : 0);
+    const end = t + durN;
+    if (!(end > t)) return;
+    const o = actx.createOscillator();
+    const kinds = ['sine', 'square', 'sawtooth', 'triangle'];
+    o.type = kinds.includes(type) ? type : 'sine';
+    safeSet(o.frequency, Math.max(Math.abs(f0n), 1), t);
+    safeExpRamp(o.frequency, Math.max(Math.abs(Number.isFinite(f1n) ? f1n : f0n), 1), end);
+    const g = actx.createGain();
+    safeSet(g.gain, volN, t);
+    safeExpRamp(g.gain, 0.001, end);
+    o.connect(g); connectOut(g, pan); o.start(t); o.stop(end + 0.02);
+    noteAudio(undefined, 'osc');
+  } catch (e) { /* um tom falho não cala o resto */ }
 }
+armAudioGestures();
+window.__audio._onstate = () => { try { flushSleigh(); } catch (e) { /* quadro seguinte */ } };
+window.__audio.master = () => (master ? master.gain.value : null);
+window.__audio.jingle = () => { try { return sleighTune(); } catch (e) { return false; } };
+window.__audio.hoho = () => { try { return hohoho(); } catch (e) { return false; } };
+window.__audio.bad = () => {
+  const c = actx || unlockAudio();
+  if (!c) return { state: 'none', threw: true };
+  const g = c.createGain();
+  let threw = false;
+  try {
+    g.gain.value = 0;
+    safeExpRamp(g.gain, 0, c.currentTime + 0.05);
+    safeSet(g.gain, NaN, c.currentTime);
+    safeExpRamp(g.gain, Infinity, NaN);
+  } catch (e) { threw = true; }
+  try { g.disconnect(); } catch (e) { /* solto */ }
+  return { state: c.state, threw, master: master ? master.gain.value : null };
+};
 let stepSide = 0;
+// Camada de blaster por cima do tiro da arma que passou na Papada. Oscilador descendo + ring mod + ressonador. Sem sample.
+function blasterLayer(vol = 1, tier = 1) {
+  if (!actx || !master || !(vol > 0.02)) return;
+  try {
+    const t0 = actx.currentTime, k = 0.65 + tier * 0.28;
+    const o = actx.createOscillator(); o.type = 'sawtooth';
+    safeSet(o.frequency, 980 * k + 420, t0);
+    safeExpRamp(o.frequency, 120, t0 + 0.1 + tier * 0.02);
+    const mod = actx.createOscillator(); mod.type = 'square'; mod.frequency.value = 60 + tier * 45;
+    const ring = actx.createGain(); ring.gain.value = 0; mod.connect(ring.gain); o.connect(ring);
+    const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 640 + tier * 240; bp.Q.value = 5 + tier * 2;
+    const g = actx.createGain();
+    safeSet(g.gain, Math.max(0.15 * vol * k, 0.001), t0);
+    safeExpRamp(g.gain, 0.001, t0 + 0.15 + tier * 0.02);
+    ring.connect(bp); bp.connect(g); g.connect(master);
+    o.start(t0); mod.start(t0); o.stop(t0 + 0.22); mod.stop(t0 + 0.22);
+  } catch (e) { /* blaster falho não cala o tiro */ }
+}
+function gunShot(w, vol, dist, pan, tier = 0) {
+  withAudioTag('shot', () => {
+    try {
+      if (w && sfx[w.key]) sfx[w.key](vol, dist, pan);
+      if (tier > 0) blasterLayer(vol == null ? 1 : vol, tier);
+    } catch (e) { /* um tiro falho não cala o resto */ }
+  });
+}
+const shotTier = (e, w) => (survOn() && e && e.pap ? (e.pap[w] | 0) : 0);
 const sfx = {
   rifle: (v = 1) => { noise(0.11, 3000, 0.5 * v); tone('square', 220, 60, 0.07, 0.15 * v); },
   commando: (v = 1) => { noise(0.06, 2600, 0.32 * v); tone('square', 170, 45, 0.05, 0.09 * v); }, // fuzil, mais seco e baixo
@@ -277,6 +599,9 @@ const sfx = {
   radioCall: () => { tone('square', 1400, 1400, 0.03, 0.08); noise(0.5, 1800, 0.12, 'bandpass', 0.08); for (let i = 0; i < 5; i++) tone('sawtooth', 380 + (i % 2) * 120, 340 + (i % 3) * 60, 0.07, 0.05, 0.14 + i * 0.12); noise(0.06, 3200, 0.1, 'highpass', 0.75); }, // clique do PTT, chiado e "fala" picotada
   radioOk: () => { tone('sine', 880, 880, 0.07, 0.12); tone('sine', 1320, 1320, 0.1, 0.12, 0.08); },
   disco: (v = 1) => { tone('sine', 300, 1200, 0.16, 0.18 * v); tone('triangle', 900, 1600, 0.12, 0.08 * v, 0.05); noise(0.08, 3800, 0.12 * v, 'highpass'); }, // fiuuu de disco voador
+  ray: (v = 1) => { if (v < 0.02) return; tone('sine', 78, 36, 0.16, 0.42 * v); tone('sawtooth', 140, 48, 0.13, 0.22 * v); tone('square', 520, 160, 0.08, 0.1 * v); noise(0.07, 280, 0.34 * v, 'lowpass'); noise(0.045, 1600, 0.1 * v, 'bandpass'); }, // pulso grave, sem cauda
+  rayHit: (v = 1) => { if (v < 0.02) return; tone('sine', 160, 42, 0.12, 0.32 * v); noise(0.09, 420, 0.38 * v, 'lowpass'); tone('triangle', 640, 180, 0.06, 0.08 * v); },
+  rayBounce: (v = 1) => { if (v < 0.02) return; tone('sine', 110, 55, 0.06, 0.2 * v); tone('square', 380, 160, 0.045, 0.1 * v); noise(0.035, 900, 0.12 * v, 'bandpass'); },
   famas: (v = 1) => { noise(0.08, 2900, 0.42 * v); tone('square', 310, 85, 0.06, 0.12 * v); noise(0.03, 6500, 0.14 * v, 'highpass'); },
   milho: (v = 1) => { noise(0.14, 700, 0.6 * v); tone('sine', 190, 80, 0.12, 0.3 * v); noise(0.05, 3200, 0.18 * v, 'bandpass', 0.02); tone('triangle', 1200, 900, 0.03, 0.06 * v, 0.06); }, // puf de ar comprimido + tlec da manivela
   pipoca: (v = 1) => { if (v < 0.03) return; noise(0.035, 2200 + Math.random() * 1600, 0.55 * v, 'bandpass'); tone('triangle', 900 + Math.random() * 500, 300, 0.05, 0.16 * v); noise(0.12, 600, 0.25 * v, 'lowpass', 0.01); }, // poc! de pipoca estourando
@@ -413,8 +738,10 @@ function reducedAnims() {
 function setReducedAnims(on) {
   reducedAnimUser = !!on;
   try { localStorage.setItem('docao.reducedAnim', on ? '1' : '0'); } catch (e) { /* sem storage */ }
+  document.body.classList.toggle('reduced-motion', reducedAnims());
   document.querySelectorAll('[data-reduced-anim]').forEach((o) => { o.checked = reducedAnims(); });
 }
+document.body.classList.toggle('reduced-motion', reducedAnims());
 document.querySelectorAll('[data-reduced-anim]').forEach((el) => {
   el.checked = reducedAnims();
   el.addEventListener('change', () => setReducedAnims(el.checked));
@@ -423,7 +750,7 @@ let mode = 'dm', teamScore = [0, 0], zone = null, zoneT = 0; // modo de jogo: 'd
 let botDiff = 'ceva'; // dificuldade dos bots (shared/bot-difficulty.js); a preferência entra mais abaixo, quando o menu existe
 let hideS = null, hideBlindEl = null; // Docão Escondido (shared/hide.js): estado da rodada · tela preta dos Caçadores na preparação
 let bombS = null, bombL = null; // Modo Bomba: estado da rodada (shared/bomb.js) e layout do mapa (sites A/B, lados)
-const MODE_OK = (m) => (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'bomb' || m === 'explore' || m === TRAIN.mode || m === INV.mode || isX1(m) ? m : 'dm');
+const MODE_OK = (m) => (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'bomb' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'survival' || isX1(m) ? m : 'dm');
 const armsMode = () => isArmsRace(mode);
 const respawnDelay = () => armsMode() ? ARMS_RACE.respawnTime : RESPAWN_TIME;
 let armsWinner = null;
@@ -441,11 +768,22 @@ const hideMode = () => isHide(mode);
 const teamMode = () => mode === 'dom' || armsMode() || mode === 'bomb' || hideMode(); // modos com times
 const training = () => isTraining(mode); // Estande do Docão: bots viram alvos
 const exploreMode = () => mode === 'explore';
-const invMode = () => isInvasion(mode); // Invasão 🎃: co-op contra zumbis (shared/invasion.js)
+let matchVariant = ''; // 'survival' quando a sala é Survival mesmo com mode 'inv'
+let survLive = false;
+const survivalMode = () => isSurvivalMode(mode, { variant: matchVariant }) || survLive;
+const survOn = () => survivalMode();
+const invMode = () => isInvasion(mode) || survivalMode(); // Invasão 🎃, e o Survival que usa as mesmas waves
+let surv = null, doorGroups = new Map(), nightLights = [];
+const nightAmb = createNightAmbience();
 let inv = null, invNet = null; // offline: InvasionCore local · online: estado lido do snapshot (parseState)
 const invGfx = { hal: null, fog: null, drops: new Map(), projs: new Map(), rings: [], cones: new Map(), inv: [], sel: 0 };
 let invZid = 1000, invMusic = null; // trilha de terror procedural (invasion-music.js)
-function invMusicOn(on) { if (on) { if (!actx) initAudio(); if (!actx) return; if (!invMusic) invMusic = createInvMusic(actx, master); invMusic.start(); } else if (invMusic) invMusic.stop(); }
+function invMusicOn(on) {
+  try {
+    if (on) { if (!actx) initAudio(); if (!actx || !master) return; if (!invMusic) invMusic = createInvMusic(actx, master); invMusic.start(); noteAudio('music', 'osc'); }
+    else if (invMusic) invMusic.stop();
+  } catch (e) { /* trilha falha não cala o jogo */ }
+}
 const friends = (a, b) => (invMode() ? !!(a && b && a !== b && !a.zt === !b.zt) : teamMode() && a && b && a !== b && a.team === b.team && a.team >= 0);
 let online = null; // modo online: { net, code, myId, hostId, ents: Map(id → entidade), evq, ... } (ver seção Online)
 let ads = 0; // 0 = normal, 1 = mirando (zoom)
@@ -521,9 +859,13 @@ function pickSpawn(e) {
 }
 function gunOf(e, idx) {
   const base = WEAPONS[idx] || WEAPONS[0];
-  if (!e || !e.isPlayer) return base;
-  const raw = e.kit && Object.prototype.hasOwnProperty.call(e.kit, base.key) ? e.kit[base.key] : undefined;
-  return resolveWeapon(idx, raw === undefined ? defaultKit(idx) : raw) || base;
+  let kit = base;
+  if (e && e.isPlayer) {
+    const raw = e.kit && Object.prototype.hasOwnProperty.call(e.kit, base.key) ? e.kit[base.key] : undefined;
+    kit = resolveWeapon(idx, raw === undefined ? defaultKit(idx) : raw) || base;
+  }
+  if (survOn() && e && e.pap) return withPap(kit, e.pap[idx] | 0);
+  return kit;
 }
 function respawn(e) {
   e.pos.copy(pickSpawn(e)); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = 100; e.alive = true; e.invulnUntil = gameTime + INVULN; resetRegen(e);
@@ -532,13 +874,17 @@ function respawn(e) {
   else if (!e.isPlayer && (Math.random() < 0.3 || !weaponAllowed(e.nextPrimary))) e.nextPrimary = pickBotPrimary(); // bots às vezes trocam de primária, e nunca ficam com arma banida na sala
   e.primary = e.nextPrimary; e.secondary = e.nextSecondary ?? PISTOL; e.melee = e.nextMelee ?? KNIFE;
   e.slots = [e.primary, e.secondary, e.melee]; e.knifeMode = false; e.prevWeapon = e.primary; resetShield(e); // vida da tampa volta; o dano segurado na partida fica
-  if (e.isPlayer) {
+  if (e.isPlayer && survOn()) {
+    e.mag = WEAPONS.map((w) => w.mag); e.reserve = WEAPONS.map((w) => w.reserve);
+    applySurvivalLoadout(e);
+  } else if (e.isPlayer) {
     const pack = kitsNow();
     e.primary = pack.load.primary; e.secondary = pack.load.secondary; e.melee = pack.load.melee;
     e.slots = [e.primary, e.secondary, e.melee]; e.kit = pack.kits; spawnedClass = classIndex;
   }
-  e.mag = WEAPONS.map((w) => w.mag); e.reserve = WEAPONS.map((w) => w.reserve); resetDrums(e); e.handAt = [-9, -9];
-  if (e.isPlayer) for (const i of e.slots) e.mag[i] = gunOf(e, i).mag;
+  if (!(e.isPlayer && survOn())) { e.mag = WEAPONS.map((w) => w.mag); e.reserve = WEAPONS.map((w) => w.reserve); }
+  resetDrums(e); e.handAt = [-9, -9];
+  if (e.isPlayer && !survOn()) for (const i of e.slots) e.mag[i] = gunOf(e, i).mag;
   e.reloadEnd = 0; e.switchEnd = 0; e.actionEnd = 0; e.burstLeft = 0; e.nades = NADE.spawnWith; e.smokeNades = clientPower('smoke') ? 1 : 0; e.stunNades = clientPower('stun') ? SHOCK.spawnWith : 0; e.lastShockT = -99; e.stunUntil = 0; e.charging = false;
   e.mgSpin = 0; e.mgHeat = 0; e.mgHot = false; e.mgWant = false; e.mgFiring = false; // minigun: renasce fria e parada
   if (armsMode()) equipArmsLocal(e);
@@ -564,6 +910,7 @@ function placeDummy(b) {
 // ---------------- Pickups ----------------
 // caixa de munição: enche a reserva da primária e da pistola; a bazuca é escassa (+1 foguete por caixa)
 function refillAmmo(e) {
+  if (survOn()) return survRefill(e, WEAPONS); // Survival: não encolhe a reserva que a Papada aumentou
   if (invMode()) return invRefillAmmo(e, WEAPONS); // Invasão: mais munição por caixa (mesma regra do servidor)
   let got = false;
   for (const i of e.slots) {
@@ -849,7 +1196,7 @@ function updateMatchEnding(realDt) {
       if (e.alive) { moveEntity(e, dt); animateBot(e, dt); }
       else { deathFx(e); if (e.fxDeath === e.deathAt && e.baconOk && e.swallowedAt !== e.deathAt) popModel(e.model.group, gameTime - e.deathAt, e.yaw); }
     }
-    updateGrenades(dt); updateRockets(dt); updateDiscs(dt); updateCorn(dt); updateEggs(dt); updateShocks(dt); updatePokeFx(dt); updateParticles(dt); updateBacon(dt); updateEffects(dt); updateShafts(dt);
+    updateGrenades(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updateShocks(dt); updatePokeFx(dt); updateParticles(dt); updateBacon(dt); updateEffects(dt); updateShafts(dt);
     gameTime = finalTime;
   }
   if (end.elapsed >= Math.min(END_MENU_DELAY, end.duration)) revealEndMenu();
@@ -1164,6 +1511,7 @@ function blast(c, owner, o, direct = null) {
     applyShieldHurt(e, met.shield, met.blocked);
     if (met.dmg > 0) damage(e, met.dmg, owner, o.wIdx, false, false, 0, c);
   }
+  splashGasClient(c, owner, o);
 }
 // partículas: confete vermelho/ciano + espuma + gotas âmbar + clarão + onda
 const confGeo = new THREE.PlaneGeometry(0.12, 0.07), foamGeo = new THREE.SphereGeometry(0.16, 8, 6), dropGeo = new THREE.SphereGeometry(0.05, 6, 5);
@@ -1203,7 +1551,9 @@ function updateParticles(dt) {
     else if (p.kind === 'corn') { const g = groundAt(m.position.x, m.position.z, m.position.y) + 0.04; p.vel.y -= 12 * dt; m.position.addScaledVector(p.vel, dt); if (m.position.y <= g) { m.position.y = g; p.vel.y = Math.abs(p.vel.y) > 1.5 ? -p.vel.y * 0.35 : 0; p.vel.x *= 0.6; p.vel.z *= 0.6; p.spin.multiplyScalar(0.6); } m.rotation.x += p.spin.x * dt; m.rotation.z += p.spin.z * dt; m.material.opacity = k > 0.7 ? (1 - k) / 0.3 : 1; } // pipoca quicando
     else if (p.kind === 'smoke') { p.vel.multiplyScalar(1 - 1.5 * dt); p.vel.y += 0.6 * dt; m.position.addScaledVector(p.vel, dt); m.scale.setScalar(p.s0 * (1 + k * 2.2)); m.material.opacity = 0.7 * (1 - k); }
     else if (p.kind === 'spark') { p.vel.y -= 6 * dt; m.position.addScaledVector(p.vel, dt); m.material.opacity = 0.55 * (1 - k); m.scale.setScalar(1 - k * 0.35); }
-    if (k >= 1) { scene.remove(m); if (m.material) m.material.dispose(); if (p.kind === 'flash' || p.kind === 'ring') m.geometry.dispose(); particles.splice(i, 1); }
+    else if (p.kind === 'ray') { m.position.addScaledVector(p.vel, dt); const s = (p.flash ? 0.4 + k * 2.4 : p.ring ? 0.4 + k * (RAY_MOVE.radius / 0.2) : (p.s0 || 1) * (1 - k * 0.3)); m.scale.setScalar(s); if (m.material) m.material.opacity = (p.flash ? 0.95 : 0.8) * (1 - k); }
+    else if (p.kind === 'raylight') { m.intensity = 12 * (1 - k); }
+    if (k >= 1) { scene.remove(m); if (m.material && m.material.dispose && !m.userData.keepMat) m.material.dispose(); if (m.geometry && !m.userData.keepGeo && (p.kind === 'flash' || p.kind === 'ring' || p.kind === 'ray')) m.geometry.dispose(); particles.splice(i, 1); }
   }
 }
 // pré-visualização da trajetória
@@ -1292,12 +1642,129 @@ function updateDiscs(dt) {
       for (const t of entities) { if (t === d.owner || !t.alive || friends(t, d.owner)) continue; for (const [y, r, head] of [[1.5, 0.5, true], [0.8, 0.58, false]]) { const tt = raySphere(a, seg, center(t, y), r + DISC.r * 0.5); if (tt > 0 && tt <= L && (!hit || tt < hit.tt)) hit = { t, tt, head, at: a.clone().addScaledVector(seg, tt), from: a, dir: seg }; } }
     }
     if (hit) {
-      const raw = W.dmg * (hit.head ? W.headMul : 1);
+      const rawW = d.owner && d.owner.isPlayer ? gunOf(d.owner, DISC_W) : W;
+      const raw = rawW.dmg * (hit.head ? rawW.headMul : 1);
       const met = bulletOnShield(hit.t, modelYaw(hit.t), hit.from, hit.dir, hit.tt, 'disco', raw);
       removeDisc(i, hit.at, true); applyShieldHurt(hit.t, met.shield, met.blocked);
       if (met.dmg > 0) damage(hit.t, met.dmg, d.owner, DISC_W, hit.head); continue;
     }
     if (d.dead) removeDisc(i, d.pos, false);
+  }
+}
+// ---------------- Ray Gun (shared/ray.js: quica 3 vezes, estouro curto) ----------------
+const rays = [];
+const rayBoltGeo = new THREE.SphereGeometry(0.16, 10, 8);
+const rayCoreGeo = new THREE.SphereGeometry(0.09, 8, 6);
+const raySparkGeo = new THREE.SphereGeometry(0.05, 6, 4);
+const rayTrailGeo = new THREE.SphereGeometry(0.07, 6, 4);
+const rayFlashGeo = new THREE.SphereGeometry(0.36, 10, 8);
+const rayRingGeo = new THREE.TorusGeometry(0.22, 0.04, 6, 18);
+function makeRayBolt() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(rayBoltGeo, new THREE.MeshBasicMaterial({ color: 0xb6ff7a, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+  body.scale.set(0.85, 0.85, 2.5); g.add(body);
+  const core = new THREE.Mesh(rayCoreGeo, new THREE.MeshBasicMaterial({ color: 0xf4fff0, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(core);
+  const lamp = new THREE.PointLight(0x39ff6a, 2.2, 6);
+  g.add(lamp); g.userData.lamp = lamp; g.userData.body = body;
+  return g;
+}
+function dropRayMesh(mesh) {
+  scene.remove(mesh);
+  mesh.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); });
+}
+function spawnRay(d) {
+  d.mesh = makeRayBolt(); d.mesh.position.copy(d.pos); scene.add(d.mesh);
+  d.trail = 0; rays.push(d); return d;
+}
+function launchRay(e, origin, dir) {
+  if (online && e.isPlayer) { netEv(['ry', v3a(origin), v3a(dir), +(performance.now() / 1000).toFixed(3)]); return; }
+  spawnRay({ owner: e, pos: origin.clone().addScaledVector(dir, 0.45), dir: dir.clone().normalize(), bounces: 0, t: 0, traveled: 0 });
+}
+function clearRays() {
+  for (const r of rays) dropRayMesh(r.mesh);
+  rays.length = 0;
+}
+function rayMat(color, opacity = 0.9) {
+  return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+}
+function raySpark(p, color, n = 8) {
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(raySparkGeo, rayMat(color));
+    m.userData.keepGeo = true;
+    m.position.copy(p); scene.add(m);
+    particles.push({ mesh: m, vel: new V3(rand(-1, 1), rand(0.2, 1.4), rand(-1, 1)).multiplyScalar(rand(2, 5)), life: rand(0.16, 0.28), t: 0, kind: 'ray', s0: rand(0.7, 1.2) });
+  }
+}
+function rayBurst(c) {
+  const add = (mesh, vel, life, extra = {}) => { mesh.userData.keepGeo = true; mesh.position.copy(c); scene.add(mesh); particles.push({ mesh, vel, life, t: 0, kind: 'ray', radius: RAY_MOVE.radius, ...extra }); };
+  add(new THREE.Mesh(rayFlashGeo, rayMat(0xd8ffb0, 0.95)), new V3(), 0.16, { s0: 1, flash: true });
+  const ring = new THREE.Mesh(rayRingGeo, rayMat(0x39ff6a, 1));
+  ring.lookAt(camera.position); add(ring, new V3(), 0.22, { s0: 1, ring: true });
+  raySpark(c, 0x7dff6a, 8);
+  const light = new THREE.PointLight(0x39ff6a, 8, 4.5); light.position.copy(c); scene.add(light);
+  particles.push({ mesh: light, vel: new V3(), life: 0.14, t: 0, kind: 'raylight' });
+}
+function rayNick(at, owner) {
+  if (!owner || !owner.alive || state === 'over') return;
+  const w = owner.isPlayer ? gunOf(owner, RAY) : WEAPONS[RAY];
+  const o = { ...raySplash(w), wIdx: RAY };
+  const los = () => true;
+  for (const h of explosionHits(at, o, [owner], los, owner, false, null)) {
+    if (h.dmg > 0) damage(owner, h.dmg, owner, RAY, false, false, 0, at);
+  }
+}
+function rayBlast(c, owner, direct = null) {
+  rayBurst(c);
+  if (player) sfx.rayHit(clamp(1 - c.distanceTo(player.pos) / 28, 0.2, 1));
+  if (state === 'over') return;
+  const w = owner && owner.isPlayer ? gunOf(owner, RAY) : WEAPONS[RAY];
+  const o = { ...raySplash(w), wIdx: RAY };
+  const los = (a, b) => losClear(new V3(a.x, a.y, a.z), new V3(b.x, b.y, b.z));
+  const ents = invMode() ? entities.filter((x) => x.zt || x === owner) : entities;
+  for (const h of explosionHits(c, o, ents, los, owner, teamMode(), direct)) {
+    const e = h.e;
+    const met = splashOnShield(e, modelYaw(e), c, h.dmg, e === owner, e === direct);
+    if (met.knockMul !== 1) { h.knock.x *= met.knockMul; h.knock.y *= met.knockMul; h.knock.z *= met.knockMul; }
+    e.vel.x += h.knock.x; e.vel.z += h.knock.z; e.vel.y = Math.max(e.vel.y, h.knock.y); e.onGround = false;
+    if (e.isPlayer) lastKnock = gameTime;
+    applyShieldHurt(e, met.shield, met.blocked);
+    if (met.dmg > 0) damage(e, met.dmg, owner, RAY, false, false, 0, c);
+  }
+}
+function updateRays(dt) {
+  for (let i = rays.length - 1; i >= 0; i--) {
+    const r = rays[i];
+    const from = r.pos.clone(), hits = stepRay(PHYS, r, dt);
+    r.mesh.position.copy(r.pos);
+    if (r.dir && r.dir.x != null) r.mesh.quaternion.setFromUnitVectors(new V3(0, 0, 1), new V3(r.dir.x, r.dir.y, r.dir.z).normalize());
+    const ud = r.mesh.userData;
+    if (ud.body) ud.body.scale.z = 2.35 + Math.sin(gameTime * 28 + i) * 0.28;
+    if (ud.lamp) ud.lamp.intensity = 1.2 + Math.sin(gameTime * 22) * 0.4;
+    r.trail = (r.trail || 0) + dt;
+    if (r.trail > 0.028) {
+      r.trail = 0;
+      const m = new THREE.Mesh(rayTrailGeo, rayMat(0x39ff6a, 0.55));
+      m.userData.keepGeo = true;
+      m.position.copy(from); scene.add(m);
+      particles.push({ mesh: m, vel: new V3(), life: 0.14, t: 0, kind: 'ray', s0: 1 });
+    }
+    for (const h of hits) if (!h.dead) { const at = new V3(h.pos.x, h.pos.y, h.pos.z); raySpark(at, 0xc6ff8a, 6); sfx.rayBounce(distVol(at)); if (!r.net) rayNick(at, r.owner); }
+    if (r.net) { if (r.dead) { dropRayMesh(r.mesh); rays.splice(i, 1); } continue; }
+    const pts = [from, ...hits.map((h) => new V3(h.pos.x, h.pos.y, h.pos.z)), r.pos.clone()];
+    let hit = null;
+    for (let k = 0; k < pts.length - 1 && !hit; k++) {
+      const a = pts[k], seg = pts[k + 1].clone().sub(a), L = seg.length(); if (L < 1e-5) continue; seg.divideScalar(L);
+      for (const t of entities) {
+        if (!t.alive || t === r.owner) continue;
+        if (friends(t, r.owner)) continue;
+        const pad = 0.16 * (t.size || 1);
+        const tt = rayCapsule(a, seg, L, t.pos, pad, t.crouch || 0);
+        if (tt !== null && tt <= L && (!hit || tt < hit.tt)) hit = { t, at: a.clone().addScaledVector(seg, tt) };
+      }
+    }
+    if (hit) { dropRayMesh(r.mesh); rays.splice(i, 1); rayBlast(hit.at, r.owner, hit.t); continue; }
+    if (r.dead) { const at = r.pos.clone(); dropRayMesh(r.mesh); rays.splice(i, 1); rayBlast(at, r.owner, null); }
   }
 }
 // ---------------- Estilingue de Ovo (shared/egg.js: voa em arco e quebra no 1º contato) ----------------
@@ -1321,7 +1788,7 @@ function eggStain(p, n) { // mancha de ovo na parede/chão: some em EGG.stain s
   if (eggStains.length > 24) { const o = eggStains.shift(); scene.remove(o.m); o.m.geometry.dispose(); o.m.material.dispose(); }
 }
 function eggHit(t, g, head, from = null, dir = null, tt = 0) {
-  const raw = eggDmg(WEAPONS[EGG_W], g.k, head);
+  const raw = eggDmg(g.owner && g.owner.isPlayer ? gunOf(g.owner, EGG_W) : WEAPONS[EGG_W], g.k, head);
   const met = from && dir ? bulletOnShield(t, modelYaw(t), from, dir, tt, 'estilingue', raw) : { dmg: raw, shield: 0, blocked: 0 };
   applyShieldHurt(t, met.shield, met.blocked);
   const ok = t.alive && gameTime >= t.invulnUntil && !friends(t, g.owner) && met.dmg > 0;
@@ -1393,14 +1860,16 @@ function updateCorn(dt) {
     if (!h) continue; scene.remove(g.mesh); corns.splice(i, 1);
     popChain(PHYS, h.pos, h.n, g.id).forEach((p, k) => cornPops.push({ at: gameTime + k * CORN.gap, pos: new V3(p.x, p.y, p.z), owner: g.owner, direct: k ? null : h.e }));
   }
-  for (let i = cornPops.length - 1; i >= 0; i--) { const q = cornPops[i]; if (gameTime < q.at) continue; cornPops.splice(i, 1); blast(q.pos, q.owner, popOpts(CORN_W), q.direct); }
+  for (let i = cornPops.length - 1; i >= 0; i--) { const q = cornPops[i]; if (gameTime < q.at) continue; cornPops.splice(i, 1); const pop = popOpts(CORN_W); if (q.owner && q.owner.pap) pop.maxDmg = cornPopDmg(papTierOf(q.owner, CORN_W)); blast(q.pos, q.owner, pop, q.direct); }
 }
 const rockets = []; const smokeGeo = new THREE.SphereGeometry(0.14, 8, 6);
 function launchRocket(e, origin, dir) {
-  const R = WEAPONS[3].rocket;
+  const R = e && e.isPlayer ? (gunOf(e, 3).rocket || WEAPONS[3].rocket) : WEAPONS[3].rocket;
   if (!online && e) hearGunshot(entities, origin, e, gameTime);
   if (online && e.isPlayer) { netEv(['r', v3a(origin), v3a(dir), +(performance.now() / 1000).toFixed(3)]); return null; } // o servidor cria o foguete
   const near = wallDistance(origin, dir, 0.7); // colado na parede/chão: explode na hora
+  const gHit = gasSim ? gasSim.ray(origin, dir, near ? near.distance : 0.7) : null;
+  if (gHit && (!near || gHit.t <= near.distance)) { blast(origin.clone().addScaledVector(dir, Math.max(0, gHit.t - 0.05)), e, { ...R, wIdx: 3 }); return null; }
   if (near) { blast(near.point.clone().addScaledVector(dir, -0.12), e, { ...R, wIdx: 3 }); return null; }
   const start = origin.clone().addScaledVector(dir, 0.6);
   const mesh = makeRocket(1.5); scene.add(mesh); mesh.position.copy(start); mesh.lookAt(start.clone().add(dir));
@@ -1424,6 +1893,8 @@ function updateRockets(dt) {
       if (t !== null && (hitT === null || t < hitT)) { const blocked = classifyRay(e, modelYaw(e), r.pos, r.dir, t).block; hitT = t; hitE = blocked ? null : e; hitLid = blocked ? e : null; } // face da tampa para o foguete; pé, borda e fresta levam o direto
     }
     if (wh && (hitE || hitLid) && wh.distance < hitT) { hitE = null; hitLid = null; }
+    const gHit = gasSim ? gasSim.ray(r.pos, r.dir, (hitT ?? step + 0.1) + 0.02) : null;
+    if (gHit && (hitT === null || gHit.t < hitT)) { hitT = gHit.t; hitE = null; hitLid = null; }
     if (hitT !== null || gameTime - r.born > 6) {
       window.__lastBlast = { c: r.pos.clone().addScaledVector(r.dir, Math.max(0, (hitT ?? 0) - 0.05)).toArray(), hit: hitE ? hitE.name : (hitLid ? hitLid.name : null) };
       blast(r.pos.clone().addScaledVector(r.dir, Math.max(0, (hitT ?? 0) - 0.05)), r.owner, { ...R, wIdx: 3 }, hitE);
@@ -1454,13 +1925,16 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   const w = shooter && shooter.isPlayer ? gunOf(shooter, wIdx) : WEAPONS[wIdx]; const res = { hit: false, kill: false, kills: 0, wall: false };
   if (shooter && shooter.model) setExpression(shooter.model, 'angry', 0.5); // cara de brava ao atirar
   const scale = wIdx === BOW ? clamp(Number(mul) || 1, 0.35, 1.3) : 1;
-  const hitsBy = new Map(), lids = new Map(), bags = new Map(), dirs = [], heliDmg = new Map(), skies = shooter === player ? [] : [...skyHelis(), ...gunshipList().filter((h) => h.owner !== shooter)];
+  const hitsBy = new Map(), lids = new Map(), bags = new Map(), dirs = [], heliDmg = new Map(), gasAcc = new Map(), skies = shooter === player ? [] : [...skyHelis(), ...gunshipList().filter((h) => h.owner !== shooter)];
   const targets = entities.filter((e) => e !== shooter && e.alive && !friends(e, shooter)).map((e) => ({ e, p: e.pos, crouch: e.crouch || 0, size: e.zt ? e.size : 1 })); // zumbi grande: hitbox escalada; // time: bala atravessa o companheiro; agachado achata o corpo
   const helis = skies.map((sh) => ({ h: sh, c: sh.pos, r: heliR(sh) }));
   const shotW = invMode() ? { ...w, pierce: 8, pierceMul: 0.82 } : w; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
   for (let p = 0; p < w.pellets; p++) {
     const d = dir.clone(); d.x += (Math.random() - 0.5) * 2 * spread; d.y += (Math.random() - 0.5) * 2 * spread; d.z += (Math.random() - 0.5) * 2 * spread; d.normalize(); dirs.push(d);
-    const tr = traceShot(PHYS, origin, d, shotW, targets, helis, scale), end = origin.clone().addScaledVector(d, tr.end), vis = p < 4 || shooter.isPlayer;
+    const tr = traceShot(PHYS, origin, d, shotW, targets, helis, scale);
+    const gHit = gasSim ? gasSim.ray(origin, d, tr.end) : null;
+    if (gHit) { clipTrace(tr, origin, d, gHit); gasAcc.set(gHit.c, (gasAcc.get(gHit.c) || 0) + pelletOnGas(w, gHit.t, scale)); }
+    const end = origin.clone().addScaledVector(d, tr.end), vis = p < 4 || shooter.isPlayer;
     if (vis) tracer(muzzle, end, !!w.beam);
     for (const h of tr.holes) bulletHole(h, vis);
     if (tr.holes.length && vis) sfx.wallPen(shooter.isPlayer ? 0.8 : distVol(end) * 0.6);
@@ -1475,7 +1949,7 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
       const a = hitsBy.get(h.e) || { dmg: 0, head: false, fx: 0 }; a.dmg += h.dmg; a.head = a.head || h.head; a.fx |= (h.walls ? 1 : 0) | (h.bodies ? 2 : 0); hitsBy.set(h.e, a);
       const bag = bags.get(h.e) || []; bag.push(h.dmg); bags.set(h.e, bag);
     }
-    if (tr.heli) { heliDmg.set(tr.heli.h, (heliDmg.get(tr.heli.h) || 0) + tr.heli.dmg); puff(end, 0xffe08a); } else if (tr.stop === 'wall') puff(end);
+    if (tr.heli) { heliDmg.set(tr.heli.h, (heliDmg.get(tr.heli.h) || 0) + tr.heli.dmg); puff(end, 0xffe08a); } else if (tr.stop === 'gas') puff(end, 0xffb020); else if (tr.stop === 'wall') puff(end);
     if (shooter.isPlayer) window.__lastTrace = { dir: d.toArray(), end: +tr.end.toFixed(3), stop: tr.stop, holes: tr.holes.length, hits: tr.hits.map((h) => ({ name: h.e.name, dmg: +h.dmg.toFixed(2), head: h.head, walls: h.walls, bodies: h.bodies })) };
   }
   for (const [sh, dmg] of heliDmg) { hurtHeli(dmg, sh); res.hit = true; if (shooter && shooter.isPlayer) sfx.hit(); }
@@ -1498,17 +1972,19 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   const hurt = new Set(); for (const [e, h] of hitsBy) { if (h.dmg <= 0) continue; res.hit = true; res.wall = res.wall || !!(h.fx & 1); const hp0 = e.hp; if (damage(e, h.dmg, shooter, wIdx, h.head, false, h.fx)) { res.kill = true; res.kills++; } if (e.hp < hp0) hurt.add(e); }
   if (w.knock) for (const [e, h] of hitsBy) { if (!e.alive || e.dummy || !hurt.has(e)) continue; const v = shotKnock(w, origin, e.pos, h.dmg, e.zt); if (!v) continue; e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; if (e.isPlayer) lastKnock = gameTime; } // Calibre 12: empurrão (mesma conta do servidor)
   if (shooter.isPlayer && res.kills >= 2) feedbackMedal('Collateral', `${res.kills} de uma bala só`);
+  if (!online) for (const [c, dmg] of gasAcc) if (noteGasHit(c, dmg, shooter)) res.hit = true;
   return res;
 }
 
 function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = attacker && attacker !== t && !attacker.fog ? attacker.pos : null) { // origin: de onde veio o golpe (explosão: o centro dela)
   if (state === 'over') return false; // resultado fechado
   if (!t.alive || gameTime < t.invulnUntil || friends(t, attacker) || bombFrozen(bombS)) return false; // sem fogo amigo; Bomba: sem dano na preparação
-  if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog) return false; // Invasão: jogador nunca machuca jogador (nem a si mesmo)
+  if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
   t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); // regen só com dano de outro
+  if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { feedbackAward(add); refreshSurvPts(); } }
   if (t.isPlayer) { hurtFlash(); noteHit(origin); if (attacker && attacker !== t) noteFlinch(amount); sfx.oink(0.8, 1.15); }
   else { if (attacker && attacker !== t && !t.target) { t.target = attacker; t.aim = t.reaction * 0.5; } if (Math.random() < 0.3) sfx.oink(distVol(t.pos) * 0.6, 1.3); }
-  if (attacker && attacker.isPlayer && attacker !== t) { if (t.hp > 0) feedbackHit({ head, wall: !!(fx & 1) }); sfx.hit(); if (training()) dmgPopup(t, amount, head); }
+  if (attacker && attacker.isPlayer && attacker !== t) { if (t.hp > 0 && !(survOn() && t.zt)) feedbackHit({ head, wall: !!(fx & 1) }); sfx.hit(); if (training()) dmgPopup(t, amount, head); }
   if (t.hp <= 0) { kill(t, attacker, wIdx, head, back, false, null, fx); return true; }
   return false;
 }
@@ -2580,7 +3056,8 @@ function ensureGunnerHud() {
 #gunnerHud .gh-x.mini::before,#gunnerHud .gh-x.mini::after{content:"";position:absolute;background:#e8fbff;box-shadow:0 0 0 1px #000}
 #gunnerHud .gh-x.mini::before{left:50%;top:50%;width:4px;height:4px;border-radius:50%;transform:translate(-50%,-50%)}
 #gunnerHud .gh-x.mini::after{display:none}
-#gunnerHud .gh-scope{position:absolute;inset:0;background:radial-gradient(circle at center,transparent 0 min(34vh,34vw),#0b0b0b calc(min(34vh,34vw) + 3px))}
+#gunnerHud .gh-scope{position:absolute;inset:0;background:transparent;pointer-events:none}
+#gunnerHud .gh-scope::before{content:"";position:absolute;inset:0;background:rgba(6,8,10,.62);-webkit-backdrop-filter:blur(14px) saturate(.72);backdrop-filter:blur(14px) saturate(.72);--hole:min(34vh,34vw);-webkit-mask-image:radial-gradient(circle at center,transparent 0 var(--hole),#000 calc(var(--hole) + 8px));mask-image:radial-gradient(circle at center,transparent 0 var(--hole),#000 calc(var(--hole) + 8px))}
 #gunnerHud .gh-x.sniper{width:min(68vh,68vw);height:min(68vh,68vw)}
 #gunnerHud .gh-x.sniper::before,#gunnerHud .gh-x.sniper::after{content:"";position:absolute;background:#111}
 #gunnerHud .gh-x.sniper::before{left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%)}
@@ -2993,9 +3470,11 @@ const KILL_PHRASES = [
 ];
 const SELF_PHRASES = [(t) => `${t} se pururucou`, (t) => `${t} virou bacon sozinho`, (t) => `${t} se jogou na frigideira`, (t) => `${t} fritou no próprio óleo`];
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
-function showStamp(wIdx) { const s = $('stamp'); s.textContent = isKnife(wIdx) ? 'MOGGADO!' : wIdx === TAMPA ? 'AMASSADO!' : wIdx === W_BOMB ? 'EXPLODIDO!' : wIdx === EGG_W ? 'OMELETADO!' : 'PURURUCADO!'; s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
+function showStamp(wIdx) { const s = $('stamp'); s.textContent = isKnife(wIdx) ? 'MOGGADO!' : wIdx === TAMPA ? 'AMASSADO!' : (wIdx === W_BOMB || wIdx === W_GAS) ? 'EXPLODIDO!' : wIdx === EGG_W ? 'OMELETADO!' : 'PURURUCADO!'; s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
 function addKillFeed(a, t, wIdx, head, back = false, label = null, fx = 0) {
+  if (wIdx === W_FALL) { addFeedLine(`${escapeHtml(t.name)} despencou do penhasco`, `${t.name} despencou`); return; }
   if (wIdx === W_BOMB) { const n = nameBits(t); addFeedLine(pick(BOOM_PHRASES)(n), `${t.name} explodiu com o botijão`); return; }
+  if (wIdx === W_GAS && !label) label = 'Botijão';
   const div = document.createElement('div'); div.className = 'kf' + (isKnife(wIdx) ? ' knife' : '');
   const nm = (e) => nameBits(e);
   const knife = isKnife(wIdx) && a && a !== t; // faca: frase fixa "moggou"
@@ -3003,7 +3482,7 @@ function addKillFeed(a, t, wIdx, head, back = false, label = null, fx = 0) {
   const zk = a && a.zt, fogK = (a && a.fog) || label === 'Névoa Assombrada'; // Invasão: zumbi / névoa
   div.innerHTML = zk ? `${nm(a)} pegou ${nm(t)} <i>[🧟 ${zk === 'boss' ? 'Chefão' : 'Zumbi'}]</i>` : fogK ? `${nm(t)} sumiu na <i>[🌫 Névoa Assombrada]</i>` : knife ? `${nm(a)} moggou ${nm(t)} ${killIcon('knife')} <i>Faca${back ? ' · pelas costas!' : ''}</i>`
     : lidKill ? `${nm(a)} amassou ${nm(t)} na tampa ${killIcon('tampa')} <i>Tampa do Tacho</i>`
-    : a && a !== t ? `${pick(KILL_PHRASES)(nm(a), nm(t))} ${killIcon(wIdx === W_NADE ? 'nade' : WEAPONS[wIdx] && WEAPONS[wIdx].key, label, head, fx)} <i>${label || WEAPON_SHORT(wIdx)}${fx & 1 ? ' · pela parede' : ''}${fx & 2 ? ' · collateral' : ''}${head ? ' · no focinho!' : ''}</i>` : pick(SELF_PHRASES)(nm(t));
+    : a && a !== t ? `${pick(KILL_PHRASES)(nm(a), nm(t))} ${killIcon(wIdx === W_GAS ? 'gas' : wIdx === W_NADE ? 'nade' : WEAPONS[wIdx] && WEAPONS[wIdx].key, label, head, fx)} <i>${label || WEAPON_SHORT(wIdx)}${fx & 1 ? ' · pela parede' : ''}${fx & 2 ? ' · collateral' : ''}${head ? ' · no focinho!' : ''}</i>` : pick(SELF_PHRASES)(nm(t));
   // log canônico p/ testes (o texto exibido varia; faca é fixo)
   { const L = (window.__feedLog ||= []); L.push(knife ? `${a.name} moggou ${t.name} [Faca${back ? ' · pelas costas!' : ''}]` : lidKill ? `${a.name} amassou ${t.name} na tampa [Tampa do Tacho]` : a && a !== t ? `${a.name} pururucou ${t.name} [${label || WEAPON_SHORT(wIdx)}]${fx & 1 ? ' +parede' : ''}${fx & 2 ? ' +colat' : ''}` : `${t.name} se pururucou`); if (L.length > 20) L.shift(); }
   const kf = $('killfeed'); kf.prepend(div); while (kf.children.length > 6) kf.lastChild.remove();
@@ -3048,8 +3527,8 @@ function updateHud(dt) {
   pm.classList.toggle('hidden', !p.charging && !pulling);
   if (p.charging) { const k = chargePower(); $('powerfill').style.width = (k * 100).toFixed(0) + '%'; $('powertext').textContent = k >= 1 ? 'FORÇA MÁXIMA! solte Q' : 'Força do arremesso · solte Q'; }
   else if (pulling) { const egg = p.weapon === EGG_W, k = clamp((gameTime - (egg ? p.eggDraw : p.bowDraw)) / (WEAPONS[p.weapon].draw || 0.7), 0, 1); $('powerfill').style.width = (k * 100).toFixed(0) + '%'; $('powertext').textContent = egg ? (k >= 1 ? 'ELÁSTICO NO TALO! solte o clique' : 'Segura o clique · o ovo vai mais longe') : k >= 1 ? 'CORDA NO TALO! solte o clique' : 'Segura o clique · a flecha fica mais forte'; }
-  paintSlot($('slot1'), 1, WEAPONS[p.slots[0]]); paintSlot($('slot2'), 2, WEAPONS[p.slots[1]]); paintSlot($('slot3'), 3, WEAPONS[p.slots[2]]);
-  $('slot2').classList.toggle('hidden', armsMode());
+  paintSlot($('slot1'), 1, survOn() ? gunOf(p, p.slots[0]) : WEAPONS[p.slots[0]]); paintSlot($('slot2'), 2, p.slotOn && p.slotOn[1] === 0 ? null : (survOn() ? gunOf(p, p.slots[1]) : WEAPONS[p.slots[1]])); paintSlot($('slot3'), 3, WEAPONS[p.slots[2]]);
+  $('slot2').classList.toggle('hidden', armsMode() || !!(survOn() && p.slotOn && p.slotOn[1] === 0));
   $('slot3').classList.toggle('hidden', armsMode() && p.primary === GOLD_KNIFE);
   paintMiniHud(p);
   $('slot1').classList.toggle('active', p.weapon === p.slots[0]); $('slot2').classList.toggle('active', p.weapon === p.slots[1]); $('slot3').classList.toggle('active', p.weapon === p.slots[2]);
@@ -3062,7 +3541,8 @@ function updateHud(dt) {
     const watchingKiller = !!(deathCamState.on && deathCamState.killer);
     if (p.alive || !watchingKiller || x1Mode() || armsMode()) killcamGuns = false;
     const pastHold = !p.alive && gameTime - p.deathAt >= DEATHCAM_HOLD;
-    const gunsOpen = watchingKiller && killcamGuns;
+    const closingGuns = $('deathpick') && $('deathpick').classList.contains('is-closing');
+    const gunsOpen = (watchingKiller && killcamGuns) || !!closingGuns;
     const cover = !armsMode() && ((pastHold && !watchingKiller) || gunsOpen);
     document.body.classList.toggle('deadgray', !p.alive);
     document.body.classList.toggle('killcam', watchingKiller && !gunsOpen);
@@ -3070,14 +3550,20 @@ function updateHud(dt) {
     const dp = $('deathpick');
     dp.classList.toggle('hidden', !(pastHold || gunsOpen));
     dp.classList.toggle('x1', x1Mode() || armsMode());
+    const fullBoard = !dp.classList.contains('hidden') && !document.body.classList.contains('killcam') && !dp.classList.contains('x1');
+    dp.classList.toggle('guns-on', fullBoard);
+    if (!killcamGuns) dp.classList.remove('is-closing');
     document.body.classList.toggle('dead', cover);
     if (wasDead === !cover) placeSocialHud();
-    const gunHint = $('deathGunHint');
-    if (gunHint) {
-      const showHint = watchingKiller && !x1Mode() && !armsMode() && (pastHold || gunsOpen);
-      gunHint.classList.toggle('hidden', !showHint);
-      const gunTxt = gunsOpen ? 'B ou Esc — fecha' : 'B — armas';
-      if (gunHint.textContent !== gunTxt) gunHint.textContent = gunTxt;
+    const armsBtn = $('deathArmsBtn');
+    if (armsBtn) {
+      const can = watchingKiller && !x1Mode() && !armsMode() && (pastHold || gunsOpen);
+      armsBtn.classList.toggle('hidden', !can);
+      armsBtn.classList.toggle('is-open', !!gunsOpen);
+      armsBtn.setAttribute('aria-expanded', gunsOpen ? 'true' : 'false');
+      const label = gunsOpen ? '← Voltar' : 'Armas';
+      const name = armsBtn.querySelector('b');
+      if (name && name.textContent !== label) name.textContent = label;
     }
     if (!p.alive) updateRespawnBtn(p);
   } crossEl.style.visibility = p.alive && !(predator && predator.phase === 'fly') ? '' : 'hidden';
@@ -3085,11 +3571,15 @@ function updateHud(dt) {
   $('reloadmsg').textContent = w.shield || w.melee ? '' : p.reloadEnd > gameTime ? (w.shellReload ? 'Recarregando... (atire para interromper)' : 'Recarregando...') : (dry ? (p.reserve[p.weapon] ? 'Aperte R' : 'Sem munição! Pegue uma caixa') : '');
   paintSaberHud(p, w);
   const left = Math.max(0, matchLimit() - gameTime); $('timer').textContent = armsMode() ? WEAPONS[p.primary].short : exploreMode() ? '∞' : x1Mode() && !Number.isFinite(matchLimit()) ? 'até 10' : Number.isFinite(left) ? `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'Treino ∞';
+  if ($('pauseTime') && !$('pause').classList.contains('hidden')) $('pauseTime').textContent = $('timer').textContent;
+  { const clockLabel = $('timer').textContent; const clocks = worldGroup && worldGroup.userData.clocks;
+    if (clocks) for (const m of clocks) { if (m.userData.last === clockLabel) continue; const { ctx, canvas, tex } = m.userData.clock; ctx.fillStyle = '#1c242c'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#8E2F2A'; ctx.lineWidth = 8; ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12); ctx.fillStyle = '#F2D9A0'; ctx.font = '900 36px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(clockLabel, canvas.width / 2, canvas.height / 2); tex.needsUpdate = true; m.userData.last = clockLabel; } }
   $('score').textContent = exploreMode() ? `Exploração · ${currentMap ? currentMap.name : ''}` : `Abates: ${p.kills} · Mortes: ${p.deaths} · K/D: ${(p.kills / Math.max(1, p.deaths)).toFixed(2)} · Pontos: ${feedbackPoints()}`;
+  paintNoclip();
   const lead = entities.filter((e) => !e.zt).reduce((a, b) => (b.kills > a.kills ? b : a));
   const killGoal = x1Mode() ? X1.KILLS : KILL_LIMIT;
   const x1Name = x1Mode() && WEAPONS[x1Gun] ? ` · ${WEAPONS[x1Gun].short}` : '';
-  const leadHtml = armsMode() ? `Corrida Armada · Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.primary === GOLD_KNIFE ? '1 abate para vencer' : `${p.armsKills}/2 abates`}` : invMode() ? '' : exploreMode() ? 'Mapa vazio · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : hideMode() ? `Docão Escondido (protótipo) · primeiro time a ${HIDE.WIN} rodadas vence` : x1Mode() ? (lead.kills ? `X1 · ${shownName(lead)} ${lead.kills}/${killGoal}${x1Name}` : `X1 · primeiro a ${killGoal}${x1Name}`) : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${shownName(lead)} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
+  const leadHtml = armsMode() ? `Corrida Armada · Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.primary === GOLD_KNIFE ? '1 abate para vencer' : `${p.armsKills}/2 abates`}` : invMode() ? '' : exploreMode() ? 'Mapa vazio · N noclip · , . ou [ ] trocam a primária' : mode === 'bomb' ? `Bomba (protótipo) · primeiro time a ${BOMB.WIN} rodadas vence` : training() ? 'Estande do Docão · B/N/M trocam a arma · munição infinita' : hideMode() ? `Docão Escondido (protótipo) · primeiro time a ${HIDE.WIN} rodadas vence` : x1Mode() ? (lead.kills ? `X1 · ${shownName(lead)} ${lead.kills}/${killGoal}${x1Name}` : `X1 · primeiro a ${killGoal}${x1Name}`) : teamMode() ? `Dominação · primeiro time a ${DOM.WIN_CAPS} zonas vence` : lead.kills ? `Líder: ${shownName(lead)} (${lead.kills}/${KILL_LIMIT})` : `Primeiro a ${KILL_LIMIT} abates vence`;
   const leaderEl = $('leader');
   if (leaderEl.dataset.h !== leadHtml) { leaderEl.dataset.h = leadHtml; leaderEl.innerHTML = leadHtml; }
   updateLeaderboard(dt); tickFeedback(dt);
@@ -3115,37 +3605,21 @@ function updateHud(dt) {
   if (!$('tabboard').classList.contains('hidden')) $('tabboard').innerHTML = boardHtml();
 }
 
-// Red dot: corpo no trilho, anel de frente pra câmera, lente com reflexo e ponto vermelho no eixo.
+// Red dot no trilho: base curta e anel fino, com um ponto pequeno. Sem vidro, reflexo, halo ou retículo extra.
+// No ADS fechado a mira de verdade é o HUD (#reddot); este modelo sai da frente pra não duplicar o ponto.
 // O círculo do Three nasce no plano XY (normal +Z), que é a face que a câmera de 1ª pessoa enxerga.
 function makeRedDot() {
   const g = new THREE.Group();
   g.name = 'red-dot';
-  const housing = toon(0x1a1d24);
-  const put = (geo, mat, x, y, z, ol) => {
-    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m);
-    if (ol) outline(m, ol);
-    return m;
-  };
-  put(new THREE.BoxGeometry(0.05, 0.012, 0.046), housing, 0, -0.032, 0, 0.003);
-  const win = 0.022, thick = 0.007;
-  put(new THREE.BoxGeometry(thick, win * 2 + thick, 0.018), housing, -win, 0, 0, 0.002);
-  put(new THREE.BoxGeometry(thick, win * 2 + thick, 0.018), housing, win, 0, 0, 0.002);
-  put(new THREE.BoxGeometry(win * 2 + thick, thick, 0.018), housing, 0, win, 0, 0.002);
-  put(new THREE.BoxGeometry(win * 2 + thick, thick, 0.018), housing, 0, -win, 0, 0.002);
-  const ring = put(new THREE.TorusGeometry(0.016, 0.0032, 8, 28), housing, 0, 0, 0.006, 0.002);
-  const glass = new THREE.Mesh(new THREE.CircleGeometry(0.0145, 24), new THREE.MeshStandardMaterial({
-    color: 0xd7ecff, metalness: 0.55, roughness: 0.08, transparent: true, opacity: 0.28,
-    emissive: 0x102030, emissiveIntensity: 0.35, depthWrite: false, side: THREE.DoubleSide,
-  }));
-  glass.position.set(0, 0, 0.004); glass.userData.noCamo = true; glass.renderOrder = 3; g.add(glass);
-  const glint = new THREE.Mesh(new THREE.PlaneGeometry(0.009, 0.0028), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
-  glint.position.set(0.003, 0.005, 0.007); glint.rotation.z = -0.5; glint.userData.noCamo = true; glint.renderOrder = 4; g.add(glint);
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.008, 20), new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-  glow.position.set(0, 0, 0.009); glow.userData.noCamo = true; glow.renderOrder = 5; g.add(glow);
-  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.0046, 18), new THREE.MeshBasicMaterial({ color: 0xff1a1a, depthWrite: false, side: THREE.DoubleSide }));
-  dot.position.set(0, 0, 0.01); dot.userData.noCamo = true; dot.renderOrder = 6; g.add(dot);
-  g.userData.aim = dot; g.userData.glow = glow;
-  g.scale.setScalar(1.65);
+  const housing = toon(0x1c2028);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.005, 0.028), housing);
+  base.position.set(0, -0.011, 0); g.add(base);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.011, 0.001, 8, 28), housing);
+  ring.position.z = 0.004; g.add(ring);
+  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.0015, 16), new THREE.MeshBasicMaterial({ color: 0xff2020, depthWrite: false, side: THREE.DoubleSide }));
+  dot.position.z = 0.007; dot.userData.noCamo = true; dot.renderOrder = 6; g.add(dot);
+  g.userData.aim = dot;
+  g.scale.setScalar(1.15);
   return g;
 }
 // ---------------- Arma em 1ª pessoa (cascos segurando) ----------------
@@ -3394,6 +3868,23 @@ const fp = (() => {
   const cap2 = makeFPCapataz(true); cap2.visible = false; root.add(cap2); guns.push(cap2); // 24 = Dois Capatazes
   fpScene.add(capatazFx());
   const tampa = makeFPShield(); tampa.position.set(0, 0, 0); tampa.visible = false; root.add(tampa); guns.push(tampa); guns.push(krGold); // 25 = Tampa do Tacho. A pose (esquerda e baixa) fica no updateFP.
+  // Ray Gun: pistola sci-fi curta. Câmara verde, prato na boca, faixa da granja. Índice 27.
+  const rayg = new THREE.Group(); rayg.name = 'fp-ray'; root.add(rayg);
+  const rayBody = toon(0x24302a), rayDark = toon(0x141a16), rayCopper = toon(0xc45a2a);
+  const rayGlowMat = new THREE.MeshBasicMaterial({ color: 0x39ff6a, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false });
+  add(new THREE.BoxGeometry(0.09, 0.1, 0.28), rayBody, 0, 0.01, -0.02, rayg);
+  add(new THREE.BoxGeometry(0.1, 0.045, 0.12), rayCopper, 0, 0.04, 0.02, rayg, 0.003);
+  add(new THREE.SphereGeometry(0.075, 16, 12), rayDark, 0, 0.02, -0.08, rayg, 0.004);
+  const rayChamber = add(new THREE.SphereGeometry(0.048, 14, 10), rayGlowMat, 0, 0.02, -0.08, rayg, 0);
+  rayChamber.userData.noCamo = false;
+  add(new THREE.CylinderGeometry(0.028, 0.034, 0.16, 12), rayDark, 0, 0.02, -0.28, rayg, 0.003).rotation.x = Math.PI / 2;
+  const rayDish = add(new THREE.TorusGeometry(0.055, 0.012, 8, 18), rayGlowMat, 0, 0.02, -0.38, rayg, 0);
+  add(new THREE.TorusGeometry(0.07, 0.008, 8, 16), toon(0x8fd0ff), 0, 0.02, -0.16, rayg, 0.002);
+  add(new THREE.BoxGeometry(0.05, 0.13, 0.055), rayDark, 0, -0.1, 0.08, rayg).rotation.x = 0.28;
+  add(new THREE.BoxGeometry(0.07, 0.04, 0.08), rayBody, 0, -0.02, 0.16, rayg, 0.003);
+  const rayLamp = new THREE.PointLight(0x39ff6a, 0.55, 1.8); rayLamp.position.set(0, 0.02, -0.36); rayg.add(rayLamp);
+  rayg.userData.lamp = rayLamp; rayg.userData.chamber = rayChamber;
+  rayg.visible = false; guns.push(rayg); // 27 = Ray Gun
   // braços (pose de fuzil, de pistola e de faca)
   let arms = makeFPArms(getSkin()), armsP = makeFPArms(getSkin(), 'pistol'), armsK = makeFPArms(getSkin(), 'knife'); root.add(arms, armsP); kr.add(armsK); armsP.visible = false; armsP.position.set(0, 0.07, -0.04);
   let armsGold = makeFPArms(getSkin(), 'knife'); armsGold.userData.noCamo = true; krGold.add(armsGold);
@@ -3515,14 +4006,16 @@ function fireModeLabel(w) {
   return 'SEMI';
 }
 function weaponTitleParts(p) {
+  const held = survOn() ? gunOf(p, p.weapon) : WEAPONS[p.weapon];
   const w = WEAPONS[p.weapon], n = (p.gunKills && p.gunKills[p.weapon]) || 0;
   const info = camoInfo(n), nxt = nextCamo(n);
   const meta = info && !nxt ? info.name : info && nxt ? `${info.name} · ${n}/${nxt.at}` : nxt ? `${n}/${nxt.at}` : '';
   const ownedSkin = (a, key) => { if (!a) return ''; if (key === 'sniper') return a.sniper || ''; if (key === 'knife') return a.knife || ''; return (a.guns && a.guns[key]) || ''; };
   const skinId = ownedSkin(getAccount(), w.key);
   const skinItem = skinId ? itemById(skinId) : null;
-  const name = skinItem ? skinItem.name : w.name;
-  return { name, meta };
+  const name = (survOn() && papTierOf(p, p.weapon)) ? held.name : (skinItem ? skinItem.name : w.name);
+  const tier = survOn() ? papTierOf(p, p.weapon) : 0;
+  return { name, meta: tier ? `Papada ${tier}/3${meta ? ' · ' + meta : ''}` : meta };
 }
 function weaponTitle(p) {
   const t = weaponTitleParts(p);
@@ -3683,7 +4176,13 @@ function applyPersonality(p, w, dt, moving, inspectK) {
 function updateFP(dt) {
   [fp.kr, fp.kpiv] = fp.knifeRigs[player && player.weapon === GOLD_KNIFE ? 1 : 0];
   const p = player, moving = Math.hypot(p.vel.x, p.vel.z) > 1 && p.onGround;
-  if (moving) fp.bob += dt * 10;
+  if (moving) {
+    const prevBob = fp.bob;
+    fp.bob += dt * 10;
+    if (Math.floor(prevBob / Math.PI) !== Math.floor(fp.bob / Math.PI)) {
+      try { withAudioTag('step', () => sfx.step(0.85)); } catch (e) { /* passo falho não trava o quadro */ }
+    }
+  }
   const wKick = WEAPONS[p.weapon];
   const plain = reducedAnims();
   fp.kick = Math.max(0, fp.kick - dt * (plain ? 6 : recoilRecover(wKick.key))); // cada arma volta do coice no seu tempo; a mira (pitch) não usa isso. Reduzidas: a curva antiga (6).
@@ -3780,10 +4279,11 @@ function updateFP(dt) {
   const dotGun = fp.guns[p.weapon];
   const dotRig = w.redDot && dotGun && dotGun.userData.redDot;
   const dotSteady = !!(dotRig && ads >= (w.redDotAds ?? RED_DOT.ads));
+  const dotHud = !!(dotRig && ads >= 0.45);
   for (const g of fp.guns) {
     if (!g.userData.redDot) continue;
     const on = !!(w.redDot && g === dotGun);
-    g.userData.redDot.visible = on;
+    g.userData.redDot.visible = on && !dotHud;
     if (g.userData.iron) g.userData.iron.visible = !on;
   }
   const swA = (1 - ads * 0.85) * (dotSteady ? 0 : 1);
@@ -3956,6 +4456,11 @@ function fpReload(p, w, dt) {
   if (fp.lmgMag) fp.lmgMag.rotation.z = 0;
   if (fp.mgBox) { fp.mgBox.position.set(-0.16, -0.08, 0.05); fp.mgBox.rotation.z = 0; fp.mgBox.visible = true; }
   fp.discLoaded.position.set(0, 0.09, -0.42); fp.discLoaded.visible = p.mag[DISC_W] > 0; fp.discLoaded.userData.body.rotation.y += dt * 5;
+  if (fp.guns[RAY] && fp.guns[RAY].userData.lamp) {
+    const lamp = fp.guns[RAY].userData.lamp, tier = survOn() ? papTierOf(p, RAY) : 0;
+    lamp.color.setHex([0x39ff6a, 0xc6e07a, 0xff8eb0, 0xffe28a][tier] || 0x39ff6a);
+    lamp.intensity = p.weapon === RAY ? 0.35 + Math.sin(gameTime * 16) * 0.18 : 0;
+  }
   fp.discLoaded.userData.lights.forEach((l, k) => { l.visible = Math.floor(gameTime * 6 + k) % 2 === 0; });
   fp.cornCob.position.set(0, 0.2, -0.02); fp.cornCob.rotation.set(0, 0, 0); fp.cornCob.visible = true;
   fp.cornKernels.forEach((g, j) => { g.visible = j < Math.ceil(p.mag[CORN_W] / WEAPONS[CORN_W].mag * 10); }); // a espiga vai ficando pelada
@@ -4139,12 +4644,13 @@ function updateAds(dt, want) {
   const fov = BASE_FOV + (target - BASE_FOV) * e;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   const sc = scoped(); const scopeEl = $('scope');
-  const throughDot = !!(held.redDot && ads >= 0.45);
+  const throughDot = !!(held.redDot && ads >= 0.45 && player && player.alive && !emote.on);
   scopeEl.classList.toggle('hidden', !sc || emote.on); crossEl.classList.toggle('hidden', !!sc || emote.on || throughDot);
+  const rd = $('reddot'); if (rd) rd.classList.toggle('hidden', !throughDot);
   scopeEl.classList.remove('torresmo', 'canhao', 'carabina');
   const scopeStyle = player && WEAPONS[player.weapon].scopeStyle;
   if (scopeStyle) scopeEl.classList.add(scopeStyle);
-  adsVig.style.opacity = emote.on || sc ? 0 : e.toFixed(3);
+  adsVig.style.opacity = emote.on || sc || held.redDot ? 0 : e.toFixed(3);
   crossEl.style.transform = `translate(-50%,-50%) scale(${(1 - 0.45 * e).toFixed(3)})`;
   crossEl.classList.toggle('ads', e > 0.5);
 }
@@ -4154,7 +4660,7 @@ function scopeGate() {
 }
 // sempre booleano: classList.toggle('hidden', undefined) vira toggle simples e a mira piscava a cada quadro (armas sem luneta)
 const scoped = () => !!(player && player.alive && WEAPONS[player.weapon].scope && ads >= scopeGate() && !(fp.actionT > 0 && WEAPONS[player.weapon].bolt));
-function resetAds() { $('scope').classList.add('hidden'); crossEl.classList.remove('hidden'); ads = 0; camera.fov = BASE_FOV; camera.updateProjectionMatrix(); adsVig.style.opacity = 0; crossEl.style.transform = ''; crossEl.classList.remove('ads'); }
+function resetAds() { $('scope').classList.add('hidden'); const rd = $('reddot'); if (rd) rd.classList.add('hidden'); crossEl.classList.remove('hidden'); ads = 0; camera.fov = BASE_FOV; camera.updateProjectionMatrix(); adsVig.style.opacity = 0; crossEl.style.transform = ''; crossEl.classList.remove('ads'); }
 
 // ---------------- Jogador ----------------
 const fwd = new V3(), right = new V3();
@@ -4477,7 +4983,7 @@ function releaseBow(p) {
   const muzzle = camera.localToWorld(new V3(0.2, -0.18, -0.9));
   const force = 0.35 + 0.95 * k;
   fire(p, camera.position.clone(), dir, BOW, spread, muzzle, force);
-  sfx[w.key](); fp.kick = Math.min(0.14, fp.kick + w.recoil * (1.2 + k)); fp.flashT = 0.04; fp.stringT = 0.14;
+  gunShot(w, 1, 0, 0, shotTier(p, BOW)); fp.kick = Math.min(0.14, fp.kick + w.recoil * (1.2 + k)); fp.flashT = 0.04; fp.stringT = 0.14;
   launchShaft(muzzle, dir, 16 + 26 * k);
   p.pitch = clamp(p.pitch + w.recoil * (0.35 + k), -1.5, 1.5);
   window.__lastShot = { dir: dir.toArray(), origin: camera.position.toArray(), spread, w: BOW, force };
@@ -4531,7 +5037,7 @@ function shootRevolver(p, w, latched) {
     const side = h === 1 ? -1 : 1;
     const muzzle = camera.localToWorld(new V3((w.akimbo ? 0.16 * side : 0.2 * (1 - ads)), -0.16 + ads * 0.05, -0.85));
     fire(p, camera.position.clone(), dir, p.weapon, spread, muzzle, 1, h);
-    sfx[w.key](); noteCapataz('shot', { hand: h, dual: !!w.akimbo });
+    gunShot(w, 1, 0, 0, shotTier(p, p.weapon)); noteCapataz('shot', { hand: h, dual: !!w.akimbo });
     fp.kick = Math.min(0.22, fp.kick + w.recoil * 2.4);
     applyShotRecoil(p, w);
     shake = Math.max(shake, w.akimbo ? 0.07 : 0.12);
@@ -4548,6 +5054,14 @@ function updatePlayer(dt) {
   if (p && p.demoBlock) rightDown = true;
   // Consome o toque mesmo no ar: segurar Espaço não rearma o pulo ao aterrissar.
   const jumpPressed = !!keys.Space; keys.Space = false;
+  if (noclipLive()) {
+    flyNoclip(p, dt);
+    stepRecoil(p, dt, gameTime);
+    stepFlinch(dt);
+    camera.position.set(p.pos.x, p.pos.y + eyeHeight(p), p.pos.z); camera.rotation.set(p.pitch, p.yaw, 0);
+    if (shake > 0) shake = Math.max(0, shake - dt * 1.8);
+    return;
+  }
   if (!p.alive) {
     if (ac130) endAc130(false); // o corpo no chão morreu: solta a mira da Grelha e mostra a câmera da morte (o avião continua no ar)
     if (gunner) endGunner(false); // garantia: mira do Chopper nunca sobrevive à morte (resetRewards já solta; "guiando" trava o WASD)
@@ -4580,6 +5094,7 @@ function updatePlayer(dt) {
   if (!guiding && jumpPressed && p.onGround && !bombLock(p) && !(hideS && p.propLock)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
   moveEntity(p, dt);
+  checkFall(p); if (!p.alive) return;
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
   stepRecoil(p, dt, gameTime);
   stepFlinch(dt);
@@ -4609,6 +5124,7 @@ function updatePlayer(dt) {
   if (p.charging) updateArc();
   // Calibre 12: atirar interrompe a recarga cartucho a cartucho
   const canFire = p.reloadEnd <= gameTime || (w.shellReload && p.mag[p.weapon] > 0);
+  if (survOn() && p.papUntil > gameTime && p.papGun === p.weapon) return; // a Papada está com a arma
   const latched = !mouseDown && clickLatch && performance.now() - clickLatch < (w.burst ? 450 : 250); // FAMAS: clique na pausa entre rajadas fica guardado pra próxima
   if (w.shield) { // clique = porrada; botão direito = investida (não é granada nem a tecla F)
     const rLatched = !rightDown && rightLatch && performance.now() - rightLatch < 250;
@@ -4662,9 +5178,10 @@ function updatePlayer(dt) {
         const d = dir.clone(); if (spread) { d.x += rand(-1, 1) * spread; d.y += rand(-1, 1) * spread; d.normalize(); }
         launchRocket(p, camera.localToWorld(new V3(0.08 * (1 - ads), -0.05, 0)), d);
       } else if (w.disc) launchDisc(p, camera.localToWorld(new V3(0.1 * (1 - ads), -0.12, 0)), dir);
+      else if (w.ray) launchRay(p, camera.localToWorld(new V3(0.06 * (1 - ads), -0.04, -0.15)), dir);
       else if (w.corn) { launchCorn(p, camera.localToWorld(new V3(0.12 * (1 - ads), -0.1, 0)), dir); fp.cornCrankT = 0.2; } // manivela dá uma volta
       else fire(p, camera.position.clone(), dir, p.weapon, spread, muzzle);
-      sfx[w.key](); fp.kick = Math.min(0.14, fp.kick + w.recoil * 2.5 * (w.redDot && ads >= (w.redDotAds ?? RED_DOT.ads) ? RED_DOT.visual : 1)); fp.flashT = w.rocket ? 0.08 : 0.04;
+      gunShot(w, 1, 0, 0, shotTier(p, p.weapon)); fp.kick = Math.min(0.14, fp.kick + w.recoil * 2.5 * (w.redDot && ads >= (w.redDotAds ?? RED_DOT.ads) ? RED_DOT.visual : 1)); fp.flashT = w.rocket ? 0.08 : 0.04;
       if (p.weapon === CROSS || p.weapon === BOW) { fp.stringT = 0.14; launchShaft(muzzle, dir, p.weapon === CROSS ? 42 : 28); }
       if (w.pump) { sfx.pump(0.9, 0.3); fp.actionT = fp.actionLen = w.rate; fp.kick = 0.2; shake = Math.max(shake, 0.2); } // Calibre 12: coice e tranco de câmera mais pesados
       if (w.bolt) { playSniperBolt(w, 0.9, 0, 0); fp.actionT = fp.actionLen = w.rate; }
@@ -4783,7 +5300,7 @@ function updateBot(b, dt) {
   if (b.shieldDashUntil > gameTime) { b.vel.x = Math.sin(b.yaw) * SHIELD.charge.speed; b.vel.z = Math.cos(b.yaw) * SHIELD.charge.speed; }
   else if (botDash) { const rate = b.saber.dashDist / Math.max(0.05, b.saber.dashDur || 0.16); b.vel.x = b.saber.dashDir.x * rate; b.vel.z = b.saber.dashDir.z * rate; }
   else { const acc = b.onGround ? 10 : 3; b.vel.x += (move.x - b.vel.x) * Math.min(1, acc * dt); b.vel.z += (move.z - b.vel.z) * Math.min(1, acc * dt); }
-  const blocked = moveEntity(b, dt);
+  const blocked = moveEntity(b, dt); checkFall(b); if (!b.alive) return;
   if (blocked) { b.stuck += dt; if (b.onGround) b.vel.y = JUMP; if (b.stuck > 1.2) { b.wp = randomWaypoint(); b.path = null; b.lastSeenAt = -99; b.strafeDir *= -1; b.stuck = 0; b.stuckCount = (b.stuckCount || 0) + 1; } }
   else b.stuck = Math.max(0, b.stuck - dt);
   let d = desiredYaw - b.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); b.yaw += d * Math.min(1, dt * mind.turn);
@@ -5029,7 +5546,7 @@ function botShoot(b, t, dist = 10) {
     if (w.scope) b.aim = b.reaction * 0.4; // precisa remirar depois de cada tiro de sniper
   }
   const bDist = b.pos.distanceTo(player.pos), bPan = stereoPan(b.pos), bVol = distVol(b.pos);
-  sfx[w.key](bVol * 0.7, bDist, bPan);
+  gunShot(w, bVol * 0.7, bDist, bPan, shotTier(b, b.weapon));
   if (w.pump) sfx.pump(bVol * 0.5, 0.3); if (w.bolt) playSniperBolt(w, bVol * 0.55, bDist, bPan);
   b.invulnUntil = Math.min(b.invulnUntil, gameTime);
 }
@@ -5356,8 +5873,8 @@ function renderWardrobePreview() {
 }
 let selectedSkin = getSkin(localStorage.getItem('docao.skin') || DEFAULT_SKIN).id, preview = null;
 // Cinco classes no navegador. A última usada é a que nasce. docao.primary continua espelhando a classe armada.
-let classes = [], classIndex = 0, spawnedClass = 0, benchOn = false, benchWeapon = 0, benchSlot = 'optic', benchLook = '', arsenalFocus = -1;
-const DEATH_HINT = '1–5 escolhe a classe. Clique no arsenal pra gravar qualquer arma nela. U volta pra última · Espaço nasce. O tracinho branco é a arma de fábrica.';
+let classes = [], classIndex = 0, spawnedClass = 0, benchOn = false, benchWeapon = 0, benchSlot = 'optic', benchLook = '', arsenalFocus = -1, pauseArmTab = 'rajada', deathArmTab = 'rajada';
+const DEATH_HINT = '1–5 escolhe a classe. O arsenal grava a arma nela. U volta na última · Espaço nasce.';
 const LIVE_HINT = '1–5 escolhe a classe. O arsenal troca a arma agora e o pente não enche sozinho. U volta pra última. O tracinho branco é a arma de fábrica.';
 let selectedPrimary = 0, selectedSecondary = PISTOL, selectedMelee = KNIFE;
 function bootClasses() {
@@ -5432,7 +5949,7 @@ function trainSwap(code) {
 }
 // aplica o loadout escolhido no jogador vivo: slots novos, pente cheio só nas armas que entraram, saca a que trocou
 function equipClassNow(p, hold) {
-  if (armsMode()) return;
+  if (armsMode() || survOn()) return;
   if (!p) return;
   const old = p.slots.slice();
   const pack = kitsNow();
@@ -5535,6 +6052,7 @@ function armClass(i) {
   saveClasses(); mirrorLegacy();
   if (player) { player.nextPrimary = pack.load.primary; player.nextSecondary = pack.load.secondary; player.nextMelee = pack.load.melee; }
   sendLoadout();
+  if ($('pause') && !$('pause').classList.contains('hidden') && pauseClassesAllowed()) showPauseLoadout(true);
   markPick('primary', selectedPrimary); markPick('secondary', selectedSecondary); markPick('melee', selectedMelee);
   syncLoadoutUi();
 }
@@ -5747,33 +6265,157 @@ function pickShowcaseCam() {
   }
   showCamYaw = 0;
 }
+let gasSim = null, gasView = null;
+function ensureGasView() {
+  if (gasView) return gasView;
+  gasView = createGasView(scene, { hiss(vol) { if (!(vol > 0.02)) return; noise(0.12, 2400, vol * 0.55, 'highpass'); tone('triangle', 720, 540, 0.09, vol * 0.12); } });
+  return gasView;
+}
+function bindGas(mapId, pack) {
+  ensureGasView().mount(mapId);
+  gasSim = createGasSim(mapId);
+  if (pack) gasSim.apply(pack);
+  gasView.syncAll(gasSim.list);
+}
+function boomGasClient(c, attacker) {
+  if (gasView) gasView.sync(c);
+  const p = gasCenter(c);
+  blast(new V3(p.x, p.y, p.z), attacker, { radius: GAS.blast.radius, maxDmg: GAS.blast.maxDmg, selfMul: GAS.blast.selfMul, knock: GAS.blast.knock, lift: GAS.blast.lift, wIdx: W_GAS, kind: 'g', gasId: c.id });
+}
+function noteGasHit(c, dmg, shooter) {
+  if (!gasSim || online) return false;
+  const r = gasSim.hurt(c, dmg, gameTime, shooter);
+  if (gasView) gasView.sync(c);
+  if (r === 'boom') gasSim.detonate(c, gameTime, shooter, (ev) => boomGasClient(ev.c, ev.attacker));
+  return !!r;
+}
+function stepGasLocal() {
+  if (!gasSim || online) return;
+  gasSim.step(gameTime, {
+    boom: (c, credit) => gasSim.detonate(c, gameTime, credit, (ev) => boomGasClient(ev.c, ev.attacker)),
+    sync: (c) => { if (gasView) gasView.sync(c); },
+  });
+}
+function splashGasClient(pos, owner, o) {
+  if (!gasSim || online || !gasSim.list.length) return;
+  gasSim.splash(pos, o, gameTime, owner, {
+    boom: (c, credit) => gasSim.detonate(c, gameTime, credit, (ev) => boomGasClient(ev.c, ev.attacker)),
+    sync: (c) => { if (gasView) gasView.sync(c); },
+  });
+}
 function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de munição (map.invPickups)
   const map = getMap(id);
-  if (currentMap === map && worldGroup) return map;
+  if (currentMap === map && worldGroup) { bindGas(map.id); return map; }
   if (worldGroup) { scene.remove(worldGroup); disposeWorld(worldGroup); }
   for (const p of pickups) scene.remove(p.mesh); pickups.length = 0;
   const w = buildWorld(map); worldGroup = w.group; scene.add(worldGroup);
-  solids = w.solids; worldMeshes = w.meshes; mapBounds = map.size; indexSolids();
+  nevascaShow = map.id === 'posto-nevasca' ? mountNevasca(worldGroup, map) : null;
+  doorGroups = new Map(); for (const g of w.doors || []) doorGroups.set(g.userData.doorId, g);
+  nightLights = w.nightLights || []; nightAmb.stop();
+  solids = w.solids; worldMeshes = w.meshes; mapBounds = map.size; indexSolids(map);
   applyPalette(scene, hemi, sun, map); fpHemi.intensity = map.palette.stars ? 1.25 : 1.8;
   SPAWNS = map.spawns.map(([x, z, y = 0]) => new V3(x, groundAt(x, z, y + 0.3), z));
   for (const [t, x, z, y] of inv && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups) makePickup(t, x, z, y || 0);
   pickups.forEach((p) => (p.mesh.visible = state !== 'menu'));
   const t0 = performance.now();
-  nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides, groundAt, solids, topAt, seeds: SPAWNS.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [] });
+  nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides, groundAt, solids, topAt, seeds: SPAWNS.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [], avoid: map.navAvoid || [] });
   navMs = performance.now() - t0;
   showcase.position.set(...map.showcase); showBaseY = map.showcase[1]; pickShowcaseCam();
-  currentMap = map; return map;
+  currentMap = map; bindGas(map.id); return map;
+}
+// Survival: folhas fechadas entram na colisão e saem quando a porta abre. O grafo dos zumbis refaz junto.
+function syncSurvivalSpace() {
+  if (!currentMap || !surv) return;
+  solids = mapSolids(currentMap).concat(closedDoorSolids(currentMap, surv.open));
+  mapBounds = currentMap.size; indexSolids();
+  const src = currentMap.survival.playerSpawns;
+  SPAWNS = src.map(([x, z, y = 0]) => new V3(x, groundAt(x, z, y + 0.3), z));
+  const seeds = currentMap.spawns.map(([x, z, y = 0]) => [x, groundAt(x, z, y + 0.3), z]);
+  const t0 = performance.now();
+  nav = buildNav({ hx: currentMap.size[0], hz: currentMap.size[1], spacing: currentMap.navSpacing || 2, collides, groundAt, solids, topAt, seeds, extra: currentMap.waypoints || [], avoid: currentMap.navAvoid || [] });
+  navMs = performance.now() - t0;
+  if (inv) { inv.A.nav = nav; inv.A.P = PHYS; inv.rev = null; for (const z of inv.zombies || []) z.node = null; }
+}
+function applyDoorLeaf(id, open) {
+  const g = doorGroups.get(id); if (!g) return;
+  g.userData.want = open ? g.userData.openAngle : 0;
+  if (open) g.rotation.y = g.userData.want;
+}
+function beginSurvival(saved) {
+  if (!currentMap || !currentMap.survival) { surv = null; return; }
+  surv = createMatchSurvival(currentMap);
+  if (saved) { for (const id of saved.open || []) surv.open.add(id); for (const id of saved.areas || []) surv.areas.add(id); }
+  for (const e of entities) if (e && !e.zt && !e.bot && e.points == null) e.points = SURVIVAL.START_POINTS;
+  syncSurvivalSpace();
+  for (const [id, g] of doorGroups) applyDoorLeaf(id, surv.open.has(id));
+  initAudio(); if (actx && master) nightAmb.start(actx, master);
+  refreshSurvPts();
+}
+function refreshSurvPts() {
+  const el = $('survPts'); if (!el) return;
+  const on = survivalMode() && player;
+  el.classList.toggle('hidden', !on);
+  if (on) el.textContent = `${player.points | 0} pts`;
+}
+function survPop(n) {
+  const box = $('points'); if (!box || !n) return;
+  const node = document.createElement('div');
+  node.className = 'pop' + (n > 0 ? ' kill' : '');
+  node.textContent = (n > 0 ? '+' : '') + n;
+  box.appendChild(node);
+  setTimeout(() => node.remove(), 700);
+}
+function tryBuyDoor() {
+  if (!survivalMode() || !surv || !player || !player.alive || state !== 'playing') return;
+  const near = nearestClosedDoor(currentMap, surv, player.pos); if (!near) return;
+  if (online && online.net) { online.net.send({ t: 'door', id: near.door.id }); return; }
+  const r = evaluateDoorBuy(currentMap, surv, player, near.door.id);
+  if (!r.ok) { if (DOOR_FAIL[r.reason]) flashMsg(DOOR_FAIL[r.reason]); return; }
+  commitDoorBuy(surv, player, r.door);
+  applyDoorLeaf(r.door.id, true); syncSurvivalSpace();
+  flashMsg(`${r.door.name} aberta`); survPop(-r.price); refreshSurvPts(); sfx.pickup();
+}
+function survivalPrompt() {
+  const el = $('bPrompt'); if (!el || !survivalMode()) return;
+  if (!surv || !player || !player.alive || state !== 'playing') { el.classList.add('hidden'); return; }
+  const near = nearestClosedDoor(currentMap, surv, player.pos);
+  if (!near) { el.classList.add('hidden'); return; }
+  const d = near.door, have = player.points | 0;
+  el.classList.remove('hidden'); el.className = have >= d.price ? 'hot' : 'soft';
+  el.querySelector('.bp1').innerHTML = `Aperte <kbd>E</kbd> · ${d.prompt}`;
+  el.querySelector('.bp2').textContent = `${d.price} pontos · você tem ${have}`;
+}
+function tickNight(dt) {
+  const calm = typeof reducedAnims === 'function' && reducedAnims();
+  for (const l of nightLights) {
+    const base = l.userData.base || 1;
+    if (calm) { l.intensity = base; continue; }
+    if (l.userData.flicker === 'alarm') l.intensity = base * (((gameTime * 2.2) % 1) < 0.55 ? 1 : 0.15);
+    else l.intensity = base * (Math.sin(gameTime * 47) > 0.92 ? 0.18 : 0.84 + 0.16 * Math.sin(gameTime * 21));
+  }
+  for (const g of doorGroups.values()) { const w = g.userData.want || 0; g.rotation.y += (w - g.rotation.y) * Math.min(1, dt * 5); }
+  if (survivalMode()) nightAmb.tick();
 }
 // seletor: mapa salvo no navegador ('random' = aleatório a cada partida)
 const invMenu = () => $('modeSel').value === INV.mode; // Invasão tem lista de mapas própria (Rodízio + Fazenda + os normais)
 const bombMenu = () => $('modeSel').value === 'bomb';
-const menuPool = (md) => (isX1(md) ? X1_MAPS : md === 'bomb' ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : PLAY_MAPS); // lista de mapas de cada modo (Bomba: só os com sites feitos à mão; X1: os currais)
+const menuSurvival = () => invMenu() && isSurvival($('survSel') && $('survSel').value); // Survival é variante da Invasão, não um modo solto
+const menuPool = (md, surv = false) => ((surv || isSurvivalMode(md)) ? SURVIVAL_MAPS : isX1(md) ? X1_MAPS : md === 'bomb' ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : PLAY_MAPS); // Survival: só a HOTMILK à Noite. Bomba: sites feitos à mão. X1: currais.
 const mapKey = () => (bombMenu() ? 'docao.bombMap' : invMenu() ? 'docao.invMap' : x1Menu() ? 'docao.x1Map' : 'docao.map');
 const x1Menu = () => $('modeSel').value === X1.mode;
-const mapPool = () => menuPool($('modeSel').value);
-function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } return v === 'random' || mapPool().some((m) => m.id === v) ? v : bombMenu() ? BOMB_MAP : invMenu() ? INV.DEFAULT_MAP : MAPS[0].id; }
+const mapPool = () => menuPool($('modeSel').value, menuSurvival());
+function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } return v === 'random' || mapPool().some((m) => m.id === v) ? v : bombMenu() ? BOMB_MAP : isSurvivalMode($('modeSel').value) ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : MAPS[0].id; }
 let selectedMap = storedMap();
 function syncMapForMode() {
+  if (menuSurvival()) {
+    selectedMap = SURVIVAL.DEFAULT_MAP;
+    if (!currentMap || currentMap.id !== SURVIVAL.DEFAULT_MAP) loadMap(SURVIVAL.DEFAULT_MAP, true);
+    const m = getMap(SURVIVAL.DEFAULT_MAP);
+    if (m && !thumbs[m.id]) { try { thumbs[m.id] = renderThumb(m); } catch (e) { /* miniatura depois */ } }
+    $('mapModal').classList.add('hidden');
+    buildMapGrid();
+    return;
+  }
   if (x1Menu()) { selectedMap = 'random'; if (!currentMap || !currentMap.x1) loadMap(X1_MAPS[0].id); buildMapGrid(); return; }
   const v = storedMap(); if (v !== selectedMap) { selectedMap = v; if (v !== 'random') loadMap(v); } buildMapGrid();
 }
@@ -5787,6 +6429,18 @@ function mapCard(id) {
   return b;
 }
 function refreshMapUI() {
+  const card = $('mapBtn');
+  if (menuSurvival()) {
+    const m = getMap(SURVIVAL.DEFAULT_MAP);
+    $('mapName').textContent = m ? m.name : 'HOTMILK à Noite';
+    $('mapDesc').textContent = 'Travado: o Survival só abre neste mapa.';
+    const th = card.querySelector('.thumb'); th.textContent = ''; th.style.backgroundImage = m && thumbs[m.id] ? `url(${thumbs[m.id]})` : ''; th.classList.remove('rnd');
+    const ch = card.querySelector('.mchange'); if (ch) ch.textContent = 'TRAVADO';
+    card.classList.add('locked'); card.title = 'O Survival só abre na HOTMILK à Noite';
+    return;
+  }
+  card.classList.remove('locked'); card.title = 'Escolher mapa';
+  const ch = card.querySelector('.mchange'); if (ch && ch.textContent !== 'TROCAR') ch.textContent = 'TROCAR';
   if (x1Menu()) {
     $('mapName').textContent = 'Sortido'; $('mapDesc').textContent = 'Um curral pequeno, sorteado. Cada um nasce de um lado.';
     const th = $('mapBtn').querySelector('.thumb'); th.textContent = '?'; th.style.backgroundImage = ''; th.classList.add('rnd');
@@ -5800,6 +6454,7 @@ function refreshMapUI() {
   document.querySelectorAll('#mapGrid .mapcard').forEach((c) => c.classList.toggle('active', c.dataset.map === selectedMap));
 }
 function selectMap(id) {
+  if (menuSurvival()) { refreshMapUI(); return; }
   if (x1Menu()) { if (id !== 'random') loadMap(id); refreshMapUI(); return; } // no X1 o mapa da partida é sorteado; o clique só mostra o curral
   selectedMap = id; try { localStorage.setItem(mapKey(), id); } catch (e) { /* sem storage */ }
   if (id !== 'random') loadMap(id);
@@ -5811,9 +6466,9 @@ function invThumbs() { // Rodízio/Fazenda: renderiza a miniatura só quando o m
   const next = () => { const m = todo.shift(); if (!m) { invThumbsBusy = false; buildMapGrid(); return; } try { thumbs[m.id] = renderThumb(m); } catch (e) { console.warn('miniatura', m.id, e); } refreshMapUI(); requestAnimationFrame(next); };
   requestAnimationFrame(next);
 }
-function buildMapGrid() { if (invMenu()) invThumbs(); const g = $('mapGrid'); g.innerHTML = ''; for (const m of mapPool()) g.appendChild(mapCard(m.id)); g.appendChild(mapCard('random')); refreshMapUI(); }
+function buildMapGrid() { if (invMenu() && !menuSurvival()) invThumbs(); const g = $('mapGrid'); g.innerHTML = ''; for (const m of mapPool()) g.appendChild(mapCard(m.id)); if (!menuSurvival()) g.appendChild(mapCard('random')); refreshMapUI(); }
 function makeThumbs() { // miniaturas renderizadas da vista aérea, uma por quadro pra não travar o menu
-  const L = MAPS.filter((m) => PLAY_MAPS.includes(m) || !INV_MAPS.includes(m)); // mapas só da Invasão: miniatura sob demanda (invThumbs)
+  const L = MAPS.filter((m) => !m.survivalOnly && (PLAY_MAPS.includes(m) || !INV_MAPS.includes(m))); // HOTMILK à Noite e os mapas só da Invasão: miniatura sob demanda
   let i = 0; const next = () => {
     if (i >= L.length) { buildMapGrid(); window.__thumbsReady = true; return; }
     const m = L[i++]; try { thumbs[m.id] = renderThumb(m); } catch (e) { console.warn('miniatura', m.id, e); }
@@ -5822,7 +6477,7 @@ function makeThumbs() { // miniaturas renderizadas da vista aérea, uma por quad
 }
 function nextOfflineMap() {
   if (x1Mode() || x1Menu()) { const i = X1_MAPS.findIndex((m) => currentMap && m.id === currentMap.id); return X1_MAPS[(i + 1) % X1_MAPS.length].id; }
-  const P = mode === 'bomb' ? BOMB_MAPS : invMode() ? INV_MAPS : MAPS.filter((x) => PLAY_MAPS.includes(x) || !INV_MAPS.includes(x)); return P[(P.indexOf(currentMap) + 1) % P.length].id;
+  const P = mode === 'bomb' ? BOMB_MAPS : survivalMode() ? SURVIVAL_MAPS : invMode() ? INV_MAPS : MAPS.filter((x) => PLAY_MAPS.includes(x) || !INV_MAPS.includes(x)); return P[(P.indexOf(currentMap) + 1) % P.length].id;
 } // Bomba: só mapas com sites. X1: o próximo curral.
 function resolveX1Map(mapId) {
   if (typeof mapId === 'string' && X1_MAPS.some((m) => m.id === mapId) && (!currentMap || mapId !== currentMap.id)) return mapId;
@@ -5831,16 +6486,16 @@ function resolveX1Map(mapId) {
 }
 function pickMapForMatch() {
   if (selectedMap !== 'random' && mapPool().some((m) => m.id === selectedMap)) return selectedMap;
-  if (selectedMap !== 'random') return bombMenu() ? BOMB_MAP : invMenu() ? INV.DEFAULT_MAP : PLAY_MAPS[0].id; // Bomba: mapa sem sites → Rodízio
+  if (selectedMap !== 'random') return bombMenu() ? BOMB_MAP : menuSurvival() ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : PLAY_MAPS[0].id; // Bomba: mapa sem sites → Rodízio. Survival: HOTMILK à Noite.
   const pool = mapPool().filter((m) => !currentMap || m.id !== currentMap.id); return pool[Math.floor(Math.random() * pool.length)].id;
 }
-$('mapBtn').onclick = () => { buildMapGrid(); $('mapModal').classList.remove('hidden'); };
+$('mapBtn').onclick = () => { if (menuSurvival()) return; buildMapGrid(); $('mapModal').classList.remove('hidden'); };
 $('mapClose').onclick = () => $('mapModal').classList.add('hidden');
 loadMap(selectedMap === 'random' ? MAPS[0].id : selectedMap); buildMapGrid(); makeThumbs();
 
 function clearBots() {
   for (const e of entities) if (e.model) scene.remove(e.model.group); entities = [];
-  for (const n of grenades) scene.remove(n.mesh); grenades.length = 0; for (const r of rockets) scene.remove(r.mesh); rockets.length = 0; for (const d of discs) scene.remove(d.mesh); discs.length = 0; for (const g of eggs) scene.remove(g.mesh); eggs.length = 0; for (const s of eggStains) scene.remove(s.m); eggStains.length = 0; eggSplatUntil = 0; for (const g of corns) scene.remove(g.mesh); corns.length = 0; cornPops.length = 0; for (const p of particles) scene.remove(p.mesh); particles.length = 0; shake = 0;
+  for (const n of grenades) scene.remove(n.mesh); grenades.length = 0; for (const r of rockets) scene.remove(r.mesh); rockets.length = 0; for (const d of discs) scene.remove(d.mesh); discs.length = 0; clearRays(); for (const g of eggs) scene.remove(g.mesh); eggs.length = 0; for (const s of eggStains) scene.remove(s.m); eggStains.length = 0; eggSplatUntil = 0; for (const g of corns) scene.remove(g.mesh); corns.length = 0; cornPops.length = 0; for (const p of particles) scene.remove(p.mesh); particles.length = 0; shake = 0;
   clearStrikes();
   clearTacticals();
   clearHeli();
@@ -5871,15 +6526,17 @@ function startGame(mapId) {
   endVictory(); stopEmote();
   resetAds(); stopInspect(true); // inspeção velha não sobrevive ao 'Jogar de novo'
   initAudio();
-  loadMap($('modeSel').value === TRAIN.mode ? TRAIN.map : $('modeSel').value === HIDE.mode ? HIDE.MAP : $('modeSel').value === X1.mode ? resolveX1Map(mapId) : typeof mapId === 'string' ? mapId : pickMapForMatch(), invMenu());
+  const wantSurv = menuSurvival();
+  loadMap($('modeSel').value === TRAIN.mode ? TRAIN.map : $('modeSel').value === HIDE.mode ? HIDE.MAP : $('modeSel').value === X1.mode ? resolveX1Map(mapId) : wantSurv ? SURVIVAL.DEFAULT_MAP : (typeof mapId === 'string' ? mapId : pickMapForMatch()), wantSurv || $('modeSel').value === INV.mode);
   const name = myName(); saveName(name);
   sens = parseFloat($('sens').value) || 1.4; sensAds = parseFloat($('sensAds').value) || 1;
   try { localStorage.setItem('docao.sens', String(sens)); localStorage.setItem('docao.sensAds', String(sensAds)); } catch (e) { /* sem storage */ }
   revengeName = null; resetNemesis(); resetFeedback(); resetRewards(); resetMatchCamos();
-  clearBots(); gameTime = 0; inv = null; invNet = null;
+  clearBots(); gameTime = 0; inv = null; invNet = null; survClear();
   const picked = $('modeSel').value;
   saveBotDiff($('botDiff').value);
-  mode = MODE_OK(picked); armsWinner = null; teamScore = [0, 0]; zone = null; window.__capLog = []; offlineMinutes = normTime($('timeSel').value);
+  mode = MODE_OK(picked); matchVariant = wantSurv ? 'survival' : ''; survLive = wantSurv; armsWinner = null; teamScore = [0, 0]; zone = null; window.__capLog = []; offlineMinutes = normTime($('timeSel').value);
+  noclipOn = false; noclipSpeed = 22; paintNoclip();
   matchLimits = { weapons: null, powers: null }; rulesLive = true; // solo: arsenal inteiro. O limite de armas é regra da sala, escolhida ao criar.
   player = makeEntity(name, true, selectedSkin, '#ffd27a'); entities.push(player); fp.setSkin(selectedSkin);
   const legal = clampLoadout(selectedPrimary, selectedSecondary, selectedMelee, matchLimits.weapons);
@@ -5896,7 +6553,8 @@ function startGame(mapId) {
   const bombEv = mode === 'bomb' ? startBombOffline() : [];
   const hideEv = hideMode() ? startHideOffline() : [];
   for (const e of entities) e.caps = 0;
-  for (const e of entities) { e.alive = false; }
+  for (const e of entities) { e.alive = false; if (survivalMode() && !e.bot) e.points = SURVIVAL.START_POINTS; }
+  if (survivalMode()) beginSurvival();
   if (x1Mode()) { x1Gun = rollX1Weapon(-1, x1WeaponOk); entities.forEach((e, i) => { e.x1Side = i % 2; }); }
   for (const e of entities) respawn(e);
   pickups.forEach((p) => { const on = clientPower(p.type); p.active = on; p.mesh.visible = on; if (!on) p.respawnAt = Infinity; });
@@ -5904,7 +6562,8 @@ function startGame(mapId) {
   showcase.visible = false;
   $('killfeed').innerHTML = '';
   const diffWord = botDiffMeta(botDiff).label;
-  flashMsg(armsMode() ? `Corrida Armada · time ${TEAM_NAMES[player.team]} · 2 abates por etapa · V rouba etapa` : mode === 'bomb' ? `Bomba · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : hideMode() ? `Docão Escondido (protótipo) · time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : invMode() ? `Invasão 🎃 · horda ${diffWord} · ${currentMap.name} · ${INV.WAVES} waves · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun].short}` : exploreMode() ? `Exploração · ${currentMap.name} · , . ou [ ] trocam a primária` : teamMode() ? `Dominação · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : training() ? 'Estande do Docão · B/N/M trocam a arma' : `Mapa: ${currentMap.name} · bots ${diffWord}`); refreshModeHud();
+  if (survOn()) survBuild(bindStations(currentMap, PHYS, player.pos));
+  flashMsg(armsMode() ? `Corrida Armada · time ${TEAM_NAMES[player.team]} · 2 abates por etapa · V rouba etapa` : mode === 'bomb' ? `Bomba · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : hideMode() ? `Docão Escondido (protótipo) · time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : survOn() ? `Survival · ${currentMap.name} · pistola e faca · ${SURV.useLabel} usa a loja · E abre porta` : invMode() ? `Invasão 🎃 · horda ${diffWord} · ${currentMap.name} · ${INV.WAVES} waves · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun].short}` : exploreMode() ? `Exploração · ${currentMap.name} · N noclip · , . ou [ ] trocam a primária` : teamMode() ? `Dominação · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : training() ? 'Estande do Docão · B/N/M trocam a arma' : `Mapa: ${currentMap.name} · bots ${diffWord}`); refreshModeHud();
   for (const ev of bombEv) onBombEvent(ev);
   for (const ev of hideEv) onHideEvent(ev);
   $('menu').classList.add('hidden'); $('gameover').classList.add('hidden'); $('pause').classList.add('hidden'); $('hud').classList.remove('hidden'); $('socialHud').classList.remove('hidden'); $('voiceHud').classList.add('hidden'); chatSetRoom(true); // offline: o chat fica (pros códigos), sem voz $('overChat').classList.add('hidden');
@@ -5955,8 +6614,8 @@ function refreshModeHud() {
   document.body.classList.toggle('armsmode', armsMode());
   if (armsMode()) { closePauseClass(); closeBombPick(); invClosePick(); killcamGuns = false; }
   $('domhud').classList.toggle('hidden', mode !== 'dom'); $('bombhud').classList.toggle('hidden', mode !== 'bomb'); document.body.classList.toggle('bombmode', mode === 'bomb');
-  const hint = document.querySelector('#deathpick .cls-headline p');
-  if (hint) hint.textContent = x1Mode() ? 'A arma é a mesma pros dois e troca quando alguém cai' : '1–5 a classe · o arsenal grava a arma nela · U volta na última';
+  const hint = $('deathSub');
+  if (hint) hint.textContent = x1Mode() ? 'A arma é a mesma pros dois e troca quando alguém cai' : '';
   if (teamMode() && player) { $('myTeam').textContent = `Você: Time ${TEAM_NAMES[player.team] || '?'}`; $('myTeam').style.color = TEAM_COLORS[player.team] || '#fff'; }
   $('winner').dataset.tone = '';
 }
@@ -5984,16 +6643,75 @@ const PX_COOLDOWN = 10; // s, igual ao servidor
 buildPauseGuns();
 function releaseLook() { mouseDown = false; rightDown = false; keys.Space = keys.ShiftLeft = keys.ShiftRight = false; resetAds(); if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } if (pickingStrike) { pickingStrike = false; closeStrikeMap(); } }
 function tuckDeathMenu() { const el = $('deathpick'); if (el) el.classList.add('hidden'); killcamGuns = false; }
-function pause() { if (state !== 'playing') return; softPauseOn = false; state = 'paused'; releaseLook(); closePauseClass(); tuckDeathMenu(); if (player && player.alive) document.body.classList.remove('dead', 'deadgray', 'cls-on', 'killcam'); $('pauseInvite').classList.toggle('hidden', !online); $('pauseVoice').classList.toggle('hidden', !online); const note = $('pauseClassNote'); if (note) note.textContent = x1Mode() ? 'No X1 a arma é sortida e igual pra todo mundo. Não dá pra trocar.' : invMode() ? 'Na Invasão a classe entra no painel B, entre as waves.' : training() ? 'No estande a classe entra agora e o pente não enche sozinho.' : 'A classe escolhida entra na próxima vida. Não derruba.'; const swap = $('pauseClassBtn'); if (swap) swap.classList.toggle('hidden', invMode() || x1Mode() || armsMode()); buildPauseGuns(); $('pauseDance').classList.toggle('hidden', invMode()); $('pause').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); }
+function pauseClassesAllowed() { return !(invMode() || x1Mode() || armsMode()); }
+function showPauseLoadout(on) {
+  const root = $('pause'); if (!root) return;
+  const show = !!on && pauseClassesAllowed() && !root.classList.contains('hidden');
+  root.classList.toggle('loadout-on', show);
+  const view = $('pauseLoadoutView'); if (view) view.classList.toggle('hidden', !show);
+}
+function pauseActs() {
+  const nav = [...document.querySelectorAll('#pauseNav [data-pause-act]')].filter((b) => !b.classList.contains('hidden'));
+  const box = $('pauseClasses');
+  const rows = box && !box.classList.contains('hidden') ? [...box.querySelectorAll('.clsrow')] : [];
+  const quit = nav.filter((b) => b.id === 'quitBtn');
+  return [...nav.filter((b) => b.id !== 'quitBtn'), ...rows, ...quit];
+}
+let pauseFocus = 0;
+function paintPauseFocus() {
+  const acts = pauseActs();
+  if (!acts.length) return;
+  pauseFocus = Math.max(0, Math.min(pauseFocus, acts.length - 1));
+  acts.forEach((b, i) => b.classList.toggle('is-focus', i === pauseFocus));
+}
+function movePauseFocus(dir) {
+  const acts = pauseActs();
+  if (!acts.length) return;
+  pauseFocus = (pauseFocus + dir + acts.length) % acts.length;
+  paintPauseFocus();
+  try { acts[pauseFocus].focus({ preventScroll: true }); } catch (e) { acts[pauseFocus].focus(); }
+}
+function activatePauseFocus() {
+  const acts = pauseActs();
+  const b = acts[pauseFocus];
+  if (b) b.click();
+}
+function fillPauseBrief() {
+  const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+  const modeLabel = armsMode() ? 'Corrida Armada' : mode === 'bomb' ? 'Bomba' : survOn() ? 'Survival' : invMode() ? 'Invasão' : x1Mode() ? 'X1' : exploreMode() ? 'Exploração' : mode === 'dom' ? 'Dominação' : training() ? 'Estande' : 'Mata-mata';
+  set('pauseMode', modeLabel);
+  set('pauseMap', currentMap ? currentMap.name : '—');
+  set('pauseTime', $('timer') ? $('timer').textContent : '—');
+  const p = player;
+  const kd = p ? (p.kills / Math.max(1, p.deaths)).toFixed(2) : '0.00';
+  set('pauseKd', p ? `${p.kills} abates · ${p.deaths} mortes · K/D ${kd}` : '—');
+  let obj = `Primeiro a ${KILL_LIMIT} abates.`;
+  if (survOn()) obj = 'F usa a loja. E compra a porta. Aguente as waves.';
+  else if (invMode()) obj = 'Aguente as waves. A horda não pode passar.';
+  else if (x1Mode()) obj = `Primeiro a ${X1.KILLS} abates.`;
+  else if (armsMode()) obj = 'Dois abates por etapa. A faca dourada decide.';
+  else if (mode === 'dom') obj = 'Segure a zona. O tempo do time decide.';
+  else if (mode === 'bomb') obj = 'Plante o botijão ou desarme.';
+  else if (training()) obj = 'Treino no estande. Sem placar.';
+  else if (exploreMode()) obj = 'Passeio no mapa. N liga o noclip.';
+  set('pauseObjective', obj);
+  let score = p ? `${p.kills} abates` : '—';
+  if (mode === 'dom' && $('ts0')) score = `Vermelho ${$('ts0').textContent} × Azul ${$('ts1').textContent}`;
+  else if (mode === 'bomb' && $('bs0')) score = `Ataque ${$('bs0').textContent} × Defesa ${$('bs1').textContent}`;
+  else if (invMode() && $('invWaveN')) score = $('invWaveN').textContent;
+  else if (armsMode() && p) score = `Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.armsKills | 0}/2`;
+  set('pauseScore', score);
+}
+function pause() { if (state !== 'playing') return; softPauseOn = false; state = 'paused'; releaseLook(); closePauseClass(); tuckDeathMenu(); if (player && player.alive) document.body.classList.remove('dead', 'deadgray', 'cls-on', 'killcam'); $('pauseInvite').classList.toggle('hidden', !online); $('pauseVoice').classList.toggle('hidden', !online); const note = $('pauseClassNote'); if (note) note.textContent = x1Mode() ? 'No X1 a arma é sortida e igual pra todo mundo. Não dá pra trocar.' : survOn() ? 'No Survival a arma se compra na partida, na loja.' : invMode() ? 'Na Invasão a classe entra no painel B, entre as waves.' : training() ? 'No estande a classe entra agora e o pente não enche sozinho.' : 'A classe escolhida entra na próxima vida. Não derruba.'; const swap = $('pauseClassBtn'); if (swap) swap.classList.add('hidden'); const classBox = $('pauseClasses'); if (classBox) classBox.classList.toggle('hidden', !pauseClassesAllowed()); buildPauseGuns(); $('pauseDance').classList.toggle('hidden', invMode()); fillPauseBrief(); showPauseLoadout(false); pauseFocus = 0; paintPauseFocus(); const opt = $('pauseOptions'); if (opt) opt.classList.remove('is-hot'); $('pause').classList.remove('hidden'); showPauseLoadout(false); if (document.pointerLockElement) document.exitPointerLock(); }
 // ` solta o mouse como o Esc, sem a pausa na chapa: o HUD fica como estava. Clique ou ` de novo volta a mirar.
 function softPause() { if (state !== 'playing') return; state = 'paused'; softPauseOn = true; releaseLook(); if (document.pointerLockElement) document.exitPointerLock(); }
-function resume() { closePauseClass(); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); lockPointer(); }
+function resume() { closePauseClass(); showPauseLoadout(false); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); lockPointer(); }
 function toMenu() {
   clearMatchEnding();
   if (online) leaveOnline();
   endVictory(); stopEmote(); document.body.classList.remove('deadgray');
   zone = null; mode = 'dm'; document.body.classList.remove('armsmode'); endBomb(); $('domhud').classList.add('hidden'); $('zoneMark').classList.add('hidden'); $('teamPick').classList.add('hidden');
-  state = 'menu'; rulesLive = false; clearBots(); inv = null; invNet = null; if (selectedMap !== 'random') loadMap(selectedMap); invApplyLook(false); showcase.visible = true; pickups.forEach((p) => (p.mesh.visible = false)); camera.clearViewOffset();
+  state = 'menu'; rulesLive = false; survLive = false; matchVariant = ''; surv = null; survClear(); nightAmb.stop(); clearBots(); inv = null; invNet = null; noclipOn = false; paintNoclip(); if (selectedMap !== 'random') loadMap(selectedMap); invApplyLook(false); showcase.visible = true; pickups.forEach((p) => (p.mesh.visible = false)); camera.clearViewOffset(); refreshSurvPts();
   closePauseClass(); ['pause', 'pauseClass', 'gameover', 'hud'].forEach((id) => { const el = $(id); if (el) el.classList.add('hidden'); }); document.body.classList.remove('cls-on', 'dead', 'killcam'); $('menu').classList.remove('hidden');
   if (document.pointerLockElement) document.exitPointerLock();
 }
@@ -6007,7 +6725,16 @@ function lockPointer() {
 
 $('playBtn').onclick = () => startGame(); $('menuBtn').onclick = toMenu;
 $('resumeBtn').onclick = resume; $('quitBtn').onclick = toMenu;
-if ($('pauseClassBtn')) $('pauseClassBtn').onclick = () => openPauseClass();
+if ($('pauseClassBtn')) $('pauseClassBtn').onclick = () => { if (pauseClassesAllowed()) showPauseLoadout(true); else openPauseClass(); };
+if ($('pauseLoadoutBack')) $('pauseLoadoutBack').onclick = () => showPauseLoadout(false);
+if ($('pauseOptBtn')) $('pauseOptBtn').onclick = () => { const box = $('pauseOptions'); if (!box) return; box.classList.add('is-hot'); try { box.focus({ preventScroll: true }); } catch (e) { /* sem focus */ } };
+const pauseNav = $('pauseNav');
+if (pauseNav) pauseNav.addEventListener('mouseover', (ev) => {
+  const b = ev.target.closest('[data-pause-act]');
+  if (!b || b.classList.contains('hidden')) return;
+  const i = pauseActs().indexOf(b);
+  if (i >= 0) { pauseFocus = i; paintPauseFocus(); }
+});
 if ($('pauseClassBack')) $('pauseClassBack').onclick = () => closePauseClass();
 if ($('bLoadClose')) $('bLoadClose').onclick = () => closeBombPick();
 if ($('iLoadClose')) $('iLoadClose').onclick = () => invClosePick();
@@ -6091,12 +6818,17 @@ function touchUp(e) {
 }
 canvas.addEventListener('pointerup', touchUp);
 canvas.addEventListener('pointercancel', touchUp);
-document.addEventListener('wheel', (e) => { // rodinha: primária → pistola → faca (e volta). Na Grelha, troca Espeto / Panela / Caldeirão.
+document.addEventListener('wheel', (e) => { // rodinha: primária → pistola → faca (e volta). Na Grelha, troca Espeto / Panela / Caldeirão. No noclip, muda a velocidade.
   if (state !== 'playing' || !player || !player.alive) return;
+  if (noclipLive()) {
+    e.preventDefault();
+    if (e.deltaY) noclipSpeed = Math.min(NOCLIP_MAX, Math.max(NOCLIP_MIN, noclipSpeed * (e.deltaY > 0 ? 1 / 1.18 : 1.18)));
+    return;
+  }
   if (ac130) { const i = AC130_ORDER.indexOf(ac130.mode); setAc130Mode(AC130_ORDER[(i + (e.deltaY > 0 ? 1 : AC130_ORDER.length - 1)) % AC130_ORDER.length]); e.preventDefault(); return; }
   if (bombPick || invPick) { armClass((classIndex + (e.deltaY < 0 ? classes.length - 1 : 1)) % classes.length); return; } // painel de classe: rodinha troca a classe
   const S = player.slots, i = Math.max(0, S.indexOf(player.weapon)), n = S.length; switchWeapon(player, S[(i + (e.deltaY < 0 ? n - 1 : 1)) % n]);
-});
+}, { passive: false });
 function tryOpenChat(e) {
   if (e.repeat || !chatShown() || !chatRoomOn() || state !== 'playing') return false;
   if (e.code === 'KeyT') { chatUseAll(); return openChat('all'); }
@@ -6128,6 +6860,8 @@ document.addEventListener('keydown', (e) => {
   }
   if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   if (e.code !== 'Space' || !e.repeat) keys[e.code] = true;
+  if (e.code === 'Space') spaceHold = true;
+  if (state === 'playing' && survivalMode() && e.code === 'KeyE' && !e.repeat && player && player.alive) { e.preventDefault(); tryBuyDoor(); return; }
   if (state === 'playing' && player && invKey(e)) { e.preventDefault(); return; } // Invasão: G poder · X troca · B painel de armas na pausa
   if (state === 'playing' && player && gunner) { // no Chopper: 1/2 trocam a arma dele, F sai
     if (e.code === 'Digit1') setGunnerMode('mini');
@@ -6153,10 +6887,11 @@ document.addEventListener('keydown', (e) => {
     if (!player.alive && (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat && requestRespawn()) keys[e.code] = false; // Espaço não vira pulo ao renascer
     else {
       if (!emote.on && e.code === 'Digit1') switchWeapon(player, player.slots[0]);
-      if (!emote.on && e.code === 'Digit2') switchWeapon(player, player.slots[1]);
+      if (!emote.on && e.code === 'Digit2') { if (!(survOn() && player.slotOn && player.slotOn[1] === 0)) switchWeapon(player, player.slots[1]); }
       if (!emote.on && e.code === 'Digit3') switchWeapon(player, player.slots[2]);
       if (!emote.on && e.code === 'KeyV' && !e.repeat) quickKnife(player);
-      if (!emote.on && e.code === 'KeyC' && player.alive && !e.repeat) saberDash(player);
+      if (exploreMode() && !online && e.code === 'KeyN' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && player.alive) { e.preventDefault(); toggleNoclip(); }
+      if (!emote.on && e.code === 'KeyC' && player.alive && !e.repeat && !noclipOn) saberDash(player);
       if (!emote.on && e.code === 'KeyZ' && player.alive && !e.repeat) saberSpecial(player);
       if (!emote.on && e.code === 'KeyI' && player.alive && !e.repeat) startInspect(player);
       if (!emote.on && e.code === 'Digit4' && player.alive && !e.repeat) throwTactical();
@@ -6171,10 +6906,15 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' || e.code === 'KeyP') pause();
     if (e.code === 'Backquote') { e.preventDefault(); softPause(); }
   } else if (state === 'paused' && softPauseOn && e.code === 'Backquote') { e.preventDefault(); resume(); }
-  else if (state === 'paused' && (e.code === 'KeyP')) resume();
+  else if (state === 'paused' && !softPauseOn && !pauseClassOpen()) {
+    if (e.code === 'ArrowUp' || e.code === 'ArrowDown') { e.preventDefault(); movePauseFocus(e.code === 'ArrowDown' ? 1 : -1); return; }
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) { e.preventDefault(); activatePauseFocus(); return; }
+    if (/^Digit[1-5]$/.test(e.code) && !e.repeat && pauseClassesAllowed()) { e.preventDefault(); armClass(Number(e.code.slice(5)) - 1); return; }
+    if (e.code === 'Escape' || e.code === 'KeyP') { e.preventDefault(); if ($('pause').classList.contains('loadout-on')) showPauseLoadout(false); else resume(); }
+  } else if (state === 'paused' && (e.code === 'KeyP')) resume();
 });
-document.addEventListener('keyup', (e) => { if (e.code === 'KeyK') voicePtt(false); keys[e.code] = false; if (e.code === 'KeyQ' && state === 'playing') releaseCharge(); if (e.code === 'Tab') $('tabboard').classList.add('hidden'); });
-addEventListener('blur', () => { voicePtt(false); for (const k in keys) keys[k] = false; mouseDown = false; rightDown = false; if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } });
+document.addEventListener('keyup', (e) => { if (e.code === 'KeyK') voicePtt(false); if (e.code === 'Space') spaceHold = false; keys[e.code] = false; if (e.code === 'KeyQ' && state === 'playing') releaseCharge(); if (e.code === 'Tab') $('tabboard').classList.add('hidden'); });
+addEventListener('blur', () => { voicePtt(false); spaceHold = false; for (const k in keys) keys[k] = false; mouseDown = false; rightDown = false; if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } });
 
 // ---------------- Loop ----------------
 const clock = new THREE.Clock(); let menuT = 0, danceT = 0;
@@ -6185,14 +6925,19 @@ function loop() {
   if (window.__stopAt != null) dt = Math.max(0, Math.min(dt, window.__stopAt - gameTime)); // testes/screenshots: congela o tempo de jogo num instante exato
   if (state === 'playing' || (online && state === 'paused' && player)) { // online o jogo não pausa
     gameTime += dt;
+    syncNevasca(gameTime);
     if (exploreMode() && player && player.alive) refillExplore(player);
     if (state === 'playing') updatePlayer(dt); else if (player.alive) { stepCrouch(player, 0, dt, PHYS); player.vel.x = player.vel.z = 0; moveEntity(player, dt); }
     if (emote.on && state === 'playing') stepEmote(dt);
     if (online) netTick(dt);
     for (const e of entities) if (!e.isPlayer) updateBot(e, dt);
     updateFootsteps(dt);
-    updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
-    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt);
+    if (gasSim && !online) stepGasLocal();
+    if (gasView) gasView.update(dt, gameTime, player ? player.pos : null);
+    updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
+    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt();
+    try { flushSleigh(); } catch (e) { /* trenó espera o contexto */ }
+    if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; queueSleigh(); });
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
   } else if (state === 'menu') {
     menuT += dt * 0.25; danceT += dt;
@@ -6217,6 +6962,7 @@ function loop() {
       frameVictoryCam();
     }
   }
+  if (worldGroup) updateWeather(worldGroup, dt);
   renderer.clear();
   const camO = window.__cam; // testes/screenshots: câmera livre { p: [x, y, z], t: [x, y, z], fov }
   if (camO) { camera.position.set(...camO.p); camera.lookAt(...camO.t); if (camO.fov && camera.fov !== camO.fov) { camera.fov = camO.fov; camera.updateProjectionMatrix(); } }
@@ -6403,7 +7149,8 @@ const MENU_RULES = {
   treino: 'Estande do Docão: alvos que não atacam e voltam em 2 s. B/N/M trocam a arma, munição infinita, sem tempo.',
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
-  explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. Munição não acaba e a partida não termina.',
+  survival: 'Survival, dentro da Invasão: o mapa trava na HOTMILK à Noite. Nasce de pistola e faca. F usa a loja (parede, Barraca da Sorte e Papada). E compra a porta. A Ray Gun só sai na barraca.',
+  explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. N liga o noclip: voa na direção da mira, atravessa parede, Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Munição não acaba e a partida não termina.',
   hide: `🫥 COMO JOGAR · Docão Escondido (protótipo, estilo Prop Hunt)\n🙈 Escondidos: você vira um objeto do mapa. ${HIDE.KEY_LABEL} troca o objeto (só os que existem no mapa), ${HIDE.ROT_LABEL} gira, ${HIDE.LOCK_LABEL} trava a posição (só a câmera mexe). Mapa: Rodízio do Docão. Fique parado e sobreviva até o tempo acabar.\n🔫 Caçadores: ${HIDE.PREP} s presos e cegos no spawn, depois ${Math.round(HIDE.ROUND / 60 * 10) / 10} min pra achar e abater todos os objetos-Docão.\n🔁 Os papéis trocam toda rodada · primeiro time a ${HIDE.WIN} vence.`,
   x1: 'X1 · duelo. Mapa pequeno sorteado, cada um nasce de um lado. Primeiro a 10 abates. Só munição no chão, sem vida. A arma é a mesma pros dois e troca quando alguém cai.',
 };
@@ -6555,7 +7302,7 @@ function gunView(c) {
   const sec = WEAPONS[pack.secondary], mel = WEAPONS[pack.melee];
   return {
     name: fac.name,
-    className: `Classe ${c.name} · ${sec.short} · ${mel.short}`,
+    className: `${c.name} · ${sec.short} · ${mel.short}`,
     weapon: i,
     slots,
     bars: statBars(w, fac).map((b) => ({ ...b, num: barCaption(b) })),
@@ -6576,7 +7323,10 @@ function sheetSpec(hint) {
 }
 function paintPair(listId, gunId, hint) {
   const list = $(listId), gun = $(gunId);
-  if (list && gun) fillSheet(list, gun, sheetSpec(hint));
+  if (list && gun) {
+    fillSheet(list, gun, sheetSpec(hint));
+    if (listId === 'deathList') { gun.classList.remove('is-fresh'); void gun.offsetWidth; gun.classList.add('is-fresh'); }
+  }
 }
 function armChip(i, kind, on, onPick) {
   const w = WEAPONS[i];
@@ -6600,9 +7350,56 @@ function armChip(i, kind, on, onPick) {
   b.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); onPick(i); };
   return b;
 }
+function paintTabbedArms(host, which) {
+  if (!host) return;
+  const cats = CATEGORIES.map((c) => ({ ...c, weapons: pool(c.weapons) })).filter((c) => c.weapons.length);
+  host.innerHTML = '';
+  if (!cats.length) {
+    const empty = document.createElement('p');
+    empty.className = 'cls-arms-empty';
+    empty.textContent = 'Nenhuma arma liberada nesta sala.';
+    host.appendChild(empty);
+    return;
+  }
+  let tab = which === 'death' ? deathArmTab : pauseArmTab;
+  if (!cats.some((c) => c.id === tab)) tab = cats[0].id;
+  if (which === 'death') deathArmTab = tab; else pauseArmTab = tab;
+  const tabs = document.createElement('div');
+  tabs.className = 'arm-tabs';
+  tabs.setAttribute('role', 'tablist');
+  tabs.setAttribute('aria-label', 'Categorias');
+  for (const cat of cats) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'arm-tab' + (cat.id === tab ? ' on' : '');
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', cat.id === tab ? 'true' : 'false');
+    b.textContent = cat.title;
+    b.onclick = (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      if (which === 'death') deathArmTab = cat.id; else pauseArmTab = cat.id;
+      paintTabbedArms(host, which);
+    };
+    tabs.appendChild(b);
+  }
+  host.appendChild(tabs);
+  const cat = cats.find((c) => c.id === tab);
+  const list = document.createElement('div');
+  list.className = 'arm-list';
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', cat.title);
+  const pack = classes[classIndex] ? classLoad(classes[classIndex], activeWeapons()) : null;
+  const pick = cat.pick === 'secondary' ? setSecondary : cat.pick === 'melee' ? setMelee : setPrimary;
+  const cur = !pack ? -1 : cat.pick === 'secondary' ? pack.secondary : cat.pick === 'melee' ? pack.melee : pack.primary;
+  for (const i of cat.weapons) list.appendChild(armChip(i, cat.pick, i === cur, pick));
+  host.appendChild(list);
+}
+function paintPauseArms() { paintTabbedArms($('pauseArms'), 'pause'); }
 function paintArms() {
   const pack = classes[classIndex] ? classLoad(classes[classIndex], activeWeapons()) : null;
-  for (const id of ['deathArms', 'pauseArms', 'bLoadArms', 'iLoadArms']) {
+  paintPauseArms();
+  paintTabbedArms($('deathArms'), 'death');
+  for (const id of ['bLoadArms', 'iLoadArms']) {
     const host = $(id);
     if (!host) continue;
     host.innerHTML = '';
@@ -6760,16 +7557,38 @@ function benchKey(e) {
   }
   return false;
 }
+let deathGunsTimer = 0;
+function toggleDeathGuns(force) { // B na kill cam: abre e fecha a mesma ficha da pausa, por cima de quem matou.
+  if (state !== 'playing' || !player || player.alive || x1Mode() || armsMode()) return;
+  if (!(deathCamState.on && deathCamState.killer)) return;
+  const next = force == null ? !killcamGuns : !!force;
+  const dp = $('deathpick');
+  if (deathGunsTimer) { clearTimeout(deathGunsTimer); deathGunsTimer = 0; }
+  if (!next && killcamGuns && dp && !reducedAnims()) {
+    dp.classList.add('is-closing');
+    deathGunsTimer = setTimeout(() => {
+      deathGunsTimer = 0;
+      killcamGuns = false;
+      if (dp) dp.classList.remove('is-closing');
+      if (deathCamState.on && deathCamState.killer) document.body.classList.add('killcam');
+    }, 170);
+    return;
+  }
+  killcamGuns = next;
+  if (dp) dp.classList.remove('is-closing');
+  if (next) {
+    deathUnlock = true;
+    document.body.classList.remove('killcam');
+    if (dp) dp.classList.add('guns-on');
+    if (document.pointerLockElement) document.exitPointerLock();
+  } else if (deathCamState.on && deathCamState.killer) document.body.classList.add('killcam');
+}
 function killcamGunKey(e) { // B é o arsenal (Invasão e Bomba). Morto, na kill cam, abre e fecha a ficha.
   if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return false;
   if (state !== 'playing' || !player || player.alive || x1Mode() || armsMode()) return false;
   if (!(deathCamState.on && deathCamState.killer)) return false;
-  if (e.code === 'KeyB') {
-    killcamGuns = !killcamGuns;
-    if (killcamGuns) { deathUnlock = true; if (document.pointerLockElement) document.exitPointerLock(); }
-    return true;
-  }
-  if (e.code === 'Escape' && killcamGuns) { killcamGuns = false; return true; }
+  if (e.code === 'KeyB') { toggleDeathGuns(); return true; }
+  if (e.code === 'Escape' && (killcamGuns || ( $('deathpick') && $('deathpick').classList.contains('is-closing')))) { toggleDeathGuns(false); return true; }
   return false;
 }
 function classMenuOn() {
@@ -6781,6 +7600,7 @@ function classMenuOn() {
 function classMenuKey(e) {
   if (e.code === 'Escape') {
     if (pauseClassOpen()) { closePauseClass(); return true; }
+    if ($('pause') && $('pause').classList.contains('loadout-on')) { showPauseLoadout(false); return true; }
     if (bombPick) { closeBombPick(); return true; }
     if (invPick) { invClosePick(); return true; }
   }
@@ -6840,19 +7660,34 @@ function paintLoadoutDock() {
 }
 function syncLoadoutUi() { paintLoadoutDock(); fillLoadoutRow('lobbyLoadoutRow', 'lobby', false); buildDeathPrimaries(); buildDeathSec(); buildDeathMelee(); }
 function refreshMenuMode() {
+  if ($('modeSel').value === 'survival') { $('modeSel').value = INV.mode; if ($('survSel')) $('survSel').value = 'survival'; }
   const v = [HIDE.mode, 'dom', ARMS_RACE.mode, 'bomb', 'explore', TRAIN.mode, INV.mode, X1.mode].includes($('modeSel').value) ? $('modeSel').value : 'dm';
+  const inv = v === INV.mode;
+  const surv = inv && isSurvival($('survSel') && $('survSel').value);
   $('menuTrain').classList.toggle('hidden', v !== TRAIN.mode);
   $('menuTeam').classList.toggle('hidden', v !== 'dom' && !isArmsRace(v) && v !== 'bomb' && v !== HIDE.mode); // Dominação, Bomba e Docão Escondido: escolhe o time
-  $('botCount').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || v === INV.mode || v === X1.mode);
-  $('timeSel').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || v === INV.mode || isArmsRace(v) || v === HIDE.mode);
+  $('botCount').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || inv || v === X1.mode);
+  $('timeSel').closest('label').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || inv || isArmsRace(v) || v === HIDE.mode);
   const showDiff = v !== 'explore' && v !== TRAIN.mode;
   $('botDiffLabel').classList.toggle('hidden', !showDiff);
   $('botDiffNote').classList.toggle('hidden', !showDiff);
+  if ($('survLabel')) {
+    $('survLabel').classList.toggle('hidden', !inv);
+    if (inv) {
+      const el = $('survLabel');
+      const box = el.getBoundingClientRect();
+      const scroller = el.closest('.menu-content');
+      const view = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+      if (box.height && (box.bottom > view.bottom - 4 || box.top < view.top + 4)) el.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  if ($('survNote')) $('survNote').classList.toggle('hidden', !inv);
   if (showDiff) paintDiffNote();
-  const playTitle = v === INV.mode ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
-  const playHint = v === INV.mode ? 'SOLO · 20 WAVES DE ZUMBIS' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : 'SOLO · CONTRA BOTS';
+  if (inv) paintSurvNote();
+  const playTitle = inv ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
+  const playHint = surv ? 'HOTMILK À NOITE · LOJA E PORTAS' : inv ? 'CLÁSSICA · 20 WAVES' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : 'SOLO · CONTRA BOTS';
   $('playBtn').innerHTML = `<span class="play-title">${playTitle}</span><small>${playHint}</small>`;
-  $('menuRules').textContent = MENU_RULES[v];
+  $('menuRules').textContent = inv ? (surv ? 'Survival · dentro da Invasão, só na HOTMILK à Noite.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada.') : MENU_RULES[v];
   teamButtons($('menuTeamBtns'), menuTeam, (t) => { menuTeam = t; refreshMenuMode(); });
   syncLoadoutUi();
 }
@@ -6869,11 +7704,20 @@ function saveBotDiff(id) {
   for (const el of [$('botDiff'), $('roomDiff')]) if (el && el.value !== botDiff) el.value = botDiff;
   if ($('botDiffNote') && !$('botDiffNote').classList.contains('hidden')) paintDiffNote();
 }
+function paintSurvNote() {
+  const el = $('survNote'); if (!el) return;
+  const surv = isSurvival($('survSel').value);
+  el.textContent = surv
+    ? 'Survival: o mapa trava na HOTMILK à Noite. Nasce de pistola e faca. F usa a loja (parede, Barraca da Sorte e Papada). E compra a porta. A Ray Gun só sai na barraca.'
+    : 'Invasão clássica: 20 waves, 2 vidas, poderes no chão (G usa, X troca) e a Névoa Assombrada fecha o mapa. Os mapas da Invasão continuam valendo, inclusive o Rodízio.';
+}
+$('survSel').onchange = () => { try { localStorage.setItem('docao.surv', $('survSel').value); } catch (e) { /* */ } refreshMenuMode(); syncMapForMode(); };
+try { const s = localStorage.getItem('docao.surv'); if (s === 'survival' || s === 'padrao') $('survSel').value = s; } catch (e) { /* */ }
 $('botDiff').onchange = () => saveBotDiff($('botDiff').value);
 $('roomDiff').onchange = () => saveBotDiff($('roomDiff').value);
 try { const d = localStorage.getItem('docao.botDiff'); if (d) saveBotDiff(d); } catch (e) { /* */ }
 $('modeSel').onchange = () => { try { localStorage.setItem('docao.mode', $('modeSel').value); } catch (e) { /* */ } refreshMenuMode(); syncMapForMode(); };
-try { const m = localStorage.getItem('docao.mode'); if (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'dm' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'bomb' || m === X1.mode) $('modeSel').value = m; } catch (e) { /* */ }
+try { const m = localStorage.getItem('docao.mode'); if (m === 'survival') { $('modeSel').value = INV.mode; $('survSel').value = 'survival'; } else if (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'dm' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'bomb' || m === X1.mode) $('modeSel').value = m; } catch (e) { /* */ }
 if (invMenu() || bombMenu() || x1Menu()) syncMapForMode();
 $('timeSel').onchange = () => { try { localStorage.setItem('docao.time', $('timeSel').value); } catch (e) { /* */ } };
 try { $('timeSel').value = String(normTime(localStorage.getItem('docao.time'))); } catch (e) { /* */ }
@@ -6913,18 +7757,25 @@ function deathLine(p) {
 function updateRespawnBtn(p) {
   const b = $('respawnBtn'), ok = respawnReady(p) && !rsSent;
   const left = Number.isFinite(p.respawnAt) ? Math.max(0, p.respawnAt - gameTime) : respawnDelay();
-  const nome = (classes[classIndex] && classes[classIndex].name) || 'a classe';
-  const ultima = classIndex === spawnedClass;
-  const txt = armsMode() ? (rsSent ? 'Nascendo...' : ok ? 'Renascer' : `Renascer em ${left.toFixed(1).replace('.', ',')}s`) : invMeOut() ? 'Sem vidas' : rsSent ? 'Nascendo...' : ok ? `Nasce com ${nome}` : Number.isFinite(p.respawnAt) ? `Nascer em ${left.toFixed(1).replace('.', ',')}s` : 'Aguarde...';
-  const sub = armsMode() ? 'Espaço · mantém sua etapa e arma' : invMeOut() ? 'Espere a ressurreição' : `Espaço · classe ${nome}${ultima ? ', a última' : ''}`;
+  const secs = left.toFixed(1).replace('.', ',');
+  let txt = 'Aguarde…';
+  let sub = 'Espaço';
+  if (armsMode()) { txt = rsSent ? 'Nascendo…' : ok ? 'Renascer' : `Renascer em ${secs}s`; sub = 'Espaço'; }
+  else if (invMeOut()) { txt = 'Sem vidas'; sub = 'Espere a Ressurreição'; }
+  else if (rsSent) txt = 'Nascendo…';
+  else if (ok) txt = 'Nasce';
+  else if (Number.isFinite(p.respawnAt)) txt = `Nascer em ${secs}s`;
   const main = b && b.querySelector('b'), small = b && b.querySelector('small');
   if (b) { if (b.disabled === ok) b.disabled = !ok; b.classList.toggle('ready', ok); }
   if (main) { if (main.textContent !== txt) main.textContent = txt; }
   else if (b && b.textContent !== txt) b.textContent = txt;
   if (small && small.textContent !== sub) small.textContent = sub;
-  const clock = $('classClockTxt'), bar = $('classClockBar');
-  if (clock) { const ct = invMeOut() ? 'Sem vidas' : rsSent ? 'Nascendo' : ok ? 'Pode nascer' : `Renasce em ${left.toFixed(1).replace('.', ',')}s`; if (clock.textContent !== ct) clock.textContent = ct; }
-  if (bar) bar.style.width = (!Number.isFinite(p.respawnAt) ? 0 : ok || rsSent ? 100 : (1 - left / respawnDelay()) * 100).toFixed(1) + '%';
+  const fill = $('respawnFill');
+  if (fill) {
+    const pct = !Number.isFinite(p.respawnAt) ? 0 : ok || rsSent ? 100 : (1 - left / Math.max(0.05, respawnDelay())) * 100;
+    const w = Math.max(0, Math.min(100, pct)).toFixed(1) + '%';
+    if (fill.style.width !== w) fill.style.width = w;
+  }
 }
 function requestRespawn() {
   const p = player; if (state !== 'playing' || !respawnReady(p) || rsSent) return false;
@@ -6933,7 +7784,8 @@ function requestRespawn() {
   return true;
 }
 $('respawnBtn').onclick = (ev) => { ev.stopPropagation(); requestRespawn(); };
-function onPlayerDeath(opts) { clearHitMarks(); if (player) { player.flinch = null; player.mgWant = false; player.mgSpin = 0; player.mgFiring = false; } rsSent = false; resetRewards(true); if (!(opts && opts.keepAim) && document.pointerLockElement) { deathUnlock = true; document.exitPointerLock(); } mouseDown = false; rightDown = false; if (player) player.bowDraw = player.eggDraw = 0; }
+if ($('deathArmsBtn')) $('deathArmsBtn').onclick = (ev) => { ev.stopPropagation(); toggleDeathGuns(); };
+function onPlayerDeath(opts) { clearHitMarks(); noclipOn = false; paintNoclip(); if (player) { player.flinch = null; player.mgWant = false; player.mgSpin = 0; player.mgFiring = false; } rsSent = false; resetRewards(true); if (!(opts && opts.keepAim) && document.pointerLockElement) { deathUnlock = true; document.exitPointerLock(); } mouseDown = false; rightDown = false; if (player) player.bowDraw = player.eggDraw = 0; }
 let lastRespawnMs = -1e9;
 function onPlayerRespawn() { if (player) resetRecoil(player); clearHitMarks(); rsSent = false; lastRespawnMs = performance.now(); if (gunner) endGunner(false); if (predator) clearPredator(); closeBench(); // nada de mira guiada nem bancada sobrando da vida anterior (travava o andar)
   deathCamState.on = false; deathCamState.killer = null; killcamGuns = false; tuckDeathMenu(); document.body.classList.remove('deadgray', 'dead', 'killcam'); if (!bombPick && !invPick && !pauseClassOpen()) document.body.classList.remove('cls-on'); if (ghost) ghost.model.group.visible = false;
@@ -7064,14 +7916,14 @@ function onNetMessage(m) {
   }
 }
 // ---------- lobby ----------
-function fillMapSelect(sel, value, md) { // Invasão: lista própria (Rodízio, Fazenda Mal-Assombrada + mapas normais). X1: o mapa é sempre sortido.
+function fillMapSelect(sel, value, md, surv = false) { // Invasão: lista própria (Rodízio, Fazenda Mal-Assombrada + mapas normais). Survival: só a HOTMILK à Noite. X1: o mapa é sempre sortido.
   if (isX1(md)) {
     if (sel.dataset.pool !== 'x1') { sel.innerHTML = ''; sel.dataset.pool = 'x1'; sel.add(new Option('Sortido · curral pequeno', 'random')); }
     sel.value = 'random'; return;
   }
-  const iv = isInvasion(md), L = menuPool(md), key = md === 'bomb' ? 'bomb' : iv ? 'inv' : 'play';
-  if (!sel.options.length || sel.dataset.pool !== key) { sel.innerHTML = ''; sel.dataset.pool = key; for (const m of L) sel.add(new Option(m.name, m.id)); sel.add(new Option('Aleatório', 'random')); }
-  if (value && [...sel.options].some((o) => o.value === value)) sel.value = value; else if (value) sel.value = md === 'bomb' ? BOMB_MAP : iv ? INV.DEFAULT_MAP : L[0].id; // Bomba: mapa sem sites → Rodízio
+  const iv = isInvasion(md), sv = !!(surv || isSurvivalMode(md)), L = menuPool(md, sv), key = md === 'bomb' ? 'bomb' : sv ? 'surv' : iv ? 'inv' : 'play';
+  if (!sel.options.length || sel.dataset.pool !== key) { sel.innerHTML = ''; sel.dataset.pool = key; for (const m of L) sel.add(new Option(m.name, m.id)); if (!sv) sel.add(new Option('Aleatório', 'random')); }
+  if (value && [...sel.options].some((o) => o.value === value)) sel.value = value; else if (value) sel.value = md === 'bomb' ? BOMB_MAP : sv ? SURVIVAL.DEFAULT_MAP : iv ? INV.DEFAULT_MAP : L[0].id; // Bomba: mapa sem sites → Rodízio. Survival: um mapa só.
   if (md === 'bomb' && value === 'random') sel.value = BOMB_MAP;
 }
 function renderLobby() {
@@ -7093,7 +7945,11 @@ function renderLobby() {
     $('lobbyName').disabled = $('lobbyNameBtn').disabled = inGame;
     $('lobbyNameMsg').textContent = me && me.name !== myName() ? `Na sala você aparece como “${me.name}”${inGame ? '' : ' (nome repetido ou ajustado)'}` : inGame ? 'Partida em andamento: o nome muda na próxima partida' : ''; }
   $('hostCtl').classList.toggle('hidden', !isHost); $('lobbyWait').classList.toggle('hidden', isHost || L.state !== 'lobby');
-  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, cfg.mode); $('lobbyMax').value = String(cfg.max); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = cfg.mode || 'dm'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
+  const lobbyVariant = cfg.mode === 'survival' || cfg.variant === 'survival' || isSurvival(cfg.surv);
+  const lobbyMode = cfg.mode === 'survival' ? INV.mode : (cfg.mode || 'dm');
+  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, lobbyMode, lobbyVariant); $('lobbyMax').value = String(cfg.max); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = lobbyMode; $('lobbySurv').value = lobbyVariant ? 'survival' : 'padrao'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
+  $('lobbySurvLabel').classList.toggle('hidden', lobbyMode !== INV.mode);
+  if (lobbyMode === INV.mode) $('lobbyInfo').textContent += (lobbyVariant ? ' · SURVIVAL · HOTMILK À NOITE' : ' · CLÁSSICA');
   syncLobbyLimits(cfg, isHost); syncLoadoutUi();
   if (state === 'over') { const h = o.myId === o.hostId; $('againBtn').classList.toggle('hidden', !h); $('nextMapBtn').classList.toggle('hidden', !h); $('overWait').classList.toggle('hidden', h); }
 }
@@ -7107,15 +7963,22 @@ function limitBlurb(cfg) {
 }
 const sendCfg = (lim) => {
   if (!online) return; const mode = $('lobbyMode').value, L = lim || limitsFor(mode);
-  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: +$('lobbyMax').value, fillBots: $('lobbyBots').value === '1', botDiff: normBotDiff($('lobbyDiff').value), mode, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers });
+  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: +$('lobbyMax').value, fillBots: $('lobbyBots').value === '1', botDiff: normBotDiff($('lobbyDiff').value), mode, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value });
 };
 ['lobbyMap', 'lobbyMax', 'lobbyBots', 'lobbyTime', 'lobbyChatOn'].forEach((id) => ($(id).onchange = sendCfg));
 $('lobbyDiff').onchange = () => { saveBotDiff($('lobbyDiff').value); sendCfg(); };
+$('lobbySurv').onchange = () => {
+  if (isSurvival($('lobbySurv').value)) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('lobbyMap').value = ex; }
+  fillMapSelect($('lobbyMap'), $('lobbyMap').value, $('lobbyMode').value, isSurvival($('lobbySurv').value));
+  sendCfg();
+};
 $('lobbyMode').onchange = () => {
   const mode = $('lobbyMode').value, humans = online && online.lobby ? online.lobby.players.filter((p) => !p.bot).length : 0;
   if (mode === X1.mode && humans > X1.MAX) { $('lobbyMode').value = (online.cfg && online.cfg.mode) || 'dm'; $('lobbyStatus').textContent = `X1 é duelo: só cabem ${X1.MAX} jogadores. Tem ${humans} na sala.`; return; }
   if (mode === X1.mode) $('lobbyMax').value = '2';
-  fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' ? BOMB_MAP : $('lobbyMap').value, mode); sendCfg(limitsFor(mode));
+  $('lobbySurvLabel').classList.toggle('hidden', mode !== INV.mode);
+  if (mode === INV.mode && isSurvival($('lobbySurv').value)) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('lobbyMap').value = ex; }
+  fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' ? BOMB_MAP : $('lobbyMap').value, mode, mode === INV.mode && isSurvival($('lobbySurv').value)); sendCfg(limitsFor(mode));
 };
 $('startOnline').onclick = () => {
   if (!online) return; const humans = online.lobby ? online.lobby.players.filter((p) => !p.bot).length : 0;
@@ -7125,13 +7988,14 @@ $('startOnline').onclick = () => {
 $('leaveLobby').onclick = () => leaveOnline();
 // ---------- menu online ----------
 function onlineTab(create) { $('tabCreate').classList.toggle('active', create); $('tabJoin').classList.toggle('active', !create); $('paneCreate').classList.toggle('hidden', !create); $('paneJoin').classList.toggle('hidden', create); }
-$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' ? BOMB_MAP : $('roomMap').value, $('roomMode').value); syncRoomLimits(); };
-$('onlineBtn').onclick = () => { commitMenuSkin(); if (invMenu()) $('roomMode').value = INV.mode; else if (bombMenu()) $('roomMode').value = 'bomb'; fillMapSelect($('roomMap'), selectedMap, $('roomMode').value); syncRoomLimits(); $('onlineErr').textContent = ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
+$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); };
+$('roomSurv').onchange = () => { const surv = isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMap').value, $('roomMode').value, surv); };
+$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); const map = surv ? SURVIVAL.DEFAULT_MAP : selectedMap; fillMapSelect($('roomMap'), map, $('roomMode').value, surv); if (surv) $('roomMap').value = SURVIVAL.DEFAULT_MAP; syncRoomLimits(); $('onlineErr').textContent = ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
 $('onlineClose').onclick = () => { $('onlineModal').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('tabCreate').onclick = () => onlineTab(true); $('tabJoin').onclick = () => { onlineTab(false); $('joinCode').focus(); };
 $('createBtn').onclick = async () => {
   const b = $('createBtn'); b.disabled = true; $('onlineErr').textContent = 'Criando sala…';
-  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : +$('roomMax').value, fillBots: $('roomBots').value === '1', botDiff, mode: $('roomMode').value, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers }); $('onlineErr').textContent = ''; joinRoom(code); }
+  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : +$('roomMax').value, fillBots: $('roomBots').value === '1', botDiff, mode: $('roomMode').value, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value }); $('onlineErr').textContent = ''; joinRoom(code); }
   catch (e) { $('onlineErr').textContent = 'Não deu pra criar a sala: ' + (e.message || 'servidor fora do ar'); }
   b.disabled = false;
 };
@@ -7156,7 +8020,7 @@ function remoteEnt(info) {
     z.model.group.visible = false; o.ents.set(info.id, z); entities.push(z); return z;
   }
   const e = makeEntity(info.name, false, info.skin, info.tag || '#ffffff');
-  Object.assign(e, { id: info.id, remote: true, netId: info.id, bot: !!info.bot, buf: [], kills: info.kills || 0, deaths: info.deaths || 0, alive: false, primary: info.primary || 0, ping: 0 });
+  Object.assign(e, { id: info.id, remote: true, netId: info.id, bot: !!info.bot, buf: [], kills: info.kills || 0, deaths: info.deaths || 0, points: info.pts | 0, alive: false, primary: info.primary || 0, ping: 0 });
   if (armsMode()) { [e.armsStage, e.armsKills] = info.arms || [0, 0]; equipArmsLocal(e); }
   e.model.group.visible = false; setWeapon(e, info.w || 0); e.slots = [e.primary, e.secondary ?? PISTOL, e.melee ?? KNIFE]; e.caps = info.caps || 0; if (armsMode()) equipArmsLocal(e); applyTeam(e, info.team ?? -1); if (info.kn) applyWorldKnife(e, info.kn); if (info.sn) applyWorldSniper(e, info.sn); if (info.gn) applyWorldGuns(e, info.gn);
   o.ents.set(info.id, e); entities.push(e); return e;
@@ -7170,25 +8034,29 @@ function startOnlineMatch(m) {
   const o = online; stopInspect(true);
   if (o.inMatch && o.mapId === m.map && state !== 'over' && player) { // reconexão no meio da partida: só ressincroniza
     for (const info of m.ents) if (!o.ents.has(info.id) && info.id !== o.myId) remoteEnt(info);
+    if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); }
     return;
   }
-  clearMatchEnding(); resetAds(); loadMap(m.map, isInvasion(m.mode)); clearBots(); gameTime = m.T; o.mapId = m.map; o.inMatch = true; o.ents.clear(); o.tmap = [];
-  endHide(); mode = MODE_OK(m.mode); armsWinner = null; if (x1Mode()) x1Gun = m.gun ?? 0; inv = null; invNet = m.iv ? parseState(m.iv) : null; window.__capLog = []; o.limit = m.limit > 0 ? m.limit : 0; endBomb();
+  clearMatchEnding(); resetAds(); loadMap(m.map, isInvasion(m.mode) || isSurvivalMode(m.mode, m)); if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); } clearBots(); gameTime = m.T; o.mapId = m.map; o.inMatch = true; o.ents.clear(); o.tmap = [];
+  endHide(); mode = MODE_OK(m.mode); matchVariant = m.variant === 'survival' || m.mode === 'survival' ? 'survival' : ''; survLive = !!m.surv || matchVariant === 'survival'; armsWinner = null; if (x1Mode()) x1Gun = m.gun ?? 0; inv = null; invNet = m.iv ? parseState(m.iv) : null; window.__capLog = []; o.limit = m.limit > 0 ? m.limit : 0; endBomb(); survClear();
   matchLimits = { weapons: (o.cfg && o.cfg.weapons) || null, powers: o.cfg && o.cfg.powers != null ? o.cfg.powers : null }; rulesLive = true;
   zone = m.zone ? newZoneState({ x: m.zone[0], y: m.zone[1], z: m.zone[2] }) : null; teamScore = m.zone ? [m.zone[8], m.zone[9]] : [0, 0];
   const me = m.ents.find((x) => x.id === o.myId) || { name: profile().name, skin: selectedSkin };
   player = makeEntity(me.name, true, me.skin, '#ffd27a'); player.netId = player.id = o.myId; player.sq = 0; player.alive = false; player.respawnAt = Infinity;
-  player.kills = me.kills || 0; player.deaths = me.deaths || 0; player.gunKills = WEAPONS.map(() => 0); revengeName = null; resetNemesis(); resetFeedback(); resetMatchCamos();
+  player.kills = me.kills || 0; player.deaths = me.deaths || 0; player.points = me.pts != null ? me.pts : (survivalMode() ? SURVIVAL.START_POINTS : 0); player.gunKills = WEAPONS.map(() => 0); revengeName = null; resetNemesis(); resetFeedback(); resetMatchCamos();
   player.primary = player.nextPrimary = selectedPrimary; player.nextSecondary = selectedSecondary; player.nextMelee = selectedMelee; player.slots = [selectedPrimary, selectedSecondary, selectedMelee]; setWeapon(player, selectedPrimary); // até o servidor mandar o renascimento
+  if (survOn()) { player.pts = me.pts | 0; player.pap = me.pap || {}; player.slotOn = me.slotOn || [1, 0, 1]; if (me.slots) player.slots = me.slots.slice(); }
   if (armsMode()) { [player.armsStage, player.armsKills] = me.arms || [0, 0]; equipArmsLocal(player); }
   entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.caps = me.caps || 0; applyTeam(player, me.team ?? -1);
   for (const info of m.ents) remoteEnt(info);
+  if (survivalMode()) beginSurvival(m.doors);
   invApplyLook(invMode()); if (invMode()) for (const [id, ki, pos] of m.drops || []) invAddDrop(id, DROP_KEYS[ki], pos);
+  if (survOn() && m.stations) survBuild(m.stations);
   if (mode === 'bomb' && m.bomb) setupBomb({ sites: m.bomb.sites.map(([x, y, z], i) => ({ x, y, z, name: SITE_NAMES[i] })), atk: m.bomb.atk, def: m.bomb.def, pts: m.bomb.pts ? m.bomb.pts.map(([x, y, z]) => ({ x, y, z })) : undefined }, unpackBomb(m.bomb.s)); else if (mode === 'bomb') mode = 'dm';
   refreshModeHud(); $('teamPick').classList.add('hidden');
   if (teamMode() && me.pend) showTeamPick(m.ents);
   pickups.forEach((p, i) => { p.active = !!(m.pk ? m.pk[i] : 1); p.mesh.visible = p.active; });
-  showcase.visible = false; $('killfeed').innerHTML = ''; flashMsg(invMode() ? `Invasão 🎃 · ${currentMap.name} · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun] ? WEAPONS[x1Gun].short : ''}` : `Mapa: ${currentMap.name}`);
+  showcase.visible = false; $('killfeed').innerHTML = ''; flashMsg(survOn() ? `Survival · ${currentMap.name} · ${SURV.useLabel} usa a loja · E abre porta` : invMode() ? `Invasão 🎃 · ${currentMap.name} · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun] ? WEAPONS[x1Gun].short : ''}` : `Mapa: ${currentMap.name}`);
   ['menu', 'gameover', 'pause', 'lobby', 'onlineModal'].forEach((id) => $(id).classList.add('hidden')); $('hud').classList.remove('hidden'); $('socialHud').classList.remove('hidden'); $('voiceHud').classList.remove('hidden'); $('overChat').classList.add('hidden');
   $('netbar').classList.remove('hidden'); $('netRoom').textContent = 'Sala ' + o.code;
   camera.clearViewOffset(); state = 'playing'; if ($('teamPick').classList.contains('hidden')) lockPointer(); // escolhendo time: mouse livre pros botões
@@ -7245,15 +8113,25 @@ function applySnapshot(s) {
 }
 const entOf = (id) => (online ? online.ents.get(id) : null);
 function remoteMuzzle(e) { return center(e, 1.3).add(new V3(Math.sin(e.yaw) * 1.0, -0.25, Math.cos(e.yaw) * 1.0)); }
-const NET_SHOOTER = { sh: 1, ml: 1, dl: 2, el: 2, cl: 1, rk: 2, sk: 2 }; // índice do id de quem disparou em cada evento
+const NET_SHOOTER = { sh: 1, ml: 1, dl: 2, yl: 2, el: 2, cl: 1, rk: 2, sk: 2 }; // índice do id de quem disparou em cada evento
 function netEvent(ev) {
   const o = online, k = ev[0];
+  if (k === 'door' && surv) {
+    const door = (currentMap.survival && currentMap.survival.doors || []).find((d) => d.id === ev[1]);
+    surv.open.add(ev[1]); for (const id of ev[4] || []) surv.areas.add(id);
+    applyDoorLeaf(ev[1], true); syncSurvivalSpace();
+    const buyer = entOf(ev[2]); if (buyer) buyer.points = ev[3];
+    if (buyer === player) refreshSurvPts();
+    flashMsg(`${door ? door.name : 'Porta'} aberta`); sfx.pickup();
+    return;
+  }
   { const si = NET_SHOOTER[k]; const se = si && entOf(ev[si]); if (se && se.model) setExpression(se.model, 'angry', 0.5); } // cara de brava de quem atirou/golpeou
   if (INV_EVENTS.has(k)) { invEvent(ev); return; } // Invasão
+  if (k === 'spts' || k === 'spap' || k === 'sgun' || k === 'sbox') { survNet(ev); return; }
   if (k === 'sh') {
     const [, sid, w, , ends] = ev; if (sid === o.myId) return; const e = entOf(sid); if (!e) return; const W = WEAPONS[w];
     const dist = e.pos.distanceTo(player.pos), pan = stereoPan(e.pos), vol = distVol(e.pos) * 0.7;
-    sfx[W.key](vol, dist, pan); if (W.pump) sfx.pump(vol * 0.7, 0.3); if (W.bolt) playSniperBolt(W, vol * 0.75, dist, pan); if (W.revolver) bumpWorldCyl(e, w, !!W.akimbo);
+    gunShot(W, vol, dist, pan, e.pap ? (e.pap[w] | 0) : 0); if (W.pump) sfx.pump(vol * 0.7, 0.3); if (W.bolt) playSniperBolt(W, vol * 0.75, dist, pan); if (W.revolver) bumpWorldCyl(e, w, !!W.akimbo);
     e.invulnUntil = 0; const mz = remoteMuzzle(e); if (W.spin) e.mgShotT = gameTime;
     e.tpKick = Math.min(0.45, (e.tpKick || 0) + (W.recoil || 0.02) * tpKickScale(W.key) * 4);
     ends.slice(0, 4).forEach(([x, y, z, hit]) => { const end = new V3(x, y, z); tracer(mz, end, !!W.beam); puff(end, hit ? 0xff9fb0 : 0xffffff); });
@@ -7263,7 +8141,7 @@ function netEvent(ev) {
     const [, tid, aid, hp, head] = ev; const t = entOf(tid), a = entOf(aid); if (!t) return;
     const prevHp = t.hp; t.hp = hp; t.flashUntil = gameTime + 0.12; t.lastAttacker = a || null;
     if (t === player) { hurtFlash(); const dealt = ev[5] ?? Math.max(0, prevHp - hp); if (hp > 0 && dealt > 0) noteHit(ev.length > 7 ? ev[7] : a && a !== player && !a.fog ? a.pos : null); if (a && a !== player && dealt > 0) noteFlinch(dealt); sfx.oink(0.8, 1.15); } else if (Math.random() < 0.3) sfx.oink(distVol(t.pos) * 0.6, 1.3);
-    if (aid === o.myId && t !== player) { if (hp > 0) feedbackHit({ head: !!head, wall: !!((ev[6] || 0) & 1) }); sfx.hit(); if (training()) dmgPopup(t, ev[5] ?? Math.max(0, prevHp - hp), !!head); }
+    if (aid === o.myId && t !== player) { if (hp > 0 && !(survOn() && t.zt)) feedbackHit({ head: !!head, wall: !!((ev[6] || 0) & 1) }); sfx.hit(); if (training()) dmgPopup(t, ev[5] ?? Math.max(0, prevHp - hp), !!head); }
   } else if (k === 'td') { // tampa levou dano: [id, hp, quebrada, dano segurado]
     const e = entOf(ev[1]); if (!e) return;
     const was = !!e.shieldBroken, blocked = ev[4] || 0;
@@ -7289,11 +8167,11 @@ function netEvent(ev) {
   } else if (k === 'k') {
     // ev[7] (servidor novo): 1 = faca, 2 = faca pelas costas. ev[3] vem como pistola pra clientes antigos.
     // ev[8] (servidor novo): killstreak 'p' míssil, 'h' Gavião, 'x' nuke. Gavião e nuke não contam pra sequência (Gavião vale 25 pts).
-    const [, aid, tid, w0, head, aK, tD, mk, ks, fx = 0] = ev; const a = entOf(aid), t = entOf(tid); if (!t) return; const w = mk === 3 ? W_BOMB : mk ? KNIFE : w0, back = mk === 2; // ev[9]: 1 pela parede, 2 collateral; mk 3 = botijão
+    const [, aid, tid, w0, head, aK, tD, mk, ks, fx = 0] = ev; const a = entOf(aid), t = entOf(tid); if (!t) return; const w = mk === 4 ? W_GAS : mk === 3 ? W_BOMB : mk ? KNIFE : w0, back = mk === 2; // ev[9]: 1 pela parede, 2 collateral; mk 3 = botijão da Bomba, mk 4 = botijão do mapa
     if (t.zt) { // Invasão: zumbi caiu (sem bacon; feed só pro chefão)
       if (a) a.kills = aK; t.alive = false; t.hp = 0; t.deathAt = gameTime; t.respawnAt = Infinity; sfx.die(distVol(t.pos) * 0.7);
       if (t.zt === 'boss') addKillFeed(a, t, w, head, back);
-      if (a === player) { sfx.kill(); if (ks !== 'h' && ks !== 'x' && ks !== 'a') { notePlayerKill(t, !!head); if (w >= 0 && w < WEAPONS.length) noteWeaponKill(player, w); } }
+      if (a === player) { sfx.kill(); if (!survOn() && ks !== 'h' && ks !== 'x' && ks !== 'a') notePlayerKill(t, !!head); if (w >= 0 && w < WEAPONS.length) noteWeaponKill(player, w); }
       return;
     }
     if (a) a.kills = aK; t.deaths = tD; t.mgSpinOn = false; t.alive = false; t.hp = 0; t.deathAt = gameTime; t.respawnAt = gameTime + respawnDelay(); t.lastAttacker = a || null; t.killW = w; t.killBack = back;
@@ -7338,6 +8216,15 @@ function netEvent(ev) {
     if (oid !== o.myId) sfx.disco(distVol(a3v(pos)));
   } else if (k === 'db') { const d = discs.find((x) => x.pid === ev[1]); if (d) { d.pos.copy(a3v(ev[2])); d.dir.copy(a3v(ev[3])); d.bounces = ev[4]; } }
   else if (k === 'dx') { const i = discs.findIndex((x) => x.pid === ev[1]); if (i >= 0) removeDisc(i, a3v(ev[2]), !!ev[3]); }
+  else if (k === 'yl') {
+    const [, pid, oid, pos, dir] = ev; const d = a3v(dir);
+    spawnRay({ net: true, pid, owner: entOf(oid), pos: a3v(pos), dir: d, bounces: 0, t: 0, traveled: 0 });
+    if (oid !== o.myId) sfx.ray(distVol(a3v(pos)));
+  } else if (k === 'yb') { const r = rays.find((x) => x.pid === ev[1]); if (r) { r.pos.copy(a3v(ev[2])); r.dir.copy(a3v(ev[3])); r.bounces = ev[4]; } }
+  else if (k === 'bm' && ev[2] === 'y') {
+    const i = rays.findIndex((x) => x.pid === ev[1]); if (i >= 0) { dropRayMesh(rays[i].mesh); rays.splice(i, 1); }
+    const at = a3v(ev[3]); rayBurst(at); if (player) sfx.rayHit(clamp(1 - at.distanceTo(player.pos) / 28, 0.2, 1));
+  }
   else if (k === 'el') { // ovo de alguém (estilingue é quase mudo: só ouve quem está perto)
     const [, pid, oid, pos, vel, kk] = ev; spawnEggFx({ net: true, pid, owner: entOf(oid), pos: a3v(pos), vel: a3v(vel), k: kk || 0, t: 0 });
     if (oid !== o.myId) sfx.estilingue(distVol(a3v(pos)) * 0.2);
@@ -7353,6 +8240,14 @@ function netEvent(ev) {
   } else if (k === 'bm' && ev[2] === 'c') { // pipoca do Lança-Milho (o servidor já deu o dano)
     const [, pid, , c] = ev; const i = pid ? corns.findIndex((x) => x.pid === pid) : -1; if (i >= 0) { scene.remove(corns[i].mesh); corns.splice(i, 1); }
     popFx(a3v(c));
+  } else if (k === 'cy') {
+    const c = gasSim && gasSim.list[ev[1]]; if (!c) return;
+    c.phase = ev[2]; c.hp = ev[3];
+    if (c.phase === 1) c.explodeAt = ev[4]; else if (c.phase === 2) c.respawnAt = ev[4]; else { c.explodeAt = 0; c.respawnAt = 0; }
+    if (gasView) gasView.sync(c);
+  } else if (k === 'bm' && ev[2] === 'g') {
+    const at = a3v(ev[3]); blastFx(at, GAS.blast.radius);
+    const c = gasSim && gasSim.list[ev[4]]; if (c) { c.phase = 2; c.hp = 0; if (gasView) gasView.sync(c); }
   } else if (k === 'bm') {
     const [, pid, kind, c] = ev;
     const list = kind === 'n' ? grenades : rockets; const i = list.findIndex((x) => x.pid === pid && pid); if (i >= 0) { scene.remove(list[i].mesh); list.splice(i, 1); }
@@ -7423,6 +8318,8 @@ function netEvent(ev) {
 }
 function personalEvent(ev) {
   const p = player; if (!p) return;
+  if (ev[0] === 'pts') { p.points = ev[1] | 0; if (ev[2]) survPop(ev[2]); refreshSurvPts(); return; }
+  if (ev[0] === 'doorNo') { const msg = DOOR_FAIL[ev[1]]; if (msg) flashMsg(msg); return; }
   if (ev[0] === 'pos') { p.pos.set(ev[1][0], ev[1][1], ev[1][2]); p.vel.set(0, 0, 0); }
   else if (ev[0] === 'pxw') { pauseSwapLast = performance.now() - (PX_COOLDOWN - (ev[1] | 0)) * 1000; flashMsg(`Espera ${ev[1]} s pra trocar de arma de novo`); } // servidor recusou a troca que derruba
   else if (ev[0] === 'inv') invSetInv(ev[1] || []); // Invasão: inventário de poderes
@@ -7432,6 +8329,7 @@ function personalEvent(ev) {
   else if (ev[0] === 'egg') { if (p.alive) eggSplat(Number(ev[1]) || EGG.splat); } // levou ovada: tela suja (evento pessoal do servidor)
   else if (ev[0] === 'skn') p.stunNades = ev[1] | 0; // servidor confirma as cargas do pau de choque
   else if (ev[0] === 'ndn') p.nades = ev[1] | 0; // servidor recusou o copo (choque): devolve a contagem
+  else if (ev[0] === 'svno') survDenied(ev);
   else if (ev[0] === 'got') {
     const [, type, hp, nades] = ev; sfx.pickup(); p.hp = hp; p.nades = nades; if (type === 'ammo') refillAmmo(p); if (ev[4] != null) p.stunNades = ev[4];
     flashMsg(type === 'health' ? '+50 de vida' : type === 'grenade' ? `+1 Copo Bomba (${p.nades}/${NADE.max})${clientPower('stun') ? ` · Pau de choque ${p.stunNades || 0}/${SHOCK.max}` : ''}` : p.primary === 3 ? `Munição! +${invMode() ? INV_AMMO.rockets : 1} foguete${invMode() ? 's' : ''} (${p.reserve[3]}/${invMode() ? Math.ceil(WEAPONS[3].reserve * INV_AMMO.reserveMul) : WEAPONS[3].reserve})` : 'Munição cheia!');
@@ -7447,14 +8345,14 @@ function onlineEnd(m) {
   for (const r of m.board) { const e = entOf(r[0]); if (e && r[6] != null) e.caps = r[6]; }
   const w = m.board[0];
   invClosePick();
-  if (isInvasion(m.mode)) { $('winner').dataset.tone = m.inv && m.inv.won ? 'won' : 'lost'; $('winner').textContent = invEndText(); }
+  if (isInvasion(m.mode) || isSurvivalMode(m.mode, m)) { $('winner').dataset.tone = m.inv && m.inv.won ? 'won' : 'lost'; $('winner').textContent = invEndText(); }
   else if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb') { teamScore = m.ts || teamScore; if (isArmsRace(m.mode)) armsWinner = entOf(m.winner); setTeamWinner(m.winTeam ?? -1); }
   else $('winner').textContent = w && w[0] === o.myId ? 'Você venceu! 🏆' : `${w ? w[1] : '???'} venceu!`;
   const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths);
   const teamGame = m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb', winTeam = m.winTeam ?? -1;
-  const tied = !isInvasion(m.mode) && !teamGame && m.board.length > 1 && m.board[0][2] === m.board[1][2] && m.board[0][3] === m.board[1][3];
+  const tied = !isInvasion(m.mode) && !isSurvivalMode(m.mode, m) && !teamGame && m.board.length > 1 && m.board[0][2] === m.board[1][2] && m.board[0][3] === m.board[1][3];
   if (tied) $('winner').textContent = 'Empate!';
-  const outcome = isInvasion(m.mode) ? (m.inv && m.inv.won ? 'win' : 'loss') : teamGame ? (winTeam < 0 ? 'draw' : player.team === winTeam ? 'win' : 'loss') : tied ? 'draw' : w && w[0] === o.myId ? 'win' : 'loss';
+  const outcome = isInvasion(m.mode) || isSurvivalMode(m.mode, m) ? (m.inv && m.inv.won ? 'win' : 'loss') : teamGame ? (winTeam < 0 ? 'draw' : player.team === winTeam ? 'win' : 'loss') : tied ? 'draw' : w && w[0] === o.myId ? 'win' : 'loss';
   matchEnding.dance = outcome === 'win' && playerWonMatch({ mode: m.mode, rows, teamW: winTeam, invWon: m.inv && m.inv.won });
   $('finalboard').innerHTML = boardHtml();
   if (player && player.shieldBlocked > 0) $('finalboard').insertAdjacentHTML('beforeend', `<p class="shieldend">Dano segurado na tampa: ${Math.round(player.shieldBlocked)}</p>`);
@@ -7592,7 +8490,7 @@ function killZombieLocal(t, a, wIdx, head, back) {
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = Infinity; t.fxDeath = t.deathAt;
   if (a && a !== t && !a.zt) a.kills++;
   sfx.die(distVol(t.pos) * 0.7);
-  if (a && a.isPlayer) { sfx.kill(); notePlayerKill(t, head); if (wIdx >= 0) noteWeaponKill(a, wIdx); }
+  if (a && a.isPlayer) { sfx.kill(); if (!survOn()) notePlayerKill(t, head); if (wIdx >= 0) noteWeaponKill(a, wIdx); }
   if (t.zt === 'boss') addKillFeed(a, t, wIdx, head, back);
   if (inv) inv.onZombieDeath(t, a);
 }
@@ -7601,8 +8499,13 @@ function startInvasionOffline() {
   const fogSrc = { fog: true, name: 'Névoa Assombrada', zt: 'fog', isPlayer: false, pos: new V3(), kills: 0 }; // "atacante" da névoa (câmera de morte olha pro centro)
   inv = new InvasionCore({
     T: () => gameTime, P: PHYS, nav, size: currentMap.size, botDiff: () => botDiff,
+    specFor: survOn() ? (w, n) => getSurvivalWaveTuning(w, n) : null,
     players: () => entities.filter((e) => e.isPlayer),
     spawnZombie(type, pos) { const z = makeZombieEnt(type); z.id = invZid++; z.pos.set(pos.x, pos.y, pos.z); z.yaw = Math.atan2(-pos.x, -pos.z); entities.push(z); return z; },
+    spawnPoints: () => {
+      if (!survivalMode() || !surv || !currentMap) return null;
+      return unlockedZombieSpawns(currentMap, surv).map((s) => ({ x: s.x, z: s.z, y: groundAt(s.x, s.z, s.y + 0.35) })).filter((s) => !collides(s.x, s.y, s.z));
+    },
     removeZombie(z) { scene.remove(z.model.group); entities = entities.filter((x) => x !== z); },
     hurtPlayer(p, dmg, src) { if (!src) fogSrc.pos.set(inv.fog.cx, p.pos.y, inv.fog.cz); damage(p, dmg, src || fogSrc, src ? KNIFE : W_NADE, false); },
     hurtZombie(z, dmg, by, kind) { damage(z, dmg, by, W_NADE, false); },
@@ -7624,9 +8527,9 @@ function invEvent(ev) {
   const isMe = (id) => (online ? id === online.myId : !!player && id === player.id);
   if (k === 'wv') {
     const [, ph, w, x] = ev;
-    if (ph === 0) invBanner('🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${INV.PREP} s · troque de arma no painel (B)`);
+    if (ph === 0) invBanner('🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'troque de arma no painel (B)'}`);
     else if (ph === 1) { invBanner(`WAVE ${w}/${INV.WAVES}`, x ? '🎃 O DOCÃO ABÓBORA chegou!' : w === 1 ? 'Os zumbis estão vindo da névoa!' : 'A névoa está fechando…', !!x); sfx.incoming(0.9); invClosePick(); }
-    else if (ph === 2) { invBanner(`WAVE ${w} LIMPA!`, `Pausa de ${INV.BREAK} s · B troca de arma`); sfx.pickup(); if (player && player.alive) invOpenPick(); }
+    else if (ph === 2) { invBanner(`WAVE ${w} LIMPA!`, `Pausa de ${survOn() ? getSurvivalWaveTuning(w).gap : INV.BREAK} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}`); sfx.pickup(); if (player && player.alive) invOpenPick(); }
     else if (ph === 3) invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${INV.WAVES} waves` : `Sobreviveu até a wave ${w}`, true);
   } else if (k === 'za') { const z = ent(ev[1]); if (z) { z.atkT = gameTime; if (player && z.pos.distanceTo(player.pos) < 25) sfx.knife(distVol(z.pos) * 0.6, 'slash'); } }
   else if (k === 'zs') { const [, id, big, p, v] = ev; const m = makeSpitMesh(!!big); m.position.set(...p); scene.add(m); invGfx.projs.set(id, { m, pos: a3v(p), vel: a3v(v), born: gameTime, spit: true }); if (player) tone('sawtooth', big ? 160 : 320, big ? 90 : 140, 0.18, 0.12 * distVol(a3v(p))); }
@@ -7679,11 +8582,12 @@ function invApplyLook(on) {
   if (on) { applyHalloweenPalette(scene, hemi, sun, currentMap); fpHemi.intensity = 1.2; invGfx.hal = buildHalloween(currentMap, nav, groundAt); scene.add(invGfx.hal); }
   else { applyPalette(scene, hemi, sun, currentMap); fpHemi.intensity = currentMap.palette.stars ? 1.25 : 1.8; }
   document.body.classList.toggle('invmode', !!on); invMusicOn(!!on);
-  ['invhud', 'invPowers'].forEach((id) => $(id).classList.toggle('hidden', !on)); if (!on) document.body.classList.remove('invout', 'ghostfx'); if (!on) { $('invBoss').classList.add('hidden'); $('invOut').classList.add('hidden'); $('fogVeil').style.opacity = '0'; invClosePick(); }
+  ['invhud', 'invPowers'].forEach((id) => $(id).classList.toggle('hidden', !on)); if (!on) document.body.classList.remove('invout', 'ghostfx'); if (!on) { $('invBoss').classList.add('hidden'); $('invOut').classList.add('hidden'); $('invBanner').classList.add('hidden'); invBannerT = 0; $('fogVeil').style.opacity = '0'; invClosePick(); const sp = $('sPrompt'); if (sp) sp.classList.add('hidden'); for (const id of ['papMark', 'boxMark', 'papCard']) { const m = $(id); if (m) m.classList.add('hidden'); } $('invWaveN').textContent = 'WAVE 1/20'; $('invWaveSub').textContent = ''; const msg = $('centermsg'); if (msg) msg.style.top = ''; }
   invGfx.inv = []; invGfx.sel = 0; invRenderSlots();
 }
 // ---------- por quadro ----------
 function invTick(dt) {
+  if (survOn()) survTick(dt);
   if (!invMode()) return;
   if (!online && inv && state === 'playing') inv.step(dt);
   const v = invView(); if (!v) return;
@@ -7721,7 +8625,7 @@ function invHud(v, me, dt) {
   if (invBannerT > 0) { invBannerT -= dt; if (invBannerT <= 0) $('invBanner').classList.add('hidden'); }
   const ph = v.phase;
   $('invWaveN').textContent = ph === 'prep' ? 'PREPARAÇÃO' : `WAVE ${Math.max(1, v.wave)}/${INV.WAVES}`;
-  $('invWaveSub').textContent = ph === 'wave' ? `🧟 ${v.remaining} zumbi${v.remaining === 1 ? '' : 's'} restando` : ph === 'break' || ph === 'prep' ? `Próxima wave em ${Math.ceil(v.left)} s · B troca de arma` : ph === 'over' ? 'Fim' : '';
+  $('invWaveSub').textContent = ph === 'wave' ? `🧟 ${v.remaining} zumbi${v.remaining === 1 ? '' : 's'} restando` : ph === 'break' || ph === 'prep' ? `Próxima wave em ${Math.ceil(v.left)} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}` : ph === 'over' ? 'Fim' : '';
   $('timer').textContent = ph === 'wave' ? `🧟 ${v.remaining}` : ph === 'over' ? '—' : `${Math.ceil(v.left)} s`;
   // chefão
   const boss = v.bossId ? (online ? entOf(v.bossId) : inv && inv.zombies.find((z) => z.id === v.bossId)) : null;
@@ -7755,9 +8659,9 @@ function invRenderPick() {
   paintPair('iLoadList', 'iLoadGun', LIVE_HINT);
 }
 const invCanPick = () => { const v = invView(); return !!(invMode() && v && (v.phase === 'break' || v.phase === 'prep') && player && player.alive); };
-function invOpenPick(unlock = false) { if (!invCanPick()) return; if (unlock) { deathUnlock = true; if (document.pointerLockElement) document.exitPointerLock(); } invPick = true; document.body.classList.add('invpick'); invRenderPick(); $('iLoad').classList.remove('hidden'); window.__invPicks = (window.__invPicks || 0) + 1; }
+function invOpenPick(unlock = false) { if (survOn()) { flashMsg('No Survival a arma se compra na partida'); return; } if (!invCanPick()) return; if (unlock) { deathUnlock = true; if (document.pointerLockElement) document.exitPointerLock(); } invPick = true; document.body.classList.add('invpick'); invRenderPick(); $('iLoad').classList.remove('hidden'); window.__invPicks = (window.__invPicks || 0) + 1; }
 function invClosePick() { if (!invPick) return; invPick = false; document.body.classList.remove('invpick'); $('iLoad').classList.add('hidden'); if (state === 'playing' && player && player.alive && document.pointerLockElement !== canvas && deathUnlock) lockPointer(); }
-function invUpdatePick(v) { if (!invCanPick()) { invClosePick(); return; } const tot = v.phase === 'prep' ? INV.PREP : INV.BREAK; $('iLoadFill').style.width = (100 * v.left / tot).toFixed(1) + '%'; $('iLoadT').textContent = `wave ${v.wave + 1} em ${Math.ceil(v.left)} s`; }
+function invUpdatePick(v) { if (!invCanPick()) { invClosePick(); return; } const tot = v.phase === 'prep' ? (survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP) : (survOn() ? getSurvivalWaveTuning(Math.max(1, v.wave)).gap : INV.BREAK); $('iLoadFill').style.width = (100 * v.left / tot).toFixed(1) + '%'; $('iLoadT').textContent = `wave ${v.wave + 1} em ${Math.ceil(v.left)} s`; }
 function invEquipNow() { equipClassNow(player); }
 // Bomba, rodada nova: a sequência e os streaks guardados continuam (trocar de rodada não é morrer), mas o que estava
 // no ar acaba: o Gavião vai embora, e o míssil pilotado e o Fim da chapa ainda na contagem voltam pro banco (F de novo).
@@ -7942,6 +8846,229 @@ const bombTest = {
   skip() { if (!bombS) return; if (bombS.phase === 'planted') bombS.explodeAt = gameTime; else bombS.phaseEnd = gameTime; }, // pula a fase atual
   setRound(n, s0, s1) { const S = bombS; S.round = n; S.score = [s0, s1]; teamScore = S.score; },
 };
+// ---------- Survival: Papada, Barraca da Sorte, armas na parede (só esta variante) ----------
+let survGfx = null, survBox = { phase: 'idle', weapon: -1, until: 0, owner: 0 }, papCardT = 0;
+function survClear() {
+  if (survGfx) { for (const m of survGfx.meshes) scene.remove(m); if (survGfx.offer) scene.remove(survGfx.offer); }
+  survGfx = null; survBox = { phase: 'idle', weapon: -1, until: 0, owner: 0 };
+  const pts = $('survPts'), card = $('papCard'), pr = $('sPrompt');
+  if (pts) pts.classList.add('hidden'); if (card) card.classList.add('hidden'); if (pr) pr.classList.add('hidden');
+  for (const id of ['papMark', 'boxMark']) { const m = $(id); if (m) m.classList.add('hidden'); }
+}
+function survBuild(layout) {
+  survClear(); if (!layout) return;
+  const meshes = [];
+  const put = (mesh, p, yaw) => { mesh.position.set(p.x, (p.y || 0), p.z); mesh.rotation.y = yaw || 0; scene.add(mesh); meshes.push(mesh); return mesh; };
+  const pap = put(makePapada(), layout.papada, layout.papada.yaw);
+  const box = put(makeMysteryBox(), layout.box, layout.box.yaw);
+  const walls = layout.walls.map((w) => { const m = put(makeWallGun(WEAPONS[w.w] ? WEAPONS[w.w].short : 'Arma', fmtPts(w.price)), w, w.yaw); m.userData.wall = w; return m; });
+  survGfx = { layout, meshes, pap, box, walls, offer: null };
+}
+// Marcadores fora da tela caem no mesmo canto e cobrem o placar. Sobe um por vez até sair da HUD e um do outro.
+function unstickSurvMarks() {
+  const ids = ['papMark', 'boxMark'];
+  const blocks = [];
+  for (const id of ['score', 'tl', 'invhud', 'bottomleft', 'ammo', 'wname', 'slots', 'sPrompt', 'papCard', 'leader', 'invPowers']) {
+    const e = $(id);
+    if (!e || e.classList.contains('hidden')) continue;
+    const st = getComputedStyle(e);
+    if (st.display === 'none' || st.visibility === 'hidden') continue;
+    const r = e.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue;
+    blocks.push({ left: r.left - 18, right: r.right + 18, top: r.top - 22, bottom: r.bottom + 14 });
+  }
+  // Munição à direita, poderes à esquerda, e a arma na mão no meio de baixo.
+  blocks.push({ left: innerWidth - 500, right: innerWidth, top: innerHeight - 220, bottom: innerHeight });
+  blocks.push({ left: 0, right: 380, top: innerHeight - 340, bottom: innerHeight });
+  blocks.push({ left: innerWidth * 0.35, right: innerWidth * 0.92, top: innerHeight * 0.62, bottom: innerHeight });
+  const placed = [];
+  const hit = (a, b) => !(a.right < b.left + 2 || a.left > b.right - 2 || a.bottom < b.top + 2 || a.top > b.bottom - 2);
+  for (const id of ids) {
+    const el = $(id);
+    if (!el || el.classList.contains('hidden')) continue;
+    const w = el.offsetWidth || 96, h = el.offsetHeight || 40;
+    let x = parseFloat(el.style.left) || innerWidth / 2;
+    let y = parseFloat(el.style.top) || innerHeight / 2;
+    const box = (px, py) => ({ left: px - w / 2, right: px + w / 2, top: py - h / 2, bottom: py + h / 2 });
+    for (let n = 0; n < 14; n++) {
+      const a = box(x, y);
+      if (!blocks.some((b) => hit(a, b)) && !placed.some((b) => hit(a, b))) break;
+      y -= h + 8;
+      if (y - h / 2 < 8) { y = innerHeight - h / 2 - 8 - (n % 3) * (h + 8); x += w + 12; }
+    }
+    x = Math.max(w / 2 + 4, Math.min(innerWidth - w / 2 - 4, x));
+    y = Math.max(h / 2 + 4, Math.min(innerHeight - h / 2 - 4, y));
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    placed.push(box(x, y));
+  }
+}
+function survNearest() {
+  if (!survGfx || !player) return null;
+  const spots = [{ kind: 'pap', p: survGfx.layout.papada, mesh: survGfx.pap }, { kind: 'box', p: survGfx.layout.box, mesh: survGfx.box }, ...survGfx.walls.map((m, i) => ({ kind: 'wall', p: survGfx.layout.walls[i], mesh: m, i }))];
+  let best = null, bd = SURV.reach;
+  for (const s of spots) { const d = Math.hypot(player.pos.x - s.p.x, player.pos.z - s.p.z); if (d < bd && Math.abs(player.pos.y - (s.p.y || 0)) < 2.4) { bd = d; best = s; } }
+  return best;
+}
+function survDenied(ev) {
+  const why = ev[1];
+  const cost = ev[2] | 0, have = ev[3] | 0;
+  if (why === 'pontos') flashMsg(`Falta dinheiro · ${fmtPts(have)} / ${fmtPts(cost)} pts`);
+  else if (why === 'max') flashMsg('Essa arma já está na Pururuca (tier 3)');
+  else if (why === 'lamina') flashMsg('A Papada não pega em lâmina');
+  else if (why === 'escudo') flashMsg('A tampa não entra no espeto');
+  else if (why === 'especial') flashMsg('Essa arma não passa na Papada');
+  else if (why === 'cozinha') flashMsg('A arma ainda está na brasa');
+  else if (why === 'cheia') flashMsg('Munição já está cheia');
+  else if (why === 'ocupada') flashMsg('A barraca já está girando');
+  else if (why === 'longe') flashMsg('Chega mais perto');
+  else if (why === 'padrao') flashMsg('A loja só existe no Survival');
+}
+function survShowCard(title, text) {
+  const card = $('papCard'); if (!card) return;
+  card.innerHTML = `<b>${escapeHtml(title)}</b><span>${escapeHtml(text)}</span>`;
+  card.classList.remove('hidden'); papCardT = 4.5;
+}
+function survApplyGun(e, weapon) {
+  if (!e.mag) return;
+  const g = withPap(WEAPONS[weapon], papTierOf(e, weapon));
+  e.mag[weapon] = g.mag; e.reserve[weapon] = g.reserve;
+}
+function survPaintHeld() {
+  if (!player || !fp || !fp.guns) return;
+  const tier = papTierOf(player, player.weapon);
+  const g = fp.guns[player.weapon];
+  if (g && (g.userData.papTier | 0) !== tier) { g.userData.papTier = tier; applyWeaponCamo(g, tier); }
+}
+function survUse() {
+  const hit = survNearest(); if (!hit || !player.alive) return;
+  if (hit.kind === 'pap') {
+    if (online) { netEv(['sv', 'pap']); return; }
+    const r = tryPap(player, WEAPONS, gameTime);
+    if (!r.ok) { survDenied(['svno', r.reason, r.cost, r.have, r.tier]); return; }
+    player.papGun = r.weapon; player.papUntil = gameTime + SURV.cook;
+    survShowCard(`${PAPADA_NAME} ${r.tier}/3 · ${r.line.name}`, r.line.text);
+    return;
+  }
+  if (hit.kind === 'box') {
+    if (survBox.phase === 'offer' && survBox.owner === (online ? online.myId : player.id)) {
+      if (online) netEv(['sv', 'take']);
+      else { const got = takeBox(player, survBox.weapon); survApplyGun(player, got.weapon); setWeapon(player, player.weapon); survBox = { phase: 'idle', weapon: -1, until: 0, owner: 0 }; flashMsg(`Pegou ${WEAPONS[got.weapon].short}`); }
+      return;
+    }
+    if (survBox.phase !== 'idle') { flashMsg('A barraca já está girando'); return; }
+    if (online) { netEv(['sv', 'box']); return; }
+    const pay = tryBoxPay(player);
+    if (!pay.ok) { survDenied(['svno', pay.reason, pay.cost, pay.have]); return; }
+    const weapon = rollBox(Math.random, player.weapon);
+    survBox = { phase: 'spin', weapon, until: gameTime + SURV.boxSpin, owner: player.id };
+    return;
+  }
+  if (hit.kind === 'wall') {
+    if (online) { netEv(['sv', 'wall', hit.i]); return; }
+    const r = tryWall(player, hit.p);
+    if (!r.ok) { survDenied(['svno', r.reason, r.cost, r.have]); return; }
+    survApplyGun(player, r.weapon); setWeapon(player, player.weapon);
+    flashMsg(r.kind === 'ammo' ? `Munição · -${fmtPts(r.cost)}` : `${WEAPONS[r.weapon].short} · -${fmtPts(r.cost)}`);
+  }
+}
+function survNet(ev) {
+  const k = ev[0];
+  if (k === 'spts') {
+    const who = online ? entOf(ev[1]) : null;
+    if (who) who.pts = ev[2];
+    if (player && ev[1] === (online ? online.myId : player.id)) { player.pts = ev[2]; player.points = ev[2]; if (ev[3]) feedbackAward(ev[3]); refreshSurvPts(); }
+  } else if (k === 'spap') {
+    const who = entOf(ev[1]); if (who) { if (!who.pap) who.pap = {}; who.pap[ev[2]] = ev[3]; who.pts = ev[4]; who.papGun = ev[2]; who.papUntil = ev[7]; }
+    if (player && ev[1] === online.myId) { survApplyGun(player, ev[2]); survShowCard(`${PAPADA_NAME} ${ev[3]}/3`, ev[6] || ''); }
+  } else if (k === 'sgun') {
+    const who = entOf(ev[1]); if (!who) return;
+    who.slots = [ev[2], ev[3], who.slots ? who.slots[2] : KNIFE]; who.slotOn = [1, ev[4] ? 1 : 0, 1]; who.weapon = ev[5]; who.pts = ev[6];
+    if (!who.mag) who.mag = WEAPONS.map((w) => w.mag);
+    if (!who.reserve) who.reserve = WEAPONS.map((w) => w.reserve);
+    survApplyGun(who, who.slots[0]); if (who.slotOn[1]) survApplyGun(who, who.slots[1]);
+    setWeapon(who, who.weapon);
+    if (who === player && ev[8]) flashMsg(ev[8] === 'ammo' ? 'Munição cheia' : `Nova arma: ${WEAPONS[who.weapon].short}`);
+  } else if (k === 'sbox') {
+    survBox = { phase: ev[1], weapon: ev[2], until: ev[3], owner: ev[4] };
+    if (player && ev[4] === online.myId && ev[5]) player.pts = ev[5];
+    if (ev[1] === 'idle' && survGfx && survGfx.offer) { scene.remove(survGfx.offer); survGfx.offer = null; }
+  }
+}
+function parkSurvFlash(open) {
+  const msg = $('centermsg');
+  if (msg) msg.style.top = open ? '42%' : '';
+}
+function survPrompt(hit) {
+  const el = $('sPrompt'); if (!el) return;
+  if (!hit || state !== 'playing' || !player || !player.alive) { el.classList.add('hidden'); parkSurvFlash(false); return; }
+  const segure = `Segure ${SURV.useLabel}`;
+  let p1 = '', p2 = '';
+  if (hit.kind === 'pap') {
+    const w = WEAPONS[player.weapon], why = papRefuse(w), tier = papTierOf(player, player.weapon);
+    if (player.papUntil > gameTime && player.papGun === player.weapon) { p1 = `${PAPADA_NAME} · na brasa`; p2 = 'espera a arma voltar'; }
+    else if (why === 'lamina') { p1 = PAPADA_NAME; p2 = 'lâmina não entra'; }
+    else if (why) { p1 = PAPADA_NAME; p2 = 'essa arma não entra'; }
+    else if (tier >= 3) { p1 = `${PAPADA_NAME} · tier 3`; p2 = statLine(w, 2, 3).text; }
+    else { const cost = [10000, 25000, 50000][tier], line = statLine(w, tier, tier + 1); p1 = `${PAPADA_NAME} ${tier ? '· tier ' + tier : ''} · ${fmtPts(cost)} pts`; p2 = `${line.text}${player.pts < cost ? ` · falta ${fmtPts(cost - (player.pts | 0))}` : ` · ${segure}`}`; }
+  } else if (hit.kind === 'box') {
+    if (survBox.phase === 'spin') { p1 = BOX_NAME; p2 = 'girando…'; }
+    else if (survBox.phase === 'offer') { p1 = `${BOX_NAME} · ${WEAPONS[survBox.weapon] ? WEAPONS[survBox.weapon].short : ''}`; p2 = survBox.owner === (online ? online.myId : player.id) ? `${segure} pra pegar` : 'esperando quem girou'; }
+    else { p1 = `${BOX_NAME} · ${fmtPts(SURV.boxPrice)} pts`; p2 = (player.pts | 0) < SURV.boxPrice ? `falta ${fmtPts(SURV.boxPrice - (player.pts | 0))}` : segure; }
+  } else {
+    const wall = hit.p, name = WEAPONS[wall.w] ? WEAPONS[wall.w].name : 'Arma';
+    const on = player.slotOn || [1, 1, 1];
+    const owns = player.slots && ((on[0] && player.slots[0] === wall.w) || (on[1] && player.slots[1] === wall.w));
+    const need = owns && needsAmmo(player, wall.w);
+    const cost = owns ? wall.ammo : wall.price;
+    p1 = owns && !need ? name : `${name} · ${fmtPts(cost)} pts`;
+    p2 = !owns ? ((player.pts | 0) < cost ? `falta ${fmtPts(cost - (player.pts | 0))}` : segure) : need ? ((player.pts | 0) < cost ? `munição · falta ${fmtPts(cost - (player.pts | 0))}` : `munição · ${segure}`) : 'munição cheia';
+  }
+  el.classList.remove('hidden'); el.querySelector('.bp1').innerHTML = p1; el.querySelector('.bp2').innerHTML = p2;
+  parkSurvFlash(true);
+}
+function survTick(dt) {
+  if (!survOn()) { if ($('sPrompt')) $('sPrompt').classList.add('hidden'); if ($('survPts')) $('survPts').classList.add('hidden'); return; }
+  const pts = $('survPts'); if (pts) { pts.classList.remove('hidden'); pts.textContent = `${fmtPts(player ? player.pts : 0)} pts`; }
+  if (papCardT > 0) { papCardT -= dt; if (papCardT <= 0 && $('papCard')) $('papCard').classList.add('hidden'); }
+  if (!online && survBox.phase === 'spin' && gameTime >= survBox.until) survBox = { ...survBox, phase: 'offer', until: gameTime + SURV.boxHold };
+  if (!online && survBox.phase === 'offer' && gameTime >= survBox.until) survBox = { phase: 'idle', weapon: -1, until: 0, owner: 0 };
+  if (survGfx) {
+    tickStation(survGfx.pap, gameTime, 'on'); tickStation(survGfx.box, gameTime, survBox.phase);
+    const show = survBox.phase === 'offer' || survBox.phase === 'spin';
+    const want = survBox.weapon | 0;
+    if (show && (!survGfx.offer || survGfx.offer.userData.w !== want)) {
+      if (survGfx.offer) scene.remove(survGfx.offer);
+      survGfx.offer = WEAPONS[want] && WEAPONS[want].ray ? makeRayOffer() : makeOfferGun();
+      survGfx.offer.userData.w = want; scene.add(survGfx.offer);
+    }
+    if (survGfx.offer) {
+      const b = survGfx.layout.box; survGfx.offer.visible = show; survGfx.offer.position.set(b.x, (b.y || 0), b.z); tickStation(survGfx.offer, gameTime);
+      if (!show) { scene.remove(survGfx.offer); survGfx.offer = null; }
+    }
+  }
+  const hit = player && player.alive ? survNearest() : null;
+  survPrompt(hit);
+  if (player && hit && keys[SURV.use]) {
+    if (!player.survHoldAt) player.survHoldAt = gameTime;
+    if (gameTime - player.survHoldAt >= SURV.hold && !player.survFired) { player.survFired = true; survUse(); }
+  } else if (player) { player.survHoldAt = 0; player.survFired = false; }
+  if (survGfx && player && player.alive) {
+    const pin = (id, p, color) => {
+      const el = $(id); if (!el) return;
+      const d = Math.hypot(player.pos.x - p.x, player.pos.z - p.z);
+      if (d < 4) { el.classList.add('hidden'); return; }
+      placeMark(el, new V3(p.x, (p.y || 0) + 2.8, p.z), color, Math.round(d) + ' m');
+    };
+    pin('papMark', survGfx.layout.papada, '#ff7a18');
+    pin('boxMark', survGfx.layout.box, '#ffd24a');
+    unstickSurvMarks();
+  } else {
+    for (const id of ['papMark', 'boxMark']) { const m = $(id); if (m) m.classList.add('hidden'); }
+  }
+  survPaintHeld();
+  if (player && player.papUntil && gameTime >= player.papUntil && player.papGun === player.weapon) { player.papUntil = 0; survPaintHeld(); }
+}
 function invKey(e) { // teclas da Invasão; true = consumiu
   if (!invMode() || state !== 'playing' || !player || e.repeat) return false;
   if (e.code === KEYS.use && !invPick) { if (!emote.on) invUsePower(); return true; }
@@ -7959,11 +9086,11 @@ function invEndText() {
 
 // ganchos para testes automatizados
 window.__docao = { get state() { return state; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
-  set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible }; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); },
-  MAPS, loadMap, selectMap, get map() { return currentMap; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
+  set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible }; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get noclip() { return noclipLive(); }, get noclipSpeed() { return noclipSpeed; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); },
+  MAPS, loadMap, selectMap, get map() { return currentMap; }, get gas() { return gasSim ? gasSim.list.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, r: c.r, h: c.h, hp: +c.hp.toFixed(1), phase: c.phase, explodeAt: +c.explodeAt.toFixed(2), respawnAt: +c.respawnAt.toFixed(2) })) : []; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
   get online() { return online; }, joinRoom, leaveOnline, netEv,
   get mode() { return mode; }, get botDiff() { return botDiff; }, get zone() { return zone; }, set zone(v) { zone = v; }, get teamScore() { return teamScore; }, get spawnHold() { return spawnHold; }, get selectedPrimary() { return selectedPrimary; },
-  ARMS_STAGES, GOLD_KNIFE, equipArmsLocal, get armsWinner() { return armsWinner; }, DOM, applyTeam, damage, respawn: (e) => respawn(e), get discs() { return discs; }, fire, get lastTrace() { return window.__lastTrace; }, get holeCount() { return holes.length; }, get PHYS() { return PHYS; }, bulletHole, get eggs() { return eggs; }, get eggStains() { return eggStains.length; }, get eggSplat() { return Math.max(0, eggSplatUntil - gameTime); }, launchEgg: (e, o, d, k) => launchEgg(e, new V3(...o), new V3(...d).normalize(), k), fpGunNames: () => fp.guns.map((g) => g.name || ''), EGG_W, get effects() { return effects; }, fpGunEgg: () => { const e = fp.sling.userData.egg; return { vis: e.visible, y: +e.position.y.toFixed(3), z: +e.position.z.toFixed(3), pouchZ: +fp.sling.userData.pouch.position.z.toFixed(3) }; }, grantPokeball, get pokeFx() { return pokeFx; }, grantMinigun: () => grantMinigun(), MINIGUN, get mini() { const p = player; return p ? { spin: p.mgSpin || 0, heat: p.mgHeat || 0, hot: !!p.mgHot, firing: !!p.mgFiring, rot: fp.mini ? fp.mini.barrels.rotation.z : 0, glow: fp.mini ? fp.mini.glowMat.opacity : 0, glowOn: !!(fp.mini && fp.mini.glow.visible), shots: window.__mgShots || 0, steam: window.__mgSteam || 0, fov: camera.fov, guns: fp.guns.length, drops: fp.drops.length, hud: !document.getElementById('mgHud')?.hidden } : null; }, setMgHeat: (h) => { if (player) player.mgHeat = h; }, get fpSaberSide() { return fp.saberSide || 0; }, inspect: () => startInspect(player), stopInspect: () => stopInspect(true), get inspecting() { const s = fp.ins; return s ? { t: s.t, wpn: s.wpn, kind: s.kind, out: s.out, fade: s.fade, hold: s.hold } : null; },
+  ARMS_STAGES, GOLD_KNIFE, equipArmsLocal, get armsWinner() { return armsWinner; }, DOM, applyTeam, damage, respawn: (e) => respawn(e), get discs() { return discs; }, get rays() { return rays; }, armRay: (tier = 0) => { const p = player; if (!p) return; if (!p.slotOn) p.slotOn = [1, 1, 1]; p.slotOn[1] = 1; p.slots[1] = RAY; p.secondary = RAY; if (!p.pap) p.pap = {}; p.pap[RAY] = tier | 0; if (!p.mag || p.mag.length < WEAPONS.length) p.mag = WEAPONS.map((w) => w.mag); if (!p.reserve || p.reserve.length < WEAPONS.length) p.reserve = WEAPONS.map((w) => w.reserve); const g = withPap(WEAPONS[RAY], tier | 0); p.mag[RAY] = g.mag; p.reserve[RAY] = g.reserve; switchWeapon(p, RAY); setWeapon(p, RAY); p.switchEnd = gameTime; }, showBox: (w) => { survBox = { phase: 'offer', weapon: w, until: gameTime + 40, owner: player ? player.id : 0 }; }, get survLayout() { return survGfx && survGfx.layout; }, shootRay: () => { if (!player) return; const dir = new V3(0, 0, -1).applyQuaternion(camera.quaternion); launchRay(player, camera.localToWorld(new V3(0.06, -0.04, -0.15)), dir); }, fire, get lastTrace() { return window.__lastTrace; }, get holeCount() { return holes.length; }, get PHYS() { return PHYS; }, bulletHole, get eggs() { return eggs; }, get eggStains() { return eggStains.length; }, get eggSplat() { return Math.max(0, eggSplatUntil - gameTime); }, launchEgg: (e, o, d, k) => launchEgg(e, new V3(...o), new V3(...d).normalize(), k), fpGunNames: () => fp.guns.map((g) => g.name || ''), EGG_W, get effects() { return effects; }, fpGunEgg: () => { const e = fp.sling.userData.egg; return { vis: e.visible, y: +e.position.y.toFixed(3), z: +e.position.z.toFixed(3), pouchZ: +fp.sling.userData.pouch.position.z.toFixed(3) }; }, grantPokeball, get pokeFx() { return pokeFx; }, grantMinigun: () => grantMinigun(), MINIGUN, get mini() { const p = player; return p ? { spin: p.mgSpin || 0, heat: p.mgHeat || 0, hot: !!p.mgHot, firing: !!p.mgFiring, rot: fp.mini ? fp.mini.barrels.rotation.z : 0, glow: fp.mini ? fp.mini.glowMat.opacity : 0, glowOn: !!(fp.mini && fp.mini.glow.visible), shots: window.__mgShots || 0, steam: window.__mgSteam || 0, fov: camera.fov, guns: fp.guns.length, drops: fp.drops.length, hud: !document.getElementById('mgHud')?.hidden } : null; }, setMgHeat: (h) => { if (player) player.mgHeat = h; }, get fpSaberSide() { return fp.saberSide || 0; }, inspect: () => startInspect(player), stopInspect: () => stopInspect(true), get inspecting() { const s = fp.ins; return s ? { t: s.t, wpn: s.wpn, kind: s.kind, out: s.out, fade: s.fade, hold: s.hold } : null; },
   fpPumpZ: () => +fp.pumpPart.position.z.toFixed(3), get shake() { return shake; },
   fpHands: () => ({ arms: fp.fpRef.arms.visible, armsP: fp.fpRef.armsP.visible, pump: fp.pumpHand.visible, saberR: !!fp.fpRef.saberR && fp.fpRef.saberR.visible, saberL: !!fp.fpRef.saberL && fp.fpRef.saberL.visible, bowGrip: !!fp.fpRef.bowGrip && fp.fpRef.bowGrip.visible, bowDraw: !!fp.fpRef.bowDraw && fp.fpRef.bowDraw.visible, kr: fp.kr.visible, knifeFlip: fp.kpiv.rotation.x }),
   fpCross: () => { const g = fp.guns[CROSS]; fp.root.updateMatrixWorld(true); const w = (v) => g.localToWorld(v.clone()), h = fp.fpRef.bowDraw.getWorldPosition(new V3()); const tip = w(new V3(0, 0.05, -0.44)).project(fpCam), lt = w(new V3(-0.24, 0.14, -0.46)).project(fpCam), butt = w(new V3(0, -0.01, 0.33)); return { tip: [tip.x, tip.y], limbL: [lt.x, lt.y], butt: butt.toArray(), fore: h.distanceTo(w(g.userData.fore)), knot: h.distanceTo(w(g.userData.draw)) }; },
@@ -8009,7 +9136,7 @@ window.__docao = { get state() { return state; }, toMenu: () => toMenu(), benchO
   },
   setSecondary, REV, REV2,
   // Invasão 🎃
-  get inv() { return inv; }, get invView() { return invView(); }, get invInv() { return invGfx.inv.slice(); }, get invSel() { return invGfx.sel; }, get invDrops() { return [...invGfx.drops.keys()]; }, get invPick() { return invPick; },
+  get inv() { return inv; }, get surv() { return survGfx ? survGfx.layout : null; }, get survOn() { return survOn(); }, get invView() { return invView(); }, get invInv() { return invGfx.inv.slice(); }, get invSel() { return invGfx.sel; }, get invDrops() { return [...invGfx.drops.keys()]; }, get invPick() { return invPick; },
   invUse: () => invUsePower(), invCycle: () => invCycle(), invOpenPick: () => invOpenPick(), invEquipNow, INV, POWERS, ZOMBIES, INV_MAPS, makeZombieEnt, get invHal() { return invGfx.hal; }, get invMusic() { return invMusic && { on: invMusic.on, level: invMusic.level }; },
   invGive: (list) => { if (inv && player) { player.inv = list.slice(0, INV.INV_MAX); invSetInv(player.inv.map((k) => POWER_KEYS.indexOf(k))); } else if (online) online.net.send({ t: 'testInv', give: list }); },
   bomb: bombTest,

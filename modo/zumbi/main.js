@@ -2375,7 +2375,8 @@ function ensureGunnerHud() {
 #gunnerHud .gh-x.mini::before,#gunnerHud .gh-x.mini::after{content:"";position:absolute;background:#e8fbff;box-shadow:0 0 0 1px #000}
 #gunnerHud .gh-x.mini::before{left:50%;top:50%;width:4px;height:4px;border-radius:50%;transform:translate(-50%,-50%)}
 #gunnerHud .gh-x.mini::after{display:none}
-#gunnerHud .gh-scope{position:absolute;inset:0;background:radial-gradient(circle at center,transparent 0 min(34vh,34vw),#0b0b0b calc(min(34vh,34vw) + 3px))}
+#gunnerHud .gh-scope{position:absolute;inset:0;background:transparent;pointer-events:none}
+#gunnerHud .gh-scope::before{content:"";position:absolute;inset:0;background:rgba(6,8,10,.62);-webkit-backdrop-filter:blur(14px) saturate(.72);backdrop-filter:blur(14px) saturate(.72);--hole:min(34vh,34vw);-webkit-mask-image:radial-gradient(circle at center,transparent 0 var(--hole),#000 calc(var(--hole) + 8px));mask-image:radial-gradient(circle at center,transparent 0 var(--hole),#000 calc(var(--hole) + 8px))}
 #gunnerHud .gh-x.sniper{width:min(68vh,68vw);height:min(68vh,68vw)}
 #gunnerHud .gh-x.sniper::before,#gunnerHud .gh-x.sniper::after{content:"";position:absolute;background:#111}
 #gunnerHud .gh-x.sniper::before{left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%)}
