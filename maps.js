@@ -1343,6 +1343,8 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   }
   // Colisor da árvore, sem malha. O pinheiro desenhado está em nevasca-show.js.
   boxes.push({ b: [-1.55, 0, -1.55, 1.55, 5.7, 1.55], hide: true, c: '#1d4a28' });
+  // Tronco da árvore do telhado. A base encosta na laje (y = 6,8). Sem malha.
+  boxes.push({ b: [-0.85, 6.8, -0.85, 0.85, 12.4, 0.85], hide: true, c: '#1d4a28' });
   // Guarda do vão da escada no mezanino, do lado do salão. A árvore ocupa o vão do centro.
   const holeRail = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2, H));
   holeRail(-10.2, -7.85, -6.4, -7.7);
@@ -1365,24 +1367,57 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     lip(1.5, s * 35.9, 11.85, s * 36.08);
   }
 
-  // Passarela: piso na cota do mezanino, guarda contínuo, postes no vazio.
+  // Passarela: piso na cota do mezanino. Guarda nos dois lados, alto o bastante para o pulo (1,50 m) não passar.
   const span = (sign) => {
     const x0 = sign < 0 ? -18.9 : 16.3, x1 = sign < 0 ? -16.3 : 18.9, y = H, zA = -28, zB = 28;
     boxes.push(B(x0, zA, x1, zB, 0.16, WOOD, y - 0.16));
-    // Sem guarda: as duas passarelas laterais são a rota perigosa. Cair delas mata.
     for (let z = -26; z <= 26; z += 8) {
       boxes.push(B(x0 + 0.02, z, x0 + 0.14, z + 0.12, y + 18, METAL2, -18));
       boxes.push(B(x1 - 0.14, z, x1 - 0.02, z + 0.12, y + 18, METAL2, -18));
+    }
+    const rail = (xa, za, xb, zb) => {
+      const xA = Math.min(xa, xb), xB = Math.max(xa, xb), zA0 = Math.min(za, zb), zB0 = Math.max(za, zb);
+      boxes.push(B(xA, zA0, xB, zB0, 0.1, WOOD, y + 0.9));
+      boxes.push(B(xA, zA0, xB, zB0, 0.12, '#d5dbe2', y + 1.92));
+      boxes.push(B(xA, zA0, xB, zB0, 0.08, '#c0392b', y + 2.04));
+    };
+    const post = (x, z) => boxes.push(B(x - 0.06, z - 0.06, x + 0.06, z + 0.06, 2.12, WOOD, y));
+    const outerX = sign < 0 ? x0 + 0.06 : x1 - 0.06;
+    const innerX = sign < 0 ? x1 - 0.06 : x0 + 0.06;
+    rail(outerX - 0.05, zA, outerX + 0.05, zB);
+    rail(x0, zA, x1, zA + 0.1);
+    rail(x0, zB - 0.1, x1, zB);
+    for (let z = zA + 1.6; z < zB; z += 2.4) post(outerX, z);
+    // O lado de dentro abre só na ponte, na escada lateral e nas escadas das pontas.
+    const gaps = [[-27.6, -24.2], [-7.6, -3.2], [3.2, 7.6], [8.8, 11.6], [24.2, 27.6]];
+    let gz = zA;
+    for (const [a, b] of gaps) {
+      if (a > gz + 0.3) rail(innerX - 0.05, gz, innerX + 0.05, a);
+      gz = Math.max(gz, b);
+    }
+    if (gz < zB - 0.3) rail(innerX - 0.05, gz, innerX + 0.05, zB);
+    for (let z = zA + 1.6; z < zB; z += 2.4) {
+      if (!gaps.some(([a, b]) => z > a && z < b)) post(innerX, z);
     }
     const wall = sign < 0 ? -11.05 : 11.05;
     const edge = sign < 0 ? x1 : x0;
     for (const zc of [-5.4, 5.4]) {
       const bx0 = Math.min(wall, edge), bx1 = Math.max(wall, edge);
       boxes.push(B(bx0, zc - 2.05, bx1, zc + 2.05, 0.16, METAL, y - 0.16));
+      rail(bx0, zc - 2.05, bx1, zc - 1.9);
+      rail(bx0, zc + 1.9, bx1, zc + 2.05);
       wps.push([sign * 13.6, y + 0.2, zc], [sign * 11.3, y + 0.2, zc]);
     }
-    // escada do térreo, só na porta do meio. O patamar não segue pra norte nem pra sul.
-    flight(sign < 0 ? -16.3 : 11.2, sign < 0 ? -11.2 : 16.3, -1.35, 1.35, y, 0);
+    // Patamar reto na boca da porta. A escada começa mais à frente, longe da parede e da visão.
+    const near = sign < 0 ? -11.55 : 11.55, far = sign < 0 ? -15.2 : 15.2;
+    boxes.push(B(Math.min(near, far), -2.15, Math.max(near, far), 2.15, 0.22, METAL, -0.22));
+    boxes.push(B(Math.min(near, sign < 0 ? -12.7 : 12.7), 2.15, Math.max(near, sign < 0 ? -12.7 : 12.7), 9.4, 0.22, METAL, -0.22));
+    boxes.push(B(Math.min(near, sign < 0 ? -13.4 : 13.4), 8.6, Math.max(near, sign < 0 ? -13.4 : 13.4), 11.5, 0.22, METAL, -0.22));
+    const sx0 = sign < 0 ? -16.25 : 16.25, sx1 = sign < 0 ? -13.05 : 13.05;
+    flight(sx0, sx1, 9.35, 11.25, y, 0);
+    posts(sx0, 9.26, sign < 0 ? -14.8 : 14.8, 9.26, y, y * 0.45, 2);
+    posts(sx0, 11.34, sx1, 11.34, y, 0, 3);
+    wps.push([sign * 13.2, 0.3, 0], [sign * 13.2, 0.3, 8.6], [sign * 14.5, y + 0.2, 9.5]);
     // sobe do platô (x ±12) até a passarela, no norte e no sul
     flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, 24.5, 27.3, sign < 0 ? y : 0, sign < 0 ? 0 : y);
     flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, -27.3, -24.5, sign < 0 ? y : 0, sign < 0 ? 0 : y);

@@ -28,6 +28,13 @@ function cabin() {
   parapet(g, hx - thick / 2, -(hz - jamb / 2), thick, jamb, metal);
   const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.15, 0.08), new THREE.MeshToonMaterial({ color: 0x2a3138 }));
   hanger.position.set(0, 2.85, 0); g.add(hanger);
+  const glass = new THREE.MeshBasicMaterial({ color: 0xb7e0ea, toneMapped: false });
+  for (const z of [1, -1]) {
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(hx * 1.15, 0.62), glass);
+    w.position.set(0, 0.82, z * (hz + 0.01));
+    if (z < 0) w.rotation.y = Math.PI;
+    g.add(w);
+  }
   return g;
 }
 function xmasTree() {
@@ -60,6 +67,34 @@ function xmasTree() {
     rib.position.set(x, h, z); g.add(rib);
   });
   g.name = 'xmas-tree';
+  return g;
+}
+function roofTree() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshToonMaterial({ color: 0x5c3a22 });
+  const green = new THREE.MeshToonMaterial({ color: 0x1d6b32 });
+  const snow = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.7, 0.42, 8), new THREE.MeshToonMaterial({ color: 0xf4f8fb }));
+  snow.position.y = 0.21; g.add(snow);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.58, 0.46, 7), new THREE.MeshToonMaterial({ color: 0x8d3a32 }));
+  pot.position.y = 0.48; g.add(pot);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.36, 1.05, 6), wood);
+  trunk.position.y = 1.1; g.add(trunk);
+  for (let i = 0; i < 5; i++) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.15 - i * 0.32, 1.5, 8), green);
+    cone.position.y = 1.85 + i * 0.98; g.add(cone);
+  }
+  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.42), emissive(0xffe27a));
+  star.position.y = 6.55; g.add(star);
+  const cols = [0xff2a2a, 0xf2c94c, 0x4aa3ff, 0xff7ad1, 0xffffff];
+  for (let i = 0; i < 20; i++) {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), emissive(cols[i % cols.length]));
+    const tier = i % 5;
+    const a = i * 1.7;
+    ball.position.set(Math.cos(a) * (1.55 - tier * 0.24), 2.15 + tier * 0.85, Math.sin(a) * (1.55 - tier * 0.24));
+    g.add(ball);
+  }
+  g.position.set(0, 6.8, 0);
+  g.name = 'roof-tree';
   return g;
 }
 function liftCar() {
@@ -469,6 +504,12 @@ export function mountNevasca(group, map) {
   const lifts = [liftCar(), liftCar()];
   lifts.forEach((c) => root.add(c));
   root.add(xmasTree());
+  root.add(roofTree());
+  [[2.3, 1.5, 0xc0392b], [-2.5, 1.2, 0x1f6b32], [1.3, -2.3, 0x3d7ec4], [-1.7, -1.9, 0xf2c94c]].forEach(([x, z, hex]) => {
+    const p = gift(0.72, 0.42, 0.55, hex);
+    p.position.set(x, 7.01, z);
+    root.add(p);
+  });
 
   const bulbs = [];
   const wire = new THREE.MeshToonMaterial({ color: 0x2a3138 });
@@ -493,10 +534,10 @@ export function mountNevasca(group, map) {
   hang(11.22, 6.35, -12.2, 11.22, 6.35, 12.2, 16);
   hang(-11.2, 4.35, -12.22, 11.2, 4.35, -12.22, 14);
   hang(-11.2, 4.35, 12.22, 11.2, 4.35, 12.22, 14);
-  hang(-17.75, 4.32, -28, -17.75, 4.32, 28, 22);
-  hang(17.75, 4.32, -28, 17.75, 4.32, 28, 22);
-  hang(-16.45, 4.32, -28, -16.45, 4.32, 28, 22);
-  hang(16.45, 4.32, -28, 16.45, 4.32, 28, 22);
+  hang(-18.84, 5.55, -28, -18.84, 5.55, 28, 26);
+  hang(18.84, 5.55, -28, 18.84, 5.55, 28, 26);
+  hang(-16.36, 5.55, -28, -16.36, 5.55, 28, 26);
+  hang(16.36, 5.55, -28, 16.36, 5.55, 28, 26);
   hang(GONDOLA.x[0], 12.55, 32, GONDOLA.x[0], 12.55, -32, 26);
   hang(GONDOLA.x[1], 12.55, 32, GONDOLA.x[1], 12.55, -32, 26);
   // Por dentro: embaixo do mezanino (laje em 3,10) e embaixo do teto.
