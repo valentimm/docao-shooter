@@ -370,6 +370,21 @@ Object.assign(SHIRT_DETAILS, {
     x.fillStyle = c; x.fillRect(0, y, W, h * 0.6);
     x.beginPath(); x.moveTo(0, y); for (let k = 0; k <= W; k += 32) { x.lineTo(k + 16, y - h); x.lineTo(k + 32, y); } x.closePath(); x.fill();
   },
+  backNumber(x, d, PT, W) { // nome + número de camisa nas costas (th = ±π fica na emenda: desenha nas duas pontas)
+    const c = d.color || '#f4f4f4';
+    x.save(); x.fillStyle = c; x.textAlign = 'center'; x.textBaseline = 'middle';
+    if (d.outline) { x.strokeStyle = d.outline; x.lineJoin = 'round'; }
+    for (const th of [Math.PI, -Math.PI]) {
+      const [nx, ny] = PT(th, d.nameY || 1.02), [cx, cy] = PT(th, d.numY || 0.66);
+      x.font = `900 ${d.nameSize || 34}px Arial Black, Arial, sans-serif`;
+      if (d.outline) { x.lineWidth = 6; x.strokeText(d.name || '', nx, ny); }
+      x.fillText(d.name || '', nx, ny);
+      x.font = `900 ${d.numSize || 96}px Arial Black, Arial, sans-serif`;
+      if (d.outline) { x.lineWidth = 8; x.strokeText(String(d.number ?? ''), cx, cy); }
+      x.fillText(String(d.number ?? ''), cx, cy);
+    }
+    x.restore();
+  },
   jersey(x, d, PT) { // camisa de futebol branca: risquinhas verticais finas, gola V preta, trevo (esq.) e escudo (dir.)
     x.save();
     const cols = d.stripes || ['#2a2a2e', '#c9a23a', '#2a2a2e', '#b8202a'];
@@ -847,4 +862,8 @@ Object.assign(PARTS, {
     for (const s of [-1, 1]) { const ns = M(new THREE.SphereGeometry(0.04, 12, 8), basic('#120c08'), head, 0); ns.position.set(s * 0.1, 1.45, sp.z + 0.215); ns.scale.set(1, 1.3, 0.5); }
     g.position.set(0, 1.52, -0.02); return onHead(g);
   },
+});
+// ---------- Docão Él Big: rabinho some pra não cobrir o BIG 67 das costas ----------
+Object.assign(PARTS, {
+  hideTail(o, rig) { if (rig.tail) rig.tail.visible = false; },
 });
