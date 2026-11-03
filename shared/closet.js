@@ -198,6 +198,17 @@ ITEMS.push(
       { type: 'shoes', color: '#5a3518', sole: '#2a1a10', strap: '#3a2414' },
     ] } },
 );
+// Docão Él Big: bonezinho preto, jaqueta escura e camisa com BIG 67 nas costas. Fantasia paga do Brechó.
+ITEMS.push(
+  { id: 'c20', name: 'Él Big', emoji: '🧢', price: 1200, line: 'Bonezinho preto e camisa escura com BIG 67 nas costas', costume: {
+    shirt: { color: '#1c1c20', trim: '#0e0e10', sleeveColor: '#26262b', details: [{ type: 'backNumber', name: 'BIG', number: 67, color: '#f4f4f4', outline: '#c9a23a', nameY: 0.92, nameSize: 44, numY: 0.62, numSize: 96 }] },
+    pants: '#2a2f3a',
+    parts: [
+      { type: 'cap', color: '#141416', brim: '#0c0c0e', scale: 1.1, lift: 0.04 },
+      { type: 'hideTail' },
+      { type: 'shoes', color: '#f4f4f4', sole: '#141416', strap: '#141416' },
+    ] } },
+);
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
   { id: 'd1', name: 'Escovinha', emoji: '🪥', price: 400, dance: 'floss', line: 'Braços varrendo o quadril' },
