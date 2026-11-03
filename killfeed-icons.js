@@ -31,6 +31,7 @@ const P = {
   capataz2: 'M4 3h4v4H5l1-2H4zM8 3h12v2H8zM18 2h2v4h-2zM4 10h4v4H5l1-2H4zM8 10h12v2H8zM18 9h2v4h-2z', // dois revólveres, um em cima do outro
   // granada e killstreaks
   nade: 'M18 3h12l-2 12h-8zM17 2h14v2H17z',
+  gas: 'M2 3h8v2H8v1h6v8H2V6h6V5H2zM4 8h4v2H4zM18 8l4-6 2 4 5-1-3 5 4 2-5 1 1 4-4-3-3 4 1-5-5-1 4-2z',
   missile: 'M4 6h30l8 2-8 2H4zM4 4l6 2H4zM4 12l6-2H4z',
   heli: 'M4 3h40v1H4zM23 4h2v2h-2zM14 6h18c3 0 5 2 5 4s-2 3-5 3H14zM2 8h12v2H2zM16 14h16v1H16z',
   gunner: 'M4 3h40v1H4zM23 4h2v2h-2zM12 6h18c3 0 5 2 5 4s-2 3-5 3H12zM2 8h10v2H2zM35 10h11v1H35zM35 12h11v1H35z',

@@ -259,6 +259,35 @@ export function morroLeitao() {
   boxes.push(B(-6.2, 20.15, -4.5, 21.7, 1.1, BRICK, Y_TOP));
   boxes.push(B(4.6, 19.4, 6.4, 20.9, 1.15, WOOD, Y_TOP));
 
+  // Perímetro do platô. O colisor invisível é alto (telhado + pulo não passa).
+  // Mureta e grade são baixas, na borda, pra não virar muralha e não fechar as escadas.
+  const rim = (x0, z0, x1, z1) => boxes.push({ b: [Math.min(x0, x1), 0, Math.min(z0, z1), Math.max(x0, x1), 36, Math.max(z0, z1)], hide: true, c: '#888' });
+  rim(-30.95, -27.95, -30.2, 24.98);
+  rim(30.2, -27.95, 30.95, 24.98);
+  rim(-30.95, 24.22, 30.95, 24.98);
+  const stairMouth = [[-29.1, -25.4], [-18.9, -15.2], [9.9, 13.6], [20.1, 23.8]];
+  let sx = -30.95;
+  for (const [a, b] of stairMouth) { if (a - sx > 0.35) rim(sx, -27.98, a, -27.28); sx = b; }
+  rim(sx, -27.98, 30.95, -27.28);
+  const POST = '#4a433c', RAIL = '#3c3631', CAP = '#d9d3c4';
+  const gradeZ = (x, z0, z1, y) => {
+    const za = Math.min(z0, z1), zb = Math.max(z0, z1);
+    for (let z = za; z <= zb + 0.02; z += 1.65) boxes.push(B(x - 0.05, z - 0.05, x + 0.05, z + 0.05, 1.2, POST, y));
+    boxes.push(B(x - 0.03, za, x + 0.03, zb, 0.05, RAIL, y + 0.46));
+    boxes.push(B(x - 0.03, za, x + 0.03, zb, 0.05, RAIL, y + 0.92));
+  };
+  gradeZ(-30.32, 0.35, 17.7, Y_FIELD);
+  gradeZ(30.32, 0.35, 17.7, Y_FIELD);
+  gradeZ(-30.32, 18.25, 23.85, Y_TOP);
+  gradeZ(30.32, 18.25, 23.85, Y_TOP);
+  boxes.push(B(-29.7, 23.9, 29.7, 24.2, 0.92, BRICK2, Y_TOP));
+  boxes.push(B(-29.7, 23.9, 29.7, 24.2, 0.07, CAP, Y_TOP + 0.92));
+  for (const x of [-28.4, -18, -8, 2, 12, 22, 28.2]) boxes.push(B(x - 0.06, 24.02, x + 0.06, 24.16, 0.42, POST, Y_TOP + 0.99));
+  const sul = (x0, x1) => { if (x1 - x0 < 0.45) return; boxes.push(B(x0, -27.82, x1, -27.46, 1.12, BRICK, 0)); boxes.push(B(x0, -27.82, x1, -27.46, 0.07, CAP, 1.12)); };
+  sul(-30.2, -29.1); sul(-25.4, -18.9); sul(-15.2, 9.9); sul(13.6, 20.1); sul(23.8, 30.2);
+  boxes.push(B(-30.05, -16.4, -29.55, -10.6, 1.15, BRICK2, 0));
+  boxes.push(B(29.55, -16.4, 30.05, -10.6, 1.15, BRICK2, 0));
+
   for (const x of [-26, -16, -8, 0, 8, 16, 24]) wps.push([x, 0.3, -13]);
   for (const x of [-26, -8, 0, 8, 26]) wps.push([x, Y_FIELD + 0.3, 4]);
   for (const x of [-16, -6, 0, 6, 16]) wps.push([x, Y_TOP + 0.3, 20.4]);
