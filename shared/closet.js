@@ -179,6 +179,16 @@ ITEMS.push(
     ],
   } },
 );
+// Docão Coelho: cabeça de coelho (capuz de pelúcia com orelhonas, dentinhos e bigodes) + dreads com contas rasta. Fantasia paga do Brechó.
+ITEMS.push(
+  { id: 'c18', name: 'SARKAO', emoji: '🐰', price: 1200, line: 'Cabeça de coelho com orelhonas, dentinhos e dreads com contas', costume: {
+    shirt: { color: '#2a7a3a', trim: '#f2c230', logo: { text: 'C!', color: '#f2c230' } }, pants: '#2c2c30',
+    parts: [
+      { type: 'dreads', color: '#3a2414', beads: ['#d81e2a', '#f2c230', '#2a9a3a'] },
+      { type: 'rabbitHead', color: '#f1ece4', inner: '#f3a6b8', nose: '#f07a96' },
+      { type: 'shoes', color: '#f4f4f4', sole: '#2a2a2e', strap: '#d81e2a' },
+    ] } },
+);
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
   { id: 'd1', name: 'Escovinha', emoji: '🪥', price: 400, dance: 'floss', line: 'Braços varrendo o quadril' },

@@ -343,8 +343,9 @@ export function makeDocao(skinOrId, opts = {}) {
   const earGeo = new THREE.ExtrudeGeometry(earShape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 3, curveSegments: 16 });
   const inner = earShape.getPoints(24).map((p) => new V2(p.x * 0.62, p.y * 0.66 + 0.06));
   const innerGeo = new THREE.ShapeGeometry(new THREE.Shape(inner));
+  const ears = [];
   for (const s of [-1, 1]) {
-    const ear = new THREE.Group(); ear.position.set(s * 0.33, 1.84, -0.03); ear.rotation.set(-0.12, s * 0.3, -s * 0.62); ear.scale.setScalar(1.08); head.add(ear);
+    const ear = new THREE.Group(); ears.push(ear); ear.position.set(s * 0.33, 1.84, -0.03); ear.rotation.set(-0.12, s * 0.3, -s * 0.62); ear.scale.setScalar(1.08); head.add(ear);
     mesh(earGeo, skinM, ear, 0.012);
     const inn = new THREE.Mesh(innerGeo, earInM); inn.position.z = 0.07; ear.add(inn);
   }
@@ -577,7 +578,7 @@ export function makeDocao(skinOrId, opts = {}) {
   setPose({ arms }, pose);
 
   // peças da skin
-  const rig = { group: g, head, eyes, torso, legs, arms, fists, tail, tuft, skin, skinM };
+  const rig = { group: g, head, eyes, torso, legs, arms, fists, tail, tuft, ears, skin, skinM };
   for (const part of skin.parts || []) {
     const b = PARTS[part.type]; if (!b) { console.warn('Peça de skin desconhecida:', part.type); continue; }
     const obj = b(part, rig); if (!obj) continue;

@@ -762,3 +762,55 @@ Object.assign(PARTS, {
     return root;
   },
 });
+// ---------- Docão Coelho (cabeça de coelho + dreads) ----------
+Object.assign(PARTS, {
+  rabbitHead(o, rig) { // capuz de pelúcia de coelho: abertura pro rosto, orelhonas em pé, dentinhos e bigodes
+    hideTuft(rig); if (rig.ears) rig.ears.forEach((e) => (e.visible = false)); // só no Coelho: orelhas de porco somem sob o capuz
+    const g = new THREE.Group(); const c = o.color || '#f1ece4';
+    const fur = toonWarm(c, 0.2, { side: THREE.DoubleSide }), inner = toonWarm(o.inner || '#f3a6b8', 0.2, { side: THREE.DoubleSide });
+    const shell = M(new THREE.SphereGeometry(0.655, 44, 30, 0, TAU, 1.05, Math.PI - 1.05), fur, g, 0.012);
+    shell.rotation.x = Math.PI / 2 - 0.38; shell.scale.set(1.03, 1, 0.97);
+    // bochechas fofas dos lados do rosto
+    for (const s of [-1, 1]) { const ch = M(new THREE.SphereGeometry(0.17, 18, 12), fur, g, 0.01); ch.position.set(s * 0.43, -0.2, 0.3); ch.scale.set(0.8, 1, 0.75); }
+    // orelhonas
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Group(); ear.position.set(s * 0.2, 0.55, -0.12); ear.rotation.set(-0.18, 0, -s * 0.16); g.add(ear);
+      const e = M(new THREE.CapsuleGeometry(0.12, 0.62, 6, 16), fur, ear, 0.012); e.position.y = 0.4; e.scale.z = 0.42;
+      const ei = M(new THREE.CapsuleGeometry(0.075, 0.5, 6, 14), inner, ear, 0); ei.position.set(0, 0.4, 0.035); ei.scale.z = 0.25;
+      if (s > 0) { ear.rotation.z = -0.5; } // uma orelha meio caída, charme de coelho
+    }
+    // focinho de coelho: narizinho rosa por cima do focinho do Docão, dentinhos e bigodes
+    const head = new THREE.Group(); // coordenadas da cabeça do Docão (o grupo g fica em y=1.52)
+    head.position.set(0, -1.52, 0.02); g.add(head);
+    const sp = headPoint(0, 1.47);
+    const nose = M(new THREE.SphereGeometry(0.06, 14, 10), toon(o.nose || '#f07a96'), head, 0.006); nose.position.set(0, 1.58, sp.z + 0.15); nose.scale.set(1.3, 0.8, 0.7);
+    const tw = basic('#fbfbf6');
+    for (const s of [-1, 1]) {
+      const t = M(new THREE.BoxGeometry(0.07, 0.1, 0.03), tw, head, 0.005); t.position.set(s * 0.038, 1.27, sp.z + 0.06); t.rotation.x = -0.15;
+      for (const k of [-1, 0, 1]) {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.003, 0.34, 4), basic('#2a2a2e'), undefined); head.add(w);
+        w.position.set(s * 0.36, 1.47 + k * 0.045, sp.z - 0.02); w.rotation.set(0, 0, Math.PI / 2 + s * k * 0.18);
+      }
+    }
+    g.position.set(0, 1.52, -0.02); return onHead(g);
+  },
+  dreads(o, rig) { // dreadlocks grossos saindo de baixo do capuz, caindo pelas costas e ombros, com contas coloridas
+    hideTuft(rig); const g = new THREE.Group(); const m = toonWarm(o.color || '#3a2414', 0.12);
+    const beads = (o.beads || ['#d81e2a', '#f2c230', '#2a9a3a']).map((b) => toon(b));
+    let k = 0;
+    for (const row of [{ y: 1.66, out: 0.16 }, { y: 1.5, out: 0.2 }]) {
+      for (let a = -2.1; a <= 2.1 + 1e-6; a += 0.3) {
+        const th = Math.PI + a + (row.y < 1.6 ? 0.15 : 0); const p = headPoint(th, row.y, row.out); const n = headNormal(th, row.y);
+        const len = 0.55 + ((k * 37) % 7) * 0.05; const sway = ((k % 3) - 1) * 0.05;
+        const pts = [p, p.clone().addScaledVector(n, 0.08).add(new V3(sway, -len * 0.35, 0)), p.clone().addScaledVector(n, 0.1).add(new V3(sway * 2, -len * 0.7, 0)), p.clone().addScaledVector(n, 0.08).add(new V3(sway, -len, 0))];
+        const curve = new THREE.CatmullRomCurve3(pts);
+        M(new THREE.TubeGeometry(curve, 14, 0.048, 8, false), m, g, 0.008);
+        const cap = M(new THREE.SphereGeometry(0.048, 10, 8), m, g, 0); cap.position.copy(pts[3]);
+        if (k % 2 === 0) { const b = M(new THREE.CylinderGeometry(0.062, 0.062, 0.06, 12), beads[k % beads.length], g, 0.004); b.position.copy(curve.getPointAt(0.55)); }
+        k++;
+      }
+    }
+    return onHead(g);
+  },
+});
+
