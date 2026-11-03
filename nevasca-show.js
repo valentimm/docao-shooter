@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
 import { makeDocao } from './docao.js';
-import { gondolaPose, elevatorPose, sleighPose, sleighAt, sleighClock, SLEIGH, CABIN, ELEVATOR } from './shared/nevasca.js';
+import { gondolaPose, elevatorPose, sleighPose, sleighAt, sleighClock, SLEIGH, CABIN, ELEVATOR, GONDOLA } from './shared/nevasca.js';
 
 const COLORS = [0xff2a2a, 0x3d8f3d, 0xf2c94c, 0x4aa3ff, 0xff7ad1];
 const emissive = (hex) => new THREE.MeshBasicMaterial({ color: hex, toneMapped: false });
@@ -28,6 +28,37 @@ function cabin() {
   parapet(g, hx - thick / 2, -(hz - jamb / 2), thick, jamb, metal);
   const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.15, 0.08), new THREE.MeshToonMaterial({ color: 0x2a3138 }));
   hanger.position.set(0, 2.85, 0); g.add(hanger);
+  return g;
+}
+function xmasTree() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshToonMaterial({ color: 0x5c3a22 });
+  const green = new THREE.MeshToonMaterial({ color: 0x1d6b32 });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.55, 1.35, 7), wood);
+  trunk.position.y = 0.68; g.add(trunk);
+  for (let i = 0; i < 6; i++) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(1.85 - i * 0.24, 1.35, 8), green);
+    cone.position.y = 1.55 + i * 0.85; g.add(cone);
+  }
+  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.38), emissive(0xffe27a));
+  star.position.y = 6.85; g.add(star);
+  const cols = [0xff2a2a, 0xf2c94c, 0x4aa3ff, 0xff7ad1, 0xffffff];
+  for (let i = 0; i < 22; i++) {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), emissive(cols[i % cols.length]));
+    const h = 1.7 + (i % 5) * 0.85;
+    const r = 1.35 - (i % 5) * 0.18;
+    const a = i * 2.4;
+    ball.position.set(Math.cos(a) * r, h, Math.sin(a) * r);
+    g.add(ball);
+  }
+  const wrap = [0xc0392b, 0x1f6b32, 0x3d7ec4, 0xf2c94c];
+  [[-0.85, 0.28, 0.7, 0.55, 0.42], [0.7, 0.22, 0.55, 0.4, 0.36], [-0.15, 0.2, -0.95, 0.48, 0.4], [0.95, 0.18, -0.35, 0.36, 0.3]].forEach(([x, h, z, w, d], i) => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(w, h * 2, d), new THREE.MeshToonMaterial({ color: wrap[i] }));
+    box.position.set(x, h, z); g.add(box);
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, h * 2.02, 0.06), new THREE.MeshToonMaterial({ color: 0xf2c94c }));
+    rib.position.set(x, h, z); g.add(rib);
+  });
+  g.name = 'xmas-tree';
   return g;
 }
 function liftCar() {
@@ -361,6 +392,7 @@ export function mountNevasca(group, map) {
   const lifts = [liftCar(), liftCar()];
   lifts.forEach((c) => root.add(c));
   const big = tree(); big.position.set(0, 6.9, 0); root.add(big);
+  root.add(xmasTree());
 
   const bulbs = [];
   const pushLine = (x0, y0, z0, x1, y1, z1, n) => {
@@ -377,8 +409,8 @@ export function mountNevasca(group, map) {
   pushLine(17.7, 4.45, -28, 17.7, 4.45, 28, 22);
   pushLine(-16.5, 4.45, -28, -16.5, 4.45, 28, 22);
   pushLine(16.5, 4.45, -28, 16.5, 4.45, 28, 22);
-  pushLine(-1.35, 12.7, 32, -1.35, 12.7, -32, 26);
-  pushLine(1.35, 12.7, 32, 1.35, 12.7, -32, 26);
+  pushLine(GONDOLA.x[0], 12.7, 32, GONDOLA.x[0], 12.7, -32, 26);
+  pushLine(GONDOLA.x[1], 12.7, 32, GONDOLA.x[1], 12.7, -32, 26);
   for (const p of map.props || []) if (p.t === 'pine') {
     const s = p.s || 1, y = (p.y || 0) + 3.2 * s;
     for (let k = 0; k < 4; k++) bulbs.push([p.x + Math.cos(k) * 0.45 * s, y - k * 0.45, p.z + Math.sin(k) * 0.45 * s]);

@@ -1,7 +1,7 @@
 // Bondinho e trenó do Posto Nevasca. A posição sai só do tempo da partida,
 // então o offline e todo cliente online veem a mesma coisa.
 export const GONDOLA = {
-  x: [-1.35, 1.35],
+  x: [-3.2, 3.2],
   y: 10,
   zN: 32,
   zS: -32,
@@ -11,14 +11,14 @@ export const GONDOLA = {
   hz: 0.58,
   head: 2.2,
 };
-// Cabine aberta: mureta que cobre o corpo agachado (altura 1,30) e deixa a cabeça em pé de fora.
-export const CABIN = { hx: 1.08, hz: 1.14, thick: 0.1, wall: 1.38, door: 0.46 };
-// Um elevador por estação, no eixo, entre o platô e o vão. Sobe e desce em ciclo, só com o tempo da partida.
+// Mureta acima do pulo (1,50) e abaixo do olho em pé (1,62): não entra pulando, atira por cima.
+export const CABIN = { hx: 1.08, hz: 1.14, thick: 0.1, wall: 1.56, door: 0.5 };
+// Plataforma larga. O elevador abre na borda de fora, com um vão de 0,3 m que o passo atravessa.
+export const DECK = { x: 5.05, zIn: 29.25, zOut: 33.75, y: 10 };
 export const ELEVATOR = {
   y0: 0, y1: 10, travel: 3.2, dwellTop: 4.8, dwellBot: 3.2,
-  hx: 0.56, hz: 0.46, head: 2.3,
-  car: { hx: 1.15, hz: 1.05, thick: 0.11, wall: 1.38 },
-  stations: [{ x: 0, z: 35.16, open: -1 }, { x: 0, z: -35.16, open: 1 }],
+  car: { hx: 1.28, hz: 1.18, thick: 0.1, wall: 1.56 },
+  stations: [{ x: 0, z: 35.28, open: -1 }, { x: 0, z: -35.28, open: 1 }],
 };
 const ELEV_UP = ELEVATOR.travel + ELEVATOR.dwellTop;
 const ELEV_PERIOD = ELEV_UP + ELEVATOR.travel + ELEVATOR.dwellBot;
@@ -56,13 +56,9 @@ function carry(pos, a, b, hx, hz, head) {
   return { x: b.x + lx, y: floor ? b.y + Math.max(0, ly) : Math.max(b.y, pos.y), z: b.z + lz, riding: true, floor };
 }
 
-// Quem está no piso do elevador ou dentro da cabine acompanha o deslocamento. Fora, nada.
+// O elevador é um piso sólido que anda. O bondinho se desloca na horizontal e precisa carregar quem está dentro.
 export function rideShift(pos, t, dt) {
   if (!(dt > 0)) return null;
-  for (let i = 0; i < 2; i++) {
-    const hit = carry(pos, elevatorPose(t - dt, i), elevatorPose(t, i), ELEVATOR.hx, ELEVATOR.hz, ELEVATOR.head);
-    if (hit) return hit;
-  }
   for (let i = 0; i < 2; i++) {
     const hit = carry(pos, gondolaPose(t - dt, i), gondolaPose(t, i), GONDOLA.hx, GONDOLA.hz, GONDOLA.head);
     if (hit) return hit;
@@ -95,7 +91,12 @@ export function nevascaSolids(t) {
   }
   const C = ELEVATOR.car;
   for (let i = 0; i < 2; i++) {
-    const p = elevatorPose(t, i), y = p.y;
+    const p = elevatorPose(t, i), y = p.y + 0.06;
+    const inset = C.thick + 0.04;
+    out.push({
+      min: { x: p.x - C.hx + inset, y: y - 0.2, z: p.z - C.hz + inset },
+      max: { x: p.x + C.hx - inset, y, z: p.z + C.hz - inset },
+    });
     coverBox(out, p.x - C.hx, y, p.z - C.hz, p.x - C.hx + C.thick, y + C.wall, p.z + C.hz);
     coverBox(out, p.x + C.hx - C.thick, y, p.z - C.hz, p.x + C.hx, y + C.wall, p.z + C.hz);
     const back = -p.open;

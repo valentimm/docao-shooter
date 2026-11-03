@@ -1,5 +1,6 @@
 import { addHotmilkNoite } from './maps-hotmilk-noite.js';
 import { morroLeitao } from './favela-map.js';
+import { DECK, ELEVATOR } from './shared/nevasca.js';
 // ============================================================
 //  MAPAS DO DOCÃO SHOOTER: só dados (geometria original).
 //  Cada mapa: id, name (pt-BR), desc, size [meia-largura X, meia-profundidade Z], wallH (muro do limite),
@@ -1230,6 +1231,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   const col = { wall: METAL, wall2: METAL2, inner: IN, floor: FLOOR, roof: SNOW, roof2: '#A9B6C4', stair: METAL, trim: '#BFDDEB' };
   const boxes = [];
   const wps = [];
+  // Degraus visíveis e, por baixo, uma rampa invisível. O primeiro contato é o chão, não uma quina.
   const flight = (x0, x1, z0, z1, y0, y1) => {
     const alongZ = Math.abs(z1 - z0) >= Math.abs(x1 - x0);
     const xa = Math.min(x0, x1), xb = Math.max(x0, x1), za = Math.min(z0, z1), zb = Math.max(z0, z1);
@@ -1237,21 +1239,21 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     const yHi = alongZ ? (z0 <= z1 ? y1 : y0) : (x0 <= x1 ? y1 : y0);
     const dir = yHi >= yLo ? 1 : -1;
     const rise = Math.abs(yHi - yLo), yb = Math.min(yLo, yHi), yt = Math.max(yLo, yHi);
-    const n = Math.max(3, Math.round(rise / 0.17)), step = rise / n;
+    const n = Math.max(3, Math.round(rise / 0.17)), stepH = rise / n;
     if (alongZ) {
       const run = (zb - za) / n;
       for (let i = 0; i < n; i++) {
         const zA = dir > 0 ? za + i * run : za + (n - 1 - i) * run;
-        boxes.push(B(xa, zA, xb, zA + run + 0.02, step, METAL, yb + i * step));
+        boxes.push(B(xa, zA, xb, zA + run + 0.02, stepH, METAL, yb + i * stepH));
       }
-      boxes.push({ b: [xa + 0.05, yb, za, xb - 0.05, yt, zb], ramp: { axis: 'z', dir }, hide: true, c: '#888' });
+      boxes.push({ b: [xa + 0.08, yb, za, xb - 0.08, yt, zb], ramp: { axis: 'z', dir }, hide: true, c: '#888' });
     } else {
       const run = (xb - xa) / n;
       for (let i = 0; i < n; i++) {
         const xA = dir > 0 ? xa + i * run : xa + (n - 1 - i) * run;
-        boxes.push(B(xA, za, xA + run + 0.02, zb, step, METAL, yb + i * step));
+        boxes.push(B(xA, za, xA + run + 0.02, zb, stepH, METAL, yb + i * stepH));
       }
-      boxes.push({ b: [xa, yb, za + 0.05, xb, yt, zb - 0.05], ramp: { axis: 'x', dir }, hide: true, c: '#888' });
+      boxes.push({ b: [xa, yb, za + 0.08, xb, yt, zb - 0.08], ramp: { axis: 'x', dir }, hide: true, c: '#888' });
     }
     wps.push([(x0 + x1) / 2, y0 + 0.25, (z0 + z1) / 2], [(x0 + x1) / 2, y1 + 0.25, (z0 + z1) / 2]);
   };
@@ -1269,7 +1271,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
 
   // Sala Fria no centro. Portas norte e sul pro spawn. Laterais pro térreo (meio) e pro mezanino (dois lados).
   boxes.push(...building(-11, -12, 11, 12, {
-    col, floors: 2, H, parapet: 1.05,
+    col, floors: 2, H, parapet: 1.7,
     ops: [
       { s: 's', a: -3.2, b: 3.2, k: 'wide' },
       { s: 'n', a: -3.2, b: 3.2, k: 'wide' },
@@ -1281,13 +1283,13 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
       { s: 'e', a: 3.2, b: 7.6, f: 1, k: 'wide' },
     ],
     // Vãos só em cima das escadas em L, longe das portas norte e sul.
-    floorHoles: { 1: [[-10.55, -11.35, -5.9, -7.7], [-10.55, 7.7, -5.9, 11.35], [5.9, -11.35, 10.55, -7.7], [5.9, 7.7, 10.55, 11.35]] },
+    floorHoles: { 1: [[-10.45, -10.75, -5.65, -7.7], [-10.45, 7.7, -5.65, 10.75], [5.65, -10.75, 10.45, -7.7], [5.65, 7.7, 10.45, 10.75], [-1.7, -1.7, 1.7, 1.7]] },
   }));
   // Escada em L encostada na parede leste ou oeste, com patamar. Não cruza a porta nem o eixo.
   const posts = (x0, z0, x1, z1, y0, y1, n) => {
     for (let i = 0; i <= n; i++) {
       const k = i / n, x = x0 + (x1 - x0) * k, z = z0 + (z1 - z0) * k, y = y0 + (y1 - y0) * k;
-      boxes.push(B(x - 0.045, z - 0.045, x + 0.045, z + 0.045, 0.9, METAL2, y));
+      boxes.push(B(x - 0.045, z - 0.045, x + 0.045, z + 0.045, 1.15, METAL2, y));
     }
     for (let i = 0; i < n; i++) {
       const a = i / n, b = (i + 1) / n;
@@ -1297,14 +1299,18 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     }
   };
   const lStair = (sx, sz) => {
-    const xW = sx * 10.4, xA = sx * 8.55, xT = sx * 6.05;
-    const zLo = sz * 11.2, zHi = sz * 9.2, zLand = sz * 7.75;
-    flight(Math.min(xW, xA), Math.max(xW, xA), zLo, zHi, 0, 1.7);
-    boxes.push(B(Math.min(xW, sx * 7.2), Math.min(zHi, zLand), Math.max(xW, sx * 7.2), Math.max(zHi, zLand), 0.16, METAL, 1.54));
-    flight(xA, xT, sz * 9.3, sz * 7.9, 1.7, H);
-    posts(sx * 8.48, zLo, sx * 8.48, zHi, 0, 1.7, 4);
-    posts(xA, sz * 7.95, xT, sz * 7.95, 1.7, H, 4);
-    wps.push([sx * 9.4, 0.3, sz * 10.2], [sx * 9.2, 1.9, sz * 8.6], [sx * 6.4, H + 0.2, sz * 8.6]);
+    // A boca fica no salão, com chão livre na frente. O corrimão começa depois dela.
+    const xWall = sx * 10.15, xOpen = sx * 8.35, xOut = sx * 5.5;
+    const zMouth = sz * 7.55, zHead = sz * 10.15;
+    flight(Math.min(xWall, xOpen), Math.max(xWall, xOpen), zMouth, zHead, 0, 1.7);
+    const zFar = sz * 10.55, zNear = sz * 8.95;
+    boxes.push(B(Math.min(xWall, sx * 7.1), Math.min(zHead, zFar), Math.max(xWall, sx * 7.1), Math.max(zHead, zFar), 1.54, ROCK, 0));
+    boxes.push(B(Math.min(xWall, sx * 7.1), Math.min(zHead, zFar), Math.max(xWall, sx * 7.1), Math.max(zHead, zFar), 0.16, METAL, 1.54));
+    boxes.push(B(Math.min(xOpen, xOut), Math.min(sz * 10.35, zNear), Math.max(xOpen, xOut), Math.max(sz * 10.35, zNear), 1.7, ROCK, 0));
+    flight(xOpen, xOut, sz * 10.35, zNear, 1.7, H);
+    posts(sx * 8.2, sz * 8.2, sx * 8.2, sz * 9.35, 0.45, 1.15, 3);
+    posts(sx * 7.6, sz * 8.78, sx * 6.2, sz * 8.78, 2.15, 3.15, 3);
+    wps.push([sx * 9.2, 0.25, sz * 6.9], [sx * 9.25, 1.85, sz * 10.2], [sx * 5.8, H + 0.25, sz * 9.6]);
   };
   lStair(-1, -1); lStair(-1, 1); lStair(1, -1); lStair(1, 1);
   // Dois pilares no térreo, espelhados. Não fecham a rota norte-sul.
@@ -1321,46 +1327,40 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     crate(sx * 6.15, sz * 3.55, 0.85, 0.7, 0.55);
   }
 
-  // Cada spawn: mureta na frente (corta a reta até o outro lado), tenda e um muro do lado da passarela.
-  // O corredor do meio, ao lado da escada do bondinho, continua aberto. As laterais sobem pras passarelas.
+  // Spawn aberto: uma mureta baixa, dois montes e uma barraquinha no canto. A árvore corta a reta pela sala.
   const band = (z, depth, x0, x1, h, c, y = 0) => boxes.push(B(x0, z - depth / 2, x1, z + depth / 2, h, c, y));
   for (const sz of [1, -1]) {
-    band(sz * 23.55, 0.7, -11.5, -2.35, 2.3, ROCK);
-    band(sz * 23.55, 0.7, 2.35, 11.5, 2.3, ROCK);
-    band(sz * 23.55, 0.5, -11.4, -2.45, 0.22, SNOW, 2.3);
-    band(sz * 23.55, 0.5, 2.45, 11.4, 0.22, SNOW, 2.3);
-    band(sz * 20.35, 0.55, -4.7, -1.3, 2.05, ROCK);
-    band(sz * 20.35, 0.55, 1.3, 4.7, 2.05, ROCK);
-    band(sz * 27.35, 1.35, -10.55, -9.15, 3.15, ROCK);
-    band(sz * 27.35, 1.35, 9.15, 10.55, 3.15, ROCK);
-    // laje baixa no corredor da passarela e na frente do spawn: passa por baixo, o olhar do alto bate no teto
-    boxes.push(B(-12.05, sz * 24.25, -8.7, sz * 27.15, 0.12, ROCK, 2.52));
-    boxes.push(B(8.7, sz * 24.25, 12.05, sz * 27.15, 0.12, ROCK, 2.52));
-    boxes.push(B(-9.3, sz * 24.35, -2.5, sz * 28.5, 0.12, '#8e2f2a', 2.42));
-    boxes.push(B(2.5, sz * 24.35, 9.3, sz * 28.5, 0.12, '#8e2f2a', 2.42));
+    band(sz * 22.2, 0.42, -6.4, -2.7, 1.25, ROCK);
+    band(sz * 22.2, 0.42, 2.7, 6.4, 1.25, ROCK);
+    band(sz * 22.2, 0.28, -6.2, -2.9, 0.16, SNOW, 1.25);
+    band(sz * 22.2, 0.28, 2.9, 6.2, 0.16, SNOW, 1.25);
     for (const sx of [-1, 1]) {
-      const x0 = sx < 0 ? -9.7 : 2.85, x1 = sx < 0 ? -2.85 : 9.7;
-      const z0 = sz * 28.2, z1 = sz * 34.1;
-      boxes.push(B(x0, Math.min(z0, z1), x1, Math.max(z0, z1), 0.12, '#8e2f2a', 2.48));
-      boxes.push(B(x0 + 0.1, Math.min(z0, z1) + 0.1, x1 - 0.1, Math.max(z0, z1) - 0.1, 0.1, SNOW, 2.6));
-      const ox = sx < 0 ? x0 : x1 - 0.16;
-      const wz0 = sz > 0 ? z0 + 1.15 : z1;
-      const wz1 = sz > 0 ? z1 : z0 - 1.15;
-      boxes.push(B(ox, Math.min(wz0, wz1), ox + 0.16, Math.max(wz0, wz1), 2.48, ROCK));
-      const ix = sx < 0 ? x1 - 0.16 : x0;
-      const iz0 = sz > 0 ? z0 + 1.25 : z1;
-      const iz1 = sz > 0 ? z1 - 0.15 : z0 - 1.25;
-      boxes.push(B(ix, Math.min(iz0, iz1), ix + 0.16, Math.max(iz0, iz1), 2.48, ROCK));
-      for (const px of [x0 + 0.08, x1 - 0.24]) for (const pz of [sz > 0 ? z0 + 0.12 : z1 + 0.12, sz > 0 ? z1 - 0.28 : z0 - 0.28]) {
-        boxes.push(B(px, pz, px + 0.16, pz + 0.16, 2.48, '#5c3a22'));
-      }
+      const mx = sx * 4.6, mz = sz * 24.6;
+      boxes.push(B(mx - 0.85, mz - 0.55, mx + 0.85, mz + 0.55, 0.45, ROCK));
+      boxes.push(B(mx - 0.55, mz - 0.35, mx + 0.55, mz + 0.35, 0.55, SNOW, 0.28));
     }
-    for (const sx of [-1, 1]) {
-      const mx = sx * 6.5, mz = sz * 25.2;
-      boxes.push(B(mx - 1.05, mz - 0.62, mx + 1.05, mz + 0.62, 0.62, ROCK));
-      boxes.push(B(mx - 0.68, mz - 0.4, mx + 0.68, mz + 0.4, 0.7, SNOW, 0.4));
-    }
-    wps.push([0, 0.3, sz * 22.2], [0, 0.3, sz * 33.2], [sz * 8, 0.3, sz * 29.2], [1.85, 0.3, sz * 18.6], [-1.85, 0.3, sz * 18.6]);
+    const ax = 10.15, az = sz * 33.4;
+    boxes.push(B(ax - 1.15, az - 0.85, ax + 1.05, az + 0.85, 0.08, '#b3392b', 2.05));
+    boxes.push(B(ax - 1.05, az - 0.75, ax + 0.95, az + 0.75, 0.06, SNOW, 2.13));
+    for (const px of [ax - 1.05, ax + 0.85]) for (const pz of [az - 0.72, az + 0.6]) boxes.push(B(px, pz, px + 0.12, pz + 0.12, 2.05, '#5c3a22'));
+    wps.push([0, 0.3, sz * 20.5], [0, 0.3, sz * 31.5], [sz * 8, 0.3, sz * 28], [1.9, 0.3, sz * 18.2], [-1.9, 0.3, sz * 18.2]);
+  }
+  // Árvore no meio da Sala Fria. O tronco e a copa fecham a reta no térreo e no mezanino.
+  boxes.push(B(-1.45, -1.45, 1.45, 1.45, 6.5, '#1d4a28'));
+  boxes.push(B(-0.42, -0.42, 0.42, 0.42, 1.3, '#5c3a22'));
+  // Guarda do vão da escada no mezanino, do lado do salão. A árvore ocupa o vão do centro.
+  const holeRail = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2, H));
+  holeRail(-10.2, -7.85, -6.4, -7.7);
+  holeRail(-10.2, 7.7, -6.4, 7.85);
+  holeRail(6.4, -7.85, 10.2, -7.7);
+  holeRail(6.4, 7.7, 10.2, 7.85);
+  // Borda do platô. A boca da escada da passarela fica aberta; a passarela em si continua sem guarda.
+  const lip = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2));
+  for (const s of [1, -1]) {
+    lip(s * 11.92, s > 0 ? 12.35 : -35.85, s * 12.08, s > 0 ? 23.85 : -27.95);
+    lip(s * 11.92, s > 0 ? 27.95 : -23.85, s * 12.08, s > 0 ? 35.85 : -12.35);
+    lip(-11.85, s * 35.9, -1.5, s * 36.08);
+    lip(1.5, s * 35.9, 11.85, s * 36.08);
   }
 
   // Passarela: piso na cota do mezanino, guarda contínuo, postes no vazio.
@@ -1383,7 +1383,10 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     const wall = sign < 0 ? -11.05 : 11.05;
     const edge = sign < 0 ? x1 : x0;
     for (const zc of [-5.4, 5.4]) {
-      boxes.push(B(Math.min(wall, edge), zc - 2.05, Math.max(wall, edge), zc + 2.05, 0.16, METAL, y - 0.16));
+      const bx0 = Math.min(wall, edge), bx1 = Math.max(wall, edge);
+      boxes.push(B(bx0, zc - 2.05, bx1, zc + 2.05, 0.16, METAL, y - 0.16));
+      boxes.push(B(bx0, zc - 2.05, bx1, zc - 1.9, 1.65, METAL2, y));
+      boxes.push(B(bx0, zc + 1.9, bx1, zc + 2.05, 1.65, METAL2, y));
       wps.push([sign * 13.6, y + 0.2, zc], [sign * 11.3, y + 0.2, zc]);
     }
     // escada do térreo, só na porta do meio. O patamar não segue pra norte nem pra sul.
@@ -1391,34 +1394,42 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     // sobe do platô (x ±12) até a passarela, no norte e no sul
     flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, 24.5, 27.3, sign < 0 ? y : 0, sign < 0 ? 0 : y);
     flight(sign < 0 ? -16.25 : 12.0, sign < 0 ? -12.0 : 16.25, -27.3, -24.5, sign < 0 ? y : 0, sign < 0 ? 0 : y);
+    const xLo = sign < 0 ? -16.25 : 12, xHi = sign < 0 ? -12 : 16.25, yLo = sign < 0 ? y : 0, yHi = sign < 0 ? 0 : y;
+    for (const zEdge of [24.42, 27.38, -24.42, -27.38]) posts(xLo, zEdge, xHi, zEdge, yLo, yHi, 4);
     wps.push([sign * 17.6, y + 0.2, 0], [sign * 17.6, 0.3, 35.2], [sign * 17.6, 0.3, -35.2]);
   };
   span(-1); span(1);
 
-  // Bondinho simétrico, estações espelhadas no eixo.
-  const station = (z) => {
-    const dir = z > 0 ? -1 : 1;
-    boxes.push(B(-2.4, z - 1.8, 2.4, z + 1.8, 0.2, METAL, 9.8));
-    boxes.push(B(-2.5, z - 1.8, -2.15, z + 1.8, 1.1, METAL2, 10));
-    boxes.push(B(2.15, z - 1.8, 2.5, z + 1.8, 1.1, METAL2, 10));
-    const lip = z > 0 ? z - 1.85 : z + 1.85;
-    flight(-1.05, 1.05, lip, lip + dir * 12.2, 10, 0);
-    wps.push([0, 10.2, z], [0, 0.3, z + dir * 12]);
+  // Plataforma larga do bondinho, com guarda. A passarela lateral não entra aqui.
+  const deckRail = (x0, z0, x1, z1) => boxes.push(B(x0, z0, x1, z1, 1.65, METAL2, DECK.y));
+  const station = (s) => {
+    const zIn = s * DECK.zIn, zOut = s * DECK.zOut;
+    const x0 = -DECK.x, x1 = DECK.x;
+    boxes.push(B(x0, Math.min(zIn, zOut), x1, Math.max(zIn, zOut), 0.22, METAL, DECK.y - 0.22));
+    deckRail(x0, zIn - s * 0.12, -1.3, zIn);
+    deckRail(1.3, zIn - s * 0.12, x1, zIn);
+    deckRail(x0, zOut, -1.45, zOut + s * 0.12);
+    deckRail(1.45, zOut, x1, zOut + s * 0.12);
+    deckRail(x0, Math.min(zIn, zOut), x0 + 0.12, Math.max(zIn, zOut));
+    deckRail(x1 - 0.12, Math.min(zIn, zOut), x1, Math.max(zIn, zOut));
+    const zGround = zIn - s * 12.4;
+    flight(-1.2, 1.2, zIn, zGround, DECK.y, 0);
+    posts(-1.28, zIn, -1.28, zGround, DECK.y, 0, 8);
+    posts(1.28, zIn, 1.28, zGround, DECK.y, 0, 8);
+    wps.push([0, DECK.y + 0.2, s * 32], [0, 0.3, zGround]);
   };
-  station(32); station(-32);
-  // Poço do elevador: três paredes altas e uma abertura embaixo e no topo, do lado da plataforma.
-  const shaft = (zSign) => {
-    const zc = zSign * 35.16, open = -zSign;
-    boxes.push(B(-1.28, zc - 1.08, -1.14, zc + 1.08, 12.3, ROCK));
-    boxes.push(B(1.14, zc - 1.08, 1.28, zc + 1.08, 12.3, ROCK));
-    const back = zc - open * 1.08;
-    boxes.push(B(-1.28, Math.min(back, back - open * 0.16), 1.28, Math.max(back, back - open * 0.16), 12.3, ROCK));
-    const lip = zc + open * 1.02;
-    boxes.push(B(-0.95, Math.min(lip, lip + open * 0.18), 0.95, Math.max(lip, lip + open * 0.18), 7.4, ROCK, 2.35));
-    const bridge = zc + open * 1.2;
-    boxes.push(B(-0.9, Math.min(bridge, zSign * 33.72), 0.9, Math.max(bridge, zSign * 33.72), 0.12, METAL, 9.9));
-  };
-  shaft(1); shaft(-1);
+  station(1); station(-1);
+  // Moldura do elevador, fora da cabine. A abertura de baixo e a de cima ficam do lado da plataforma.
+  for (const st of ELEVATOR.stations) {
+    const C = ELEVATOR.car, open = st.open;
+    const z0 = st.z - C.hz - 0.08, z1 = st.z + C.hz + 0.08;
+    boxes.push(B(st.x - C.hx - 0.16, z0, st.x - C.hx - 0.04, z1, 12.2, ROCK));
+    boxes.push(B(st.x + C.hx + 0.04, z0, st.x + C.hx + 0.16, z1, 12.2, ROCK));
+    const back = st.z - open * (C.hz + 0.06);
+    boxes.push(B(st.x - C.hx - 0.16, back, st.x + C.hx + 0.16, back - open * 0.12, 12.2, ROCK));
+    const mouth = st.z + open * (C.hz + 0.02);
+    boxes.push(B(st.x - C.hx + 0.15, mouth, st.x + C.hx - 0.15, mouth + open * 0.14, 7.35, ROCK, 2.3));
+  }
 
   const props = [
     { t: 'pine', x: -6, z: 20, s: 1.15 }, { t: 'pine', x: 6, z: 20, s: 1.15 },
@@ -1440,11 +1451,11 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
       lights: [['#fff6e4', 0, 4.2, 0, 18, 14], ['#fff6e4', 0, 2.4, 26, 14, 10], ['#fff6e4', 0, 2.4, -26, 14, 10], ['#ffd9a0', -17.6, 4.6, 0, 16, 8], ['#ffd9a0', 17.6, 4.6, 0, 16, 8]] },
     weather: { kind: 'snow', n: 900, fall: 6, wind: [1.2, 0, 0.4], top: 28, color: 0xF7FBFF, size: 0.14, roofs },
     ...fin([...boxes, ...wps.map((p) => ({ wp: p }))]), props,
-    spawns: [[-6, 26.4], [6, 26.4], [-8, 32.4], [8, 32.4], [0, 32.6], [4.2, 30.2], [-4.2, 30.2], [-6, -26.4], [6, -26.4], [-8, -32.4], [8, -32.4], [0, -32.6], [4.2, -30.2], [-4.2, -30.2]],
+    spawns: [[-6, 25.4], [6, 25.4], [-8, 31.4], [8, 31.4], [0, 14.8], [5.8, 27.2], [-5.8, 27.2], [-6, -25.4], [6, -25.4], [-8, -31.4], [8, -31.4], [0, -14.8], [5.8, -27.2], [-5.8, -27.2]],
     pickups: [
       ['health', 5, 22], ['health', -5, 22], ['health', 5, -22], ['health', -5, -22],
       ['ammo', -8, 28], ['ammo', 8, 28], ['ammo', -8, -28], ['ammo', 8, -28],
-      ['grenade', 0, 2, H], ['grenade', 0, -2, H],
+      ['grenade', 3.5, 2.2, H], ['grenade', -3.5, -2.2, H],
     ],
     showcase: [0, 0, 22], view: [0, 8, 20, Math.PI, -0.15],
     test: {
