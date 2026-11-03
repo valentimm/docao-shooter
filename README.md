@@ -69,7 +69,7 @@ O nome, a skin, as armas, a dança da vitória, o mapa, o modo, a dificuldade do
 
 ### 🌐 Online (com a galera)
 
-- **Criar sala:** escolha mapa, modo (Mata-mata, Dominação, Treino, Invasão ou Bomba), **máximo de jogadores (2 a 10)**, se quer **completar com bots**, a **dificuldade** deles (Leitão, Ceva, Javali ou Cachaço), o **tempo** (Padrão, 3, 5, 7, 10, 15 ou 20 min) e **quais armas e power-ups valem na sala** (o loadout da sala). Sai um **código de 4 letras**.
+- **Criar sala:** escolha mapa, modo (Mata-mata, Dominação, Treino, Invasão ou Bomba), **máximo de jogadores (2 a 30)**, se quer **completar com bots**, a **dificuldade** deles (Leitão, Ceva, Javali ou Cachaço), o **tempo** (Padrão, 3, 5, 7, 10, 15 ou 20 min) e **quais armas e power-ups valem na sala** (o loadout da sala). Sai um **código de 4 letras**.
 - **Entrar na sala:** digite o código ou abra o link de convite `https://docao.mvalentim.dev/?sala=ABCD`, que já cai direto no lobby.
 - **Convite:** no lobby e na pausa tem Copiar link, Copiar código, WhatsApp, Telegram, Slack e Compartilhar.
 - **Anfitrião (★):** troca mapa, máximo, bots, dificuldade, modo, tempo, as armas e os power-ups liberados e o **chat (liga/desliga)**, e clica em **INICIAR PARTIDA**. No fim, ele escolhe **JOGAR DE NOVO** ou **PRÓXIMO MAPA ▸**.
@@ -196,7 +196,7 @@ Um estande de tiro no estilo The Range, que abre sempre no mapa **Estande do Doc
 
 ### 🎃 Invasão · Hordas de Zumbis
 
-Modo **cooperativo** em que todo mundo joga no **mesmo time** contra hordas de **Docões zumbis**. Funciona **offline (solo)** e **online (até 10 jogadores)**. O mapa padrão é o **Rodízio do Docão**, e a **Fazenda Mal-Assombrada** foi feita só pra ele. Os mapas de sempre também entram, com decoração de Halloween.
+Modo **cooperativo** em que todo mundo joga no **mesmo time** contra hordas de **Docões zumbis**. Funciona **offline (solo)** e **online (até 30 jogadores)**. O mapa padrão é o **Rodízio do Docão**, e a **Fazenda Mal-Assombrada** foi feita só pra ele. Os mapas de sempre também entram, com decoração de Halloween.
 
 - **20 waves**, cada uma mais difícil (mais zumbis, mais vida, mais velocidade e mais dano). A **cada 5 waves** vem o chefão **Docão Abóbora**. Sobreviveu à wave 20, venceu. Entre as waves tem uma pausa de uns 15 s.
 - **Zumbis:** **Docão Podre** (o comum), **Esqueleto Corredor** (rápido e frágil), **Barrigão de Gás** (grande, lento, e **explode** quando cai) e **Cuspidor** (cospe de longe).

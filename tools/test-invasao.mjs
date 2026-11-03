@@ -13,7 +13,7 @@ const errors = [], fails = []; const ok = (c, msg) => { console.log((c ? 'OK   '
   const tot = []; for (let w = 1; w <= INV.WAVES; w++) tot.push(waveSpec(w, 1));
   ok(tot.every((s, i) => i === 0 || (s.total >= tot[i - 1].total && s.hpMul > tot[i - 1].hpMul)), '20 waves: cada uma com mais zumbis e mais vida que a anterior');
   ok(tot.filter((s) => s.boss).map((s) => s.w).join() === '5,10,15,20', 'chefão Docão Abóbora nas waves 5, 10, 15 e 20');
-  ok(waveSpec(1, 4).total > waveSpec(1, 1).total && waveSpec(1, 10).n === 10 && waveSpec(1, 50).n === 10, 'mais jogadores = wave maior (limite de 10)');
+  ok(waveSpec(1, 4).total > waveSpec(1, 1).total && waveSpec(1, 10).n === 10 && waveSpec(1, 50).n === 30, 'mais jogadores = wave maior (limite de 30)');
   ok(waveSpec(1, 1).total === 18 && waveSpec(20, 1).total === 132 && waveSpec(1, 4).total === 50, `zumbis por wave: 18 (w1) → 132 (w20) solo; 50 na w1 com 4 jogadores`);
   ok(tot.every((s) => s.maxAlive <= 48 && s.batch >= 2 && s.batch <= 6) && waveSpec(20, 10).maxAlive === 48, 'teto de vivos (≤ 48) e lotes de 2–6');
   ok(waveSpec(20, 1).spdMul > waveSpec(1, 1).spdMul && waveSpec(20, 1).spdMul <= 1.45, 'velocidade cresce com a wave (até 1,45×)');

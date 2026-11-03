@@ -297,7 +297,7 @@ const LOOT_LADDER = [
   { id: 'gold', label: 'Dourado', rank: 5, hex: '#f0c14a', glow: '#fff1a8', ink: '#fff8df' },
 ];
 const LOOT_RANK = { 500: 0, 750: 1, 1000: 2, 1250: 3, 2000: 5 };
-const SPIN_MS = [1800, 2500, 3200, 4000, 4800, 5500];
+const SPIN_MS = [3600, 5000, 6400, 8000, 9600, 11000];
 const SPIN_LEAD = [16, 22, 30, 38, 44, 52];
 const SPIN_OVER = [8, 16, 32, 52, 64, 78];
 const lookOf = (it) => LOOT_LADDER[LOOT_RANK[it && it.weight | 0] ?? 0];
@@ -332,8 +332,9 @@ function buildStrip(pool, winner, rank) {
   for (let i = 0; i < 7; i++) cards.push(pickFrom(pool));
   return { cards, winAt };
 }
-// Os primeiros 10% do giro levam ~70% da fita. O resto desacelera até parar, e o final só assenta.
-const SPIN_BURST_T = 0.10, SPIN_BURST_D = 0.70, SPIN_SETTLE = 0.14;
+// O começo ainda é o trecho rápido, só que menos disparado: ~18% do tempo leva metade da fita.
+// O resto desacelera até parar, e o final só assenta.
+const SPIN_BURST_T = 0.18, SPIN_BURST_D = 0.50, SPIN_SETTLE = 0.14;
 const SPIN_SLOW_R = 1 - SPIN_BURST_T;
 const SPIN_VJOIN = 2 * (1 - SPIN_BURST_D) / SPIN_SLOW_R;
 const SPIN_V0 = 2 * SPIN_BURST_D / SPIN_BURST_T - SPIN_VJOIN;

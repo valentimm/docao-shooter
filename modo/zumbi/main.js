@@ -6463,9 +6463,9 @@ function fillMapSelect(sel, value, md) { // Invasão: lista própria (Rodízio, 
   if (value && [...sel.options].some((o) => o.value === value)) sel.value = value; else if (value) sel.value = md === 'bomb' ? BOMB_MAP : iv ? INV.DEFAULT_MAP : inf ? INF.DEFAULT_MAP : L[0].id; // Bomba: mapa sem sites → Rodízio
   if (md === 'bomb' && value === 'random') sel.value = BOMB_MAP;
 }
-// Máx. jogadores: até 10 nos modos de sempre; na Infecção até 50
+// Máx. jogadores: até 30 nos modos de sempre; na Infecção até 50
 function syncMaxSelect(sel, md, cur) {
-  const list = isInfection(md) ? INF.MAX_CHOICES : [2, 3, 4, 5, 6, 7, 8, 9, 10], key = isInfection(md) ? 'inf' : 'std';
+  const list = isInfection(md) ? INF.MAX_CHOICES : [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], key = isInfection(md) ? 'inf' : 'std';
   if (sel.dataset.pool !== key) { const keep = +sel.value; sel.innerHTML = ''; sel.dataset.pool = key; for (const n of list) sel.add(new Option(String(n), String(n))); sel.value = String(list.includes(keep) ? keep : isInfection(md) ? INF.DEFAULT_MAX : 6); }
   if (cur != null) { if (![...sel.options].some((o) => +o.value === +cur)) sel.add(new Option(String(cur), String(cur))); sel.value = String(cur); }
 }
