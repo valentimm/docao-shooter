@@ -370,6 +370,23 @@ Object.assign(SHIRT_DETAILS, {
     x.fillStyle = c; x.fillRect(0, y, W, h * 0.6);
     x.beginPath(); x.moveTo(0, y); for (let k = 0; k <= W; k += 32) { x.lineTo(k + 16, y - h); x.lineTo(k + 32, y); } x.closePath(); x.fill();
   },
+  jersey(x, d, PT) { // camisa de futebol branca: risquinhas verticais finas, gola V preta, trevo (esq.) e escudo (dir.)
+    x.save();
+    const cols = d.stripes || ['#2a2a2e', '#c9a23a', '#2a2a2e', '#b8202a'];
+    for (let i = 0; i < 28; i++) { const th = -Math.PI + (i + 0.5) * Math.PI * 2 / 28; const a = PT(th, 1.2), b = PT(th, 0.0); x.strokeStyle = cols[i % cols.length]; x.globalAlpha = 0.75; x.lineWidth = 3; x.beginPath(); x.moveTo(...a); x.lineTo(...b); x.stroke(); }
+    x.globalAlpha = 1; x.fillStyle = d.trim || '#111114';
+    x.beginPath(); x.moveTo(...PT(-0.42, 1.25)); x.lineTo(...PT(0, 0.9)); x.lineTo(...PT(0.42, 1.25)); x.lineTo(...PT(0.28, 1.25)); x.lineTo(...PT(0, 0.98)); x.lineTo(...PT(-0.28, 1.25)); x.closePath(); x.fill();
+    // trevo de 3 folhas (lado direito de quem veste = esquerda de quem olha)
+    const [tx, ty] = PT(-0.32, 0.8); x.fillStyle = '#111114';
+    for (const [dx, dy, r] of [[-14, 4, 11], [0, -6, 12], [14, 4, 11]]) { x.beginPath(); x.ellipse(tx + dx, ty + dy, r * 0.7, r, dx / 30, 0, Math.PI * 2); x.fill(); }
+    x.fillRect(tx - 22, ty + 14, 44, 4); x.fillRect(tx - 22, ty + 20, 44, 3);
+    // escudo
+    const [cx, cy] = PT(0.32, 0.8);
+    x.beginPath(); x.moveTo(cx - 18, cy - 20); x.lineTo(cx + 18, cy - 20); x.lineTo(cx + 18, cy + 4); x.quadraticCurveTo(cx, cy + 26, cx - 18, cy + 4); x.closePath(); x.fillStyle = '#111114'; x.fill();
+    x.fillStyle = '#f4f4f4'; x.fillRect(cx - 12, cy - 15, 24, 18); x.fillStyle = '#111114'; x.beginPath(); x.arc(cx, cy - 6, 6, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#d4af37'; x.fillRect(cx - 12, cy - 28, 24, 4);
+    x.restore();
+  },
   diagStripes(x, d, PT) { // listras diagonais esportivas nas laterais e nos ombros
     const c = d.color || '#1fb89a';
     x.save(); x.strokeStyle = c; x.lineCap = 'round';
@@ -468,6 +485,12 @@ Object.assign(PARTS, {
     for (const [i, piv] of rig.arms.entries()) for (const y of [-0.02, -0.08, -0.14]) { const t = M(new THREE.TorusGeometry(0.163, 0.014, 6, 24), m, piv, 0); t.rotation.set(Math.PI / 2, 0.45 * (i ? 1 : -1), 0); t.position.y = y; }
     return null;
   },
+  watch(o, rig) { // relógio no pulso esquerdo (pulseira colorida + mostrador)
+    const i = o.hand === 'right' ? 0 : 1; const piv = rig.arms[i];
+    const band = M(new THREE.TorusGeometry(0.135, 0.035, 8, 20), toon(o.color || '#2f8a3c'), piv, 0.006); band.rotation.x = Math.PI / 2; band.position.y = -0.38;
+    const face = M(new THREE.CylinderGeometry(0.07, 0.07, 0.035, 18), toon(o.face || '#e8e4d8'), piv, 0.006); face.rotation.z = Math.PI / 2; face.position.set((i ? 1 : -1) * 0.16, -0.38, 0);
+    return null;
+  },
   shortsStripes(o, rig) { // faixas laterais no shorts
     const g = new THREE.Group(); const m = toon(o.color || '#1fb89a');
     for (const s of [-1, 1]) for (const dz of [-0.035, 0.035]) { const b = M(new THREE.BoxGeometry(0.02, 0.22, 0.03), m, g, 0); b.position.set(s * 0.413, 0.47, dz); }
@@ -497,6 +520,10 @@ Object.assign(PARTS, {
       const p = headPoint(0, 1.16, 0.02);
       const patch = M(new THREE.CapsuleGeometry(0.014, 0.03, 3, 6), m, g, 0.003);
       patch.position.copy(p).add(new V3(0, -0.012, 0.02)); patch.scale.set(0.7, 1, 0.4);
+    }
+    if (o.goatee) { // cavanhaque curto em ponta no queixo + bigode mais grosso (JanorDoc)
+      for (const s of [-1, 1]) { const q = headPoint(s * 0.24, 1.3, 0.04); const c = M(new THREE.CapsuleGeometry(0.04, 0.14, 4, 8), m, g, 0.004); c.position.copy(q).add(new V3(0, -0.02, 0.06)); c.rotation.set(0, 0, s * 1.0); c.scale.z = 0.6; }
+      const q = headPoint(0, 1.08, 0.03); const gt = M(new THREE.ConeGeometry(0.09, 0.16, 12), m, g, 0.005); gt.position.copy(q).add(new V3(0, -0.04, 0.0)); gt.rotation.x = Math.PI + 0.3; gt.scale.z = 0.5;
     }
     return onHead(g);
   },
