@@ -47,6 +47,34 @@ export function morroLeitao() {
     const mx = (x0 + x1) / 2;
     wps.push([mx, y0 + 0.25, zLo + 0.45], [mx, (y0 + y1) / 2 + 0.2, (zLo + zHi) / 2], [mx, y1 + 0.2, zHi - 0.35]);
   }
+  // Lance estreito. y0/y1 são a cota no começo e no fim do sentido da marcha (z0→z1 ou x0→x1).
+  function flight(x0, x1, z0, z1, y0, y1) {
+    const alongZ = Math.abs(z1 - z0) >= Math.abs(x1 - x0);
+    const xa = Math.min(x0, x1), xb = Math.max(x0, x1), za = Math.min(z0, z1), zb = Math.max(z0, z1);
+    const yLo = alongZ ? (z0 <= z1 ? y0 : y1) : (x0 <= x1 ? y0 : y1);
+    const yHi = alongZ ? (z0 <= z1 ? y1 : y0) : (x0 <= x1 ? y1 : y0);
+    const dir = yHi >= yLo ? 1 : -1;
+    const rise = Math.abs(yHi - yLo), yb = Math.min(yLo, yHi), yt = Math.max(yLo, yHi);
+    const n = Math.max(3, Math.round(rise / 0.17));
+    const step = rise / n;
+    if (alongZ) {
+      const run = (zb - za) / n;
+      for (let i = 0; i < n; i++) {
+        const zA = dir > 0 ? za + i * run : za + (n - 1 - i) * run;
+        boxes.push(B(xa, zA, xb, zA + run + 0.02, step, TREAD, yb + i * step));
+      }
+      boxes.push({ b: [xa + 0.05, yb, za, xb - 0.05, yt, zb], ramp: { axis: 'z', dir }, hide: true, c: '#888' });
+    } else {
+      const run = (xb - xa) / n;
+      for (let i = 0; i < n; i++) {
+        const xA = dir > 0 ? xa + i * run : xa + (n - 1 - i) * run;
+        boxes.push(B(xA, za, xA + run + 0.02, zb, step, TREAD, yb + i * step));
+      }
+      boxes.push({ b: [xa, yb, za + 0.05, xb, yt, zb - 0.05], ramp: { axis: 'x', dir }, hide: true, c: '#888' });
+    }
+    wps.push([(x0 + x1) / 2, y0 + 0.2, (z0 + (alongZ ? 0 : 0))], [(xa + xb) / 2, yb + 0.25, (za + zb) / 2], [(xa + xb) / 2, yt + 0.2, (za + zb) / 2]);
+  }
+  const pad = (x0, z0, x1, z1, y) => { boxes.push(B(x0, z0, x1, z1, 0.16, TREAD, y - 0.16)); wps.push([(x0 + x1) / 2, y + 0.2, (z0 + z1) / 2]); };
 
   // ---- morro: rua, campinho, topo. A face de cada caixa é o muro de arrimo. ----
   boxes.push(B(-30.5, -0.05, 30.5, 14.2, Y_FIELD, DIRT));
@@ -56,27 +84,56 @@ export function morroLeitao() {
   boxes.push(B(-29.2, -15.5, 29.2, -11.2, 0.055, ASPH, 0.02));
   for (let x = -26; x < 26; x += 4.4) props.push({ t: 'decal', x0: x, z0: -13.15, x1: x + 2.1, z1: -12.95, y: 0.09, c: 0xf2c94c });
 
-  // rua → campinho. Três vãos de ~6 m. A rampa central é lisa; as laterais são escada.
-  // a crista fica depois da face do patamar: o corpo chega na altura cheia antes de encostar no muro
-  stairs(-23.2, -17.0, -11.05, -0.15, 0, Y_FIELD);
-  boxes.push(R(-3.3, -11.05, 3.3, -0.15, 0, Y_FIELD, 'z', 1, TREAD));
-  stairs(17.0, 23.2, -11.05, -0.15, 0, Y_FIELD);
-  // patamar raso na boca de cada subida, pra não ter vão nem quina entre a crista e o campinho
-  boxes.push(B(-23.4, -0.32, -16.8, 0.15, Y_FIELD, DIRT));
-  boxes.push(B(-3.45, -0.32, 3.45, 0.15, Y_FIELD, DIRT));
-  boxes.push(B(16.8, -0.32, 23.4, 0.15, Y_FIELD, DIRT));
-  wps.push([0, 0.3, -10.6], [0, Y_FIELD * 0.5, -5.5], [0, Y_FIELD + 0.2, 0.2]);
-
-  // campinho → topo. Mesmas três faixas, alinhadas com as de baixo.
-  stairs(-23.0, -16.8, 7.6, 18.5, Y_FIELD, Y_TOP);
-  stairs(-4.0, 4.0, 7.6, 18.5, Y_FIELD, Y_TOP);
-  stairs(16.8, 23.0, 7.6, 18.5, Y_FIELD, Y_TOP);
-  wps.push([0, Y_FIELD + 0.3, 8.3], [0, (Y_FIELD + Y_TOP) / 2, 13.2], [0, Y_TOP + 0.2, 18.4]);
-  wps.push([-20, 0.3, -12.5], [-20, Y_FIELD + 0.25, 2], [-20, Y_TOP + 0.25, 19.5]);
-  wps.push([20, 0.3, -12.5], [20, Y_FIELD + 0.25, 2], [20, Y_TOP + 0.25, 19.5]);
+  // Três subidas estreitas em L. O patamar é só a quina, pra não virar teto do lance seguinte.
+  const corner = (x, z, y) => pad(x - 1.25, z - 0.35, x + 1.25, z + 1.45, y);
+  flight(-4.8, -2.6, -10.8, -6.55, 0, 2.55);
+  corner(-3.6, -6.2, 2.55);
+  flight(-2.6, 1.8, -6.85, -4.65, 2.55, 4.15);
+  corner(1.5, -4.7, 4.15);
+  flight(0.3, 2.5, -4.7, -0.2, 4.15, Y_FIELD);
+  flight(-23.6, -21.4, -10.8, -6.55, 0, 2.55);
+  corner(-22.4, -6.2, 2.55);
+  flight(-21.4, -17.0, -6.85, -4.65, 2.55, 4.15);
+  corner(-17.2, -4.7, 4.15);
+  flight(-18.4, -16.2, -4.7, -0.2, 4.15, Y_FIELD);
+  flight(16.2, 18.4, -10.8, -6.55, 0, 2.55);
+  corner(17.3, -6.35, 2.55);
+  flight(18.7, 22.4, -6.15, -3.95, 2.55, 4.15);
+  corner(22.0, -4.05, 4.15);
+  flight(20.2, 22.4, -4.05, -0.15, 4.15, Y_FIELD);
+  flight(-4.6, -2.4, 8.75, 12.35, Y_FIELD, Y_FIELD + 2.3);
+  corner(-3.4, 12.2, Y_FIELD + 2.3);
+  flight(-2.4, 1.8, 11.0, 13.2, Y_FIELD + 2.3, Y_FIELD + 4.05);
+  corner(1.5, 13.05, Y_FIELD + 4.05);
+  flight(0.3, 2.5, 12.85, 18.25, Y_FIELD + 4.05, Y_TOP);
+  flight(-23.4, -21.2, 8.75, 12.35, Y_FIELD, Y_FIELD + 2.3);
+  corner(-22.2, 12.2, Y_FIELD + 2.3);
+  flight(-21.2, -17.0, 11.0, 13.2, Y_FIELD + 2.3, Y_FIELD + 4.05);
+  corner(-17.2, 13.05, Y_FIELD + 4.05);
+  flight(-18.4, -16.2, 12.85, 18.25, Y_FIELD + 4.05, Y_TOP);
+  flight(16.2, 18.4, 8.75, 12.35, Y_FIELD, Y_FIELD + 2.3);
+  corner(17.3, 12.15, Y_FIELD + 2.3);
+  flight(18.7, 22.4, 12.55, 14.75, Y_FIELD + 2.3, Y_FIELD + 4.05);
+  corner(22.0, 14.6, Y_FIELD + 4.05);
+  flight(20.2, 22.4, 14.4, 18.25, Y_FIELD + 4.05, Y_TOP);
 
   // campinho
   boxes.push(B(-13.2, 0.35, 13.2, 8.15, 0.07, GRASS, Y_FIELD));
+  // Coberturas pra quem está embaixo: toldo acima da cabeça, muro e lona. Não atravessam as escadas.
+  const awn = (x0, z0, x1, z1, y, c) => boxes.push(B(x0, z0, x1, z1, 0.1, c, y));
+  awn(-28.2, -14.7, -20.2, -12.35, 2.72, '#c45a6a');
+  awn(-7.6, -14.85, -1.6, -12.4, 2.78, '#e6c15a');
+  awn(14.2, -14.7, 22.4, -12.4, 2.72, '#3a6fb0');
+  awn(-16.4, -13.85, -12.2, -13.15, 3.25, '#d9d3c4');
+  awn(5.4, -13.7, 10.6, -13.05, 3.3, '#c45a6a');
+  boxes.push(B(-16.4, -14.5, -15.9, -11.7, 2.2, BRICK));
+  boxes.push(B(13.1, -14.6, 13.6, -11.8, 2.2, BRICK2));
+  awn(-12.2, 1.15, -8.0, 5.6, Y_FIELD + 2.45, '#c45a6a');
+  awn(8.2, 2.1, 12.5, 6.3, Y_FIELD + 2.45, '#e6c15a');
+  boxes.push(B(-7.7, 1.3, -7.25, 4.4, 1.2, BRICK, Y_FIELD));
+  boxes.push(B(7.25, 3.0, 7.7, 6.1, 1.2, BRICK, Y_FIELD));
+  boxes.push(B(-24.35, -6.4, -23.9, -2.2, 2.05, BRICK2));
+  boxes.push(B(23.9, -6.4, 24.35, -2.2, 2.05, BRICK2));
   const gy = Y_FIELD + 0.09;
   props.push(
     { t: 'decal', x0: -12.2, z0: 0.7, x1: 12.2, z1: 0.88, y: gy, c: 0xf7f4ee },
@@ -219,7 +276,7 @@ export function morroLeitao() {
 
   return {
     id: 'morro-leitao', name: 'Morro do Leitão',
-    desc: 'Morro de verdade: a rua embaixo, o campinho no patamar do meio e o topo lá em cima. Três subidas largas.',
+    desc: 'Morro de verdade: rua, campinho e topo. Escadas estreitas em zigue-zague e cobertura pra quem sobe.',
     size: [32, 28], wallH: 0.4, wallColor: [DIRT, DIRT], openMax: 12, laneMin: 36, expMax: 0.55, navSpacing: 2,
     skyline: 'favela',
     thumb: { x: 22, y: 26, z: -18, tx: -2, ty: 6, tz: 4 },
@@ -232,8 +289,8 @@ export function morroLeitao() {
     showcase: [0, 0, -13],
     view: [0, 1.7, -13.4, Math.PI, -0.18],
     test: {
-      stairs: { from: [0, 0.1, -11.6], to: [0, Y_FIELD, 0.35], level: Y_FIELD },
-      roof: { from: [0, Y_FIELD + 0.2, 7.3], to: [0, Y_TOP, 18.7], level: Y_TOP },
+      stairs: { from: [-3.7, 0.1, -10.6], to: [1.4, Y_FIELD, -0.45], level: Y_FIELD, via: [[-3.7, -6.7], [-0.4, -5.75], [1.4, -4.2]] },
+      roof: { from: [-3.5, Y_FIELD + 0.15, 9.0], to: [1.4, Y_TOP, 17.6], level: Y_TOP, via: [[-3.5, 12.1], [-0.3, 12.1], [1.4, 13.4]] },
       under: { from: [0, 0, -22.7], to: [0, 0, -19.35], ceil: 2.56 },
     },
   };

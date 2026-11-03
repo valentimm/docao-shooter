@@ -50,6 +50,8 @@ import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStami
 import { DOM, TEAM_NAMES, TEAM_COLORS, TEAM_HEX, TEAM_DARK, pickZone, newZoneState, zoneCounts, stepZone, inZone, smallerTeam } from './shared/domination.js';
 import { BACON_ITEM, noteHurt, resetRegen, regenStep, W_FALL } from './shared/rules.js';
 import { fellOff } from './shared/physics.js';
+import { rideShift } from './shared/nevasca.js';
+import { mountNevasca, updateNevasca } from './nevasca-show.js';
 import { BOMB, W_BOMB, SIDE_NAMES, SITE_NAMES, attackTeam, sideOf, bombLayout, newBombState, startRound, stepBomb, blastVictims, unpackBomb, spawnList, botObjective, bombFrozen, bombCanUse, plantNow, siteAt } from './shared/bomb.js';
 import { makeBotijao, makeSiteMark } from './bomb-gfx.js';
 import { KS_KILL_NAME, heliPos, GUNNER, heliOrbit, AC130 } from './shared/killstreaks.js';
@@ -165,7 +167,7 @@ function placeNameTags() {
 }
 
 // ---------------- Mapa (dados em maps.js, construção em world.js) ----------------
-let solids = [], worldMeshes = [], SPAWNS = [], nav = null, currentMap = null, worldGroup = null, mapBounds = [36, 36];
+let solids = [], worldMeshes = [], SPAWNS = [], nav = null, currentMap = null, worldGroup = null, mapBounds = [36, 36], nevascaShow = null;
 // Física/colisão: a MESMA implementação do servidor (shared/physics.js) — a predição online bate com o servidor.
 let PHYS = createPhysics([], mapBounds);
 function indexSolids(map = currentMap) { PHYS = createPhysics(solids, mapBounds, map && map.fall); } // broadphase em grade 4 m + movimento compartilhado
@@ -4675,7 +4677,12 @@ function updatePlayer(dt) {
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
   if (!guiding && jumpPressed && p.onGround && !bombLock(p)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
-  moveEntity(p, dt); checkFall(p); if (!p.alive) return;
+  moveEntity(p, dt);
+  if (currentMap && currentMap.id === 'posto-nevasca') {
+    const ride = rideShift(p.pos, gameTime, dt);
+    if (ride) { p.pos.set(ride.x, ride.floor ? ride.y : Math.max(ride.y, p.pos.y), ride.z); if (ride.floor) { p.vel.y = 0; p.onGround = true; } }
+  }
+  checkFall(p); if (!p.alive) return;
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
   stepRecoil(p, dt, gameTime);
   stepFlinch(dt);
@@ -5812,6 +5819,7 @@ function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de muniçã
   if (worldGroup) { scene.remove(worldGroup); disposeWorld(worldGroup); }
   for (const p of pickups) scene.remove(p.mesh); pickups.length = 0;
   const w = buildWorld(map); worldGroup = w.group; scene.add(worldGroup);
+  nevascaShow = map.id === 'posto-nevasca' ? mountNevasca(worldGroup, map) : null;
   doorGroups = new Map(); for (const g of w.doors || []) doorGroups.set(g.userData.doorId, g);
   nightLights = w.nightLights || []; nightAmb.stop();
   solids = w.solids; worldMeshes = w.meshes; mapBounds = map.size; indexSolids(map);
@@ -6427,6 +6435,7 @@ function loop() {
     for (const e of entities) if (!e.isPlayer) updateBot(e, dt);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
     updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); updateBombOffline(dt); updateBombGfx(dt); tickNight(dt); if (survivalMode()) survivalPrompt();
+    if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => tone('sine', 988, 988, 0.09, 0.04));
     if (!online && !exploreMode() && gameTime >= matchLimit()) endGame();
   } else if (state === 'menu') {
     menuT += dt * 0.25; danceT += dt;
