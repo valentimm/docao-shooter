@@ -256,11 +256,11 @@ export const PARTS = {
     brim.scale.set(1, 1, 1.2); brim.position.set(0, 0.005, 0.36); brim.rotation.x = 0.12; outline(brim, 0.01); g.add(brim);
     const btn = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), bm); btn.position.y = 0.27; g.add(btn);
     if (o.logo) {
-      const tex = canvasTex(256, 256, (x) => drawLogo(x, 128, 128, 170, o.logoColor || '#12233a'));
+      const tex = canvasTex(256, 256, (x) => { if (o.logo === 'arcs') { x.strokeStyle = o.logoColor || '#2ec4b6'; x.lineWidth = 26; x.lineCap = 'round'; for (const s of [-1, 1]) { x.beginPath(); x.arc(128 + s * 120, 128, 90, s < 0 ? -0.75 : Math.PI - 0.75, s < 0 ? 0.75 : Math.PI + 0.75); x.stroke(); } } else drawLogo(x, 128, 128, 170, o.logoColor || '#12233a'); });
       const p = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 }));
       p.position.set(0, 0.15, 0.39); p.rotation.x = -0.45; g.add(p);
     }
-    g.position.set(0, 1.74, -0.01); g.rotation.x = -0.12; return g;
+    g.position.set(0, 1.74 + (o.lift || 0), -0.01); g.rotation.x = -0.12; if (o.scale) g.scale.setScalar(o.scale); return g;
   },
   glasses(o, rig) {
     const g = new THREE.Group(); const m = basic(o.color || '#2a1408');

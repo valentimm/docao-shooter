@@ -118,9 +118,18 @@ export const SKINS = [
   {
     id: 'cabeludo',
     name: 'JanorDoc',
-    shirt: { color: '#1a1a1d', trim: '#1a1a1d', logo: { text: 'OINK', color: '#e8e8e8', outline: '#c0121e', size: 0.2 } },
-    pants: '#2e3a55',
-    parts: [{ type: 'longHair', color: '#3b2414', headband: '#c0121e' }],
+    shirt: { color: '#f6f6f4', trim: '#111114', sleeveColor: '#f6f6f4', details: [{ type: 'jersey', trim: '#111114' }] },
+    pants: '#141416',
+    parts: [
+      { type: 'longHair', color: '#5a3518' },
+      { type: 'cap', color: '#1a1a1d', brim: '#111114', logo: 'arcs', logoColor: '#2ec4b6', scale: 1.14, lift: 0.06 },
+      { type: 'sunglasses', color: '#111114', lens: '#1b2a3a' },
+      { type: 'beard', color: '#5a3518', stubble: false, goatee: true },
+      { type: 'sleeveStripes', color: '#111114' },
+      { type: 'shortsStripes', color: '#f4f4f4' },
+      { type: 'watch', color: '#2f8a3c' },
+      { type: 'shoes', color: '#141416', sole: '#f4f4f4', strap: '#f4f4f4' },
+    ],
   },
   {
     id: 'pescador',
