@@ -189,6 +189,15 @@ ITEMS.push(
       { type: 'shoes', color: '#f4f4f4', sole: '#2a2a2e', strap: '#d81e2a' },
     ] } },
 );
+// Docão Boizão: boi comum (marrom, chifres creme), nada de Caprichoso. Fantasia paga do Brechó.
+ITEMS.push(
+  { id: 'c19', name: 'Boizão', emoji: '🐂', price: 1200, line: 'Cabeça de boi com chifrões, focinho largo e camisa de peão', costume: {
+    shirt: { color: '#8a5a2b', trim: '#3a2414' }, pants: '#3b4a63',
+    parts: [
+      { type: 'bullHead', color: '#6b3e22', dark: '#2b1a10', horn: '#efe2c4', muzzle: '#3a2a22' },
+      { type: 'shoes', color: '#5a3518', sole: '#2a1a10', strap: '#3a2414' },
+    ] } },
+);
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
   { id: 'd1', name: 'Escovinha', emoji: '🪥', price: 400, dance: 'floss', line: 'Braços varrendo o quadril' },

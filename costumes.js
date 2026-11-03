@@ -813,4 +813,38 @@ Object.assign(PARTS, {
     return onHead(g);
   },
 });
-
+// ---------- Docão Boi (cabeça de boi comum, nada de Caprichoso) ----------
+Object.assign(PARTS, {
+  bullHead(o, rig) { // capuz de boi: pelagem marrom, chifres curvos creme, orelhas de lado, focinho largo escuro com narinas
+    hideTuft(rig); if (rig.ears) rig.ears.forEach((e) => (e.visible = false)); // só no Boi: orelhas de porco somem sob o capuz
+    const g = new THREE.Group();
+    const fur = toonWarm(o.color || '#6b3e22', 0.15, { side: THREE.DoubleSide });
+    const dark = toonWarm(o.dark || '#2b1a10', 0.1, { side: THREE.DoubleSide });
+    const hornM = toonWarm(o.horn || '#efe2c4', 0.2), tipM = toon(o.hornTip || '#3a3026');
+    const shell = M(new THREE.SphereGeometry(0.655, 44, 30, 0, TAU, 1.05, Math.PI - 1.05), fur, g, 0.012);
+    shell.rotation.x = Math.PI / 2 - 0.38; shell.scale.set(1.06, 1, 0.97);
+    // topete escuro na testa
+    const tuft = M(new THREE.SphereGeometry(0.2, 18, 12), dark, g, 0.008); tuft.position.set(0, 0.5, 0.22); tuft.scale.set(1.3, 0.55, 0.8);
+    // chifres: base grossa saindo de lado, curvando pra cima e pra frente
+    for (const s of [-1, 1]) {
+      const curve = new THREE.CatmullRomCurve3([new V3(s * 0.5, 0.38, 0.0), new V3(s * 0.78, 0.46, 0.04), new V3(s * 0.94, 0.66, 0.1), new V3(s * 0.96, 0.86, 0.16)]);
+      const n = 16, pts = curve.getPoints(n);
+      for (let i = 0; i < n; i++) {
+        const a = pts[i], b = pts[i + 1], r = 0.1 * (1 - i / n) + 0.02;
+        const seg = M(new THREE.CylinderGeometry(r * 0.92, r, a.distanceTo(b) * 1.15, 12), i > n - 4 ? tipM : hornM, g, 0.006);
+        seg.position.copy(a).lerp(b, 0.5); seg.quaternion.setFromUnitVectors(new V3(0, 1, 0), b.clone().sub(a).normalize());
+      }
+      // orelha de boi: de lado, abaixo do chifre
+      const ear = new THREE.Group(); ear.position.set(s * 0.6, 0.18, 0.0); ear.rotation.set(0, s * 0.3, -s * 1.25); g.add(ear);
+      const e = M(new THREE.CapsuleGeometry(0.09, 0.2, 6, 14), fur, ear, 0.01); e.position.y = 0.16; e.scale.z = 0.4;
+      const ei = M(new THREE.CapsuleGeometry(0.055, 0.15, 6, 12), toon(o.inner || '#d9a48a'), ear, 0); ei.position.set(0, 0.16, 0.03); ei.scale.z = 0.25;
+    }
+    // focinho de boi largo por cima do focinho do Docão, com narinas
+    const head = new THREE.Group(); head.position.set(0, -1.52, 0.02); g.add(head);
+    const sp = headPoint(0, 1.47);
+    const muzzle = M(new THREE.SphereGeometry(0.2, 22, 16), toonWarm(o.muzzle || '#3a2a22', 0.15), head, 0.01);
+    muzzle.position.set(0, 1.42, sp.z + 0.08); muzzle.scale.set(1.35, 0.85, 0.7);
+    for (const s of [-1, 1]) { const ns = M(new THREE.SphereGeometry(0.04, 12, 8), basic('#120c08'), head, 0); ns.position.set(s * 0.1, 1.45, sp.z + 0.215); ns.scale.set(1, 1.3, 0.5); }
+    g.position.set(0, 1.52, -0.02); return onHead(g);
+  },
+});
