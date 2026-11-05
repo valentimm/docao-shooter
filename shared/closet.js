@@ -181,7 +181,7 @@ ITEMS.push(
 );
 // Docão Coelho: cabeça de coelho (capuz de pelúcia com orelhonas, dentinhos e bigodes) + dreads com contas rasta. Fantasia paga do Brechó.
 ITEMS.push(
-  { id: 'c18', name: 'SARKAO', emoji: '🐰', price: 1200, line: 'Cabeça de coelho com orelhonas, dentinhos e dreads com contas', costume: {
+  { id: 'c18', name: 'SARKAO', emoji: '🐰', price: 0, free: true, line: 'Cabeça de coelho com orelhonas, dentinhos e dreads com contas', costume: {
     shirt: { color: '#2a7a3a', trim: '#f2c230', logo: { text: 'C!', color: '#f2c230' } }, pants: '#2c2c30',
     parts: [
       { type: 'dreads', color: '#3a2414', beads: ['#d81e2a', '#f2c230', '#2a9a3a'] },
@@ -191,7 +191,7 @@ ITEMS.push(
 );
 // Docão Boizão: boi comum (marrom, chifres creme), nada de Caprichoso. Fantasia paga do Brechó.
 ITEMS.push(
-  { id: 'c19', name: 'Boizão', emoji: '🐂', price: 1200, line: 'Cabeça de boi com chifrões, focinho largo e camisa de peão', costume: {
+  { id: 'c19', name: 'Boizão', emoji: '🐂', price: 0, free: true, line: 'Cabeça de boi com chifrões, focinho largo e camisa de peão', costume: {
     shirt: { color: '#8a5a2b', trim: '#3a2414' }, pants: '#3b4a63',
     parts: [
       { type: 'bullHead', color: '#6b3e22', dark: '#2b1a10', horn: '#efe2c4', muzzle: '#3a2a22' },
@@ -200,7 +200,7 @@ ITEMS.push(
 );
 // Docão Él Big: bonezinho preto, jaqueta escura e camisa com BIG 67 nas costas. Fantasia paga do Brechó.
 ITEMS.push(
-  { id: 'c20', name: 'Él Big', emoji: '🧢', price: 1200, line: 'Bonezinho preto e camisa escura com BIG 67 nas costas', costume: {
+  { id: 'c20', name: 'Él Big', emoji: '🧢', price: 0, free: true, line: 'Bonezinho preto e camisa escura com BIG 67 nas costas', costume: {
     shirt: { color: '#1c1c20', trim: '#0e0e10', sleeveColor: '#26262b', details: [{ type: 'backNumber', name: 'BIG', number: 67, color: '#f4f4f4', outline: '#c9a23a', nameY: 0.92, nameSize: 44, numY: 0.62, numSize: 96 }] },
     pants: '#2a2f3a',
     parts: [
