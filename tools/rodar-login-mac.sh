@@ -10,7 +10,7 @@ done
 cd server
 [ -d node_modules/wrangler ] || npm install --no-audit --no-fund
 npx wrangler d1 migrations apply docao-contas --local
-npx wrangler dev --port "$WORKER_PORT" > ../wrangler-login.log 2>&1 &
+npx wrangler dev --port "$WORKER_PORT" --var "DEV_UNLOCK_SKINS:${DEV_UNLOCK_SKINS:-1}" > ../wrangler-login.log 2>&1 &
 WR=$!
 cd ..
 python3 -m http.server "$SITE_PORT" > http-login.log 2>&1 &

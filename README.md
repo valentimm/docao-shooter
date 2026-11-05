@@ -571,7 +571,7 @@ npx wrangler d1 migrations apply docao-contas --local
 npx wrangler dev --port 8787
 ```
 
-Ou rode `./tools/rodar-login-mac.sh`, que faz isso e sobe o site (porta 8135) e o Worker (porta 8795, mude com `SITE_PORT` e `WORKER_PORT`) de uma vez. Pra zerar as contas de teste, apague `server/.wrangler`. O `ALLOW_TEST` **não** é ligado nesse script.
+Ou rode `./tools/rodar-login-mac.sh`, que faz isso e sobe o site (porta 8135) e o Worker (porta 8795, mude com `SITE_PORT` e `WORKER_PORT`) de uma vez. Pra zerar as contas de teste, apague `server/.wrangler`. No desenvolvimento local, o script libera todos os itens cosméticos na mochila da conta ao entrar ou atualizar a página, sem gastar Docoins. Para testar a progressão normal, inicie com `DEV_UNLOCK_SKINS=0` e use uma conta local nova; os itens já concedidos continuam na mochila. A liberação só funciona em localhost com `DEV_UNLOCK_SKINS=1` e nunca é configurada no deploy. O `ALLOW_TEST` **não** é ligado nesse script.
 
 Parâmetros de URL úteis:
 - `?server=` troca o servidor (o padrão está em `config.js`)

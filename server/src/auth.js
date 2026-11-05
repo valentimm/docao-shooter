@@ -5,6 +5,7 @@
 //  - Limite de tentativas no login/cadastro (tabela rate_limits). Erros genéricos, sem dizer o que falhou.
 //  - Tudo é OPCIONAL: sem D1 configurado (env.DB) as rotas respondem 503 e o jogo segue como convidado.
 // ============================================================
+import { unlockDevSkins } from './dev-skins.js';
 import { cleanNick, nickKey, nickError, passError } from '../../shared/nick.js';
 import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
@@ -169,6 +170,7 @@ export async function handleAccountRoute(req, env, url, json) {
     }
     if (p === '/api/me' && m === 'GET') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      await unlockDevSkins(env, a.id, url);
       const boxGrant = await grantLoginBox(env, a.id);
       const w = await wallet(env, a.id);
       return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant });
