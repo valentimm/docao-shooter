@@ -152,3 +152,6 @@
 #menu #arsenalApp .ar-options .ar-skins-empty{font-size:.9em;margin-top:14px}
 #menu #arsenalApp button:disabled{cursor:wait;opacity:.65}
 @media(max-width:760px){#menu #arsenalApp .ar-owned-skins{max-height:440px}}
+
+#menu #arsenalApp .ar-melee-grid .ar-photo{height:clamp(85px,12vh,140px)}
+@media(min-width:1101px){#menu #arsenalApp .ar-melee-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}

@@ -19,9 +19,9 @@ try {
   await page.locator('.arsenal-crate').click();
   await page.waitForSelector('#menu[data-crate-state="inside"][data-view="arsenal"]');
  }
- async function choose(slot, i) {
+ async function choose(slot, i, model = 'chef') {
   await page.locator(`#arsenalApp [data-slot="${slot}"]`).click();
-  await page.locator(`#arsenalApp [data-weapon="${i}"]`).click();
+  await page.locator(`#arsenalApp [data-weapon="${i}"]${i === KNIFE ? `[data-knife-model="${model}"]` : ''}`).click();
   await page.locator('#arsenalApp [data-action="customize"]').click();
  }
  const equip = async () => { await page.locator('#arsenalApp [data-action="equip"]').click(); await page.waitForSelector('#arsenalApp[data-step="1"]'); };
@@ -29,8 +29,9 @@ try {
  assert.equal(await page.locator('#arsenalApp [data-skin]').count(), ITEMS.filter(i => i.gun === 'rifle').length + 1);
  const rifle = ITEMS.find(i => i.gun === 'rifle' && i.paint === 'gold');
  await page.locator(`#arsenalApp [data-skin="${rifle.id}"]`).click(); await equip();
- await choose('melee', KNIFE);
- assert.equal(await page.locator('#arsenalApp [data-skin]').count(), ITEMS.filter(i => i.knife).length + 1);
+ await choose('melee', KNIFE, 'butterfly');
+ assert.equal(await page.locator('#arsenalApp [data-skin]').count(), ITEMS.filter(i => i.knife === 'butterfly').length);
+ assert.equal(await page.locator('#arsenalApp [data-skin="k2"]').count(), 0, 'cores de outros modelos não entram na Butterfly');
  await page.locator('#arsenalApp [data-skin="k19"]').click();
  mkdirSync('/tmp/docao-dev-local', { recursive: true });
  await page.screenshot({ path: '/tmp/docao-dev-local/skins-sem-login.png' });
@@ -38,7 +39,7 @@ try {
  const local = await page.evaluate(() => JSON.parse(localStorage.getItem('docao.dev.cosmetics')));
  assert.equal(local.knife, 'k19'); assert.equal(local.guns.rifle, rifle.id);
  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('docao.classes'))[0].melee), KNIFE);
- await open(); await choose('melee', KNIFE);
+ await open(); await choose('melee', KNIFE, 'butterfly');
  assert.equal(await page.locator('#arsenalApp [data-skin="k19"]').getAttribute('aria-pressed'), 'true');
  await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
  await page.locator('#arsenalApp [data-action="close"]').click();

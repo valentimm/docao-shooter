@@ -85,8 +85,8 @@ import { POWER_UPS, normHand, clampLoadout, botPool, powerOn, savedToLimits, lim
 try { document.fonts?.load('700 32px Fredoka'); } catch {}
 import { CLASS_COUNT, clampClassIndex, clampKit, classLoad, compare, defaultKit, familyOf, kitIsDefault, normalizeClasses, pieceBlurb, pieceInfo, piecesOf, resolveWeapon, slotsOf, statBars } from './shared/attachments.js';
 import { fillBench, fillChips, fillSheet } from './classes-ui.js';
-import { createArsenal } from './arsenal-ui.js';
-import { skinChannel, ownedWeaponSkins, equippedWeaponSkin } from './shared/arsenal-skins.js';
+import { createArsenal } from './arsenal-ui.js?v=knife-models';
+import { skinChannel, ownedWeaponSkins, equippedWeaponSkin, unlockedKnifeModels } from './shared/arsenal-skins.js?v=knife-models';
 
 const V3 = THREE.Vector3;
 const $ = (id) => document.getElementById(id);
@@ -6212,6 +6212,7 @@ arsenalUi = createArsenal($('arsenalApp'), {
     signedIn: !!getAccount(),
     local: !!getAccount()?.dev,
   }),
+  knifeModels: () => unlockedKnifeModels(getItems(), getAccount()?.knife || ''),
   skinThumb: arsenalSkinThumb,
   prepareSkin: (i, id, clone) => {
     if (i !== KNIFE && skinChannel(i)) paintThumbGun(clone, itemById(id) || { gun: WEAPONS[i].key });

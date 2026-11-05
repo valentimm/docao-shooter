@@ -35,9 +35,9 @@ try {
   await page.locator('.arsenal-crate').click();
   await page.waitForSelector('#menu[data-crate-state="inside"][data-view="arsenal"]');
  };
- const choose = async (slot, weapon) => {
+ const choose = async (slot, weapon, model = 'chef') => {
   await page.locator(`#arsenalApp [data-slot="${slot}"]`).click();
-  await page.locator(`#arsenalApp [data-weapon="${weapon}"]`).click();
+  await page.locator(`#arsenalApp [data-weapon="${weapon}"]${weapon === KNIFE ? `[data-knife-model="${model}"]` : ''}`).click();
   await page.locator('#arsenalApp [data-action="customize"]').click();
  };
  const equip = async () => {
@@ -45,8 +45,8 @@ try {
   await page.waitForSelector('#arsenalApp[data-step="1"]');
  };
  await open();
- await choose('melee', KNIFE);
- assert.equal(await page.locator('#arsenalApp [data-skin]').count(), 4);
+ await choose('melee', KNIFE, 'butterfly');
+ assert.equal(await page.locator('#arsenalApp [data-skin]').count(), 1);
  assert.equal(await page.locator('#arsenalApp [data-skin="k1"]').count(), 0, 'skin não possuída não aparece');
  await page.locator('#arsenalApp [data-skin="k19"]').click();
  assert.equal((await me()).account.knife, null, 'prévia não salva');
@@ -56,7 +56,7 @@ try {
  assert.equal((await me()).account.knife, 'k19');
  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('docao.classes'))[0].melee), KNIFE);
  assert.match(await page.locator('#arsenalApp [data-slot="melee"]').textContent(), /Butterfly/);
- await choose('melee', KNIFE);
+ await choose('melee', KNIFE, 'karambit');
  await page.locator('#arsenalApp [data-skin="k2"]').click();
  await page.route('**/api/me/knife', route => route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: 'Skin recusada no teste' }), headers: { 'Access-Control-Allow-Origin': '*' } }));
  await page.locator('#arsenalApp [data-action="equip"]').click();
@@ -79,8 +79,11 @@ try {
  await choose('melee', SABER);
  assert.equal(await page.locator('#arsenalApp [data-skin]').count(), 1, 'sabre não recebe skins da faca');
  await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
- await choose('melee', KNIFE);
+ await choose('melee', KNIFE, 'karambit');
  assert.equal(await page.locator('#arsenalApp [data-skin="k2"]').getAttribute('aria-pressed'), 'true');
+ await page.keyboard.press('Escape');
+ await page.locator('#arsenalApp [data-knife-model="chef"]').click();
+ await page.locator('#arsenalApp [data-action="customize"]').click();
  await page.locator('#arsenalApp [data-skin=""]').click(); await equip();
  assert.equal((await me()).account.knife, null, 'restaura faca padrão');
  await open();
