@@ -209,6 +209,20 @@ ITEMS.push(
       { type: 'shoes', color: '#f4f4f4', sole: '#141416', strap: '#141416' },
     ] } },
 );
+// Docão Neymar: camisa amarela da Seleção com NEYMAR -10 nas costas, de muleta e gesso na perna. Fantasia do Brechó.
+ITEMS.push(
+  { id: 'c21', name: 'Neymar', emoji: '🩼', price: 1, line: 'Pronto Pedro, o Neymar do jeito que ele é, camisa -10', costume: {
+    shirt: { color: '#f7d417', trim: '#0f8a3c', sleeveColor: '#f7d417', logo: { text: 'BR', color: '#0f8a3c' }, details: [{ type: 'backNumber', name: 'NEYMAR', number: '-10', color: '#0f8a3c', outline: '#1d3f9a', nameY: 0.96, nameSize: 36, numY: 0.7, numSize: 80 }] },
+    pants: '#1d3f9a',
+    parts: [
+      { type: 'socks', color: '#f4f4f4' },
+      { type: 'legCast' },
+      { type: 'crutch' },
+      { type: 'babyMavi' },
+      { type: 'hideTail' },
+      { type: 'shoes', color: '#f4f4f4', sole: '#0f8a3c', strap: '#f7d417' },
+    ] } },
+);
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
   { id: 'd1', name: 'Escovinha', emoji: '🪥', price: 400, dance: 'floss', line: 'Braços varrendo o quadril' },
