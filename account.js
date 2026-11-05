@@ -93,6 +93,18 @@ export async function openBox() {
   account.coins = r.data.coins | 0; account.boxes = r.data.boxes | 0; emit();
   return { ok: true, dupe: !!r.data.dupe, item: r.data.item, coins: account.coins, gain: r.data.gain | 0, boxes: account.boxes };
 }
+export async function buyBox() {
+  if (!token || !account) return { error: 'Entre na sua conta para comprar o caixote' };
+  const r = await api('/api/lootbox/buy', { method: 'POST', auth: true });
+  if (r.status === 401) { dropSession(); return { error: 'Sessão expirada. Entre de novo.' }; }
+  if (!r.ok) {
+    if (r.status === 409) account.boxBought = true;
+    emit();
+    return { error: r.data.error || 'Não deu pra comprar o caixote' };
+  }
+  account.coins = r.data.coins | 0; account.boxes = r.data.boxes | 0; account.boxBought = true; emit();
+  return { ok: true, coins: account.coins, boxes: account.boxes };
+}
 export async function spinWheel(ids) {
   if (!token || !account) return { error: 'Entre na sua conta para girar a roleta' };
   const r = await api('/api/lootbox/wheel', { method: 'POST', body: { items: ids }, auth: true });

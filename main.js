@@ -75,9 +75,10 @@ import { makeFPShield } from './shield-view.js';
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, rollFumble, pickBotSecondary, akimboReady, ammoLow } from './shared/revolver.js';
 import { getAccount, getItems, onAccount, loadMe, saveSkin as saveAcctSkin, dropSession } from './account.js';
 import { knifeKind, knifeFinish, sniperKind, itemById, gunPaint, GUN_EQUIP_KEYS } from './shared/closet.js';
+import { lootItems } from './shared/lootbox.js';
 import { applyGunPaint } from './gun-paint.js';
 import { initAccountUI } from './account-ui.js';
-import { initCloset, refreshWardrobeLook } from './closet-ui.js';
+import { initCloset, refreshWardrobeLook, setLootThumbSource } from './closet-ui.js';
 import { bindGrenadeVoice, playGrenadeVoice, grenadeVoiceEnabled, setGrenadeVoiceEnabled } from './grenade-voice.js';
 import { POWER_UPS, normHand, clampLoadout, botPool, powerOn, savedToLimits, limitsToSaved } from './shared/loadout.js';
 // fonte Fredoka (canvas de HUD/nomes usa a fonte só depois de carregada; o CSS já tem font-display: swap)
@@ -3924,6 +3925,66 @@ function applyWorldKnife(e, id) {
 }
 const SNIPER_W = WEAPONS.findIndex((w) => w.key === 'sniper');
 const GUN_MESH = Object.fromEntries(['rifle', 'sniper', 'pistol', 'carabina', 'p90'].map((k) => [k, WEAPONS.findIndex((w) => w.key === k)]));
+const lootThumbs = new Map();
+function detachThumbMaterials(root) {
+  const drop = [];
+  root.traverse((o) => {
+    if (o.name === 'gold-dress' || o.name === 'lore-dress') drop.push(o);
+    if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+    const mat = o.material.clone();
+    mat.userData = { thumbOwn: true };
+    o.material = mat;
+  });
+  for (const o of drop) if (o.parent) o.parent.remove(o);
+  if (!root.userData) root.userData = {};
+  root.userData.gunPaint = '';
+  root.userData.goldDress = null;
+  root.userData.sniperSkin = '';
+  root.userData.loreDress = null;
+}
+function paintThumbGun(clone, it) {
+  detachThumbMaterials(clone);
+  if (it.gun === 'sniper') {
+    applySniperSkin(clone, '');
+    applyGunPaint(clone, '');
+    if (it.sniper === 'lore' || it.paint === 'lore') applySniperSkin(clone, 'lore');
+    else applyGunPaint(clone, it.paint || '');
+    return;
+  }
+  applyGunPaint(clone, it.paint || '');
+}
+function lootItemThumb(it) {
+  if (!it || !(it.gun || it.knife)) return '';
+  if (lootThumbs.has(it.id)) return lootThumbs.get(it.id);
+  let url = '';
+  try {
+    if (it.knife) {
+      const knife = makeKnife(1, 0.004, it.knife, it.finish || 'factory');
+      if (it.knife === 'butterfly') poseButterfly(knife, 0, 1);
+      url = renderWeaponThumb(knife, 192, 112);
+    } else {
+      const idx = GUN_MESH[it.gun];
+      const gun = idx != null && idx >= 0 ? fp.guns[idx] : null;
+      if (gun) url = renderWeaponThumb(gun, 192, 112, (clone) => paintThumbGun(clone, it));
+    }
+  } catch (e) {
+    console.warn('prévia da roleta', it.id, e);
+    url = '';
+  }
+  lootThumbs.set(it.id, url || '');
+  return url || '';
+}
+function warmLootThumbs() {
+  const list = lootItems().filter((it) => it.gun || it.knife);
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { window.__lootThumbs = lootThumbs.size; return; }
+    try { lootItemThumb(list[i]); } catch (e) { /* a carta cai no emoji */ }
+    i++;
+    requestAnimationFrame(next);
+  };
+  requestAnimationFrame(next);
+}
 function paintGunMesh(group, id) {
   if (!group) return;
   applyGunPaint(group, gunPaint(id));
@@ -6126,7 +6187,7 @@ function paintWeaponThumbs() {
 function makeWeaponThumbs() {
   let i = 0;
   const next = () => {
-    if (i >= fp.guns.length) { paintWeaponThumbs(); paintClassSurfaces(); window.__gunThumbs = weaponThumbs.length; return; }
+    if (i >= fp.guns.length) { paintWeaponThumbs(); paintClassSurfaces(); window.__gunThumbs = weaponThumbs.length; warmLootThumbs(); return; }
     try { weaponThumbs[i] = renderWeaponThumb(fp.guns[i]); } catch (e) { console.warn('miniatura da arma', i, e); }
     i++; requestAnimationFrame(next);
   };
@@ -7836,6 +7897,7 @@ function applyAccount(a) {
   if (a) { saveName(a.nick); if (a.skin && skinOk(a.skin) && a.skin !== selectedSkin) setPreview(a.skin); else if (!a.skin) saveAcctSkin(selectedSkin); applyHeldKnife(a.knife); applyHeldSniper(a.sniper); applyHeldGuns(a.guns); }
   else { if (selectedSkin.startsWith('x1.')) setPreview(DEFAULT_SKIN); /* visual personalizado é só de conta */ applyHeldKnife(''); let n = ''; try { n = localStorage.getItem('docao.name') || ''; } catch (e) { /* sem storage */ } for (const id of NAME_FIELDS) $(id).value = cleanName(n || 'Docão'); }
 }
+setLootThumbSource(lootItemThumb);
 onAccount(applyAccount); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
 const roomLink = (code) => { const u = new URL(location.href); u.search = ''; const sv = new URLSearchParams(location.search).get('server'); if (sv) u.searchParams.set('server', sv); u.searchParams.set('sala', code); return u.toString(); };
 function socialTeam() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && (cfg.mode === 'dom' || isArmsRace(cfg.mode) || cfg.mode === 'bomb')); } // Dominação e Bomba: chat e voz do time

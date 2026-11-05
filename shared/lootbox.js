@@ -8,6 +8,7 @@ import { ITEMS, itemById } from './closet.js';
 export const BOX_ID = 'safra1';
 export const BOX_NAME = 'Caixote da Primeira Safra';
 export const BOX_EMOJI = '🌽';
+export const BOX_PRICE = 400; // 1 caixote comprado por dia de Brasília, além do grátis e dos desafios
 // bp = pontos em 10.000 (72,5% = 7250). A soma é 10.000.
 export const ODDS = [
   { weight: 500, bp: 7250 },

@@ -7,7 +7,7 @@
 import { SKINS, skinOk } from '../../skins.js';
 import { ITEMS, itemById, parseLook, lookItemIds, isFreeItem, knifeKind, sniperKind, gunKey, parseGuns, GUN_EQUIP_KEYS, EARN } from '../../shared/closet.js';
 import { spDay, parseChal, applyChal, chalView } from '../../shared/challenges.js';
-import { rollBox, dupeCoins, BOX_NAME, wheelInputs, rollWheel } from '../../shared/lootbox.js';
+import { rollBox, dupeCoins, BOX_NAME, BOX_PRICE, wheelInputs, rollWheel } from '../../shared/lootbox.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 export const dayNow = () => Math.floor(now() / 86400);
@@ -51,14 +51,14 @@ export async function chalUpdates(env, items) {
 
 export async function wallet(env, id) { // saldo + mochila + quanto já ganhou hoje
   const [a, inv] = await env.DB.batch([
-    env.DB.prepare('SELECT coins, custom, earn_day, earn_today, chal, knife, sniper, boxes, guns FROM accounts WHERE id = ?').bind(id),
+    env.DB.prepare('SELECT coins, custom, earn_day, earn_today, chal, knife, sniper, boxes, guns, box_buy_day FROM accounts WHERE id = ?').bind(id),
     env.DB.prepare('SELECT item FROM inventory WHERE account_id = ?').bind(id),
   ]);
   const r = (a.results && a.results[0]) || { coins: 0, custom: null, earn_day: 0, earn_today: 0 };
   const items = (inv.results || []).map((x) => x.item).filter((i) => itemById(i));
   const knife = knifeKind(r.knife) && (isFreeItem(r.knife) || items.includes(r.knife)) ? r.knife : null;
   const sniper = sniperKind(r.sniper) && (isFreeItem(r.sniper) || items.includes(r.sniper)) ? r.sniper : null;
-  return { coins: r.coins | 0, custom: r.custom && parseLook(r.custom) ? r.custom : null, items, knife, sniper, guns: parseGuns(r.guns), boxes: r.boxes | 0, earnToday: r.earn_day === dayNow() ? r.earn_today | 0 : 0, dayCap: EARN.dayCap, chal: chalView(id, r.chal) };
+  return { coins: r.coins | 0, custom: r.custom && parseLook(r.custom) ? r.custom : null, items, knife, sniper, guns: parseGuns(r.guns), boxes: r.boxes | 0, boxBought: (r.box_buy_day | 0) === spDay(), earnToday: r.earn_day === dayNow() ? r.earn_today | 0 : 0, dayCap: EARN.dayCap, chal: chalView(id, r.chal) };
 }
 export async function equipSniper(env, id, itemId) {
   const clear = itemId == null || itemId === '';
@@ -126,6 +126,26 @@ export async function equipSkin(env, id, skin) {
   const cur = await env.DB.prepare('SELECT skin, custom FROM accounts WHERE id = ?').bind(id).first(); // nada mudou: ou já estava assim, ou faltou item
   return !!cur && cur.skin === skin && cur.custom === skin;
 }
+// Compra 1 caixote por dia de Brasília. O preço é o do servidor. O dia da compra não é o dia do caixote grátis.
+export async function buyBox(env, id) {
+  const day = spDay();
+  const row = await env.DB.prepare('SELECT coins, box_buy_day FROM accounts WHERE id = ?').bind(id).first();
+  if (!row) return { status: 404, error: 'Conta não encontrada' };
+  if ((row.box_buy_day | 0) === day) return { status: 409, error: 'Você já comprou o caixote de hoje. Volta amanhã.' };
+  if ((row.coins | 0) < BOX_PRICE) return { status: 402, error: 'Docoins insuficientes' };
+  const upd = await env.DB.prepare(
+    `UPDATE accounts SET coins = coins - ?3, boxes = boxes + 1, box_buy_day = ?2
+     WHERE id = ?1 AND coins >= ?3 AND box_buy_day IS NOT ?2`
+  ).bind(id, day, BOX_PRICE).run();
+  if (!upd.meta || !upd.meta.changes) {
+    const again = await env.DB.prepare('SELECT coins, box_buy_day FROM accounts WHERE id = ?').bind(id).first();
+    if (again && (again.box_buy_day | 0) === day) return { status: 409, error: 'Você já comprou o caixote de hoje. Volta amanhã.' };
+    return { status: 402, error: 'Docoins insuficientes' };
+  }
+  const done = await env.DB.prepare('SELECT coins, boxes FROM accounts WHERE id = ?').bind(id).first();
+  return { status: 200, coins: (done && done.coins) | 0, boxes: (done && done.boxes) | 0, boxBought: true };
+}
+
 // Um caixote por dia de Brasília, na primeira leitura da conta nesse dia (login ou sessão que continua aberta).
 export async function grantLoginBox(env, id) {
   const day = spDay();
