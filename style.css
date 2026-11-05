@@ -443,6 +443,11 @@ body:has(#pause:not(.hidden)) #streakBar { display: none !important; }
 .bmark .zlbl b{font-family:var(--font);font-size:15px}
 .kf.bomb{border-left:4px solid #ffd27a}
 #bPrompt,#sPrompt{position:fixed;top:70%;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;padding:8px 18px;border-radius:12px;background:rgba(20,10,8,.62);border:2px solid rgba(255,210,122,.5);max-width:92vw;z-index:6}
+#downHud{position:fixed;top:62%;left:50%;transform:translateX(-50%);width:min(440px,92vw);text-align:center;pointer-events:none;z-index:7;padding:10px 16px 12px;border-radius:14px;background:rgba(18,8,8,.82);border:3px solid #ffd27a;box-shadow:0 6px 0 #2a1410}
+#downTitle{display:block;font-family:var(--font);font-size:26px;color:#fff6e4;-webkit-text-stroke:1px #2a1410;text-shadow:0 2px 0 #000}
+#downBar{position:relative;height:18px;margin:8px 0 6px;background:#1a100c;border:2px solid #2a1410;border-radius:9px;overflow:hidden}
+#downFill{display:block;height:100%;width:0;background:linear-gradient(#ffe08a,#e63946)}
+#downSub{display:block;font-size:15px;font-weight:bold;color:#ffd27a;text-shadow:0 1px 0 #000}
 #sPrompt{top:56%}
 #bPrompt .bp1,#sPrompt .bp1{font-family:var(--font);font-size:22px;color:#fff;-webkit-text-stroke:1px #2a1410;text-shadow:0 2px 0 #000}
 #bPrompt .bp2,#sPrompt .bp2{font-size:14px;font-weight:bold;color:#ffd27a;text-shadow:0 1px 0 #000;margin-top:2px}
