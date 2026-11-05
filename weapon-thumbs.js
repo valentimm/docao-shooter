@@ -147,7 +147,7 @@ export function createWeaponViewer() {
     draw();
   });
   return {
-    show(mount, model, level = 0) {
+    show(mount, model, level = 0, prepare) {
       if (clone) {
         pivot.remove(clone);
         clone.traverse(o => { if (o.isMesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); });
@@ -157,6 +157,7 @@ export function createWeaponViewer() {
       clone = cloneWeapon(model); stripNoCamo(clone);
       clone.visible = true; clone.position.set(0, 0, 0); clone.rotation.set(0, 0, 0);
       clone.traverse(o => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(m => m.clone()) : o.material.clone(); });
+      if (prepare) prepare(clone);
       const box = boundsOfVisibleMeshes(clone), center = box.getCenter(new THREE.Vector3());
       const size = Math.max(box.getSize(new THREE.Vector3()).length() * .5, .01);
       clone.position.copy(center).multiplyScalar(-1 / size); clone.scale.setScalar(1 / size);

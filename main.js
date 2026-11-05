@@ -73,7 +73,7 @@ import { normBotDiff, botDiffMeta, applyBotDiff, profileOf, nextThink, considerT
 import { SHIELD, isShieldW, shieldRaised, shieldOnBack, resetShield, shieldStage, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from './shared/shield.js';
 import { makeFPShield } from './shield-view.js';
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, rollFumble, pickBotSecondary, akimboReady, ammoLow } from './shared/revolver.js';
-import { getAccount, getItems, onAccount, loadMe, saveSkin as saveAcctSkin, dropSession } from './account.js';
+import { getAccount, getItems, onAccount, loadMe, equipKnife, equipSniper, equipGun, saveSkin as saveAcctSkin, dropSession } from './account.js';
 import { knifeKind, knifeFinish, sniperKind, itemById, gunPaint, GUN_EQUIP_KEYS } from './shared/closet.js';
 import { lootItems } from './shared/lootbox.js';
 import { applyGunPaint } from './gun-paint.js';
@@ -86,6 +86,7 @@ try { document.fonts?.load('700 32px Fredoka'); } catch {}
 import { CLASS_COUNT, clampClassIndex, clampKit, classLoad, compare, defaultKit, familyOf, kitIsDefault, normalizeClasses, pieceBlurb, pieceInfo, piecesOf, resolveWeapon, slotsOf, statBars } from './shared/attachments.js';
 import { fillBench, fillChips, fillSheet } from './classes-ui.js';
 import { createArsenal } from './arsenal-ui.js';
+import { skinChannel, ownedWeaponSkins, equippedWeaponSkin } from './shared/arsenal-skins.js';
 
 const V3 = THREE.Vector3;
 const $ = (id) => document.getElementById(id);
@@ -6180,10 +6181,51 @@ function buildSkinPicker() {
   $('skinPrev').onclick = () => step(-1); $('skinNext').onclick = () => step(1);
 }
 const weaponThumbs = [];
+const arsenalKnifeModels = new Map(), arsenalFactoryThumbs = new Map();
+function arsenalModel(i, skinId = '') {
+  if (i !== KNIFE) return fp.guns[i];
+  if (!arsenalKnifeModels.has(skinId)) {
+    const look = knifeLook(skinId), model = makeKnife(1, 0.004, look.kind, look.finish);
+    if (look.kind === 'butterfly') poseButterfly(model, 0, 1);
+    arsenalKnifeModels.set(skinId, model);
+  }
+  return arsenalKnifeModels.get(skinId);
+}
+function arsenalSkinThumb(i, id = '') {
+  if (id) return lootItemThumb(itemById(id));
+  if (!arsenalFactoryThumbs.has(i) && weaponThumbs[i]) {
+    const model = arsenalModel(i);
+    const url = renderWeaponThumb(model, 192, 112, clone => {
+      if (i !== KNIFE && skinChannel(i)) paintThumbGun(clone, { gun: WEAPONS[i].key });
+    });
+    arsenalFactoryThumbs.set(i, url);
+  }
+  return arsenalFactoryThumbs.get(i) || weaponThumbs[i] || '';
+}
 arsenalUi = createArsenal($('arsenalApp'), {
   thumbs: weaponThumbs,
   snapshot: () => ({ classes, index: classIndex }),
-  pool, model: i => fp.guns[i], arm: armClass,
+  pool, model: arsenalModel, arm: armClass,
+  skins: i => ({
+    items: ownedWeaponSkins(i, getItems()),
+    equipped: equippedWeaponSkin(i, getAccount()),
+    signedIn: !!getAccount(),
+  }),
+  skinThumb: arsenalSkinThumb,
+  prepareSkin: (i, id, clone) => {
+    if (i !== KNIFE && skinChannel(i)) paintThumbGun(clone, itemById(id) || { gun: WEAPONS[i].key });
+  },
+  equipSkin: async (i, id) => {
+    if (id === equippedWeaponSkin(i, getAccount())) return { ok: true };
+    const channel = skinChannel(i);
+    if (!channel || (id && !ownedWeaponSkins(i, getItems()).some(item => item.id === id))) return { error: 'Essa skin não está na sua mochila.' };
+    const result = await (channel === 'knife' ? equipKnife(id) : channel === 'sniper' ? equipSniper(id) : equipGun(channel, id));
+    if (!result.error) {
+      const event = channel === 'knife' ? 'docao-knife-pick' : channel === 'sniper' ? 'docao-sniper-pick' : 'docao-gun-pick';
+      document.dispatchEvent(new CustomEvent(event, { detail: channel === 'knife' || channel === 'sniper' ? id : { key: channel, id } }));
+    }
+    return result;
+  },
   saber: i => isSaber(i) ? { colors: SABER_COLORS, selected: saberColor } : null,
   colorSaber: hex => {
     if (!SABER_COLORS.some(c => c.hex === hex)) return;
@@ -6280,16 +6322,19 @@ buildDancePicks();
 document.addEventListener('docao-dance-pick', (e) => setDance(e.detail));
 document.addEventListener('docao-knife-pick', (e) => {
   applyHeldKnife(e.detail);
+  arsenalUi?.render();
   if (player && player.weapon === KNIFE) startButterfly();
   if (online && online.net) online.net.send({ t: 'prof', knife: e.detail || '' });
 });
 document.addEventListener('docao-sniper-pick', (e) => {
   applyHeldSniper(e.detail);
+  arsenalUi?.render();
   if (online && online.net) online.net.send({ t: 'prof', sniper: e.detail || '' });
 });
 document.addEventListener('docao-gun-pick', (e) => {
   const d = e.detail || {};
   applyHeldGun(d.key, d.id || '');
+  arsenalUi?.render();
   if (online && online.net) online.net.send({ t: 'prof', gun: { k: d.key, id: d.id || '' } });
 });
 document.addEventListener('docao-look-preview', (e) => paintPreview(e.detail, false));
@@ -7924,7 +7969,7 @@ function applyAccount(a) {
   else { if (selectedSkin.startsWith('x1.')) setPreview(DEFAULT_SKIN); /* visual personalizado é só de conta */ applyHeldKnife(''); let n = ''; try { n = localStorage.getItem('docao.name') || ''; } catch (e) { /* sem storage */ } for (const id of NAME_FIELDS) $(id).value = cleanName(n || 'Docão'); }
 }
 setLootThumbSource(lootItemThumb);
-onAccount(applyAccount); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
+onAccount(a => { applyAccount(a); arsenalUi?.render(); }); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
 const roomLink = (code) => { const u = new URL(location.href); u.search = ''; const sv = new URLSearchParams(location.search).get('server'); if (sv) u.searchParams.set('server', sv); u.searchParams.set('sala', code); return u.toString(); };
 function socialTeam() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && (cfg.mode === 'dom' || isArmsRace(cfg.mode) || cfg.mode === 'bomb')); } // Dominação e Bomba: chat e voz do time
 function inviteBlurb(code) { return `Bora jogar Docão Shooter! Sala ${code}\n${roomLink(code)}`; }

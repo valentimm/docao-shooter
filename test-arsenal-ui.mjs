@@ -19,6 +19,7 @@ try {
   await page.locator('[data-weapon="0"]').click();
   await page.screenshot({ path: 'screenshots/arsenal-armas.png' });
   await page.locator('[data-action="customize"]').click();
+  await page.locator('.ar-match-camos summary').click();
   await page.locator('[data-camo="2"]').click();
   const cv = page.locator('#arsenalApp canvas');
   const box = await cv.boundingBox();
