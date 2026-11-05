@@ -28,7 +28,7 @@ import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap, BOMB_MAP } from './maps.js';
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit } from './shared/invasion.js';
-import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL } from './shared/survival.js';
+import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
 import { createNightAmbience } from './night-ambience.js';
 import { createInvMusic } from './invasion-music.js';
@@ -58,7 +58,7 @@ import { BOMB, W_BOMB, SIDE_NAMES, SITE_NAMES, attackTeam, sideOf, bombLayout, n
 import { makeBotijao, makeSiteMark } from './bomb-gfx.js';
 import { KS_KILL_NAME, heliPos, GUNNER, heliOrbit, AC130 } from './shared/killstreaks.js';
 import { DISC, stepDisc } from './shared/disc.js';
-import { RAY as RAY_MOVE, stepRay, raySplash } from './shared/ray.js';
+import { RAY as RAY_MOVE, stepRay, raySplash, rayImpactHead } from './shared/ray.js';
 import { traceShot } from './shared/penetration.js';
 import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from './shared/gas.js';
 import { createGasView } from './gas-view.js';
@@ -1732,7 +1732,7 @@ function rayBlast(c, owner, direct = null) {
     e.vel.x += h.knock.x; e.vel.z += h.knock.z; e.vel.y = Math.max(e.vel.y, h.knock.y); e.onGround = false;
     if (e.isPlayer) lastKnock = gameTime;
     applyShieldHurt(e, met.shield, met.blocked);
-    if (met.dmg > 0) damage(e, met.dmg, owner, RAY, false, false, 0, c);
+    if (met.dmg > 0) damage(e, met.dmg, owner, RAY, !!(direct && e === direct && rayImpactHead(direct, c)), false, 0, c);
   }
 }
 function updateRays(dt) {
@@ -1984,7 +1984,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (!t.alive || gameTime < t.invulnUntil || friends(t, attacker) || bombFrozen(bombS)) return false; // sem fogo amigo; Bomba: sem dano na preparação
   if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
   t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); // regen só com dano de outro
-  if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { feedbackAward(add); refreshSurvPts(); } }
+  if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
   if (t.isPlayer) { hurtFlash(); noteHit(origin); if (attacker && attacker !== t) noteFlinch(amount); sfx.oink(0.8, 1.15); }
   else { if (attacker && attacker !== t && !t.target) { t.target = attacker; t.aim = t.reaction * 0.5; } if (Math.random() < 0.3) sfx.oink(distVol(t.pos) * 0.6, 1.3); }
   if (attacker && attacker.isPlayer && attacker !== t) { if (t.hp > 0 && !(survOn() && t.zt)) feedbackHit({ head, wall: !!(fx & 1) }); sfx.hit(); if (training()) dmgPopup(t, amount, head); }
@@ -3577,7 +3577,7 @@ function updateHud(dt) {
   if ($('pauseTime') && !$('pause').classList.contains('hidden')) $('pauseTime').textContent = $('timer').textContent;
   { const clockLabel = $('timer').textContent; const clocks = worldGroup && worldGroup.userData.clocks;
     if (clocks) for (const m of clocks) { if (m.userData.last === clockLabel) continue; const { ctx, canvas, tex } = m.userData.clock; ctx.fillStyle = '#1c242c'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#8E2F2A'; ctx.lineWidth = 8; ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12); ctx.fillStyle = '#F2D9A0'; ctx.font = '900 36px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(clockLabel, canvas.width / 2, canvas.height / 2); tex.needsUpdate = true; m.userData.last = clockLabel; } }
-  $('score').textContent = exploreMode() ? `Exploração · ${currentMap ? currentMap.name : ''}` : `Abates: ${p.kills} · Mortes: ${p.deaths} · K/D: ${(p.kills / Math.max(1, p.deaths)).toFixed(2)} · Pontos: ${feedbackPoints()}`;
+  $('score').textContent = exploreMode() ? `Exploração · ${currentMap ? currentMap.name : ''}` : survOn() ? `Abates: ${p.kills} · Mortes: ${p.deaths} · K/D: ${(p.kills / Math.max(1, p.deaths)).toFixed(2)}` : `Abates: ${p.kills} · Mortes: ${p.deaths} · K/D: ${(p.kills / Math.max(1, p.deaths)).toFixed(2)} · Pontos: ${feedbackPoints()}`;
   paintNoclip();
   const lead = entities.filter((e) => !e.zt).reduce((a, b) => (b.kills > a.kills ? b : a));
   const killGoal = x1Mode() ? X1.KILLS : KILL_LIMIT;
@@ -6478,18 +6478,24 @@ function beginSurvival(saved) {
   if (!currentMap || !currentMap.survival) { surv = null; return; }
   surv = createMatchSurvival(currentMap);
   if (saved) { for (const id of saved.open || []) surv.open.add(id); for (const id of saved.areas || []) surv.areas.add(id); }
-  for (const e of entities) if (e && !e.zt && !e.bot && e.points == null) e.points = SURVIVAL.START_POINTS;
+  for (const e of entities) if (e && !e.zt && !e.bot && e.points == null && e.pts == null) acceptPurse(e, SURVIVAL.START_POINTS, 0);
   syncSurvivalSpace();
   for (const [id, g] of doorGroups) applyDoorLeaf(id, surv.open.has(id));
   initAudio(); if (actx && master) nightAmb.start(actx, master);
   refreshSurvPts();
 }
-function refreshSurvPts() {
+function paintSurvPurse() {
   const el = $('survPts'); if (!el) return;
-  const on = survivalMode() && player;
+  const on = survivalMode() && !!player && state !== 'menu';
   el.classList.toggle('hidden', !on);
-  if (on) el.textContent = `${player.points | 0} pts`;
+  document.body.classList.toggle('survmode', on && state === 'playing');
+  if (!on) return;
+  const n = fmtPts((player.pts != null ? player.pts : player.points) | 0);
+  const num = el.querySelector('span');
+  if (num) num.textContent = n;
+  else el.textContent = n;
 }
+function refreshSurvPts() { paintSurvPurse(); }
 function survPop(n) {
   const box = $('points'); if (!box || !n) return;
   const node = document.createElement('div');
@@ -6513,10 +6519,10 @@ function survivalPrompt() {
   if (!surv || !player || !player.alive || state !== 'playing') { el.classList.add('hidden'); return; }
   const near = nearestClosedDoor(currentMap, surv, player.pos);
   if (!near) { el.classList.add('hidden'); return; }
-  const d = near.door, have = player.points | 0;
+  const d = near.door, have = (player.pts != null ? player.pts : player.points) | 0;
   el.classList.remove('hidden'); el.className = have >= d.price ? 'hot' : 'soft';
   el.querySelector('.bp1').innerHTML = `Aperte <kbd>E</kbd> · ${d.prompt}`;
-  el.querySelector('.bp2').textContent = `${d.price} pontos · você tem ${have}`;
+  el.querySelector('.bp2').textContent = have >= d.price ? `${fmtPts(d.price)} pts` : `${fmtPts(d.price)} pts · falta ${fmtPts(d.price - have)}`;
 }
 function tickNight(dt) {
   const calm = typeof reducedAnims === 'function' && reducedAnims();
@@ -6686,7 +6692,7 @@ function startGame(mapId) {
   const bombEv = mode === 'bomb' ? startBombOffline() : [];
   const hideEv = hideMode() ? startHideOffline() : [];
   for (const e of entities) e.caps = 0;
-  for (const e of entities) { e.alive = false; if (survivalMode() && !e.bot) e.points = SURVIVAL.START_POINTS; }
+  for (const e of entities) { e.alive = false; if (survivalMode() && !e.bot) { e.points = SURVIVAL.START_POINTS; e.pts = e.points; e._purse = e.points; e.purseN = 0; } }
   if (survivalMode()) beginSurvival();
   if (x1Mode()) { x1Gun = rollX1Weapon(-1, x1WeaponOk); entities.forEach((e, i) => { e.x1Side = i % 2; }); }
   for (const e of entities) respawn(e);
@@ -8169,6 +8175,8 @@ function startOnlineMatch(m) {
   const o = online; stopInspect(true);
   if (o.inMatch && o.mapId === m.map && state !== 'over' && player) { // reconexão no meio da partida: só ressincroniza
     for (const info of m.ents) if (!o.ents.has(info.id) && info.id !== o.myId) remoteEnt(info);
+    const meNow = m.ents.find((x) => x.id === o.myId);
+    if (meNow && meNow.pts != null && survOn()) { player.pts = meNow.pts | 0; player.points = player.pts; player._purse = player.pts; player.purseN = meNow.pn | 0; paintSurvPurse(); }
     if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); }
     return;
   }
@@ -8178,9 +8186,9 @@ function startOnlineMatch(m) {
   zone = m.zone ? newZoneState({ x: m.zone[0], y: m.zone[1], z: m.zone[2] }) : null; teamScore = m.zone ? [m.zone[8], m.zone[9]] : [0, 0];
   const me = m.ents.find((x) => x.id === o.myId) || { name: profile().name, skin: selectedSkin };
   player = makeEntity(me.name, true, me.skin, '#ffd27a'); player.netId = player.id = o.myId; player.sq = 0; player.alive = false; player.respawnAt = Infinity;
-  player.kills = me.kills || 0; player.deaths = me.deaths || 0; player.points = me.pts != null ? me.pts : (survivalMode() ? SURVIVAL.START_POINTS : 0); player.gunKills = WEAPONS.map(() => 0); revengeName = null; resetNemesis(); resetFeedback(); resetMatchCamos();
+  player.kills = me.kills || 0; player.deaths = me.deaths || 0; player.points = me.pts != null ? me.pts : (survivalMode() ? SURVIVAL.START_POINTS : 0); player.pts = player.points; player._purse = player.points; player.purseN = me.pn | 0; player.gunKills = WEAPONS.map(() => 0); revengeName = null; resetNemesis(); resetFeedback(); resetMatchCamos();
   player.primary = player.nextPrimary = selectedPrimary; player.nextSecondary = selectedSecondary; player.nextMelee = selectedMelee; player.slots = [selectedPrimary, selectedSecondary, selectedMelee]; setWeapon(player, selectedPrimary); // até o servidor mandar o renascimento
-  if (survOn()) { player.pts = me.pts | 0; player.pap = me.pap || {}; player.slotOn = me.slotOn || [1, 0, 1]; if (me.slots) player.slots = me.slots.slice(); }
+  if (survOn()) { player.pts = me.pts | 0; player.points = player.pts; player._purse = player.pts; player.purseN = me.pn | 0; player.pap = me.pap || {}; player.slotOn = me.slotOn || [1, 0, 1]; if (me.slots) player.slots = me.slots.slice(); }
   if (armsMode()) { [player.armsStage, player.armsKills] = me.arms || [0, 0]; equipArmsLocal(player); }
   entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.caps = me.caps || 0; applyTeam(player, me.team ?? -1);
   for (const info of m.ents) remoteEnt(info);
@@ -8255,8 +8263,9 @@ function netEvent(ev) {
     const door = (currentMap.survival && currentMap.survival.doors || []).find((d) => d.id === ev[1]);
     surv.open.add(ev[1]); for (const id of ev[4] || []) surv.areas.add(id);
     applyDoorLeaf(ev[1], true); syncSurvivalSpace();
-    const buyer = entOf(ev[2]); if (buyer) buyer.points = ev[3];
-    if (buyer === player) refreshSurvPts();
+    const buyer = entOf(ev[2]);
+    if (buyer) acceptPurse(buyer, ev[3], ev.length > 5 ? ev[5] : null);
+    if (buyer === player) paintSurvPurse();
     flashMsg(`${door ? door.name : 'Porta'} aberta`); sfx.pickup();
     return;
   }
@@ -8453,7 +8462,13 @@ function netEvent(ev) {
 }
 function personalEvent(ev) {
   const p = player; if (!p) return;
-  if (ev[0] === 'pts') { p.points = ev[1] | 0; if (ev[2]) survPop(ev[2]); refreshSurvPts(); return; }
+  if (ev[0] === 'pts') {
+    const seq = ev.length > 3 ? ev[3] | 0 : 0;
+    const changed = acceptPurse(p, ev[1], ev.length > 3 ? ev[3] : null);
+    if (ev[2] && (changed || (p._pursePop | 0) < seq)) { p._pursePop = seq; survPop(ev[2]); }
+    paintSurvPurse();
+    return;
+  }
   if (ev[0] === 'doorNo') { const msg = DOOR_FAIL[ev[1]]; if (msg) flashMsg(msg); return; }
   if (ev[0] === 'pos') { p.pos.set(ev[1][0], ev[1][1], ev[1][2]); p.vel.set(0, 0, 0); }
   else if (ev[0] === 'pxw') { pauseSwapLast = performance.now() - (PX_COOLDOWN - (ev[1] | 0)) * 1000; flashMsg(`Espera ${ev[1]} s pra trocar de arma de novo`); } // servidor recusou a troca que derruba
@@ -9083,6 +9098,7 @@ function survUse() {
     if (!r.ok) { survDenied(['svno', r.reason, r.cost, r.have, r.tier]); return; }
     player.papGun = r.weapon; player.papUntil = gameTime + SURV.cook;
     survShowCard(`${PAPADA_NAME} ${r.tier}/3 · ${r.line.name}`, r.line.text);
+    survPop(-r.cost); paintSurvPurse();
     return;
   }
   if (hit.kind === 'box') {
@@ -9095,6 +9111,7 @@ function survUse() {
     if (online) { netEv(['sv', 'box']); return; }
     const pay = tryBoxPay(player);
     if (!pay.ok) { survDenied(['svno', pay.reason, pay.cost, pay.have]); return; }
+    survPop(-pay.cost); paintSurvPurse();
     const weapon = rollBox(Math.random, player.weapon);
     survBox = { phase: 'spin', weapon, until: gameTime + SURV.boxSpin, owner: player.id };
     return;
@@ -9104,29 +9121,39 @@ function survUse() {
     const r = tryWall(player, hit.p);
     if (!r.ok) { survDenied(['svno', r.reason, r.cost, r.have]); return; }
     survApplyGun(player, r.weapon); setWeapon(player, player.weapon);
+    survPop(-r.cost); paintSurvPurse();
     flashMsg(r.kind === 'ammo' ? `Munição · -${fmtPts(r.cost)}` : `${WEAPONS[r.weapon].short} · -${fmtPts(r.cost)}`);
   }
 }
 function survNet(ev) {
   const k = ev[0];
   if (k === 'spts') {
-    const who = online ? entOf(ev[1]) : null;
-    if (who) who.pts = ev[2];
-    if (player && ev[1] === (online ? online.myId : player.id)) { player.pts = ev[2]; player.points = ev[2]; if (ev[3]) feedbackAward(ev[3]); refreshSurvPts(); }
+    const who = entOf(ev[1]);
+    const changed = who ? acceptPurse(who, ev[2], ev.length > 4 ? ev[4] : null) : false;
+    if (changed && player && ev[1] === online.myId && ev[3]) survPop(ev[3]);
+    if (player && ev[1] === online.myId) paintSurvPurse();
   } else if (k === 'spap') {
-    const who = entOf(ev[1]); if (who) { if (!who.pap) who.pap = {}; who.pap[ev[2]] = ev[3]; who.pts = ev[4]; who.papGun = ev[2]; who.papUntil = ev[7]; }
-    if (player && ev[1] === online.myId) { survApplyGun(player, ev[2]); survShowCard(`${PAPADA_NAME} ${ev[3]}/3`, ev[6] || ''); }
+    const who = entOf(ev[1]); if (who) { if (!who.pap) who.pap = {}; who.pap[ev[2]] = ev[3]; who.papGun = ev[2]; who.papUntil = ev[7]; const before = who.pts | 0; if (acceptPurse(who, ev[4], ev.length > 8 ? ev[8] : null) && who === player && (who.pts | 0) !== before) survPop((who.pts | 0) - before); }
+    if (player && ev[1] === online.myId) { survApplyGun(player, ev[2]); survShowCard(`${PAPADA_NAME} ${ev[3]}/3`, ev[6] || ''); paintSurvPurse(); }
   } else if (k === 'sgun') {
     const who = entOf(ev[1]); if (!who) return;
-    who.slots = [ev[2], ev[3], who.slots ? who.slots[2] : KNIFE]; who.slotOn = [1, ev[4] ? 1 : 0, 1]; who.weapon = ev[5]; who.pts = ev[6];
+    const before = who.pts | 0;
+    who.slots = [ev[2], ev[3], who.slots ? who.slots[2] : KNIFE]; who.slotOn = [1, ev[4] ? 1 : 0, 1]; who.weapon = ev[5];
+    if (ev.length > 9) { if (acceptPurse(who, ev[6], ev[9]) && who === player && (who.pts | 0) !== before) survPop((who.pts | 0) - before); }
+    else acceptPurse(who, ev[6], null);
     if (!who.mag) who.mag = WEAPONS.map((w) => w.mag);
     if (!who.reserve) who.reserve = WEAPONS.map((w) => w.reserve);
     survApplyGun(who, who.slots[0]); if (who.slotOn[1]) survApplyGun(who, who.slots[1]);
     setWeapon(who, who.weapon);
     if (who === player && ev[8]) flashMsg(ev[8] === 'ammo' ? 'Munição cheia' : `Nova arma: ${WEAPONS[who.weapon].short}`);
+    if (who === player) paintSurvPurse();
   } else if (k === 'sbox') {
     survBox = { phase: ev[1], weapon: ev[2], until: ev[3], owner: ev[4] };
-    if (player && ev[4] === online.myId && ev[5]) player.pts = ev[5];
+    if (player && ev[4] === online.myId && ev.length > 6) {
+      const before = player.pts | 0;
+      if (acceptPurse(player, ev[5], ev[6]) && (player.pts | 0) !== before) survPop((player.pts | 0) - before);
+      paintSurvPurse();
+    }
     if (ev[1] === 'idle' && survGfx && survGfx.offer) { scene.remove(survGfx.offer); survGfx.offer = null; }
   }
 }
@@ -9163,8 +9190,8 @@ function survPrompt(hit) {
   parkSurvFlash(true);
 }
 function survTick(dt) {
-  if (!survOn()) { if ($('sPrompt')) $('sPrompt').classList.add('hidden'); if ($('survPts')) $('survPts').classList.add('hidden'); return; }
-  const pts = $('survPts'); if (pts) { pts.classList.remove('hidden'); pts.textContent = `${fmtPts(player ? player.pts : 0)} pts`; }
+  if (!survOn()) { if ($('sPrompt')) $('sPrompt').classList.add('hidden'); document.body.classList.remove('survmode'); if ($('survPts')) $('survPts').classList.add('hidden'); return; }
+  paintSurvPurse();
   if (papCardT > 0) { papCardT -= dt; if (papCardT <= 0 && $('papCard')) $('papCard').classList.add('hidden'); }
   if (!online && survBox.phase === 'spin' && gameTime >= survBox.until) survBox = { ...survBox, phase: 'offer', until: gameTime + SURV.boxHold };
   if (!online && survBox.phase === 'offer' && gameTime >= survBox.until) survBox = { phase: 'idle', weapon: -1, until: 0, owner: 0 };

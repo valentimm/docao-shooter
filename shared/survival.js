@@ -211,22 +211,54 @@ export function fmtPts(n) {
   return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
-// Um saldo só. A loja escreve `pts` e a porta escreve `points`; os dois ficam iguais.
+// Um saldo só. `pts` (loja, Papada, barraca, parede, abate) e `points` (porta) são o mesmo número.
+// `purseN` sobe a cada mudança de verdade. O cliente ignora um saldo com geração mais antiga,
+// senão um ganho que chega depois do gasto devolve o valor velho.
+// Integração (revive, porta, loja): não escreva só um dos dois campos. Gaste por
+// trySpendPoints / tryPap / tryWall / tryBoxPay / commitDoorBuy, que passam por setPurse.
+// Ler `pts`. Não escolha o maior dos dois: isso reabria o saldo depois de um débito.
 export function syncPurse(e) {
   if (!e) return 0;
-  if (e.pts == null && e.points == null) { e.pts = 0; e.points = 0; }
-  else if (e.pts == null) e.pts = e.points | 0;
-  else if (e.points == null) e.points = e.pts | 0;
-  else if ((e.pts | 0) !== (e.points | 0)) {
-    const v = Math.max(0, e.pts | 0, e.points | 0);
-    e.pts = v; e.points = v;
+  if (e.pts == null && e.points == null) return setPurse(e, 0);
+  if (e.pts == null) return setPurse(e, e.points | 0);
+  if (e.points == null) return setPurse(e, e.pts | 0);
+  if ((e.pts | 0) === (e.points | 0)) {
+    if (e._purse == null) e._purse = e.pts | 0;
+    return e.pts | 0;
   }
-  return e.pts | 0;
+  const pts = Math.max(0, e.pts | 0);
+  const points = Math.max(0, e.points | 0);
+  if (e._purse == null) return setPurse(e, Math.max(pts, points));
+  const prev = e._purse | 0;
+  if (pts !== prev && points === prev) return setPurse(e, pts);
+  if (points !== prev && pts === prev) return setPurse(e, points);
+  return setPurse(e, Math.min(pts, points));
 }
 function setPurse(e, n) {
   const v = Math.max(0, n | 0);
-  e.pts = v; e.points = v;
+  const prev = e._purse;
+  e.pts = v; e.points = v; e._purse = v;
+  if (prev == null || (prev | 0) !== v) e.purseN = (e.purseN | 0) + 1;
   return v;
+}
+// Aplica um saldo vindo da rede. 0 é saldo válido. Geração menor que a já vista é ignorada.
+// Devolve true só quando o número mudou.
+export function acceptPurse(e, value, seq) {
+  if (!e) return false;
+  const n = Math.max(0, value | 0);
+  const hasSeq = seq != null && seq !== '' && Number.isFinite(+seq);
+  if (!hasSeq) {
+    if ((e.purseN | 0) > 0) return false;
+    const prev = e._purse;
+    e.pts = n; e.points = n; e._purse = n;
+    return prev == null ? false : (prev | 0) !== n;
+  }
+  const s = seq | 0;
+  if ((e.purseN | 0) > s) return false;
+  if ((e.purseN | 0) === s && e._purse != null) return false;
+  const prev = e._purse;
+  e.pts = n; e.points = n; e._purse = n; e.purseN = s;
+  return prev == null ? false : (prev | 0) !== n;
 }
 export function ensurePurse(e) {
   if (!e.pap || typeof e.pap !== 'object') e.pap = {};

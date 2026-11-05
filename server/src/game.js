@@ -30,7 +30,7 @@ import { stanceScale, stanceHeight, stepCrouch } from '../../shared/stance.js';
 import { traceShot } from '../../shared/penetration.js';
 import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from '../../shared/gas.js';
 import { DISC, stepDisc } from '../../shared/disc.js';
-import { stepRay, raySplash } from '../../shared/ray.js';
+import { stepRay, raySplash, rayImpactHead } from '../../shared/ray.js';
 import { CORN, cornDirs, cornAim, stepCorn, popChain, popOpts } from '../../shared/corn.js';
 import { EGG, eggSpeed, eggDmg, stepEgg } from '../../shared/egg.js';
 import { explosionHits, rayCapsule, ROCKET_PAD, shotKnock } from '../../shared/combat.js';
@@ -109,7 +109,7 @@ export class Game {
       if (this.humans().length >= this.cfg.max) return { error: 'Sala cheia' };
       if (acct) { for (const x of this.ents.values()) if (!x.acct && x.name.toLowerCase() === acct.nick.toLowerCase()) x.name = this.freeName(Array.from(x.name).slice(0, NAME_MAX - 7).join('') + ' (conv)', x); } // o apelido da conta é dela: quem estava usando vira "(conv)"
       e = this.makeEnt({ name: acct ? acct.nick : this.freeName(name), skin: acct && skinOk(acct.skin) ? acct.skin : SKINS.some((x) => x.id === skin) ? skin : undefined, primary, secondary, melee, bot: false });
-      if (this.state === 'playing' && this.survival) e.points = SURVIVAL.START_POINTS;
+      if (this.state === 'playing' && this.survival) { e.points = SURVIVAL.START_POINTS; e.pts = e.points; e._purse = e.points; e.purseN = e.purseN | 0; }
       e.jt = this.state === 'playing' ? this.T : 0; // quando entrou (segundos de partida): bônus de fim só pra quem jogou um tempo
       if (acct) { e.acct = { id: acct.id, nick: acct.nick }; e.sk = 0; e.sd = 0; e.ck = 0; e.cpaid = 0; }
       if (this.teamMode) { this.chooseTeam(e, -1); if (this.state === 'playing') { e.pendingTeam = true; e.pendingSince = this.now(); } }
@@ -192,7 +192,7 @@ export class Game {
   entInfo(e) { const o = { id: e.id, name: e.name, skin: e.skin, bot: e.bot, tag: e.tag, kills: e.kills, deaths: e.deaths, alive: e.alive, primary: e.primary, w: e.weapon, team: e.team, caps: e.caps, pend: e.pendingTeam ? 1 : 0, kn: e.knife || undefined, sn: e.sniper || undefined, gn: e.guns && Object.keys(e.guns).length ? e.guns : undefined };
     if (this.armsMode) { o.arms = [e.armsStage, e.armsKills]; }
     if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); }
-    if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
+    if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pn = e.purseN | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
     return o; }
   sendLobby() {
     this.io.broadcast({ t: 'lobby', cfg: this.cfg, hostId: this.hostId, state: this.state, mapId: this.mapId,
@@ -259,7 +259,7 @@ export class Game {
     this.curLimit = this.cfgLimit;
     for (const e of this.ents.values()) { e.ck = 0; e.cpaid = 0; e.jt = 0; e.cpl = 0; e.cdf = 0; e.vu = e.voice && e.voice !== 'off' ? 1 : 0;
       resetArmsRace(e);
-      e.kills = 0; e.deaths = 0; e.alive = false; e.needRs = false; e.caps = 0; e.pendingTeam = false; e.points = this.survival && !e.bot ? SURVIVAL.START_POINTS : 0; e.pts = e.points; if (!this.teamMode) e.team = -1;
+      e.kills = 0; e.deaths = 0; e.alive = false; e.needRs = false; e.caps = 0; e.pendingTeam = false; e.points = this.survival && !e.bot ? SURVIVAL.START_POINTS : 0; e.pts = e.points; e._purse = e.points; e.purseN = 0; if (!this.teamMode) e.team = -1;
       // this.T e o relógio do cliente voltam a 0 na partida nova: zera cadência/anti speed-hack, senão os tiros da partida anterior
       // (lastShot/lastCt/lastMelee no futuro) fazem o servidor rejeitar todo tiro no "Próximo mapa"/"Jogar de novo" (sem dano)
       e.lastShot = WEAPONS.map(() => -9); e.lastShotL = WEAPONS.map(() => -9); e.lastCt = []; e.lastCtL = []; e.maxOff = undefined; e.lastMeleeCt = undefined; e.lastMeleeT = undefined; e.lastMeleeRate = 0; e.lastKnock = -9; e.mg = null; e.shotBud = [];
@@ -1136,7 +1136,7 @@ startMsg() {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb)) return false; // sem fogo amigo; Bomba: ninguém leva dano na preparação
     if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
     t.hp -= amount; t.lastAttacker = a ? a.id : 0; noteHurt(t, a, this.T); // regen só com dano de outro
-    if (this.survival && t.zt && a && !a.bot && !a.zt && t.hp > 0) { const add = grantHit(a, t.id); if (add) this.events.push(['spts', a.id, a.pts | 0, add]); }
+    if (this.survival && t.zt && a && !a.bot && !a.zt && t.hp > 0) { const add = grantHit(a, t.id); if (add) this.events.push(['spts', a.id, a.pts | 0, add, a.purseN | 0]); }
     if (t.bot && a && a !== t && !t.target) { t.target = a; t.aim = t.reaction * 0.5; }
     this.events.push(['h', t.id, a ? a.id : 0, Math.max(0, Math.round(t.hp)), head ? 1 : 0, Math.round(amount), fx, origin ? arr3(origin) : null]); // [5] = dano, [6] = parede/collateral, [7] = origem no instante do golpe
     if (t.hp <= 0) { this.kill(t, a, w, head, back, ks, fx); return true; }
@@ -1197,7 +1197,7 @@ startMsg() {
       if (e.bot) { e.vel.x += h.knock.x; e.vel.z += h.knock.z; e.vel.y = Math.max(e.vel.y, h.knock.y); e.onGround = false; }
       else this.toMe(e, ['kn', arr3(h.knock)]); // empurrão aplicado pelo próprio cliente (rocket jump)
       this.payShield(e, met.shield, met.blocked);
-      if (met.dmg > 0) this.damage(e, met.dmg, owner, o.wIdx, false, false, o.ks || null, 0, c);
+      if (met.dmg > 0) this.damage(e, met.dmg, owner, o.wIdx, !!(o.headId && e.id === o.headId), false, o.ks || null, 0, c);
     }
     if (this.gas && this.gas.list.length) this.splashGas(c, owner, o);
     return hits;
@@ -1322,7 +1322,8 @@ startMsg() {
       if (hit) {
         this.rays.splice(i, 1);
         const W = this.resolvedW(r.owner, RAY) || WEAPONS[RAY];
-        this.blast(hit.at, r.owner, { ...raySplash(W), wIdx: RAY, kind: 'y', pid: r.id }, hit.t);
+        const headId = rayImpactHead(hit.t, hit.at) ? hit.t.id : 0;
+        this.blast(hit.at, r.owner, { ...raySplash(W), wIdx: RAY, kind: 'y', pid: r.id, headId }, hit.t);
         continue;
       }
       for (const h of hits) if (!h.dead) { this.events.push(['yb', r.id, arr3(h.pos), arr3(r.dir), r.bounces]); this.rayNick(h.pos, r.owner); }
@@ -1458,7 +1459,7 @@ startMsg() {
     e.hist = []; this.pushHist(e); e.lastUpd = this.now();
     if (e.bot) Object.assign(e, { target: null, wp: null, path: null, stuck: 0, reloadEnd: 0 });
     this.events.push(['sp', e.id, arr3(e.pos), r2(e.yaw), e.primary, e.sq]);
-    if (this.survival && !e.bot) this.events.push(['sgun', e.id, e.slots[0], e.slots[1], e.slotOn[1] ? 1 : 0, e.weapon, e.pts | 0]);
+    if (this.survival && !e.bot) this.events.push(['sgun', e.id, e.slots[0], e.slots[1], e.slotOn[1] ? 1 : 0, e.weapon, e.pts | 0, 0, '', e.purseN | 0]);
   }
   refillAmmo(e) {
     if (this.survival) return survRefill(e, WEAPONS); // Survival: teto da arma já passada na Papada
@@ -1568,7 +1569,7 @@ startMsg() {
       const r = tryPap(e, WEAPONS, this.T);
       if (!r.ok) { this.toMe(e, ['svno', r.reason, r.cost | 0, r.have | 0, r.tier | 0]); return; }
       e.papGun = r.weapon; e.papUntil = this.T + SURV.cook;
-      say(['spap', e.id, r.weapon, r.tier, e.pts | 0, r.cost, r.line.text, r2(e.papUntil)]);
+      say(['spap', e.id, r.weapon, r.tier, e.pts | 0, r.cost, r.line.text, r2(e.papUntil), e.purseN | 0]);
       return;
     }
     if (act === 'box') {
@@ -1578,7 +1579,7 @@ startMsg() {
       if (!pay.ok) { this.toMe(e, ['svno', pay.reason, pay.cost | 0, pay.have | 0]); return; }
       const weapon = rollBox(Math.random, e.weapon);
       this.boxState = { phase: 'spin', weapon, owner: e.id, until: this.T + SURV.boxSpin };
-      say(['sbox', 'spin', weapon, r2(this.boxState.until), e.id, e.pts | 0]);
+      say(['sbox', 'spin', weapon, r2(this.boxState.until), e.id, e.pts | 0, e.purseN | 0]);
       return;
     }
     if (act === 'take') {
@@ -1587,8 +1588,8 @@ startMsg() {
       if (!nearPoint(e.pos, this.stations.box)) { this.toMe(e, ['svno', 'longe']); return; }
       const got = takeBox(e, B.weapon, WEAPONS);
       this.boxState = { phase: 'idle', weapon: -1, owner: 0, until: 0 };
-      say(['sgun', e.id, e.slots[0], e.slots[1], e.slotOn[1] ? 1 : 0, e.weapon, e.pts | 0, got.weapon, got.how]);
-      say(['sbox', 'idle', -1, 0, 0, e.pts | 0]);
+      say(['sgun', e.id, e.slots[0], e.slots[1], e.slotOn[1] ? 1 : 0, e.weapon, e.pts | 0, got.weapon, got.how, e.purseN | 0]);
+      say(['sbox', 'idle', -1, 0, 0]);
       return;
     }
     if (act === 'wall') {
@@ -1596,7 +1597,7 @@ startMsg() {
       if (!wall || !nearPoint(e.pos, wall)) { this.toMe(e, ['svno', 'longe']); return; }
       const r = tryWall(e, wall, WEAPONS);
       if (!r.ok) { this.toMe(e, ['svno', r.reason, r.cost | 0, r.have | 0, wall.w]); return; }
-      say(['sgun', e.id, e.slots[0], e.slots[1], e.slotOn[1] ? 1 : 0, e.weapon, e.pts | 0, r.weapon, r.kind]);
+      say(['sgun', e.id, e.slots[0], e.slots[1], e.slotOn[1] ? 1 : 0, e.weapon, e.pts | 0, r.weapon, r.kind, e.purseN | 0]);
     }
   }
   stepBox() {
@@ -1651,12 +1652,12 @@ startMsg() {
     if (!r.ok) { if (DOOR_FAIL[r.reason]) this.toMe(e, ['doorNo', r.reason]); return; }
     const done = commitDoorBuy(this.surv, e, r.door);
     this.rebuildDoors();
-    this.events.push(['door', r.door.id, e.id, e.points, done.unlocked]);
-    this.toMe(e, ['pts', e.points, -r.price]);
+    this.events.push(['door', r.door.id, e.id, e.points, done.unlocked, e.purseN | 0]);
+    this.toMe(e, ['pts', e.points, -r.price, e.purseN | 0]);
   }
   killZombie(t, a, w, head, back, ks) {
     t.alive = false; t.hp = 0; t.deaths++; if (t.acct) t.sd++; t.respawnAt = Infinity;
-    if (a && a !== t && !a.zt) { a.kills++; if (this.survival && !a.bot) { const n = grantKill(a, t.zt, head); if (n) this.events.push(['spts', a.id, a.pts | 0, n]); } if (a.acct) { a.sk++; this.cq(a, 'zk'); if (head) this.cq(a, 'zhs'); if (t.zt === 'spitter') this.cq(a, 'spit'); else if (t.zt === 'tank') this.cq(a, 'tank'); else if (t.zt === 'boss') this.cq(a, 'boss'); } if (a.alive && ks !== 'h' && ks !== 'x') this.streakKill(a); }
+    if (a && a !== t && !a.zt) { a.kills++; if (this.survival && !a.bot) { const n = grantKill(a, t.zt, head); if (n) this.events.push(['spts', a.id, a.pts | 0, n, a.purseN | 0]); } if (a.acct) { a.sk++; this.cq(a, 'zk'); if (head) this.cq(a, 'zhs'); if (t.zt === 'spitter') this.cq(a, 'spit'); else if (t.zt === 'tank') this.cq(a, 'tank'); else if (t.zt === 'boss') this.cq(a, 'boss'); } if (a.alive && ks !== 'h' && ks !== 'x') this.streakKill(a); }
     const ev = ['k', a ? a.id : 0, t.id, w === KNIFE ? PISTOL : w, head ? 1 : 0, a ? a.kills : 0, t.deaths]; if (w === KNIFE) ev.push(back ? 2 : 1);
     if (ks) { while (ev.length < 8) ev.push(0); ev.push(ks); }
     this.events.push(ev);
