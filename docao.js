@@ -642,6 +642,24 @@ export function addSparkles(mesh, n = 10, r = 0.16, color = '#e8f4ff') {
   }
 }
 
+// Deitado de lado, ordem XYZ estável (trocar a ordem do Euler a cada quadro derrubava o WebGL).
+// blend 0 = em pé, 1 = caído. O caller já pôs yaw e a posição nos pés.
+export function setDownPose(model, blend) {
+  const k = Math.max(0, Math.min(1, Number(blend) || 0));
+  const lie = k * 1.35;
+  model.group.rotation.order = 'XYZ';
+  model.group.rotation.z = lie;
+  model.group.position.y += Math.sin(lie) * 0.55;
+  if (model.arms && model.arms[0]) {
+    model.arms[0].rotation.set(-1.15, 0.4, -0.35);
+    if (model.arms[1]) model.arms[1].rotation.set(-0.25, -0.15, 0.85);
+  }
+  if (model.legs && model.legs[0]) {
+    model.legs[0].rotation.set(0.55 * k, 0, 0.18 * k);
+    if (model.legs[1]) model.legs[1].rotation.set(0.2 * k, 0, -0.12 * k);
+  }
+}
+
 export function setPose(model, pose) {
   model.arms.forEach((a, i) => {
     const s = i === 0 ? -1 : 1;

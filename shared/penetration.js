@@ -35,6 +35,20 @@ export function sphereSpan(o, d, c, r) {
   if (h < 0) return null; const q = Math.sqrt(h); return [-b - q, -b + q];
 }
 export function falloffMul(W, t) { if (!W.falloff) return 1; const [n0, n1, mn] = W.falloff; return clamp(1 - (t - n0) / (n1 - n0) * (1 - mn), mn, 1); }
+// Caído: corpo baixo, alongado na direção do modelo (yaw). Cabeça na frente, tronco no meio.
+function proneSpan(o, d, p, yaw) {
+  const fx = Math.sin(yaw || 0), fz = Math.cos(yaw || 0);
+  const spots = [
+    { x: p.x + fx * 0.35, y: p.y + 0.28, z: p.z + fz * 0.35, r: 0.46, head: false },
+    { x: p.x + fx * 0.95, y: p.y + 0.34, z: p.z + fz * 0.95, r: 0.32, head: true },
+  ];
+  let best = null;
+  for (const s of spots) {
+    const sp = sphereSpan(o, d, s, s.r); if (!sp) continue;
+    if (!best || sp[0] < best[0]) best = { t0: sp[0], t1: sp[1], head: s.head };
+  }
+  return best;
+}
 // agachado: o corpo achata na vertical (igual ao rayHitboxes de physics.js); devolve [entrada, saída] no raio original
 function bodySpan(o, d, p, y, r, crouch) {
   const s = stanceScale(crouch); if (s >= 0.9999) return sphereSpan(o, d, { x: p.x, y: p.y + y, z: p.z }, r);
@@ -49,8 +63,16 @@ export function traceShot(P, o, d, W, targets, helis = [], scale = 1) {
   let t0 = 0, mul = 1, left = W.pen || 0, walls = 0, bodies = 0;
   for (let it = 0; it < 8; it++) {
     const wh = P.rayWorldS(at(o, d, t0), d, far - t0), wallT = wh ? t0 + wh.t : far, seg = [];
-    for (const { e, p, crouch, size } of targets) {
+    for (const { e, p, crouch, size, prone, yaw } of targets) {
       if (done.has(e)) continue; let b = null; const sz = size || 1; // zumbis da Invasão: hitbox escalada a partir dos pés (igual ao scaleHit)
+      if (prone) {
+        const sp = proneSpan(o, d, p, yaw);
+        if (sp && sp.t1 > t0) {
+          const t = sp.t0 >= t0 ? sp.t0 : t0 > 0 ? t0 : sp.t1;
+          if (t > 0 && t < wallT) seg.push({ e, t, head: sp.head });
+        }
+        continue;
+      }
       for (const [y, r, head] of HITBOXES) {
         const sp = bodySpan(o, d, p, y * sz, r * sz, crouch || 0); if (!sp || sp[1] <= t0) continue;
         const t = sp[0] >= t0 ? sp[0] : t0 > 0 ? t0 : sp[1]; // encostado do outro lado da parede: entra no início do trecho; colado no cano: raiz de trás (igual ao raySphere)
