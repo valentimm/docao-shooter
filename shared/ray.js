@@ -7,6 +7,8 @@
 //  stepRay devolve [{ pos, n, dead }]. dead = o pulso acaba ali (estouro).
 //  Quica RAY.bounces vezes; o contato seguinte, ou a distância RAY.range, estoura.
 // ============================================================
+import { HITBOXES } from './physics.js';
+
 export const RAY = {
   speed: 36,
   r: 0.14,
@@ -18,6 +20,22 @@ export const RAY = {
   knock: 2.2,
   lift: 0.8,
 };
+
+// O contato do pulso usa as mesmas esferas do tiro (cabeça / corpo), só pra marcar
+// headshot no alvo direto. O dano continua o do estouro (headMul da Ray Gun é 1).
+// Quem só entra na área, sem o pulso no corpo, não é cabeça — igual bazuca.
+export function rayImpactHead(ent, at) {
+  if (!ent || !ent.pos || !at) return false;
+  const size = ent.size > 0 ? ent.size : 1;
+  let best = null;
+  for (const [y, r, head] of HITBOXES) {
+    const dx = at.x - ent.pos.x, dy = at.y - (ent.pos.y + y * size), dz = at.z - ent.pos.z;
+    const d = Math.hypot(dx, dy, dz);
+    // O pulso para na cápsula do corpo (raio 0,58), mais larga que a esfera da cabeça (0,50).
+    if (d <= r * size + 0.28 && (!best || d < best.d)) best = { d, head: !!head };
+  }
+  return !!(best && best.head);
+}
 
 // O dano do estouro é o dmg da arma (já com o tier da Papada, se houver).
 export function raySplash(w) {
