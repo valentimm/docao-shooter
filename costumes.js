@@ -867,3 +867,50 @@ Object.assign(PARTS, {
 Object.assign(PARTS, {
   hideTail(o, rig) { if (rig.tail) rig.tail.visible = false; },
 });
+// ---------- Docão Neymar (muleta + gesso) ----------
+Object.assign(PARTS, {
+  crutch(o, rig) { // muleta axilar procedural: duas hastes de alumínio em A, almofada na axila, manopla na altura da mão e ponteira de borracha no chão
+    const g = new THREE.Group();
+    const metal = toon(o.color || '#c9ccd2'), pad = toon(o.pad || '#1a1c20'), rub = toon(o.tip || '#2a2a2e');
+    const top = 0.98, grip = 0.46, join = 0.26;
+    for (const z of [-0.07, 0.07]) { // hastes duplas que se juntam embaixo
+      const a = new V3(0, top, z), b = new V3(0, join, 0);
+      const len = a.distanceTo(b); const rod = M(new THREE.CylinderGeometry(0.018, 0.018, len, 10), metal, g, 0.005);
+      rod.position.copy(a).add(b).multiplyScalar(0.5); rod.quaternion.setFromUnitVectors(new V3(0, 1, 0), a.clone().sub(b).normalize());
+    }
+    const shaft = M(new THREE.CylinderGeometry(0.02, 0.02, join - 0.04, 10), metal, g, 0.005); shaft.position.y = (join + 0.04) / 2;
+    const padM = M(new THREE.CapsuleGeometry(0.04, 0.16, 4, 10), pad, g, 0.006); padM.rotation.x = Math.PI / 2; padM.position.y = top + 0.03;
+    const gr = M(new THREE.CylinderGeometry(0.026, 0.026, 0.17, 10), pad, g, 0.005); gr.rotation.x = Math.PI / 2; gr.position.y = grip;
+    M(new THREE.CylinderGeometry(0.032, 0.036, 0.06, 12), rub, g, 0.005).position.y = 0.03;
+    const side = o.hand === 'left' ? 1 : -1; // −x = mão direita do Docão (arms[0])
+    g.position.set(side * 0.64, 0, 0.04); g.rotation.z = side * -0.08; // axila → chão, pezinho levemente pra fora
+    return g;
+  },
+  legCast(o, rig) { // gesso branco na canela (perna do lado da muleta)
+    const leg = rig.legs[o.leg === 'left' ? 1 : 0]; const m = toon(o.color || '#f4f2ec');
+    const c = M(new THREE.CylinderGeometry(0.155, 0.17, 0.3, 16), m, leg, 0.008); c.position.y = -0.2;
+    for (const y of [-0.1, -0.2, -0.3]) { const r = M(new THREE.TorusGeometry(0.163, 0.012, 6, 18), toon(o.wrap || '#e2ded4'), leg, 0); r.rotation.x = Math.PI / 2; r.position.y = y; }
+    return null;
+  },
+  babyMavi(o, rig) { // bebê Mavi no colo: porquinha embrulhada em manta rosa, apoiada no antebraço oposto à muleta
+    const g = new THREE.Group();
+    const skin = toon(o.skin || '#ffb3a8'), snoutM = toon(o.snout || '#ff8f86'), blanket = toon(o.blanket || '#f7a8c8'), trimM = toon(o.trim || '#ffffff'), dark = basic('#2a1a14');
+    const body = M(new THREE.CapsuleGeometry(0.12, 0.2, 6, 14), blanket, g, 0.008); body.rotation.z = Math.PI / 2;
+    const fold = M(new THREE.TorusGeometry(0.115, 0.025, 8, 18), trimM, g, 0.004); fold.rotation.y = Math.PI / 2; fold.position.x = -0.1;
+    const head = new THREE.Group(); head.position.set(-0.2, 0.06, 0.02); g.add(head);
+    M(new THREE.SphereGeometry(0.12, 18, 14), skin, head, 0.008);
+    const sn = M(new THREE.CylinderGeometry(0.045, 0.05, 0.04, 14), snoutM, head, 0.005); sn.rotation.x = Math.PI / 2; sn.position.set(0, -0.02, 0.12);
+    for (const s of [-1, 1]) {
+      const n = new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 6), dark); n.position.set(s * 0.016, -0.02, 0.142); head.add(n);
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 8), dark); e.position.set(s * 0.045, 0.035, 0.105); head.add(e);
+      const ear = M(new THREE.ConeGeometry(0.04, 0.07, 10), skin, head, 0.005); ear.position.set(s * 0.075, 0.1, 0); ear.rotation.z = -s * 0.5;
+      const ck = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), basic('#ff7f8a')); ck.position.set(s * 0.075, -0.01, 0.095); head.add(ck);
+    }
+    const bow = new THREE.Group(); bow.position.set(0.03, 0.12, 0.03); head.add(bow); // lacinho da Mavi
+    for (const s of [-1, 1]) { const l = M(new THREE.ConeGeometry(0.03, 0.05, 8), toon(o.bow || '#e0408a'), bow, 0.004); l.rotation.z = s * Math.PI / 2; l.position.x = s * 0.028; }
+    M(new THREE.SphereGeometry(0.016, 8, 8), toon(o.bow || '#e0408a'), bow, 0);
+    const side = o.hand === 'right' ? -1 : 1; // +x = braço esquerdo do Docão (oposto à muleta)
+    g.position.set(side * 0.34, 0.5, 0.3); g.rotation.set(0, side * 0.35, side * -0.15); if (side < 0) g.scale.x = -1;
+    return g;
+  },
+});
