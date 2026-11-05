@@ -22,6 +22,15 @@ export const INV = {
   MAX_PLAYERS: 30, DEFAULT_MAP: 'rodizio', ZOMBIE_LINGER: 2.4, SPAWN_MIN: 12,
 };
 export const isInvasion = (m) => m === INV.mode;
+// A futura frente de down chama isto no zumbi (não implementa o estado caído).
+// order: { targetId?: number, hold?: boolean }. targetId troca o alvo na hora;
+// hold faz o zumbi parar de caçar. A.targetable(player) no adaptador, se existir,
+// tira alguém da lista (por exemplo um jogador caído) sem mudar o resto da horda.
+export function orderZombie(z, order) {
+  if (!z) return;
+  z.order = order || null;
+  z.retarget = 0;
+}
 // Munição na Invasão: caixas do mapa voltam rápido, dão mais (reserva até 1,5× e pente cheio, +2 foguetes) e zumbi também solta caixa.
 export const INV_AMMO = { respawn: 6, reserveMul: 1.5, rockets: 2, zdrop: { walker: 0.14, runner: 0.12, tank: 0.4, spitter: 0.2, boss: 1 } };
 // mesma conta no cliente offline, no cliente online (espelho do 'got'/'dg') e no servidor. Devolve true se pegou alguma coisa.
@@ -161,7 +170,7 @@ export class InvasionCore {
     if ((this.phase === 'prep' || this.phase === 'break') && T >= this.phaseEnd) this.startWave(this.wave + 1);
     if (this.phase === 'wave') this.stepSpawns(T);
     this.stepFog(T, dt);
-    if (T - this.flowAt > 0.5) this.buildFlow();
+    if (T - this.flowAt > 0.5 || (this.A.survival && T - this.flowAt > 0.22 && this.flowSeedsMoved())) this.buildFlow();
     for (const z of this.zombies) if (z.alive) this.stepZombie(z, dt, T);
     this.separate();
     this.stepProjs(dt, T);
@@ -231,6 +240,7 @@ export class InvasionCore {
     // Sem o método, ou devolvendo null, continua o sorteio no mapa inteiro.
     const custom = this.A.spawnPoints ? this.A.spawnPoints() : null;
     if (custom && !custom.length) return null;
+    if (custom && this.A.survival) return this.survivalSpawn(custom);
     const good = custom || ((this.A.nav && this.A.nav.good) || []), H = this.A.players().filter((p) => p.alive), P = this.A.P;
     let best = null, bs = -1e9;
     const tries = custom ? Math.min(80, Math.max(24, custom.length * 4)) : 60;
@@ -259,38 +269,108 @@ export class InvasionCore {
     this.flowAt = this.T; const nav = this.A.nav; if (!nav || !nav.nodes) return;
     const N = nav.nodes.length;
     if (!this.rev) { this.rev = nav.nodes.map(() => []); for (const n of nav.nodes) if (n.ok) for (const [j, c] of n.e) if (nav.nodes[j].ok) this.rev[j].push([n.id, c]); }
-    const dist = new Float32Array(N).fill(Infinity), next = new Int32Array(N).fill(-1), heap = [];
+    // Float64 de propósito: Float32 arredonda a diagonal (√2) pra baixo e o teste
+    // `d > dist[i]` joga fora a única entrada da heap. O campo parava na quina e o
+    // zumbi ia reto na parede. Cada nó expande uma vez.
+    const dist = new Float64Array(N).fill(Infinity), next = new Int32Array(N).fill(-1), closed = new Uint8Array(N), heap = [];
     const push = (i, f) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const q = (k - 1) >> 1; if (heap[q][0] <= heap[k][0]) break; [heap[q], heap[k]] = [heap[k], heap[q]]; k = q; } };
     const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
-    for (const p of this.A.players()) { if (!this.visible(p)) continue; const nd = nav.nearest(p.pos.x, p.pos.y, p.pos.z); if (nd) { dist[nd.id] = 0; next[nd.id] = nd.id; push(nd.id, 0); } }
-    let it = 0;
-    while (heap.length && it++ < 60000) { const [d, i] = pop(); if (d > dist[i]) continue; for (const [j, c] of this.rev[i]) { const nd = d + c; if (nd < dist[j]) { dist[j] = nd; next[j] = i; push(j, nd); } } }
+    for (const p of this.A.players()) {
+      if (!this.zombieWants(p)) continue;
+      const nd = this.A.survival ? this.standNode(p.pos.x, p.pos.y, p.pos.z) : nav.nearest(p.pos.x, p.pos.y, p.pos.z);
+      if (nd) { dist[nd.id] = 0; next[nd.id] = nd.id; push(nd.id, 0); }
+    }
+    const cap = N * 6 + 1000; let it = 0;
+    while (heap.length && it++ < cap) {
+      const [d, i] = pop(); if (closed[i] || d > dist[i]) continue; closed[i] = 1;
+      for (const [j, c] of this.rev[i]) { const nd = d + c; if (nd < dist[j]) { dist[j] = nd; next[j] = i; push(j, nd); } }
+    }
     this.flow = { dist, next };
+    this._apSet = null; this.flowGen = (this.flowGen || 0) + 1;
+    this._seedKey = this.currentSeedKey();
+  }
+  zombieWants(p) {
+    if (!this.visible(p)) return false;
+    if (typeof this.A.targetable === 'function') return !!this.A.targetable(p);
+    return true;
+  }
+  currentSeedKey() {
+    const nav = this.A.nav; if (!nav) return '';
+    const ids = [];
+    for (const p of this.A.players()) if (this.zombieWants(p)) { const n = this.standNode(p.pos.x, p.pos.y, p.pos.z); ids.push(p.id, n ? n.id : -1); }
+    return ids.join(',');
+  }
+  flowSeedsMoved() { return this.currentSeedKey() !== this._seedKey; }
+  // Nó em que o corpo realmente pisa. nearest() devolve o mais perto mesmo
+  // quando a caminhada até ele atravessa a parede; isso semeava o fluxo do lado errado.
+  standNode(x, y, z) {
+    const nav = this.A.nav; if (!nav) return null;
+    const from = { x, y, z };
+    const n0 = nav.nearest(x, y, z);
+    if (n0 && Math.hypot(n0.x - x, n0.z - z) < 3.2 && Math.abs(n0.y - y) < 1.4 && nav.walk(from, n0) >= 0) return n0;
+    const near = [];
+    for (const g of nav.good) {
+      const d = Math.hypot(g.x - x, g.z - z);
+      if (d > 4 || Math.abs(g.y - y) > 1.5) continue;
+      near.push([d, g]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < Math.min(6, near.length); i++) if (nav.walk(from, near[i][1]) >= 0) return near[i][1];
+    return null;
   }
   pickTarget(z) {
+    if (z.order && z.order.hold) return null;
+    if (z.order && z.order.targetId != null) {
+      const forced = this.A.players().find((p) => p.id === z.order.targetId);
+      if (forced && this.zombieWants(forced)) return forced;
+    }
     let best = null, bd = 1e9;
-    for (const p of this.A.players()) { if (!this.visible(p)) continue; const d = d3(p.pos, z.pos) * (p === z.target ? 0.8 : 1); if (d < bd) { bd = d; best = p; } }
+    for (const p of this.A.players()) { if (!this.zombieWants(p)) continue; const d = d3(p.pos, z.pos) * (p === z.target ? 0.8 : 1); if (d < bd) { bd = d; best = p; } }
     return best;
   }
   stepZombie(z, dt, T) {
     const st = ZOMBIES[z.zt], P = this.A.P, tune = zombieTune(this.A.botDiff);
     if (T >= z.retarget) { z.target = this.pickTarget(z); z.retarget = T + tune.retarget[0] + this.rnd() * (tune.retarget[1] - tune.retarget[0]); }
-    let t = z.target; if (t && !this.visible(t)) { t = z.target = null; }
+    let t = z.target; if (t && !this.zombieWants(t)) { t = z.target = null; }
     let mx = 0, mz = 0; const stunned = z.stunUntil > T;
     if (t && !stunned) {
       const dx = t.pos.x - z.pos.x, dz = t.pos.z - z.pos.z, dh = hyp(dx, dz) || 1, dy = t.pos.y - z.pos.y;
       if (T - z.losAt > tune.losEvery) { z.losAt = T; z.lastLos = dh < tune.aggro && P.losClear({ x: z.pos.x, y: z.pos.y + 1.5 * z.size, z: z.pos.z }, { x: t.pos.x, y: t.pos.y + 1.2, z: t.pos.z }); }
       const spit = st.spit && z.lastLos && dh < st.spit.range;
       if (spit && T >= z.nextSpit && dh > 3) { z.nextSpit = T + st.spit.every * tune.spitRate * (0.85 + this.rnd() * 0.3); this.spit(z, t); }
-      const keep = st.spit && st.spit.keep ? st.spit.keep * tune.keep : 0;
-      let goDirect = z.lastLos && dh < 9 && Math.abs(dy) < 1.3;
-      if (spit && keep && dh < keep + 2) { goDirect = true; if (dh < keep - 2) { mx = -dx / dh; mz = -dz / dh; } }
-      else if (goDirect) { if (dh > st.reach * 0.6) { mx = dx / dh; mz = dz / dh; } }
-      else { const s = this.flowDir(z, T); if (s) { mx = s.x; mz = s.z; } else { mx = dx / dh; mz = dz / dh; } }
-      // cerco: cada zumbi puxa um pouco pro lado (par/ímpar) pra não empilhar na mesma porta. 0 no Leitão e na Ceva.
-      if (tune.flank > 0 && dh > st.reach * 2) { const side = (z.id % 2 ? 1 : -1) * (z.zt === 'runner' ? 1.35 : 1); mx += (-dz / dh) * tune.flank * 0.08 * side; mz += (dx / dh) * tune.flank * 0.08 * side; }
-      const yawT = Math.atan2(dx, dz); let dd = yawT - z.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); z.yaw += dd * Math.min(1, dt * tune.turn);
-      if (dh < st.reach * Math.max(1, z.size * 0.85) && Math.abs(dy) < 1.7 && T >= z.nextAtk) {
+      const reach = st.reach * Math.max(1, z.size * 0.85);
+      if (this.A.survival) {
+        const nav = this.A.nav;
+        const straight = !!(z.lastLos && nav && dh < 16 && Math.abs(dy) < 1.35 && dh > reach * 0.55 && nav.walk(z.pos, t.pos) >= 0);
+        if (straight) { mx = dx / dh; mz = dz / dh; z.aiState = 'direct'; z.route = null; }
+        else if (dh > reach * 0.55) {
+          const s = this.routeTo(z, t, T);
+          if (s && !s.hold) { mx = s.x; mz = s.z; z.aiState = s.via || 'seek'; }
+          else { z.aiState = 'hold'; }
+        } else z.aiState = 'seek';
+        if ((mx || mz) && tune.flank > 0 && dh > reach * 2) {
+          const side = (z.id % 2 ? 1 : -1) * (z.zt === 'runner' ? 1.35 : 1);
+          mx += (-dz / dh) * tune.flank * 0.05 * side; mz += (dx / dh) * tune.flank * 0.05 * side;
+        }
+        if (mx || mz) {
+          const slot = ((z.id % 5) - 2) * 0.18;
+          const ox = mx - mz * slot, oz = mz + mx * slot, L = hyp(ox, oz) || 1;
+          const steered = this.steerClear(z, ox / L, oz / L);
+          if (steered) { mx = steered.x; mz = steered.z; } else { mx = 0; mz = 0; z.aiState = 'hold'; }
+        }
+      } else {
+        const keep = st.spit && st.spit.keep ? st.spit.keep * tune.keep : 0;
+        let goDirect = z.lastLos && dh < 9 && Math.abs(dy) < 1.3;
+        if (spit && keep && dh < keep + 2) { goDirect = true; if (dh < keep - 2) { mx = -dx / dh; mz = -dz / dh; } }
+        else if (goDirect) { if (dh > st.reach * 0.6) { mx = dx / dh; mz = dz / dh; } }
+        else { const s = this.flowDir(z, T); if (s) { mx = s.x; mz = s.z; } else { mx = dx / dh; mz = dz / dh; } }
+        // cerco: cada zumbi puxa um pouco pro lado (par/ímpar) pra não empilhar na mesma porta. 0 no Leitão e na Ceva.
+        if (tune.flank > 0 && dh > st.reach * 2) { const side = (z.id % 2 ? 1 : -1) * (z.zt === 'runner' ? 1.35 : 1); mx += (-dz / dh) * tune.flank * 0.08 * side; mz += (dx / dh) * tune.flank * 0.08 * side; }
+      }
+      const faceX = this.A.survival && (mx || mz) ? mx : dx, faceZ = this.A.survival && (mx || mz) ? mz : dz;
+      const yawT = Math.atan2(faceX, faceZ); let dd = yawT - z.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); z.yaw += dd * Math.min(1, dt * tune.turn);
+      const bite = this.A.survival ? this.canBite(z, t, dh, dy, reach) : (dh < reach && Math.abs(dy) < 1.7);
+      if (bite && T >= z.nextAtk) {
         z.nextAtk = T + st.rate * tune.atkRate; this.A.emit(['za', z.id]); this.A.hurtPlayer(t, st.dmg * z.dmgMul, z);
       }
     } else if (!stunned) { // sem alvo (todo mundo fantasma ou morto): anda devagar pro centro da névoa
@@ -302,22 +382,231 @@ export class InvasionCore {
     if (mx || mz) { const yawM = Math.atan2(mx, mz); if (!t || stunned) { let dd = yawM - z.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); z.yaw += dd * Math.min(1, dt * (6 * tune.turn / 8)); } }
     const acc = z.onGround ? 9 : 2.5; z.vel.x += (mx - z.vel.x) * Math.min(1, acc * dt); z.vel.z += (mz - z.vel.z) * Math.min(1, acc * dt);
     const blocked = P.moveEntity(z, dt);
-    if (blocked && ml > 0) { z.stuck += dt; if (z.onGround && z.stuck > 0.25) z.vel.y = 8.5; if (z.stuck > 6) this.unstick(z); }
-    else z.stuck = Math.max(0, z.stuck - dt * 0.5);
-    if (z.pos.y < -5) this.unstick(z);
+    if (this.A.survival) this.afterMoveSurvival(z, blocked, dt, T, t);
+    else {
+      if (blocked && ml > 0) { z.stuck += dt; if (z.onGround && z.stuck > 0.25) z.vel.y = 8.5; if (z.stuck > 6) this.unstick(z); }
+      else z.stuck = Math.max(0, z.stuck - dt * 0.5);
+      if (z.pos.y < -5) this.unstick(z);
+    }
   }
   unstick(z) { const p = this.spawnPos(); if (p) { z.pos.x = p.x; z.pos.y = p.y; z.pos.z = p.z; z.vel.x = z.vel.y = z.vel.z = 0; } z.stuck = 0; z.node = null; }
-  flowDir(z, T) {
+  flowDir(z, T, careful = false) {
     const nav = this.A.nav, F = this.flow; if (!nav || !F) return null;
-    if (!z.node || T - z.nodeAt > 0.45 || hyp(z.node.x - z.pos.x, z.node.z - z.pos.z) < 0.9) { z.node = nav.nearest(z.pos.x, z.pos.y, z.pos.z); z.nodeAt = T; }
-    const nd = z.node; if (!nd || F.next[nd.id] < 0) return null;
-    let tgt = nav.nodes[F.next[nd.id]];
+    const refresh = !z.node || T - z.nodeAt > 0.45 || hyp(z.node.x - z.pos.x, z.node.z - z.pos.z) < 0.9;
+    if (refresh) { z.node = careful ? this.standNode(z.pos.x, z.pos.y, z.pos.z) : nav.nearest(z.pos.x, z.pos.y, z.pos.z); z.nodeAt = T; }
+    const nd = z.node; if (!nd) return null;
+    let via = 'seek', idx = F.next[nd.id];
+    if (idx < 0) {
+      if (!careful) return null;
+      idx = this.approachTo(nd.id);
+      via = 'approach';
+      if (idx < 0) return { x: 0, z: 0, hold: true, via };
+    }
+    let tgt = nav.nodes[idx];
+    if (!tgt) return null;
+    if (via === 'approach' && tgt === nd) return { x: 0, z: 0, hold: true, via };
     if (hyp(nd.x - z.pos.x, nd.z - z.pos.z) > 1.6 && Math.abs(nd.y - z.pos.y) < 1.2) tgt = nd; // ainda não chegou no nó
-    else { const n2 = nav.nodes[F.next[tgt.id]]; if (n2 && n2 !== tgt && Math.abs(n2.y - z.pos.y) < 0.3 && Math.abs(tgt.y - z.pos.y) < 0.3) tgt = n2; } // atalho
+    else if (via !== 'approach') {
+      const n2 = F.next[tgt.id] >= 0 ? nav.nodes[F.next[tgt.id]] : null;
+      if (n2 && n2 !== tgt && Math.abs(n2.y - z.pos.y) < 0.3 && Math.abs(tgt.y - z.pos.y) < 0.3 && (!careful || nav.walk(z.pos, n2) >= 0)) tgt = n2;
+    }
     const vx = tgt.x - z.pos.x, vz = tgt.z - z.pos.z, L = hyp(vx, vz);
-    if (L < 0.05) { z.node = tgt; return null; }
+    if (L < 0.05) { z.node = tgt; return via === 'approach' ? { x: 0, z: 0, hold: true, via } : null; }
     if (L < 0.9) { z.node = tgt; z.nodeAt = T; }
-    return { x: vx / L, z: vz / L };
+    if (via === 'approach' && L < 1.15 && this.approachAnchor(tgt.id)) return { x: 0, z: 0, hold: true, via };
+    return { x: vx / L, z: vz / L, via };
+  }
+  approachAnchor(id) {
+    if (!this._apSet) return false;
+    for (const table of this._apSet.values()) if (table[id] === id) return true;
+    return false;
+  }
+  // Componente sem caminho até o jogador: anda até o nó acessível mais perto dele e para.
+  // Não empurra o vetor através da parede. Recalcula quando o fluxo (porta, alvo) muda.
+  approachTo(id, target = null) {
+    const nav = this.A.nav, F = this.flow;
+    if (!nav || !F || id < 0) return -1;
+    const who = target ? target.id : 0;
+    if (!this._apSet || this._apGen !== this.flowGen) { this._apGen = this.flowGen; this._apSet = new Map(); }
+    let table = this._apSet.get(who);
+    if (!table) { table = new Int32Array(nav.nodes.length).fill(-2); this._apSet.set(who, table); }
+    if (table[id] !== -2) return table[id];
+    const nodes = nav.nodes, mark = new Uint8Array(nodes.length), comp = [id];
+    mark[id] = 1;
+    for (let qi = 0; qi < comp.length; qi++) {
+      const i = comp[qi];
+      const see = (j) => { if (!nodes[j] || !nodes[j].ok || mark[j]) return; mark[j] = 1; comp.push(j); };
+      for (const [j] of nodes[i].e) see(j);
+      const incoming = this.rev && this.rev[i];
+      if (incoming) for (const [j] of incoming) see(j);
+    }
+    const players = target ? [target] : this.A.players().filter((p) => this.zombieWants(p));
+    let anchor = comp[0], ad = 1e9;
+    for (const i of comp) {
+      const n = nodes[i]; let dp = players.length ? 1e9 : Math.hypot(n.x, n.z);
+      for (const p of players) dp = Math.min(dp, Math.hypot(n.x - p.pos.x, n.z - p.pos.z) + Math.abs(n.y - p.pos.y) * 2);
+      if (dp < ad) { ad = dp; anchor = i; }
+    }
+    const dist = new Float64Array(nodes.length).fill(Infinity), next = new Int32Array(nodes.length).fill(-1), closed = new Uint8Array(nodes.length);
+    dist[anchor] = 0; next[anchor] = anchor;
+    const heap = [[0, anchor]];
+    const push = (i, f) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const q = (k - 1) >> 1; if (heap[q][0] <= heap[k][0]) break; [heap[q], heap[k]] = [heap[k], heap[q]]; k = q; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+    while (heap.length) {
+      const [d, i] = pop(); if (!mark[i] || closed[i] || d > dist[i]) continue; closed[i] = 1;
+      for (const [j, c] of this.rev[i] || []) { if (!mark[j]) continue; const nd = d + c; if (nd < dist[j]) { dist[j] = nd; next[j] = i; push(j, nd); } }
+    }
+    for (const i of comp) table[i] = next[i];
+    return table[id];
+  }
+  // Caminho até o alvo deste zumbi (não o mais perto no campo compartilhado).
+  // Repete no máximo a cada 0,5 s, ou quando o alvo anda, a porta abre ou o progresso trava.
+  routeTo(z, target, T) {
+    const nav = this.A.nav; if (!nav || !target) return null;
+    if (!this.flow) this.buildFlow();
+    const goal = z.routeGoal;
+    const goalMoved = !goal || Math.hypot(goal.x - target.pos.x, goal.z - target.pos.z) > 2.4 || Math.abs(goal.y - target.pos.y) > 0.9;
+    const stale = z.routeGen !== this.flowGen || goalMoved || (z.stall || 0) > 0.9 || T >= (z.repathAt || 0);
+    if (stale) {
+      z.route = nav.path(z.pos, target.pos);
+      z.routeGoal = { x: target.pos.x, y: target.pos.y, z: target.pos.z };
+      z.routeGen = this.flowGen;
+      z.repathAt = T + 0.5;
+      z.ri = 0;
+    }
+    const path = z.route;
+    if (!path || !path.length) {
+      const n = this.standNode(z.pos.x, z.pos.y, z.pos.z);
+      z.node = n;
+      if (!n) return { hold: true, via: 'approach' };
+      const idx = this.approachTo(n.id, target);
+      if (idx < 0) return { hold: true, via: 'approach' };
+      const tgt = nav.nodes[idx];
+      if (!tgt || tgt === n) return { hold: true, via: 'approach' };
+      const vx = tgt.x - z.pos.x, vz = tgt.z - z.pos.z, L = hyp(vx, vz);
+      if (L < 1.15 && idx === n.id) return { hold: true, via: 'approach' };
+      if (L < 0.08) return { hold: true, via: 'approach' };
+      return { x: vx / L, z: vz / L, via: 'approach' };
+    }
+    while (z.ri < path.length) {
+      const n = path[z.ri];
+      if (Math.hypot(n.x - z.pos.x, n.z - z.pos.z) < 0.95 && Math.abs(n.y - z.pos.y) < 1.35) z.ri++;
+      else break;
+    }
+    if (z.ri + 1 < path.length && Math.abs(path[z.ri + 1].y - z.pos.y) < 0.45 && nav.walk(z.pos, path[z.ri + 1]) >= 0) z.ri++;
+    if (z.ri >= path.length) {
+      if (nav.walk(z.pos, target.pos) >= 0) {
+        const vx = target.pos.x - z.pos.x, vz = target.pos.z - z.pos.z, L = hyp(vx, vz) || 1;
+        return { x: vx / L, z: vz / L, via: 'direct' };
+      }
+      return { hold: true, via: 'seek' };
+    }
+    const tgt = path[z.ri];
+    z.node = tgt;
+    const vx = tgt.x - z.pos.x, vz = tgt.z - z.pos.z, L = hyp(vx, vz);
+    if (L < 0.08) return { hold: true, via: 'seek' };
+    return { x: vx / L, z: vz / L, via: 'seek' };
+  }
+  steerClear(z, mx, mz) {
+    const P = this.A.P, step = 0.62, L = hyp(mx, mz) || 1; mx /= L; mz /= L;
+    const free = (x, zz) => !P.collides(x, z.pos.y, zz);
+    if (free(z.pos.x + mx * step, z.pos.z + mz * step)) return { x: mx, z: mz };
+    let best = null, bd = -1e9;
+    for (const deg of [32, -32, 58, -58, 90, -90, 125, -125]) {
+      const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+      const rx = mx * c - mz * s, rz = mx * s + mz * c;
+      if (!free(z.pos.x + rx * step, z.pos.z + rz * step)) continue;
+      const dot = rx * mx + rz * mz;
+      if (dot > bd) { bd = dot; best = { x: rx, z: rz }; }
+    }
+    return best;
+  }
+  canBite(z, t, dh, dy, reach) {
+    if (!(dh < reach) || !(Math.abs(dy) < 1.25)) return false;
+    const P = this.A.P;
+    for (const h of [0.42, 0.9, 1.25]) {
+      if (!P.losClear({ x: z.pos.x, y: z.pos.y + h * z.size, z: z.pos.z }, { x: t.pos.x, y: t.pos.y + Math.min(1.35, 0.4 + h * 0.45), z: t.pos.z })) return false;
+    }
+    return true;
+  }
+  afterMoveSurvival(z, blocked, dt, T, t) {
+    const gd = t ? hyp(z.pos.x - t.pos.x, z.pos.z - t.pos.z) : 0;
+    if (!z.trail || T - z.trail.at > 0.45) {
+      if (z.trail) {
+        const moved = hyp(z.pos.x - z.trail.x, z.pos.z - z.trail.z);
+        const gained = z.trail.gd - gd;
+        if (z.aiState === 'hold') z.stall = 0;
+        else if (moved < 0.2 && gained < 0.12) z.stall = (z.stall || 0) + (T - z.trail.at);
+        else z.stall = Math.max(0, (z.stall || 0) - 0.2);
+        if ((z.stall || 0) > 1.05) { z.node = null; z.nodeAt = -9; z.stall = 0.4; }
+      }
+      z.trail = { x: z.pos.x, z: z.pos.z, gd, at: T };
+    }
+    z.stuck = z.stall || 0;
+    const stepUp = z.node && z.node.y > z.pos.y + 0.48 && z.node.y < z.pos.y + 1.35;
+    if (blocked && z.onGround && stepUp && T > (z.hopAt || 0)) { z.vel.y = 8.5; z.hopAt = T + 0.85; }
+    if (z.pos.y < -5) this.recoverZombie(z);
+    else if (this.A.P.overlapping && this.A.P.overlapping(z.pos.x, z.pos.y, z.pos.z)) this.A.P.depenetrate(z);
+  }
+  // Correção curta se o corpo caiu do mapa. Não teleporta até o jogador.
+  recoverZombie(z) {
+    const nav = this.A.nav;
+    if (this.A.P.depenetrate) this.A.P.depenetrate(z);
+    if (z.pos.y >= -1) { z.stuck = 0; return; }
+    const n = nav && this.standNode(z.pos.x, Math.max(0, z.pos.y), z.pos.z);
+    if (n && Math.hypot(n.x - z.pos.x, n.z - z.pos.z) <= 3) { z.pos.x = n.x; z.pos.y = n.y; z.pos.z = n.z; z.vel.x = z.vel.y = z.vel.z = 0; }
+    z.stuck = 0; z.node = null;
+  }
+  survivalSpawn(custom) {
+    if (!this.flow || this.T - this.flowAt > 0.45) this.buildFlow();
+    const P = this.A.P, nav = this.A.nav;
+    const boxes = (this.A.spawnAreas && this.A.spawnAreas()) || [];
+    if (this._spawnGen !== this.flowGen) {
+      this._spawnGen = this.flowGen;
+      const pts = [], seen = new Set();
+      const push = (x, y, z) => {
+        if (Math.abs(x) > this.hx - 1.2 || Math.abs(z) > this.hz - 1.2) return;
+        if (P && P.collides(x, y, z)) return;
+        let node = null;
+        if (nav) { node = this.standNode(x, y, z); if (!node) return; }
+        const px = node ? node.x : x, py = node ? node.y : y, pz = node ? node.z : z;
+        const key = (px * 2 | 0) + ',' + (pz * 2 | 0) + ',' + (py | 0);
+        if (seen.has(key)) return; seen.add(key);
+        if (P && P.collides(px, py, pz)) return;
+        pts.push({ x: px, y: py, z: pz, id: node ? node.id : -1 });
+      };
+      for (const s of custom) push(s.x, s.y, s.z);
+      if (nav && boxes.length) for (const n of nav.good) {
+        if (n.id % 3) continue;
+        let inside = false;
+        for (const b of boxes) if (n.x >= b[0] && n.x <= b[2] && n.z >= b[1] && n.z <= b[3] && n.y >= (b[4] || 0) - 0.45 && n.y <= (b[5] || 4) + 0.35) { inside = true; break; }
+        if (!inside || (P && P.collides(n.x, n.y, n.z))) continue;
+        const key = (n.x * 2 | 0) + ',' + (n.z * 2 | 0) + ',' + (n.y | 0);
+        if (seen.has(key)) continue; seen.add(key);
+        pts.push({ x: n.x, y: n.y, z: n.z, id: n.id });
+      }
+      this._spawnPts = pts;
+    }
+    const pts = this._spawnPts || []; if (!pts.length) return null;
+    const H = this.A.players().filter((p) => this.zombieWants(p));
+    const linked = (id) => !!(this.flow && id >= 0 && this.flow.dist[id] < 1e8);
+    const anyLink = pts.some((p) => linked(p.id));
+    let best = null, bs = -1e9;
+    const tries = Math.min(96, Math.max(28, pts.length));
+    for (let i = 0; i < tries; i++) {
+      const nd = pts[Math.floor(this.rnd() * pts.length)];
+      if (anyLink && !linked(nd.id)) continue;
+      let dp = 1e9; for (const p of H) dp = Math.min(dp, d3(nd, p.pos));
+      if (H.length && dp < 3.2) continue;
+      let seenBy = false;
+      if (P && P.losClear && dp < 40) for (const p of H) {
+        if (d3(nd, p.pos) < 40 && P.losClear({ x: p.pos.x, y: p.pos.y + 1.5, z: p.pos.z }, { x: nd.x, y: nd.y + 1.15, z: nd.z })) { seenBy = true; break; }
+      }
+      const far = dp >= INV.SPAWN_MIN ? 28 : dp >= 6 ? 12 : dp * 0.4;
+      const s = far + this.rnd() * 6 - (seenBy ? 10 : 0) - Math.max(0, dp - 42) * 0.25;
+      if (s > bs) { bs = s; best = nd; }
+    }
+    return best ? { x: best.x, y: best.y, z: best.z } : null;
   }
   separate() {
     const Z = this.zombies.filter((z) => z.alive);

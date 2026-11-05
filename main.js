@@ -8649,12 +8649,17 @@ function startInvasionOffline() {
   const fogSrc = { fog: true, name: 'Névoa Assombrada', zt: 'fog', isPlayer: false, pos: new V3(), kills: 0 }; // "atacante" da névoa (câmera de morte olha pro centro)
   inv = new InvasionCore({
     T: () => gameTime, P: PHYS, nav, size: currentMap.size, botDiff: () => botDiff,
+    survival: survOn(),
     specFor: survOn() ? (w, n) => getSurvivalWaveTuning(w, n) : null,
     players: () => entities.filter((e) => e.isPlayer),
     spawnZombie(type, pos) { const z = makeZombieEnt(type); z.id = invZid++; z.pos.set(pos.x, pos.y, pos.z); z.yaw = Math.atan2(-pos.x, -pos.z); entities.push(z); return z; },
     spawnPoints: () => {
       if (!survivalMode() || !surv || !currentMap) return null;
       return unlockedZombieSpawns(currentMap, surv).map((s) => ({ x: s.x, z: s.z, y: groundAt(s.x, s.z, s.y + 0.35) })).filter((s) => !collides(s.x, s.y, s.z));
+    },
+    spawnAreas: () => {
+      if (!survivalMode() || !surv || !currentMap || !currentMap.survival) return [];
+      return currentMap.survival.areas.filter((a) => surv.areas.has(a.id)).map((a) => a.box);
     },
     removeZombie(z) { scene.remove(z.model.group); entities = entities.filter((x) => x !== z); },
     hurtPlayer(p, dmg, src) { if (!src) fogSrc.pos.set(inv.fog.cx, p.pos.y, inv.fog.cz); damage(p, dmg, src || fogSrc, src ? KNIFE : W_NADE, false); },

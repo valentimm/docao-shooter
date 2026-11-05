@@ -1610,6 +1610,7 @@ startMsg() {
     const g = this;
     return new InvasionCore({
       T: () => g.T, P: g.P, nav: g.nav, size: g.map.size, botDiff: () => g.cfg.botDiff,
+      survival: !!g.survival,
       specFor: g.survival ? (w, n) => getSurvivalWaveTuning(w, n) : null,
       players: () => g.humans(),
       spawnZombie(type, pos) {
@@ -1634,6 +1635,10 @@ startMsg() {
       spawnPoints: () => {
         if (!g.survival || !g.surv) return null;
         return unlockedZombieSpawns(g.map, g.surv).map((s) => ({ x: s.x, z: s.z, y: g.P.groundAt(s.x, s.z, s.y + 0.35) })).filter((s) => !g.P.collides(s.x, s.y, s.z));
+      },
+      spawnAreas: () => {
+        if (!g.survival || !g.surv || !g.map.survival) return [];
+        return g.map.survival.areas.filter((a) => g.surv.areas.has(a.id)).map((a) => a.box);
       },
     });
   }
