@@ -18,6 +18,7 @@ const left = (s) => { s = Math.max(0, s | 0); const h = Math.floor(s / 3600), m 
 let dailyTimer = 0, dailyAsked = 0;
 function renderDaily() {
   const box = $('dailyPanel'); if (!box) return; const a = getAccount(), c = a ? getChal() : null;
+  if (a?.dev) { box.innerHTML = '<div class="daily-head"><b>DEV local</b></div><p class="daily-note">Todos os visuais liberados, sem login. As escolhas ficam salvas neste navegador.</p>'; box.classList.remove('guest'); return; }
   if (!a) { box.innerHTML = `<div class="daily-head"><b>🎯 Desafios do dia</b></div><p class="daily-guest">3 desafios novos todo dia valendo <b>Docoins ${COIN_ICON}</b>. <button type="button" class="daily-enter" data-daily-enter>ENTRAR NA CONTA</button></p>`; box.classList.add('guest'); return; }
   box.classList.remove('guest');
   if (!c || !c.list) { box.innerHTML = '<div class="daily-head"><b>🎯 Desafios do dia</b><span>carregando…</span></div>'; return; }
@@ -31,6 +32,8 @@ function renderDaily() {
 }
 function renderStrip(a) {
   const t = $('acctTxt'), b = $('acctBtn');
+  b.disabled = !!a?.dev;
+  if (a?.dev) { t.textContent = 'DEV local · todas as skins liberadas · sem login'; b.textContent = 'DEV LOCAL'; return; }
   if (a) { t.innerHTML = `🐷 <b>${esc(a.nick)}</b> · <span class="nw">${COIN_ICON} <b>${a.coins | 0}</b> ${CURRENCY}</span> · 🌽 <b>${a.boxes | 0}</b>`; b.textContent = 'MINHA CONTA'; }
   else { t.textContent = 'Convidado · com conta: apelido só seu, skin guardada e ranking'; b.textContent = 'ENTRAR'; }
 }

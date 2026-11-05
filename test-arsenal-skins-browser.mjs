@@ -30,7 +30,7 @@ try {
  await page.addInitScript(token => localStorage.setItem('docao.auth', token), session.token);
  const me = async () => (await fetch(SERVER + '/api/me', { headers: { Authorization: 'Bearer ' + session.token } })).json();
  const open = async () => {
-  await page.goto(SITE + '?server=' + encodeURIComponent(SERVER.replace('http', 'ws')));
+  await page.goto(SITE + '?devSkins=0&server=' + encodeURIComponent(SERVER.replace('http', 'ws')));
   await page.waitForFunction(() => window.__gunThumbs > 0);
   await page.locator('.arsenal-crate').click();
   await page.waitForSelector('#menu[data-crate-state="inside"][data-view="arsenal"]');

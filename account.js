@@ -3,16 +3,40 @@
 //  O token fica só no navegador (localStorage 'docao.auth'); convidado = sem token, o jogo funciona igual.
 // ============================================================
 import { HTTP_URL } from './config.js';
+import { ITEMS, parseLook, knifeKind, sniperKind, gunKey, parseGuns } from './shared/closet.js';
+import { localCosmeticsEnabled } from './shared/local-dev.js';
+
+export const DEV_LOCAL = localCosmeticsEnabled(location);
+const DEV_KEY = 'docao.dev.cosmetics';
+function devProfile() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(DEV_KEY) || '{}') || {}; } catch {}
+  const skin = typeof saved.skin === 'string' ? saved.skin : null;
+  return { dev: true, nick: 'DEV local', coins: 0, boxes: 0, skin,
+    custom: parseLook(saved.custom) ? saved.custom : null,
+    knife: knifeKind(saved.knife) ? saved.knife : null,
+    sniper: sniperKind(saved.sniper) ? saved.sniper : null,
+    guns: parseGuns(saved.guns),
+  };
+}
+function saveDevProfile() {
+  try { localStorage.setItem(DEV_KEY, JSON.stringify(account)); } catch { /* sem storage */ }
+}
+function equipDevSkin(field, id, valid) {
+  if (id && !valid(id)) return { error: 'Skin inválida para esta arma' };
+  account[field] = id || null; saveDevProfile(); emit();
+  return { ok: true, [field]: account[field] };
+}
 
 const KEY = 'docao.auth';
-let token = ''; try { token = localStorage.getItem(KEY) || ''; } catch (e) { /* sem storage */ }
-let account = null, stats = null, items = [], earn = { today: 0, cap: 0 }; // { nick, skin, custom, coins } · mochila (ids das partes) · ganho de hoje · { all:{kills,deaths,wins,matches}, dm:{...}, ... }
+let token = ''; try { if (!DEV_LOCAL) token = localStorage.getItem(KEY) || ''; } catch (e) { /* sem storage */ }
+let account = DEV_LOCAL ? devProfile() : null, stats = null, items = [], earn = { today: 0, cap: 0 }; // { nick, skin, custom, coins } · mochila (ids das partes) · ganho de hoje · { all:{kills,deaths,wins,matches}, dm:{...}, ... }
 const subs = new Set();
 const emit = () => subs.forEach((f) => { try { f(account, stats); } catch (e) { console.error(e); } });
 export const getToken = () => token;
 export const getAccount = () => account;
 export const getStats = () => stats;
-export const getItems = () => items.slice(); // mochila no cliente: vem do /api/me e da compra (sem polling)
+export const getItems = () => DEV_LOCAL ? ITEMS.map(item => item.id) : items.slice(); // mochila no cliente: vem do /api/me e da compra (sem polling)
 export const getEarn = () => earn;
 let chal = null, chalAt = 0; // desafios do dia (vêm no /api/me; o relógio do reset anda no cliente)
 export const getChal = () => (chal ? { ...chal, resetIn: Math.max(0, Math.round(chal.resetIn - (Date.now() - chalAt) / 1000)) } : null);
@@ -25,15 +49,17 @@ async function api(path, { method = 'GET', body, auth = false } = {}) {
   const data = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, data };
 }
 async function enter(path, nick, password) {
+  if (DEV_LOCAL) return { account };
   const r = await api(path, { method: 'POST', body: { nick, password } });
   if (!r.ok || !r.data.token) return { error: r.data.error || 'Não deu certo. Tente de novo.' };
   setToken(r.data.token); account = r.data.account; stats = null; items = []; emit(); refreshStats(); return { account };
 }
 export const register = (nick, password) => enter('/api/auth/register', nick, password);
 export const login = (nick, password) => enter('/api/auth/login', nick, password);
-export async function logout() { const t = token; if (t) await api('/api/auth/logout', { method: 'POST', auth: true }); setToken(''); account = null; stats = null; items = []; emit(); }
-export function dropSession() { setToken(''); account = null; stats = null; items = []; emit(); } // token vencido/recusado pelo servidor da sala
+export async function logout() { if (DEV_LOCAL) return; const t = token; if (t) await api('/api/auth/logout', { method: 'POST', auth: true }); setToken(''); account = null; stats = null; items = []; emit(); }
+export function dropSession() { if (DEV_LOCAL) return; setToken(''); account = null; stats = null; items = []; emit(); } // token vencido/recusado pelo servidor da sala
 export async function refreshStats() {
+  if (DEV_LOCAL) { emit(); return { account, items: getItems() }; }
   if (!token) return null; const r = await api('/api/me', { auth: true });
   if (r.status === 401) { dropSession(); return null; }
   if (r.ok) { account = r.data.account; stats = r.data.stats; items = r.data.items || []; earn = r.data.earn || earn; chal = r.data.chal || null; chalAt = Date.now(); emit(); } return r.ok ? r.data : null;
@@ -41,6 +67,7 @@ export async function refreshStats() {
 export const loadMe = refreshStats; // no começo: confere o token guardado (se vencer, volta a convidado)
 let skinTimer = 0, skinWant = '';
 export function saveSkin(skin) { // pula de skin em skin sem gravar a cada clique: espera 700 ms parado (menos escrita no D1)
+  if (DEV_LOCAL) { account.skin = skin; if (parseLook(skin)) account.custom = skin; saveDevProfile(); return; }
   if (!token || !account || account.skin === skin) return; skinWant = skin; clearTimeout(skinTimer);
   skinTimer = setTimeout(async () => {
     const want = skinWant; if (!token || !account || account.skin === want) return;
@@ -49,6 +76,10 @@ export function saveSkin(skin) { // pula de skin em skin sem gravar a cada cliqu
   }, 700);
 }
 export async function equipLook(code) { // visual personalizado: imediato, com resposta (o servidor confere se as partes são suas)
+  if (DEV_LOCAL) {
+    if (!parseLook(code)) return { error: 'Visual inválido' };
+    account.skin = account.custom = code; saveDevProfile(); emit(); return { ok: true };
+  }
   if (!token || !account) return { error: 'Entre na sua conta para salvar o visual' };
   clearTimeout(skinTimer);
   const r = await api('/api/me/skin', { method: 'PUT', body: { skin: code }, auth: true });
@@ -63,7 +94,8 @@ export async function buyItem(item) { // o servidor decide: preço, saldo e se j
   if (!r.ok) { if (r.status === 409 && !items.includes(item)) { items.push(item); emit(); } return { error: r.data.error || 'Não deu pra comprar' }; }
   if (!items.includes(r.data.item)) items.push(r.data.item); account.coins = r.data.coins; emit(); return { ok: true, coins: r.data.coins };
 }
-export async function equipKnife(id) { // '' volta pra faca de churrasqueiro. O servidor só aceita faca que está na mochila.
+export async function equipKnife(id) { // '' volta pra faca de churrasqueiro.
+  if (DEV_LOCAL) return equipDevSkin('knife', id, knifeKind);
   if (!token || !account) return { error: 'Entre na sua conta para equipar' };
   const r = await api('/api/me/knife', { method: 'PUT', body: { knife: id || '' }, auth: true });
   if (r.status === 401) { dropSession(); return { error: 'Sessão expirada. Entre de novo.' }; }
@@ -71,6 +103,7 @@ export async function equipKnife(id) { // '' volta pra faca de churrasqueiro. O 
   account.knife = r.data.knife || null; emit(); return { ok: true, knife: account.knife };
 }
 export async function equipSniper(id) {
+  if (DEV_LOCAL) return equipDevSkin('sniper', id, sniperKind);
   if (!token || !account) return { error: 'Entre na sua conta para equipar' };
   const r = await api('/api/me/sniper', { method: 'PUT', body: { sniper: id || '' }, auth: true });
   if (r.status === 401) { dropSession(); return { error: 'Sessão expirada. Entre de novo.' }; }
@@ -78,6 +111,11 @@ export async function equipSniper(id) {
   account.sniper = r.data.sniper || null; emit(); return { ok: true, sniper: account.sniper };
 }
 export async function equipGun(key, id) {
+  if (DEV_LOCAL) {
+    if (!['rifle', 'pistol', 'p90', 'carabina'].includes(key) || (id && gunKey(id) !== key)) return { error: 'Skin inválida para esta arma' };
+    account.guns = { ...account.guns }; if (id) account.guns[key] = id; else delete account.guns[key];
+    saveDevProfile(); emit(); return { ok: true, guns: account.guns };
+  }
   if (!token || !account) return { error: 'Entre na sua conta para equipar' };
   const r = await api('/api/me/gun', { method: 'PUT', body: { key, item: id || '' }, auth: true });
   if (r.status === 401) { dropSession(); return { error: 'Sessão expirada. Entre de novo.' }; }

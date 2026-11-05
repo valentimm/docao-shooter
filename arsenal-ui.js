@@ -34,6 +34,7 @@ export function createArsenal(host, api) {
   host.tabIndex = -1;
   function render() {
     const restoreFocus = host.contains(document.activeElement);
+    const skinsScroll = host.querySelector('.ar-owned-skins')?.scrollTop || 0;
     const { classes, index } = api.snapshot(), c = classes[index], w = WEAPONS[weapon];
     const skins = api.skins(weapon);
     if (step === 3 && skinId && !skins.items.some(item => item.id === skinId)) skinId = skins.equipped;
@@ -58,9 +59,11 @@ export function createArsenal(host, api) {
       </div>
       ${!skins.items.length ? `<p class="ar-hint ar-skins-empty">${skins.signedIn ? 'Nenhuma skin desta arma na mochila. As skins do Brechó e do Caixote aparecem aqui.' : 'Entre na sua conta para usar as skins da sua mochila.'}</p>` : ''}
       <details class="ar-match-camos"><summary>Camuflagens por abates na partida</summary><div class="ar-tabs">${button('Visual escolhido', 'skin-preview', camo === 0 ? 'selected' : '')}${CAMO_TIERS.map((s, i) => `<button type="button" class="ar-button ${camo === i + 1 ? 'selected' : ''}" data-camo="${i + 1}">${esc(s.name)} · ${s.at} abates</button>`).join('')}</div><p class="ar-hint">Prévia temporária. Essas camuflagens são liberadas por abates e duram até o fim da partida.</p></details>
-      <p class="ar-hint ar-bottom-note">Escolha uma skin e clique em Equipar. O visual fica salvo na sua conta para esta arma, em todas as classes. Skins não alteram os atributos.</p>` : `<div class="ar-options-grid">${pieces.map(p => `<button type="button" class="ar-option ${p.id === (kit[part] || '') ? 'selected' : ''}" data-piece="${esc(p.id)}"><span class="ar-piece-icon" aria-hidden="true">${esc(slots.find(s => s.id === part)?.label || '')}</span><b>${esc(p.name)}</b><span>${p.id === (kit[part] || '') ? 'Selecionada' : 'Disponível'}</span></button>`).join('')}</div><p class="ar-hint">${esc(part ? pieceBlurb(weapon, part, kit[part] || '') : 'Esta arma não possui peças intercambiáveis.')}</p>${diff.length ? `<div class="ar-comparison">${diff.map(d => `<span>${esc(d.label)} <b>${esc(d.now)} → ${esc(d.next)}</b></span>`).join('')}</div>` : ''}<p class="ar-hint ar-bottom-note">Escolha as peças e clique em Equipar para salvar na classe.</p>`}</section></div>`;
+      <p class="ar-hint ar-bottom-note">Escolha uma skin e clique em Equipar. ${skins.local ? 'O visual fica salvo neste navegador para esta arma, em todas as classes.' : 'O visual fica salvo na sua conta para esta arma, em todas as classes.'} Skins não alteram os atributos.</p>` : `<div class="ar-options-grid">${pieces.map(p => `<button type="button" class="ar-option ${p.id === (kit[part] || '') ? 'selected' : ''}" data-piece="${esc(p.id)}"><span class="ar-piece-icon" aria-hidden="true">${esc(slots.find(s => s.id === part)?.label || '')}</span><b>${esc(p.name)}</b><span>${p.id === (kit[part] || '') ? 'Selecionada' : 'Disponível'}</span></button>`).join('')}</div><p class="ar-hint">${esc(part ? pieceBlurb(weapon, part, kit[part] || '') : 'Esta arma não possui peças intercambiáveis.')}</p>${diff.length ? `<div class="ar-comparison">${diff.map(d => `<span>${esc(d.label)} <b>${esc(d.now)} → ${esc(d.next)}</b></span>`).join('')}</div>` : ''}<p class="ar-hint ar-bottom-note">Escolha as peças e clique em Equipar para salvar na classe.</p>`}</section></div>`;
     }
     host.innerHTML = `<header class="ar-header"><div><p>${esc(crumb)}</p><h1>${step === 1 ? 'Arsenal do chiqueiro' : step === 2 ? 'Escolher arma' : 'Customizar'}</h1></div><nav class="ar-actions">${actions}</nav></header>${content}<p class="ar-feedback" aria-live="polite"></p>`;
+    const ownedGrid = host.querySelector('.ar-owned-skins');
+    if (ownedGrid) ownedGrid.scrollTop = skinsScroll;
     if (restoreFocus) host.focus({ preventScroll: true });
     if (step === 3 && api.saber(weapon)) {
       const colors = api.saber(weapon);

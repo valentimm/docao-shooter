@@ -6210,6 +6210,7 @@ arsenalUi = createArsenal($('arsenalApp'), {
     items: ownedWeaponSkins(i, getItems()),
     equipped: equippedWeaponSkin(i, getAccount()),
     signedIn: !!getAccount(),
+    local: !!getAccount()?.dev,
   }),
   skinThumb: arsenalSkinThumb,
   prepareSkin: (i, id, clone) => {
@@ -7942,10 +7943,10 @@ function renderServerT() {
 }
 // ---------- nome do jogador: um só valor nos 3 campos (menu, janela online, lobby), salvo no navegador ----------
 const NAME_FIELDS = ['nameInput', 'onlineName', 'lobbyName'];
-function myName() { const a = getAccount(); return a ? a.nick : cleanName($('nameInput').value); } // conta: o apelido é fixo
+function myName() { const a = getAccount(); return a && !a.dev ? a.nick : cleanName($('nameInput').value); } // conta: o apelido é fixo
 function saveName(n, from) {
-  const acc = getAccount(); n = acc ? acc.nick : cleanName(n); for (const id of NAME_FIELDS) if (id !== from) $(id).value = n;
-  if (!acc) { try { localStorage.setItem('docao.name', n); } catch (e) { /* sem storage */ } } // o apelido da conta não vira o nome de convidado
+  const acc = getAccount(); n = acc && !acc.dev ? acc.nick : cleanName(n); for (const id of NAME_FIELDS) if (id !== from) $(id).value = n;
+  if (!acc || acc.dev) { try { localStorage.setItem('docao.name', n); } catch (e) { /* sem storage */ } } // o apelido da conta não vira o nome de convidado
   return n;
 }
 function profile() {
@@ -7964,8 +7965,8 @@ function sendName() { if (!online || !online.net) return; const n = saveName($('
 $('lobbyNameBtn').onclick = () => sendName();
 // ---------- conta (opcional): apelido fixo + skin guardada ----------
 function applyAccount(a) {
-  for (const id of NAME_FIELDS) { const el = $(id); el.readOnly = !!a; el.title = a ? 'Apelido fixo da sua conta' : ''; el.classList.toggle('locked', !!a); }
-  if (a) { saveName(a.nick); if (a.skin && skinOk(a.skin) && a.skin !== selectedSkin) setPreview(a.skin); else if (!a.skin) saveAcctSkin(selectedSkin); applyHeldKnife(a.knife); applyHeldSniper(a.sniper); applyHeldGuns(a.guns); }
+  for (const id of NAME_FIELDS) { const el = $(id); el.readOnly = !!a && !a.dev; el.title = a && !a.dev ? 'Apelido fixo da sua conta' : ''; el.classList.toggle('locked', !!a && !a.dev); }
+  if (a) { if (!a.dev) saveName(a.nick); if (a.skin && skinOk(a.skin) && a.skin !== selectedSkin) setPreview(a.skin); else if (!a.skin) saveAcctSkin(selectedSkin); applyHeldKnife(a.knife); applyHeldSniper(a.sniper); applyHeldGuns(a.guns); }
   else { if (selectedSkin.startsWith('x1.')) setPreview(DEFAULT_SKIN); /* visual personalizado é só de conta */ applyHeldKnife(''); let n = ''; try { n = localStorage.getItem('docao.name') || ''; } catch (e) { /* sem storage */ } for (const id of NAME_FIELDS) $(id).value = cleanName(n || 'Docão'); }
 }
 setLootThumbSource(lootItemThumb);
