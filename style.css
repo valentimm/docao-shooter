@@ -1343,6 +1343,8 @@ body.invout #deathpick,body.invout #stamp,body.invout #centermsg{display:none!im
 }
 #hud #hpregen{right:6px;line-height:12px;font-size:13px;color:var(--cream);text-shadow:0 1px 0 var(--shadow)}
 #hud #hpbar.regen{box-shadow:2px 2px 0 var(--shadow),0 0 0 2px #7d9a62}
+#hud #hpbar.downed #hpfill{background:linear-gradient(90deg,#e63946,#7a1c24)}
+#hud #hpbar.downed #hptext{letter-spacing:.14em;font-size:11px}
 #hud #shieldbox{width:200px;height:auto;margin-top:4px;background:none;border:none}
 #hud #shieldbar{height:14px;border-width:2px;border-radius:2px}
 #hud #shieldtext{line-height:14px;font-size:10px}

@@ -3520,8 +3520,17 @@ function paintSaberHud(p, w) {
 }
 function updateHud(dt) {
   const p = player, w = gunOf(p, p.weapon);
-  $('hpfill').style.width = Math.max(0, p.hp) + '%'; $('hptext').textContent = Math.max(0, Math.ceil(p.hp));
-  $('hpfill').style.background = p.hp > 35 ? '' : 'linear-gradient(#ff7b7b,#e63946)';
+  const downed = !!(p.down && survOn());
+  hpBar.classList.toggle('downed', downed);
+  if (downed) {
+    $('hpfill').style.width = '100%';
+    $('hptext').textContent = 'CAÍDO';
+    $('hpfill').style.background = '';
+  } else {
+    $('hpfill').style.width = Math.max(0, p.hp) + '%';
+    $('hptext').textContent = Math.max(0, Math.ceil(p.hp));
+    $('hpfill').style.background = p.hp > 35 ? '' : 'linear-gradient(#ff7b7b,#e63946)';
+  }
   { const box = $('shieldbox'), has = !!(p.slots && isShieldW(p.slots[0]) && !p.shieldBroken && p.shieldHp > 0);
     if (box) { box.classList.toggle('hidden', !has); if (has) { const k = p.shieldHp / SHIELD.hp; $('shieldfill').style.width = (k * 100).toFixed(1) + '%'; $('shieldtext').textContent = Math.ceil(p.shieldHp); box.classList.toggle('dent', k <= 0.66); box.classList.toggle('crack', k <= 0.33); const cd = Math.max(0, (p.shieldDashAt || 0) - gameTime); $('shieldcd').textContent = shieldRaised(p) ? (cd > 0.05 ? `investida ${cd.toFixed(1)}s` : 'botão direito: investida') : 'tampa nas costas'; } }
     if (crossEl) crossEl.classList.toggle('shield', !!(w.shield || fp.breakT > 0)); }
@@ -5123,7 +5132,7 @@ function enterDownLocal(e) {
   e.reloadEnd = 0; e.switchEnd = 0; e.charging = false;
   if (e === player && emote.on) stopEmote();
   armDownPistol(e);
-  if (e === player) flashMsg('Corações esgotados. Você caiu — só a pistolinha. Um amigo segura L para levantar.');
+  if (e === player) { const msg = $('centermsg'); if (msg) { msg.textContent = ''; msgTimer = 0; } }
 }
 function armDownPistol(e) {
   if (!e.downSnapWeapon && e.loadSnap) e.downSnapWeapon = e.loadSnap.weapon;
@@ -9231,24 +9240,32 @@ function downTargetFor(me) {
   }
   return best;
 }
+function parkDownFlash(open) {
+  const msg = $('centermsg');
+  if (!msg) return;
+  if (open) msg.style.top = '30%';
+  else if (msg.style.top === '30%') msg.style.top = '';
+}
 function paintDownHud() { try { paintDownHudBody(); } catch (e) { /* HUD do down não pode travar o quadro */ } }
 function paintDownHudBody() {
   const el = $('downHud'); if (!el) return;
   const on = survOn() && state === 'playing' && player;
-  if (!on) { el.classList.add('hidden'); return; }
+  if (!on) { el.classList.add('hidden'); parkDownFlash(false); return; }
   const title = $('downTitle'), sub = $('downSub'), fill = $('downFill');
   if (player.down) {
     el.classList.remove('hidden');
+    parkDownFlash(true);
     const left = Math.max(0, (player.downUntil || 0) - gameTime);
     title.textContent = 'Você está caído';
     const rev = (player.revP || 0) > 0;
-    sub.textContent = rev ? 'Estão te levantando — não solte' : `Só a pistolinha · rasteje · sangrando ${Math.ceil(left)}s`;
+    sub.textContent = rev ? 'Estão te levantando' : `Pistolinha no chão · amigo segura L · ${Math.ceil(left)}s`;
     fill.style.width = `${Math.round((player.revP || 0) * 100)}%`;
     return;
   }
   const mate = downTargetFor(player);
-  if (!mate) { el.classList.add('hidden'); return; }
+  if (!mate) { el.classList.add('hidden'); parkDownFlash(false); return; }
   el.classList.remove('hidden');
+  parkDownFlash(true);
   const mine = mate.revBy === (online ? online.myId : player.id) || (!online && mate.revBy === player.id);
   const busy = mate.revBy && !mine;
   title.textContent = busy ? `${mate.name} já está sendo levantado` : `Levantar ${mate.name}`;
@@ -9286,7 +9303,7 @@ function survNet(ev) {
     who.downMag = DOWNED.mag; who.crouch = 0; who.revP = 0; who.revBy = 0;
     if (!who.downBlend) who.downBlend = 0;
     setWeapon(who, DOWNED.pistol);
-    if (who === player) flashMsg('Corações esgotados. Você caiu — só a pistolinha. Um amigo segura L para levantar.');
+    if (who === player) { const msg = $('centermsg'); if (msg) { msg.textContent = ''; msgTimer = 0; } }
   } else if (k === 'ldk') {
     const who = entOf(ev[1]); if (!who) return;
     const stood = ev[18] === 1;
