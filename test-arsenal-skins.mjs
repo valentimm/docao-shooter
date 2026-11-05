@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { KNIFE, SABER, SABER2, GOLD_KNIFE, WEAPONS, CATEGORIES } from './shared/rules.js';
+import { ITEMS } from './shared/closet.js';
+import { skinChannel, ownedWeaponSkins, equippedWeaponSkin, unlockedKnifeModels } from './shared/arsenal-skins.js';
+const rifle = WEAPONS.findIndex(w => w.key === 'rifle');
+const sniper = WEAPONS.findIndex(w => w.key === 'sniper');
+const rifleSkin = ITEMS.find(i => i.gun === 'rifle');
+const sniperSkin = ITEMS.find(i => i.gun === 'sniper');
+const inventory = ['k19', 'k2', rifleSkin.id, sniperSkin.id, 'c15', 'inexistente'];
+assert.deepEqual(ownedWeaponSkins(KNIFE, inventory).map(i => i.id).sort(), ['k19', 'k2']);
+assert.deepEqual(ownedWeaponSkins(rifle, inventory).map(i => i.id), [rifleSkin.id]);
+assert.deepEqual(ownedWeaponSkins(sniper, inventory).map(i => i.id), [sniperSkin.id]);
+for (const i of [SABER, SABER2, GOLD_KNIFE]) {
+  assert.equal(skinChannel(i), null);
+  assert.deepEqual(ownedWeaponSkins(i, inventory), []);
+}
+assert.deepEqual(ownedWeaponSkins(KNIFE), []);
+assert.deepEqual(ownedWeaponSkins(-1, inventory), []);
+const account = { knife: 'k19', sniper: sniperSkin.id, guns: { rifle: rifleSkin.id } };
+assert.equal(equippedWeaponSkin(KNIFE, account), 'k19');
+assert.equal(equippedWeaponSkin(rifle, account), rifleSkin.id);
+assert.equal(equippedWeaponSkin(sniper, account), sniperSkin.id);
+assert.equal(equippedWeaponSkin(SABER, account), '');
+assert.equal(equippedWeaponSkin(KNIFE, null), '');
+assert(CATEGORIES.find(c => c.pick === 'melee').weapons.includes(KNIFE));
+assert(!WEAPONS.some(w => /Butterfly|Karambit/.test(w.name)));
+assert.deepEqual(unlockedKnifeModels([]), []);
+const unlocked = unlockedKnifeModels(['k20', 'k21', 'k11', 'c15']);
+assert.deepEqual(unlocked.map(model => model.knife).sort(), ['butterfly', 'karambit']);
+assert(unlocked.every(model => model.weapon === KNIFE), 'modelos usam a mesma arma, dano e regras da faca padrão');
+assert.equal(unlocked.find(model => model.knife === 'butterfly').preview, 'k20', 'ganhar só Rusty desbloqueia o modelo sem conceder a fábrica');
+assert.deepEqual(unlocked.find(model => model.knife === 'karambit').skins.map(skin => skin.id), ['k11']);
+assert.equal(unlockedKnifeModels(['k19', 'k20'], 'k20')[0].preview, 'k20', 'prévia respeita a cor equipada');
+console.log('OK: desbloqueio por modelo e cor possuída; atributos da faca padrão; sabres e faca dourada separados.');

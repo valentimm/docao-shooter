@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="acessorios.css">
 <link rel="stylesheet" href="truco.css">
 <link rel="stylesheet" href="uno.css">
+<link rel="stylesheet" href="arsenal.css?v=knife-models">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -252,6 +253,8 @@
         </section>
       </section>
       <section id="menu-arsenal" aria-label="Arsenal" tabindex="0" hidden>
+        <div id="arsenalApp"></div>
+        <div class="arsenal-legacy" hidden>
         <div class="section-heading"><span>EQUIPAMENTO DA CASA</span><h2>Arsenal do chiqueiro</h2><p>Escolha uma primária, uma secundária e uma arma corpo a corpo. Temperar grava a peça na classe aberta.</p></div>
         <button type="button" id="temperBtn">Temperar esta arma</button>
         <div id="bench" class="bench" hidden>
@@ -271,6 +274,7 @@
         <div id="saberColors"></div>
       </div>
     </div>
+        </div>
       </section>
       <section id="menu-operator" aria-label="Visual do personagem" tabindex="0" hidden>
         <div class="section-heading"><span>VESTIDO PRA CONFUSÃO</span><h2>Seu Docão, seu estilo</h2><p>Escolha uma skin pronta ou monte com o que já está na mochila. Comprar continua no Brechó.</p></div>

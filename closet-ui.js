@@ -77,6 +77,7 @@ function stopThree() { if (raf) cancelAnimationFrame(raf); raf = 0; } // o rende
 // ---------- telas ----------
 function renderWallet() {
   const a = getAccount(), e = getEarn(); if (!a) return;
+  if (a.dev) { $('closetWallet').textContent = 'DEV local · todos os visuais disponíveis, sem compra ou login'; return; }
   $('closetWallet').innerHTML = `${COIN_ICON} <b>${a.coins | 0}</b> ${CURRENCY} · ${BOX_EMOJI} <b>${a.boxes | 0}</b> caixote${(a.boxes | 0) === 1 ? '' : 's'}<small>Partidas hoje: ${e.today | 0}/${e.cap | 0} · desafios sem teto · 1 grátis ao entrar, +1 por desafio e 1 comprado por dia</small>`;
 }
 const curDance = () => { try { return normDance(localStorage.getItem('docao.dance')); } catch (e) { return 'moonwalk'; } };
@@ -140,6 +141,7 @@ function chalClock() { const c = getChal(), el = document.getElementById('chalRe
 let chalTimer = 0, chalRefreshing = false;
 function renderBox() {
   const box = $('closetBox'); if (!box) return;
+  if (getAccount()?.dev) { box.innerHTML = '<p class="closet-note">Todos os prêmios já estão na mochila em DEV. Escolha o visual em Personalizar ou no Arsenal.</p>'; return; }
   const a = getAccount(), n = a ? a.boxes | 0 : 0, owned = new Set(getItems());
   wheelPick = wheelPick.filter((id) => owned.has(id)).slice(0, 3);
   const weights = [...new Set(lootItems().map((i) => i.weight))].sort((x, y) => x - y);
@@ -167,6 +169,7 @@ function renderBox() {
 }
 function renderChal() {
   const c = getChal(), box = $('closetChal');
+  if (getAccount()?.dev) { box.innerHTML = '<p class="closet-note">Todos os visuais estão liberados em DEV. Os desafios e seus prêmios continuam no jogo online.</p>'; return; }
   if (!c || !c.list) { box.innerHTML = '<p class="closet-note">Carregando os desafios…</p>'; return; }
   const done = c.list.filter((x) => x.done).length, total = c.list.reduce((t, x) => t + x.reward, 0);
   box.innerHTML = `<div class="chal-head"><b>Desafios do dia</b> <span>${done}/${CHAL_PER_DAY} feitos · até ${COIN_ICON} ${total}</span></div>`

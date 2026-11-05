@@ -571,7 +571,7 @@ npx wrangler d1 migrations apply docao-contas --local
 npx wrangler dev --port 8787
 ```
 
-Ou rode `./tools/rodar-login-mac.sh`, que faz isso e sobe o site (porta 8135) e o Worker (porta 8795, mude com `SITE_PORT` e `WORKER_PORT`) de uma vez. Pra zerar as contas de teste, apague `server/.wrangler`. O `ALLOW_TEST` **não** é ligado nesse script.
+Ou rode `./tools/rodar-login-mac.sh`, que faz isso e sobe o site (porta 8135) e o Worker (porta 8795, mude com `SITE_PORT` e `WORKER_PORT`) de uma vez. Pra zerar as contas de teste, apague `server/.wrangler`. Ao abrir o site em `localhost` ou `127.0.0.1`, todos os visuais ficam disponíveis automaticamente, sem conta, login ou servidor de autenticação. As escolhas ficam salvas apenas neste navegador. Para testar login e inventário normais, acrescente `&devSkins=0` à URL (ou `?devSkins=0` quando não há outros parâmetros) e inicie o servidor com `DEV_UNLOCK_SKINS=0`; os itens já concedidos no banco local continuam na conta. Hosts públicos continuam usando o inventário autenticado. O `ALLOW_TEST` **não** é ligado nesse script.
 
 Parâmetros de URL úteis:
 - `?server=` troca o servidor (o padrão está em `config.js`)

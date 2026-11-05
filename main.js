@@ -73,7 +73,7 @@ import { normBotDiff, botDiffMeta, applyBotDiff, profileOf, nextThink, considerT
 import { SHIELD, isShieldW, shieldRaised, shieldOnBack, resetShield, shieldStage, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from './shared/shield.js';
 import { makeFPShield } from './shield-view.js';
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, rollFumble, pickBotSecondary, akimboReady, ammoLow } from './shared/revolver.js';
-import { getAccount, getItems, onAccount, loadMe, saveSkin as saveAcctSkin, dropSession } from './account.js';
+import { getAccount, getItems, onAccount, loadMe, equipKnife, equipSniper, equipGun, saveSkin as saveAcctSkin, dropSession } from './account.js';
 import { knifeKind, knifeFinish, sniperKind, itemById, gunPaint, GUN_EQUIP_KEYS } from './shared/closet.js';
 import { lootItems } from './shared/lootbox.js';
 import { applyGunPaint } from './gun-paint.js';
@@ -85,6 +85,8 @@ import { POWER_UPS, normHand, clampLoadout, botPool, powerOn, savedToLimits, lim
 try { document.fonts?.load('700 32px Fredoka'); } catch {}
 import { CLASS_COUNT, clampClassIndex, clampKit, classLoad, compare, defaultKit, familyOf, kitIsDefault, normalizeClasses, pieceBlurb, pieceInfo, piecesOf, resolveWeapon, slotsOf, statBars } from './shared/attachments.js';
 import { fillBench, fillChips, fillSheet } from './classes-ui.js';
+import { createArsenal } from './arsenal-ui.js?v=knife-models';
+import { skinChannel, ownedWeaponSkins, equippedWeaponSkin, unlockedKnifeModels } from './shared/arsenal-skins.js?v=knife-models';
 
 const V3 = THREE.Vector3;
 const $ = (id) => document.getElementById(id);
@@ -5658,6 +5660,7 @@ function openMenuView(view, trigger) {
 menuViewButtons.forEach((button) => button.onclick = () => openMenuView(button.dataset.menuView, button));
 $('menuBack').onclick = () => openMenuView('match');
 $('menu').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && $('menu').dataset.view === 'arsenal' && arsenalUi?.back()) { event.preventDefault(); event.stopPropagation(); return; }
   if (event.key === 'Escape' && benchIsOpen()) { event.preventDefault(); event.stopPropagation(); closeBench(); return; }
   if (event.key === 'Escape' && (crateJourney.phase !== 'closed' || ($('menu').dataset.view && $('menu').dataset.view !== 'match'))) {
     event.preventDefault(); openMenuView('match');
@@ -5934,6 +5937,7 @@ function renderWardrobePreview() {
 }
 let selectedSkin = getSkin(localStorage.getItem('docao.skin') || DEFAULT_SKIN).id, preview = null;
 // Cinco classes no navegador. A última usada é a que nasce. docao.primary continua espelhando a classe armada.
+let arsenalUi = null;
 let classes = [], classIndex = 0, spawnedClass = 0, benchOn = false, benchWeapon = 0, benchSlot = 'optic', benchLook = '', arsenalFocus = -1, pauseArmTab = 'rajada', deathArmTab = 'rajada';
 const DEATH_HINT = '1–5 escolhe a classe. O arsenal grava a arma nela. U volta na última · Espaço nasce.';
 const LIVE_HINT = '1–5 escolhe a classe. O arsenal troca a arma agora e o pente não enche sozinho. U volta pra última. O tracinho branco é a arma de fábrica.';
@@ -6177,6 +6181,71 @@ function buildSkinPicker() {
   $('skinPrev').onclick = () => step(-1); $('skinNext').onclick = () => step(1);
 }
 const weaponThumbs = [];
+const arsenalKnifeModels = new Map(), arsenalFactoryThumbs = new Map();
+function arsenalModel(i, skinId = '') {
+  if (i !== KNIFE) return fp.guns[i];
+  if (!arsenalKnifeModels.has(skinId)) {
+    const look = knifeLook(skinId), model = makeKnife(1, 0.004, look.kind, look.finish);
+    if (look.kind === 'butterfly') poseButterfly(model, 0, 1);
+    arsenalKnifeModels.set(skinId, model);
+  }
+  return arsenalKnifeModels.get(skinId);
+}
+function arsenalSkinThumb(i, id = '') {
+  if (id) return lootItemThumb(itemById(id));
+  if (!arsenalFactoryThumbs.has(i) && weaponThumbs[i]) {
+    const model = arsenalModel(i);
+    const url = renderWeaponThumb(model, 192, 112, clone => {
+      if (i !== KNIFE && skinChannel(i)) paintThumbGun(clone, { gun: WEAPONS[i].key });
+    });
+    arsenalFactoryThumbs.set(i, url);
+  }
+  return arsenalFactoryThumbs.get(i) || weaponThumbs[i] || '';
+}
+arsenalUi = createArsenal($('arsenalApp'), {
+  thumbs: weaponThumbs,
+  snapshot: () => ({ classes, index: classIndex }),
+  pool, model: arsenalModel, arm: armClass,
+  skins: i => ({
+    items: ownedWeaponSkins(i, getItems()),
+    equipped: equippedWeaponSkin(i, getAccount()),
+    signedIn: !!getAccount(),
+    local: !!getAccount()?.dev,
+  }),
+  knifeModels: () => unlockedKnifeModels(getItems(), getAccount()?.knife || ''),
+  skinThumb: arsenalSkinThumb,
+  prepareSkin: (i, id, clone) => {
+    if (i !== KNIFE && skinChannel(i)) paintThumbGun(clone, itemById(id) || { gun: WEAPONS[i].key });
+  },
+  equipSkin: async (i, id) => {
+    if (id === equippedWeaponSkin(i, getAccount())) return { ok: true };
+    const channel = skinChannel(i);
+    if (!channel || (id && !ownedWeaponSkins(i, getItems()).some(item => item.id === id))) return { error: 'Essa skin não está na sua mochila.' };
+    const result = await (channel === 'knife' ? equipKnife(id) : channel === 'sniper' ? equipSniper(id) : equipGun(channel, id));
+    if (!result.error) {
+      const event = channel === 'knife' ? 'docao-knife-pick' : channel === 'sniper' ? 'docao-sniper-pick' : 'docao-gun-pick';
+      document.dispatchEvent(new CustomEvent(event, { detail: channel === 'knife' || channel === 'sniper' ? id : { key: channel, id } }));
+    }
+    return result;
+  },
+  saber: i => isSaber(i) ? { colors: SABER_COLORS, selected: saberColor } : null,
+  colorSaber: hex => {
+    if (!SABER_COLORS.some(c => c.hex === hex)) return;
+    saberColor = hex;
+    try { localStorage.setItem('docao.saber', hex); } catch (e) { /* sem storage */ }
+    paintSabers();
+  },
+  rename: name => tuneClass(classIndex, { name: name.trim() || `Classe ${classIndex + 1}` }),
+  equip: (slot, i, kit) => {
+    const c = classes[classIndex], key = WEAPONS[i].key;
+    c.kits[key] = clampKit(i, kit);
+    (slot === 'primary' ? setPrimary : slot === 'secondary' ? setSecondary : setMelee)(i);
+  },
+  close: () => openMenuView('match'),
+  shoot: () => { $('modeShoot').click(); openMenuView('match'); },
+  truco: () => { $('modeTruco').click(); openMenuView('match'); },
+});
+arsenalUi.render();
 buildSkinPicker(); setPreview(selectedSkin); buildPrimaryPickers(); buildSaberColors();
 function paintWeaponThumbs() {
   document.querySelectorAll('.wthumb').forEach((el) => {
@@ -6255,16 +6324,19 @@ buildDancePicks();
 document.addEventListener('docao-dance-pick', (e) => setDance(e.detail));
 document.addEventListener('docao-knife-pick', (e) => {
   applyHeldKnife(e.detail);
+  arsenalUi?.render();
   if (player && player.weapon === KNIFE) startButterfly();
   if (online && online.net) online.net.send({ t: 'prof', knife: e.detail || '' });
 });
 document.addEventListener('docao-sniper-pick', (e) => {
   applyHeldSniper(e.detail);
+  arsenalUi?.render();
   if (online && online.net) online.net.send({ t: 'prof', sniper: e.detail || '' });
 });
 document.addEventListener('docao-gun-pick', (e) => {
   const d = e.detail || {};
   applyHeldGun(d.key, d.id || '');
+  arsenalUi?.render();
   if (online && online.net) online.net.send({ t: 'prof', gun: { k: d.key, id: d.id || '' } });
 });
 document.addEventListener('docao-look-preview', (e) => paintPreview(e.detail, false));
@@ -7496,6 +7568,7 @@ function paintArms() {
   }
 }
 function paintClassSurfaces() {
+  if (arsenalUi) arsenalUi.render();
   paintPair('deathList', 'classGun', DEATH_HINT);
   paintPair('pauseGuns', 'pauseGun', '1–5 escolhe a classe. O arsenal grava a arma nela e vale na próxima vida.');
   paintPair('bLoadList', 'bLoadGun', LIVE_HINT);
@@ -7871,10 +7944,10 @@ function renderServerT() {
 }
 // ---------- nome do jogador: um só valor nos 3 campos (menu, janela online, lobby), salvo no navegador ----------
 const NAME_FIELDS = ['nameInput', 'onlineName', 'lobbyName'];
-function myName() { const a = getAccount(); return a ? a.nick : cleanName($('nameInput').value); } // conta: o apelido é fixo
+function myName() { const a = getAccount(); return a && !a.dev ? a.nick : cleanName($('nameInput').value); } // conta: o apelido é fixo
 function saveName(n, from) {
-  const acc = getAccount(); n = acc ? acc.nick : cleanName(n); for (const id of NAME_FIELDS) if (id !== from) $(id).value = n;
-  if (!acc) { try { localStorage.setItem('docao.name', n); } catch (e) { /* sem storage */ } } // o apelido da conta não vira o nome de convidado
+  const acc = getAccount(); n = acc && !acc.dev ? acc.nick : cleanName(n); for (const id of NAME_FIELDS) if (id !== from) $(id).value = n;
+  if (!acc || acc.dev) { try { localStorage.setItem('docao.name', n); } catch (e) { /* sem storage */ } } // o apelido da conta não vira o nome de convidado
   return n;
 }
 function profile() {
@@ -7893,12 +7966,12 @@ function sendName() { if (!online || !online.net) return; const n = saveName($('
 $('lobbyNameBtn').onclick = () => sendName();
 // ---------- conta (opcional): apelido fixo + skin guardada ----------
 function applyAccount(a) {
-  for (const id of NAME_FIELDS) { const el = $(id); el.readOnly = !!a; el.title = a ? 'Apelido fixo da sua conta' : ''; el.classList.toggle('locked', !!a); }
-  if (a) { saveName(a.nick); if (a.skin && skinOk(a.skin) && a.skin !== selectedSkin) setPreview(a.skin); else if (!a.skin) saveAcctSkin(selectedSkin); applyHeldKnife(a.knife); applyHeldSniper(a.sniper); applyHeldGuns(a.guns); }
+  for (const id of NAME_FIELDS) { const el = $(id); el.readOnly = !!a && !a.dev; el.title = a && !a.dev ? 'Apelido fixo da sua conta' : ''; el.classList.toggle('locked', !!a && !a.dev); }
+  if (a) { if (!a.dev) saveName(a.nick); if (a.skin && skinOk(a.skin) && a.skin !== selectedSkin) setPreview(a.skin); else if (!a.skin) saveAcctSkin(selectedSkin); applyHeldKnife(a.knife); applyHeldSniper(a.sniper); applyHeldGuns(a.guns); }
   else { if (selectedSkin.startsWith('x1.')) setPreview(DEFAULT_SKIN); /* visual personalizado é só de conta */ applyHeldKnife(''); let n = ''; try { n = localStorage.getItem('docao.name') || ''; } catch (e) { /* sem storage */ } for (const id of NAME_FIELDS) $(id).value = cleanName(n || 'Docão'); }
 }
 setLootThumbSource(lootItemThumb);
-onAccount(applyAccount); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
+onAccount(a => { applyAccount(a); arsenalUi?.render(); }); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
 const roomLink = (code) => { const u = new URL(location.href); u.search = ''; const sv = new URLSearchParams(location.search).get('server'); if (sv) u.searchParams.set('server', sv); u.searchParams.set('sala', code); return u.toString(); };
 function socialTeam() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && (cfg.mode === 'dom' || isArmsRace(cfg.mode) || cfg.mode === 'bomb')); } // Dominação e Bomba: chat e voz do time
 function inviteBlurb(code) { return `Bora jogar Docão Shooter! Sala ${code}\n${roomLink(code)}`; }

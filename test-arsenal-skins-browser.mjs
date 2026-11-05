@@ -1,0 +1,96 @@
+// Node 22+ e servidor local: node test-arsenal-skins-browser.mjs
+// Integração local: cria uma conta temporária e uma mochila no D1 local; limpa a fixture ao terminar.
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { ITEMS } from './shared/closet.js';
+import { KNIFE, SABER, WEAPONS } from './shared/rules.js';
+const SITE = process.env.SITE || 'http://127.0.0.1:8135/';
+const SERVER = process.env.SERVER || 'http://127.0.0.1:8795';
+assert(/\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(SERVER), 'este teste só roda no servidor local');
+const NODE = process.env.TEST_NODE || process.execPath;
+const nick = 'ArQA' + Date.now().toString(36);
+const rifle = WEAPONS.findIndex(w => w.key === 'rifle');
+const rifleSkin = ITEMS.find(i => i.gun === 'rifle' && i.paint === 'camo');
+const sniper = WEAPONS.findIndex(w => w.key === 'sniper');
+const sniperSkin = ITEMS.find(i => i.gun === 'sniper' && i.paint === 'cheers');
+const sql = command => execFileSync(NODE, ['node_modules/wrangler/bin/wrangler.js', 'd1', 'execute', 'docao-contas', '--local', '--command', command], { cwd: new URL('./server/', import.meta.url), stdio: 'pipe' });
+let browser, created = false;
+try {
+ const response = await fetch(SERVER + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nick, password: 'arsenal-qa-local-2026' }) });
+ assert.equal(response.status, 201);
+ created = true;
+ const session = await response.json();
+ const owned = ['k19', 'k2', 'k26', rifleSkin.id, sniperSkin.id];
+ sql(owned.map(id => `INSERT INTO inventory (account_id,item,acquired_at) SELECT id,'${id}',0 FROM accounts WHERE nick='${nick}';`).join('\n'));
+ browser = await chromium.launch({ executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+ const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+ const errors = []; page.on('pageerror', e => { errors.push(e.message); console.error(e.message); });
+ await page.addInitScript(token => localStorage.setItem('docao.auth', token), session.token);
+ const me = async () => (await fetch(SERVER + '/api/me', { headers: { Authorization: 'Bearer ' + session.token } })).json();
+ const open = async () => {
+  await page.goto(SITE + '?devSkins=0&server=' + encodeURIComponent(SERVER.replace('http', 'ws')));
+  await page.waitForFunction(() => window.__gunThumbs > 0);
+  await page.locator('.arsenal-crate').click();
+  await page.waitForSelector('#menu[data-crate-state="inside"][data-view="arsenal"]');
+ };
+ const choose = async (slot, weapon, model = 'chef') => {
+  await page.locator(`#arsenalApp [data-slot="${slot}"]`).click();
+  await page.locator(`#arsenalApp [data-weapon="${weapon}"]${weapon === KNIFE ? `[data-knife-model="${model}"]` : ''}`).click();
+  await page.locator('#arsenalApp [data-action="customize"]').click();
+ };
+ const equip = async () => {
+  await page.locator('#arsenalApp [data-action="equip"]').click();
+  await page.waitForSelector('#arsenalApp[data-step="1"]');
+ };
+ await open();
+ await choose('melee', KNIFE, 'butterfly');
+ assert.equal(await page.locator('#arsenalApp [data-skin]').count(), 1);
+ assert.equal(await page.locator('#arsenalApp [data-skin="k1"]').count(), 0, 'skin não possuída não aparece');
+ await page.locator('#arsenalApp [data-skin="k19"]').click();
+ assert.equal((await me()).account.knife, null, 'prévia não salva');
+ mkdirSync('/tmp/arsenal-skins', { recursive: true });
+ await page.screenshot({ path: '/tmp/arsenal-skins/butterfly.png' });
+ await equip();
+ assert.equal((await me()).account.knife, 'k19');
+ assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('docao.classes'))[0].melee), KNIFE);
+ assert.match(await page.locator('#arsenalApp [data-slot="melee"]').textContent(), /Butterfly/);
+ await choose('melee', KNIFE, 'karambit');
+ await page.locator('#arsenalApp [data-skin="k2"]').click();
+ await page.route('**/api/me/knife', route => route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: 'Skin recusada no teste' }), headers: { 'Access-Control-Allow-Origin': '*' } }));
+ await page.locator('#arsenalApp [data-action="equip"]').click();
+ await page.waitForFunction(() => document.querySelector('.ar-feedback')?.textContent.includes('Skin recusada'));
+ assert.equal((await me()).account.knife, 'k19');
+ assert.equal(await page.locator('#arsenalApp').getAttribute('data-step'), '3');
+ await page.unroute('**/api/me/knife');
+ await equip(); assert.equal((await me()).account.knife, 'k2');
+ await choose('primary', rifle);
+ assert.equal(await page.locator('#arsenalApp [data-skin="k19"]').count(), 0);
+ await page.locator(`#arsenalApp [data-skin="${rifleSkin.id}"]`).click();
+ await page.screenshot({ path: '/tmp/arsenal-skins/fuzil.png' });
+ await equip(); assert.equal((await me()).account.guns.rifle, rifleSkin.id);
+ await page.locator('#arsenalApp [data-slot="primary"]').click();
+ await page.locator('#arsenalApp [data-category="precisao"]').click();
+ await page.locator(`#arsenalApp [data-weapon="${sniper}"]`).click();
+ await page.locator('#arsenalApp [data-action="customize"]').click();
+ await page.locator(`#arsenalApp [data-skin="${sniperSkin.id}"]`).click();
+ await equip(); assert.equal((await me()).account.sniper, sniperSkin.id);
+ await choose('melee', SABER);
+ assert.equal(await page.locator('#arsenalApp [data-skin]').count(), 1, 'sabre não recebe skins da faca');
+ await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+ await choose('melee', KNIFE, 'karambit');
+ assert.equal(await page.locator('#arsenalApp [data-skin="k2"]').getAttribute('aria-pressed'), 'true');
+ await page.keyboard.press('Escape');
+ await page.locator('#arsenalApp [data-knife-model="chef"]').click();
+ await page.locator('#arsenalApp [data-action="customize"]').click();
+ await page.locator('#arsenalApp [data-skin=""]').click(); await equip();
+ assert.equal((await me()).account.knife, null, 'restaura faca padrão');
+ await open();
+ assert.equal((await me()).account.sniper, sniperSkin.id);
+ assert.deepEqual(errors, []);
+ console.log('OK: mochila real, prévia sem salvar, Butterfly/Karambit, faca base, fuzil, sniper, isolamento do sabre, erro de gravação, fábrica e persistência.');
+} finally {
+ if (browser) await browser.close();
+ if (created) sql(`DELETE FROM inventory WHERE account_id IN (SELECT id FROM accounts WHERE nick='${nick}'); DELETE FROM sessions WHERE account_id IN (SELECT id FROM accounts WHERE nick='${nick}'); DELETE FROM accounts WHERE nick='${nick}';`);
+}
