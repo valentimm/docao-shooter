@@ -25,9 +25,46 @@ export function regenStep(e, now, dt) {
 export const BACON_ITEM = { heal: 10, radius: 1.2, dy: 1.0, from: 0.3, life: 3.45 };
 export const GRAV = -24, JUMP = 8.5, SPEED = 6.8, BOT_SPEED = 5.4, STEP = 0.45, RADIUS = 0.42, HEIGHT = 2.0, EYE = 1.6;
 
+// Tranco de quem leva tiro (flinch). Ângulos em radianos. A luneta de sniper leva o tranco cheio;
+// fora dela fica hip (bem menor): o castigo é de quem fica parado de scope, sem reescrever o duelo de fuzil.
+// recover: ~95% da volta em 0,32 s (entre 0,25 e 0,4). maxPitch/maxYaw: tiros seguidos não acumulam sem teto.
+export const FLINCH = {
+  pitch: 0.05, yaw: 0.014, refDmg: 40, cap: 1, hip: 0.18, recover: 0.32, maxPitch: 0.072, maxYaw: 0.03,
+};
+export function flinchKick(dmg, scope01 = 0, rnd = Math.random) {
+  const k = Math.min(FLINCH.cap, Math.max(0, Number(dmg) || 0) / FLINCH.refDmg);
+  const s = FLINCH.hip + (1 - FLINCH.hip) * Math.max(0, Math.min(1, scope01));
+  return { pitch: FLINCH.pitch * k * s, yaw: (rnd() * 2 - 1) * FLINCH.yaw * k * s };
+}
+// Soma no estado { flinch: { pitch, yaw } } respeitando o teto. Devolve o que entra na câmera agora.
+export function applyFlinch(state, dmg, scope01 = 0, rnd = Math.random) {
+  const kick = flinchKick(dmg, scope01, rnd);
+  const f = state.flinch ||= { pitch: 0, yaw: 0 };
+  const pitch = Math.min(kick.pitch, Math.max(0, FLINCH.maxPitch - f.pitch));
+  const nextY = Math.max(-FLINCH.maxYaw, Math.min(FLINCH.maxYaw, f.yaw + kick.yaw));
+  const yaw = nextY - f.yaw;
+  f.pitch += pitch; f.yaw = nextY;
+  return { pitch, yaw };
+}
+// Quanto devolver da câmera neste frame. Em recover segundos sobra ~5% (e^{-3}).
+export function decayFlinch(f, dt) {
+  if (!f) return { pitch: 0, yaw: 0 };
+  const decay = Math.exp(-Math.max(0, dt) / (FLINCH.recover / 3));
+  const pitch = f.pitch, yaw = f.yaw;
+  f.pitch = Math.abs(pitch * decay) < 1e-4 ? 0 : pitch * decay;
+  f.yaw = Math.abs(yaw * decay) < 1e-4 ? 0 : yaw * decay;
+  return { pitch: pitch - f.pitch, yaw: yaw - f.yaw };
+}
+
+// Red dot dos fuzis de assalto (cat: 'ar'). adsFov 63 com FOV base 75 ≈ 1,19×.
+// recoil 0,35 = mirando, o coice real da câmera (subida, lateral, padrão) fica em 35% (−65%). Não zera.
+// visual = tremor do modelo, sem deslocar o ponto. No quadril o recoil da arma continua o de sempre.
+export const RED_DOT = { adsFov: 63, adsSpread: 0.02, recoil: 0.35, visual: 0.12, ads: 0.85 };
+
 // Armas. Primárias (menu): 0 Fuzil, 22 Commando, 21 Metralhadora do Chiqueiro, 1 Calibre 12 (pump), 12 Semi, 2 Sniper Torresmo, 5 Canhão, 6 Carabina, 3 Bazuca. Faca 7, sabre 8. Secundária: 4 pistola, 11 furadeira, 13 besta, 14 arco, 19 estilingue. 18 lança-milho, 20 minigun (só código). A besta e o arco são fracas de propósito: um tiro no corpo não mata.
+// cat 'ar' = fuzil de assalto (Fuzil, FAMAS, Commando). O menu 'rajada' também tem SMG e LMG; isso não é AR.
 export const WEAPONS = [
-  { key: 'rifle', name: 'Fuzil Pururuca', short: 'Fuzil Pururuca', chip: 'Fuzil', mag: 30, reserve: 120, dmg: 20, headMul: 2, rate: 0.1, auto: true, pellets: 1, spread: 0.01, reload: 1.6, range: 140, recoil: 0.018, adsFov: 40, adsSpread: 0.12, flashZ: -0.76,
+  { key: 'rifle', name: 'Fuzil Pururuca', short: 'Fuzil Pururuca', chip: 'Fuzil', cat: 'ar', mag: 30, reserve: 120, dmg: 20, headMul: 2, rate: 0.1, auto: true, pellets: 1, spread: 0.01, reload: 1.6, range: 140, recoil: 0.018, adsFov: 40, adsSpread: 0.12, flashZ: -0.76,
     desc: 'Automático · 30/120 · 20 dano' },
   // 1 · Calibre 12 (SPAS-12 pump): 9 chumbos × 17 = 153 no corpo; mata de 1 tiro até ~8 m andando (moveSpread 1,35 no lugar do 2,2 geral); cai forte depois de 8 m; empurra quem leva (knock, ver shotKnock em combat.js)
   { key: 'shotgun', name: 'Escopeta Chiqueiro · Calibre 12', short: 'Calibre 12', chip: 'Calibre 12', mag: 8, reserve: 32, dmg: 17, headMul: 1.5, rate: 0.62, auto: false, pellets: 9, spread: 0.05, moveSpread: 1.35, reload: 0.38, shellReload: true, reloadStart: 0.2, range: 45, recoil: 0.085, adsFov: 55, adsSpread: 0.7, flashZ: -0.86,
@@ -42,9 +79,9 @@ export const WEAPONS = [
   // Pesada: pouca bala, dano alto, luneta forte (ref. Barrett).
   { key: 'canhao', name: 'Canhão do Barril', short: 'Canhão do Barril', chip: 'Canhão', mag: 3, reserve: 12, dmg: 180, headMul: 1, rate: 1.85, auto: false, pellets: 1, spread: 0.045, reload: 3.1, range: 260, recoil: 0.1, adsFov: 8, adsSpread: 0, flashZ: -1.25,
     scope: true, bolt: true, beam: true, scopeStyle: 'canhao', desc: 'Ferrolho lento · 3/12 · mata em qualquer lugar · luneta pesada' },
-  // Leve: ferrolho rápido, 7/40, recarrega mais lento, fraca no corpo (ref. M21).
-  { key: 'carabina', name: 'Carabina da Granja', short: 'Carabina da Granja', chip: 'Carabina', mag: 7, reserve: 40, dmg: 55, headMul: 2.2, rate: 0.58, auto: false, pellets: 1, spread: 0.09, reload: 2.9, range: 180, recoil: 0.04, adsFov: 24, adsSpread: 0, flashZ: -0.95,
-    scope: true, bolt: true, beam: true, scopeStyle: 'carabina', desc: 'Ferrolho rápido · 7/40 · recarrega mais lento · fraca no corpo · luneta aberta' },
+  // Leve: ferrolho rápido, 5 no pente e 40 na reserva. Antes do flinch não havia adsIn: a Granja usava os 0,15 s globais. adsIn 0,19125 s = +27,5% sobre esse original (o 0,24 s era +60%). scopeAt: a lente só abre com a arma já no lugar.
+  { key: 'carabina', name: 'Carabina da Granja', short: 'Carabina da Granja', chip: 'Carabina', mag: 5, reserve: 40, dmg: 55, headMul: 2.2, rate: 0.58, auto: false, pellets: 1, spread: 0.09, reload: 2.9, range: 180, recoil: 0.04, adsFov: 24, adsSpread: 0, flashZ: -0.95,
+    scope: true, bolt: true, beam: true, scopeStyle: 'carabina', adsIn: 0.15 * 1.275, scopeAt: 0.97, desc: 'Ferrolho rápido · 5/40 · luneta mais lenta · recarrega mais lento · fraca no corpo · luneta aberta' },
   // 7 · Faca de churrasqueiro: corpo a corpo, sempre no slot 3 (sem munição). Regras de acerto em shared/melee.js
   { key: 'knife', name: 'Faca de churrasqueiro', short: 'Faca', chip: 'Faca', mag: 0, reserve: 0, dmg: 40, headMul: 1, rate: 0.42, auto: true, pellets: 0, spread: 0, reload: 0, range: 1.6, recoil: 0, adsFov: 75, adsSpread: 1, flashZ: 0,
     melee: true, desc: 'Golpe 40 · estocada no botão direito · pelas costas mata' },
@@ -72,7 +109,7 @@ export const WEAPONS = [
   { key: 'arco', name: 'Arco da Granja', short: 'Arco', chip: 'Arco', mag: 1, reserve: 16, dmg: 26, headMul: 1.4, rate: 0.35, auto: false, pellets: 1, spread: 0.015, reload: 0.85, range: 65, recoil: 0.03, adsFov: 62, adsSpread: 0.55, flashZ: -0.55,
     falloff: [10, 36, 0.4], draw: 0.7, desc: 'Secundária · segura o clique para puxar a corda · solta mais forte' },
   // 15 · Bullpup de rajada (ref. FAMAS do CoD): um clique = 3 tiros. rate = intervalo dentro da rajada; burstDelay = pausa até a próxima.
-  { key: 'famas', name: 'FAMAS da Pocilga', short: 'FAMAS', chip: 'FAMAS', mag: 30, reserve: 120, dmg: 34, headMul: 1.5, rate: 0.065, auto: false, pellets: 1, spread: 0.022, reload: 2.1, range: 150, recoil: 0.02, adsFov: 46, adsSpread: 0.11, flashZ: -0.78,
+  { key: 'famas', name: 'FAMAS da Pocilga', short: 'FAMAS', chip: 'FAMAS', cat: 'ar', mag: 30, reserve: 120, dmg: 34, headMul: 1.5, rate: 0.065, auto: false, pellets: 1, spread: 0.022, reload: 2.1, range: 150, recoil: 0.02, adsFov: 46, adsSpread: 0.11, flashZ: -0.78,
     burst: 3, burstDelay: 0.3, falloff: [16, 50, 0.6], desc: 'Rajada de 3 · 30/120 · uma rajada inteira mata de perto' },
   // 16 · Disco Voador: dispara um disco-OVNI que quica 3 vezes (regras em shared/disc.js). Dois discos no corpo matam.
   { key: 'disco', name: 'Disco Voador', short: 'Disco Voador', chip: 'Disco', mag: 4, reserve: 16, dmg: 60, headMul: 1.5, rate: 0.6, auto: false, pellets: 0, spread: 0, reload: 1.7, range: 0, recoil: 0.04, adsFov: 55, adsSpread: 0.5, flashZ: -0.62,
@@ -94,7 +131,7 @@ export const WEAPONS = [
   { key: 'lmg', name: 'Metralhadora do Chiqueiro', short: 'Metralhadora', chip: 'LMG', mag: 100, reserve: 300, dmg: 15, headMul: 1.6, rate: 0.08, auto: true, pellets: 1, spread: 0.024, reload: 3.1, range: 130, recoil: 0.032, adsFov: 48, adsSpread: 0.22, flashZ: -0.95,
     falloff: [18, 55, 0.5], move: 0.95, inspect: 'lmg', desc: 'Fita · 100/300 · recuo forte · anda 5% mais devagar · recarga lenta' },
   // 22 · Commando da Granja: cone preciso, mas a rajada sobe e exige compensação.
-  { key: 'commando', name: 'Commando da Granja', short: 'Commando', chip: 'Commando', mag: 30, reserve: 120, dmg: 12, headMul: 1.4, rate: 0.09, auto: true, pellets: 1, spread: 0.003, reload: 1.8, range: 150, recoil: 0.025, adsFov: 36, adsSpread: 0.04, flashZ: -0.8,
+  { key: 'commando', name: 'Commando da Granja', short: 'Commando', chip: 'Commando', cat: 'ar', mag: 30, reserve: 120, dmg: 12, headMul: 1.4, rate: 0.09, auto: true, pellets: 1, spread: 0.003, reload: 1.8, range: 150, recoil: 0.025, adsFov: 36, adsSpread: 0.04, flashZ: -0.8,
     move: 1, desc: 'Rajada com subida · 12 de dano · 30/120 · compense o recuo' },
   // 23 · Revólver do Capataz: secundária de dupla ação. 58 no corpo (2 tiros) e 116 na cabeça (1) até o começo do falloff.
   // rate 0,4 s = 150 RPM. O coice sobe forte e volta (recoilBack) antes do próximo tiro. Tambor de 6, recarga lenta.
@@ -112,6 +149,13 @@ export const WEAPONS = [
 // Exclusiva da Corrida Armada: ID próprio, fora do arsenal e das classes.
 export const GOLD_KNIFE = WEAPONS.length;
 WEAPONS.push({ ...WEAPONS[7], key: 'faca-dourada', name: 'Faca Dourada', short: 'Faca Dourada', chip: 'Ouro', noAds: true, desc: 'Corrida Armada · uma eliminação válida vence a partida' });
+// 27 · Ray Gun: só a Barraca da Sorte no Survival. Fora de PRIMARIES, SECONDARIES, categorias, bots, parede e X1.
+// dmg é o centro do estouro (raio e auto-dano em shared/ray.js). Não é hitscan.
+export const RAY = WEAPONS.length;
+WEAPONS.push({
+  key: 'ray', name: 'Ray Gun', short: 'Ray Gun', chip: 'Ray', mag: 20, reserve: 160, dmg: 260, headMul: 1, rate: 0.22, auto: true, pellets: 0, spread: 0.006, reload: 1.7, range: 0, recoil: 0.028, adsFov: 58, adsSpread: 0.35, flashZ: -0.55,
+  ray: true, inspect: 'ray', desc: 'Survival · Barraca da Sorte · pulso que quica 3 vezes · estouro curto · 20/160',
+});
 export const isKnife = (i) => i === 7 || i === GOLD_KNIFE;
 
 // Penetração e collateral (regra em shared/penetration.js). pen = metros de parede fina por bala (caixote conta 45%);
@@ -130,7 +174,8 @@ export const REV = 23; // Revólver do Capataz
 export const REV2 = 24; // Dois Capatazes (akimbo)
 export const TAMPA = 25; // Tampa do Tacho (escudo). 23 e 24 são os revólveres.
 export const isSaber = (i) => !!(WEAPONS[i] && WEAPONS[i].saber); // Sabre (8) ou Sabre Duplo (17)
-export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1;
+export const isAssault = (i) => !!(WEAPONS[i] && WEAPONS[i].cat === 'ar');
+export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1, W_FALL = -3;
 export const SECONDARIES = [PISTOL, NAIL, CROSS, BOW, EGG_W, REV, REV2];
 export const MELEES = [KNIFE, SABER, SABER2];
 export const BOT_PRIMARIES = [0, COMMANDO, LMG, UZI, P90, FAMAS, 1, SEMI, 2, 5, 6, 3, CORN_W];
@@ -152,6 +197,7 @@ export const MELEE = {
   stab: { dmg: 75, range: 1.8, cone: 0.36, rate: 1.0 },
   backDot: -0.4, backDmg: 1000, speedMul: 1.15, draw: 0.2,
 };
+WEAPONS[GOLD_KNIFE].move = MELEE.speedMul; // a dourada corre como a faca de churrasqueiro
 export const SABER_COLORS = [
   { id: 'vermelho', hex: '#ff2a2a' },
   { id: 'azul', hex: '#3d7eff' },
@@ -160,7 +206,6 @@ export const SABER_COLORS = [
   { id: 'amarelo', hex: '#ffe14a' },
   { id: 'branco', hex: '#f4fbff' },
 ];
-
 // Copo Bomba (granada)
 export const NADE = { max: 3, spawnWith: 1, fuse: 2.5, charge: 1.2, step: 1 / 120, radius: 6, maxDmg: 130, selfMul: 0.4, grav: -20, r: 0.14, pickupRespawn: 20, knock: 14, lift: 7 };
 // Pokébola (código "pokebola" no chat): joga no Q no lugar do copo; ao abrir engole todo inimigo no raio (com linha livre).
@@ -168,10 +213,10 @@ export const POKE = { fuse: 1.4, radius: 5.5, max: 3 };
 export const isPokeCode = (text) => /pok[eé]\s*bola/i.test(String(text || ''));
 // Minigun (código "minigun" no chat): troca a primária pela minigun até morrer
 export const isMiniCode = (text) => /\bmini\s*-?\s*gun\b/i.test(String(text || ''));
-export const WEAPON_SHORT = (i) => (i === W_NADE ? 'Copo Bomba' : WEAPONS[i] ? WEAPONS[i].short : '?');
+export const WEAPON_SHORT = (i) => (i === W_NADE ? 'Copo Bomba' : i === W_FALL ? 'Penhasco' : WEAPONS[i] ? WEAPONS[i].short : '?');
 export const BOT_DEFS = [
   { name: 'Farofa' }, { name: 'Pipoca' }, { name: 'Trufa' }, { name: 'Bolota' }, { name: 'Torresmo' }, { name: 'Paçoca' }, { name: 'Linguiça' }, { name: 'Quindim' }, { name: 'Coxinha' }, { name: 'Pururuca' },
 ];
 
-export const BOT_RANGE = [14, 4.5, 26, 14, 10, 34, 18, 1.2, 2.2, 8, 12, 6, 6, 16, 14, 20, 12, 2.2, 9, 14, 16, 16, 18, 10, 6, 4]; // 23 revólver (como a pistola), 24 akimbo (cola), 25 tampa (chega perto pra porrada)
+export const BOT_RANGE = [14, 4.5, 26, 14, 10, 34, 18, 1.2, 2.2, 8, 12, 6, 6, 16, 14, 20, 12, 2.2, 9, 14, 16, 16, 18, 10, 6, 4, 1.2, 14]; // 23 revólver (como a pistola), 24 akimbo (cola), 25 tampa (chega perto pra porrada), 26 faca dourada (cola, igual a faca), 27 Ray Gun (não entra no sorteio dos bots)
 export const TAG_COLORS = ['#7DF9FF', '#ffd27a', '#ff9fb6', '#9be37a', '#c9a4ff', '#ffb36b', '#9fd0ff', '#ffa3d8', '#b8f2e6', '#ffe9a8'];

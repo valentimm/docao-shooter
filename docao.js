@@ -6,6 +6,7 @@ import { makeWorldShield } from './shield-view.js';
 import { getSkin } from './skins.js';
 import { mergeVertices } from './vendor/BufferGeometryUtils.js';
 import { crouchAmount, stanceScale } from './shared/stance.js';
+import { butterflyInspectAngles } from './inspect.js';
 
 const V3 = THREE.Vector3, V2 = THREE.Vector2;
 const TAU = Math.PI * 2;
@@ -255,11 +256,11 @@ export const PARTS = {
     brim.scale.set(1, 1, 1.2); brim.position.set(0, 0.005, 0.36); brim.rotation.x = 0.12; outline(brim, 0.01); g.add(brim);
     const btn = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), bm); btn.position.y = 0.27; g.add(btn);
     if (o.logo) {
-      const tex = canvasTex(256, 256, (x) => drawLogo(x, 128, 128, 170, o.logoColor || '#12233a'));
+      const tex = canvasTex(256, 256, (x) => { if (o.logo === 'arcs') { x.strokeStyle = o.logoColor || '#2ec4b6'; x.lineWidth = 26; x.lineCap = 'round'; for (const s of [-1, 1]) { x.beginPath(); x.arc(128 + s * 120, 128, 90, s < 0 ? -0.75 : Math.PI - 0.75, s < 0 ? 0.75 : Math.PI + 0.75); x.stroke(); } } else drawLogo(x, 128, 128, 170, o.logoColor || '#12233a'); });
       const p = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 }));
       p.position.set(0, 0.15, 0.39); p.rotation.x = -0.45; g.add(p);
     }
-    g.position.set(0, 1.74, -0.01); g.rotation.x = -0.12; return g;
+    g.position.set(0, 1.74 + (o.lift || 0), -0.01); g.rotation.x = -0.12; if (o.scale) g.scale.setScalar(o.scale); return g;
   },
   glasses(o, rig) {
     const g = new THREE.Group(); const m = basic(o.color || '#2a1408');
@@ -342,8 +343,9 @@ export function makeDocao(skinOrId, opts = {}) {
   const earGeo = new THREE.ExtrudeGeometry(earShape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 3, curveSegments: 16 });
   const inner = earShape.getPoints(24).map((p) => new V2(p.x * 0.62, p.y * 0.66 + 0.06));
   const innerGeo = new THREE.ShapeGeometry(new THREE.Shape(inner));
+  const ears = [];
   for (const s of [-1, 1]) {
-    const ear = new THREE.Group(); ear.position.set(s * 0.33, 1.84, -0.03); ear.rotation.set(-0.12, s * 0.3, -s * 0.62); ear.scale.setScalar(1.08); head.add(ear);
+    const ear = new THREE.Group(); ears.push(ear); ear.position.set(s * 0.33, 1.84, -0.03); ear.rotation.set(-0.12, s * 0.3, -s * 0.62); ear.scale.setScalar(1.08); head.add(ear);
     mesh(earGeo, skinM, ear, 0.012);
     const inn = new THREE.Mesh(innerGeo, earInM); inn.position.z = 0.07; ear.add(inn);
   }
@@ -422,10 +424,10 @@ export function makeDocao(skinOrId, opts = {}) {
     for (const x of [-0.04, 0.04]) mesh(new THREE.BoxGeometry(0.01, 0.014, 0.4), spD, sg, 0.004).position.set(x, 0.09, 0); // coronha dobrada
     mesh(new THREE.BoxGeometry(0.09, 0.05, 0.02), spD, sg, 0.004).position.set(0, 0.075, 0.2);
     // sniper (cano longo + luneta)
-    const sn = new THREE.Group(); sn.position.copy(r.position); g.add(sn);
-    mesh(new THREE.BoxGeometry(0.1, 0.12, 0.75), toon('#5c7a3a'), sn, 0.01).position.z = 0.02;
-    const snb = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.55, 8), toon('#22252c'), sn, 0.008); snb.position.set(0, 0.01, 0.62); snb.rotation.x = Math.PI / 2;
-    const sc = mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.34, 12), toon('#2a2d35'), sn, 0.008); sc.position.set(0, 0.12, 0.05); sc.rotation.x = Math.PI / 2;
+    const sn = new THREE.Group(); sn.position.copy(r.position); sn.userData.kind = 'torresmo'; sn.userData.muzzle = 1; g.add(sn);
+    const snBody = mesh(new THREE.BoxGeometry(0.1, 0.12, 0.75), toon('#5c7a3a'), sn, 0.01); snBody.position.z = 0.02; snBody.userData.gunPart = 'body';
+    const snb = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.55, 8), toon('#22252c'), sn, 0.008); snb.position.set(0, 0.01, 0.62); snb.rotation.x = Math.PI / 2; snb.userData.gunPart = 'barrel';
+    const sc = mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.34, 12), toon('#2a2d35'), sn, 0.008); sc.position.set(0, 0.12, 0.05); sc.rotation.x = Math.PI / 2; sc.userData.gunPart = 'scope';
     // bazuca no ombro (RPG: tubo longo, traseira alargada, grip) — continua sendo guns[3]
     const bz = new THREE.Group(); bz.position.set(0.55, 1.2, 0.02); bz.scale.setScalar(1.12); g.add(bz);
     const tube = mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.55, 16), toon('#6b7a3a'), bz, 0.012); tube.rotation.x = Math.PI / 2; tube.position.set(0, 0.02, 0.32);
@@ -570,13 +572,22 @@ export function makeDocao(skinOrId, opts = {}) {
     rv2.userData.extra = rvR; rv2.userData.twin = rvL; guns.push(rv2); // 24 = Dois Capatazes
     const tp = makeWorldShield(); tp.name = 'tampa'; tp.position.set(0, 0.98, 0.62); g.add(tp); guns.push(tp); // 25 = Tampa do Tacho
     const goldKnife = makeKnife(1.7, 0.006, true); goldKnife.position.copy(kn.position); goldKnife.rotation.copy(kn.rotation); goldKnife.visible = false; arms[0].add(goldKnife); guns.push(goldKnife); // 26 = Faca Dourada
+    const ry = new THREE.Group(); ry.name = 'ray'; ry.position.copy(r.position); g.add(ry);
+    mesh(new THREE.BoxGeometry(0.09, 0.1, 0.26), toon('#24302a'), ry, 0.008);
+    mesh(new THREE.BoxGeometry(0.1, 0.035, 0.1), toon('#c45a2a'), ry, 0.004).position.set(0, 0.04, 0.02);
+    mesh(new THREE.SphereGeometry(0.055, 12, 8), toon('#141a16'), ry, 0.005).position.set(0, 0.01, 0.08);
+    const ryCore = mesh(new THREE.SphereGeometry(0.032, 10, 8), new THREE.MeshBasicMaterial({ color: 0x39ff6a }), ry, 0); ryCore.position.set(0, 0.01, 0.08);
+    const ryb = mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.16, 8), toon('#1a1c22'), ry, 0.004); ryb.rotation.x = Math.PI / 2; ryb.position.set(0, 0.01, 0.22);
+    const ryd = mesh(new THREE.TorusGeometry(0.04, 0.008, 6, 12), new THREE.MeshBasicMaterial({ color: 0x7dff6a }), ry, 0); ryd.position.set(0, 0.01, 0.3);
+    mesh(new THREE.BoxGeometry(0.04, 0.1, 0.04), toon('#141a16'), ry, 0.004).position.set(0, -0.08, -0.04);
+    ry.visible = false; guns.push(ry); // 27 = Ray Gun
     backLid = makeWorldShield(); backLid.name = 'tampa-costas'; backLid.position.set(0, 1.15, -0.32); backLid.rotation.y = Math.PI; backLid.visible = false; g.add(backLid);
     for (const o of [sg, sn, bz, ps, cn, cb, kn, hold, uz, p9, nl, sm, xb, bw, fm, dk, d2r, d2l, mh, es, mg, lm, cd, rv, rv2, rvR, rvL, tp]) o.visible = false;
   }
   setPose({ arms }, pose);
 
   // peças da skin
-  const rig = { group: g, head, eyes, torso, legs, arms, fists, tail, tuft, skin, skinM };
+  const rig = { group: g, head, eyes, torso, legs, arms, fists, tail, tuft, ears, skin, skinM };
   for (const part of skin.parts || []) {
     const b = PARTS[part.type]; if (!b) { console.warn('Peça de skin desconhecida:', part.type); continue; }
     const obj = b(part, rig); if (!obj) continue;
@@ -602,7 +613,26 @@ export function setCrouchPose(model, amount) {
 
 export function sleeveColor(shirt) { return shirt.sleeveColor || (shirt.pattern ? shirt.pattern.colors[0] : (shirt.color || '#d8261c')); }
 // material de luva (branca com brilho) usado por PARTS.glove e pelos braços em 1ª pessoa
-export function gloveMat(color = '#ffffff') { return toonWarm(color, 0.18, {}, '#c8d8ff'); }
+let rainbowGloveMap = null;
+function rainbowGloveTex() {
+  if (rainbowGloveMap) return rainbowGloveMap;
+  const c = document.createElement('canvas'); c.width = 64; c.height = 8;
+  const x = c.getContext('2d');
+  for (let i = 0; i < 64; i++) { x.fillStyle = `hsl(${Math.round((i / 64) * 300)} 85% 54%)`; x.fillRect(i, 0, 1, 8); }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  rainbowGloveMap = tex; return tex;
+}
+export function gloveMat(color = '#ffffff', opt = {}) {
+  if (opt && opt.rainbow) return toonWarm('#ffffff', 0.1, { map: rainbowGloveTex() }, '#ffffff');
+  if (opt && opt.gold) return toonWarm(opt.color || color || '#f3d78a', 0.32, {}, '#fff1a8');
+  return toonWarm(color, 0.18, {}, '#c8d8ff');
+}
+export function gloveSparkles(mesh, glove, r = 0.158) {
+  if (!mesh || !glove) return;
+  if (glove.rainbow) { for (const col of ['#ff4d4d', '#ffd24a', '#3dff7a', '#4db4ff', '#d06bff']) addSparkles(mesh, 3, r, col); return; }
+  if (glove.gold) { addSparkles(mesh, 14, r, '#fff1a8'); return; }
+  if (glove.sparkle !== false) addSparkles(mesh, 14, r);
+}
 export function addSparkles(mesh, n = 10, r = 0.16, color = '#e8f4ff') {
   const m = basic(color);
   for (let i = 0; i < n; i++) {
@@ -655,9 +685,9 @@ export function makeFPArms(skinOrId, pose = 'rifle') {
       for (const pp of [p0, p1]) for (const k of [-1, 1]) { const kn = addL(new THREE.SphereGeometry(r * 0.38, 10, 8), bm, 0.004); kn.position.copy(pp).addScaledVector(new V3().crossVectors(dir, up).normalize(), k * r * 0.3); }
     }
     const hand = limbIdx++ === 0 ? 'right' : 'left';
-    const gl = glove && (glove.hand === 'both' || (glove.hand || 'right') === hand); const handM = gl ? gloveMat(glove.color) : skinM;
+    const gl = glove && (glove.hand === 'both' || (glove.hand || 'right') === hand); const handM = gl ? gloveMat(glove.color, glove) : skinM;
     const fist = addL(new THREE.SphereGeometry(r * 1.45, 18, 14), handM); fist.position.copy(b).addScaledVector(dir, r * 0.6); fist.scale.set(1, 0.9, 1.1);
-    if (gl && glove.sparkle !== false) addSparkles(fist, 14, r * 1.45);
+    if (gl) gloveSparkles(fist, glove, r * 1.45);
     const th = addL(new THREE.CapsuleGeometry(r * 0.42, r * 0.6, 4, 8), handM, 0.005); th.position.copy(fist.position).add(new V3(-0.03, 0.05, -0.04)); th.rotation.set(0.4, 0, 0.9);
     return limbG;
   }
@@ -677,14 +707,14 @@ export function makeFPForearm(skinOrId) {
   const tone = safeTone(skin.body && skin.body.tone);
   const skinM = toonWarm(tone, 0.42, {}, '#e0500a'), sleeveM = toonWarm(sleeveColor(shirt), 0.12);
   const glove = (skin.parts || []).find((p) => p.type === 'glove');
-  const handM = glove && (glove.hand === 'both' || glove.hand === 'left' || !glove.hand) ? gloveMat(glove.color) : skinM;
+  const handM = glove && (glove.hand === 'both' || glove.hand === 'left' || !glove.hand) ? gloveMat(glove.color, glove) : skinM;
   const g = new THREE.Group();
   const armLen = 0.52;
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.052, armLen, 14), skinM); outline(arm, 0.006); g.add(arm);
   const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.088, armLen * 0.42, 14), sleeveM); sleeve.position.y = armLen * 0.2; outline(sleeve, 0.005); arm.add(sleeve);
   const fist = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), handM); fist.scale.set(1.2, 0.82, 1.05); outline(fist, 0.007); g.add(fist);
   const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.05, 4, 8), handM); thumb.position.set(0.05, 0.04, 0.02); thumb.rotation.set(0.7, 0, 0.8); outline(thumb, 0.004); g.add(thumb);
-  if (glove && glove.sparkle !== false && handM !== skinM) addSparkles(fist, 10, 0.1);
+  if (glove && handM !== skinM) gloveSparkles(fist, glove, 0.1);
   g.userData.arm = arm; g.userData.armLen = armLen; g.userData.handR = 0.1;
   return g;
 }
@@ -752,17 +782,76 @@ export function makeRocket(scale = 1) {
   root.scale.setScalar(scale); return root;
 }
 
-// ---------- Faca de churrasqueiro: lâmina de aço (chef), cabo de madeira com 3 rebites e logo C! vermelho ----------
+// ---------- Facas ----------
 // Origem = centro da empunhadura; lâmina aponta pra -z, fio pra -y, espessura em x. Usada em 1ª e 3ª pessoa.
+// kind: chef (churrasqueiro), skeleton, karambit, bayonet.
+// finish: factory, rusty, rainbow, sapphire, emerald, ruby, camo, obsidian. O churrasqueiro não tem pintura.
 let knifeLogoTex = null;
-export function makeKnife(scale = 1, th = 0.004, golden = false) {
+const KNIFE_FINISH = {
+  factory: { steel: '#d5dde6', warm: '#f4f8ff', metal: '#8d939c', dark: '#1a1c20', edge: '#ffffff', fuller: '#8aa0b4' },
+  rusty: { steel: '#8a4a28', warm: '#e08a40', metal: '#6a3a22', dark: '#2a1810', edge: '#e2b56a', fuller: '#5c3018', rust: true },
+  rainbow: { steel: '#f4f4f8', warm: '#ffffff', metal: '#d8d8e4', dark: '#1a1c20', edge: '#ffffff', fuller: '#ffffff', rainbow: true },
+  sapphire: { steel: '#1d4ed8', warm: '#9ec5ff', metal: '#12358f', dark: '#0a1020', edge: '#e7f1ff', fuller: '#16367a' },
+  emerald: { steel: '#0f9d58', warm: '#8dffc0', metal: '#0b6b3a', dark: '#07140e', edge: '#e9fff0', fuller: '#0d5a32' },
+  ruby: { steel: '#d0123a', warm: '#ff9aaf', metal: '#8a142c', dark: '#1a0a0e', edge: '#ffe8ee', fuller: '#7a1830' },
+  camo: { steel: '#4a5c32', warm: '#8aa05a', metal: '#2c3a20', dark: '#141c10', edge: '#d5ddc4', fuller: '#3d4a28', camo: true },
+  obsidian: { steel: '#16161c', warm: '#b388ff', metal: '#2a1840', dark: '#0c0c10', edge: '#e6d4ff', fuller: '#3a2158', obsidian: true },
+};
+function tintVerts(mesh, fn) {
+  const geo = mesh.geometry; if (!geo || !geo.attributes.position) return;
+  const pos = geo.attributes.position, colors = new Float32Array(pos.count * 3), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) { fn(c, pos.getX(i), pos.getY(i), pos.getZ(i)); colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  mesh.material.vertexColors = true; mesh.material.needsUpdate = true;
+}
+function knifePal(finish) {
+  const f = KNIFE_FINISH[finish] || KNIFE_FINISH.factory;
+  const dress = (mesh) => {
+    if (!mesh) return mesh;
+    if (f.rainbow) {
+      const geo = mesh.geometry; geo.computeBoundingBox(); const bb = geo.boundingBox;
+      const dx = bb.max.x - bb.min.x, dy = bb.max.y - bb.min.y, dz = bb.max.z - bb.min.z;
+      const axis = dx >= dy && dx >= dz ? 'x' : dy >= dz ? 'y' : 'z';
+      const min = bb.min[axis], span = Math.max(1e-4, bb.max[axis] - min);
+      tintVerts(mesh, (c, x, y, z) => { const p = axis === 'x' ? x : axis === 'y' ? y : z; c.setHSL((((p - min) / span) % 1) * 0.92, 0.88, 0.52); });
+    } else if (f.rust) {
+      tintVerts(mesh, (c, x, y, z) => {
+        const n = Math.sin(x * 90 + z * 40) * Math.cos(y * 70 + z * 25);
+        c.set(n > 0.35 ? '#d4783a' : n > -0.15 ? '#8d4b28' : '#3e2416');
+      });
+    } else if (f.camo) {
+      tintVerts(mesh, (c, x, y, z) => {
+        const n = Math.sin(x * 46 + z * 18) + Math.cos(y * 28 + x * 12);
+        c.set(n > 0.6 ? '#6d8348' : n > -0.2 ? '#3d5228' : '#1c2814');
+      });
+    } else if (f.obsidian) {
+      tintVerts(mesh, (c, x, y, z) => {
+        const n = Math.sin(x * 80 + z * 30) + Math.cos(y * 50);
+        c.set(n > 0.7 ? '#c9a6ff' : n > 0.05 ? '#3a2158' : '#121216');
+      });
+    }
+    return mesh;
+  };
+  return {
+    steel: () => toonWarm(f.steel, 0.14, {}, f.warm),
+    metal: () => toon(f.metal),
+    dark: () => toon(f.dark),
+    edge: () => basic(f.edge),
+    fuller: () => toon(f.fuller),
+    dress,
+  };
+}
+function knifeShape(g, th, shape, mat, pos, segs = 8) {
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.008, bevelEnabled: true, bevelThickness: 0.0016, bevelSize: 0.0012, bevelSegments: 1, curveSegments: segs });
+  geo.translate(0, 0, -0.004); geo.rotateY(Math.PI / 2); // +x do perfil vira -z
+  const o = new THREE.Mesh(geo, mat); o.position.copy(pos); g.add(o); if (th) outline(o, th); return o;
+}
+function fillChef(g, th, golden = false) {
   if (!knifeLogoTex) knifeLogoTex = canvasTex(128, 64, (x, W, H) => {
     x.fillStyle = '#f5e6d0'; x.beginPath(); x.roundRect(4, 4, W - 8, H - 8, 16); x.fill();
     drawLogo(x, W / 2, H / 2, H * 0.62, '#e63946');
   });
-  const g = new THREE.Group();
   const m = (geo, mat, t = th) => { const o = new THREE.Mesh(geo, mat); g.add(o); if (t) outline(o, t); return o; };
-  // lâmina: perfil de faca de chef (costas retas, fio que curva até a ponta)
   const s = new THREE.Shape();
   s.moveTo(0, 0.012); s.lineTo(0.235, 0.012); s.quadraticCurveTo(0.285, 0.008, 0.305, -0.006);
   s.quadraticCurveTo(0.25, -0.042, 0.13, -0.05); s.lineTo(0, -0.05); s.closePath();
@@ -777,7 +866,139 @@ export function makeKnife(scale = 1, th = 0.004, golden = false) {
   const cap = m(new THREE.CylinderGeometry(0.025, 0.025, 0.03, 12), wood); cap.rotation.z = Math.PI / 2; cap.position.set(0, -0.004, 0.08); cap.scale.set(1, 1, 1.1);
   for (const z of [-0.058, -0.026, 0.066]) for (const sx of [-1, 1]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0075, 0.004, 10), toon('#e8edf2')); r.rotation.z = Math.PI / 2; r.position.set(sx * 0.0165, -0.004, z); g.add(r); }
   for (const sx of [-1, 1]) { const lg = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.02), new THREE.MeshBasicMaterial({ map: knifeLogoTex, transparent: true })); lg.position.set(sx * 0.0162, -0.004, 0.022); lg.rotation.y = sx * Math.PI / 2; g.add(lg); }
+}
+// Skeleton: ponta afilada, três furos pequenos na lâmina e um furo grande no meio, na guarda. Cabo escuro canelado.
+function fillSkeleton(g, th, pal) {
+  const m = (geo, mat, t = th) => { const o = new THREE.Mesh(geo, mat); g.add(o); if (t) outline(o, t); return o; };
+  const s = new THREE.Shape();
+  s.moveTo(-0.02, -0.016);
+  s.lineTo(0.0, -0.038);
+  s.lineTo(0.06, -0.03);
+  s.lineTo(0.26, -0.012);
+  s.lineTo(0.34, 0.0);
+  s.lineTo(0.26, 0.014);
+  s.lineTo(0.06, 0.032);
+  s.lineTo(0.0, 0.04);
+  s.lineTo(-0.02, 0.016);
+  s.closePath();
+  const big = new THREE.Path();
+  big.absellipse(0.012, 0.001, 0.02, 0.02, 0, Math.PI * 2, true);
+  s.holes.push(big);
+  for (const [cx, cy, r] of [[0.068, 0.006, 0.0065], [0.096, 0.008, 0.0056], [0.122, 0.01, 0.0048]]) {
+    const hole = new THREE.Path(); hole.absellipse(cx, cy, r, r, 0, Math.PI * 2, true); s.holes.push(hole);
+  }
+  pal.dress(knifeShape(g, Math.min(th, 0.0032), s, pal.steel(), new THREE.Vector3(0, 0.002, -0.03), 16));
+  m(new THREE.BoxGeometry(0.024, 0.03, 0.1), pal.dark()).position.set(0, -0.002, 0.042);
+  for (const z of [0.002, 0.024, 0.046, 0.068]) pal.dress(m(new THREE.BoxGeometry(0.028, 0.034, 0.007), pal.metal(), 0.002)).position.set(0, -0.002, z);
+  const pom = new THREE.Shape();
+  pom.absellipse(0, 0, 0.015, 0.017, 0, Math.PI * 2, false);
+  const lace = new THREE.Path(); lace.absellipse(0.004, 0, 0.005, 0.005, 0, Math.PI * 2, true); pom.holes.push(lace);
+  pal.dress(knifeShape(g, 0.0025, pom, pal.metal(), new THREE.Vector3(0, -0.002, 0.1), 12));
+}
+// Karambit: a garra sai da frente do cabo, desce e aponta pra frente. A argola fica no fim do cabo.
+function fillKarambit(g, th, pal) {
+  const m = (geo, mat, t = th) => { const o = new THREE.Mesh(geo, mat); g.add(o); if (t) outline(o, t); return o; };
+  const s = new THREE.Shape();
+  s.moveTo(0.0, 0.012);
+  s.quadraticCurveTo(0.12, 0.03, 0.2, -0.04);
+  s.quadraticCurveTo(0.22, -0.1, 0.12, -0.09);
+  s.quadraticCurveTo(0.14, -0.02, 0.0, -0.01);
+  s.closePath();
+  pal.dress(knifeShape(g, th, s, pal.steel(), new THREE.Vector3(0, -0.01, -0.06)));
+  m(new THREE.BoxGeometry(0.03, 0.036, 0.09), pal.dark()).position.set(0, 0, 0.02);
+  pal.dress(m(new THREE.BoxGeometry(0.04, 0.016, 0.012), pal.metal())).position.set(0, 0, -0.03);
+  const ring = pal.dress(m(new THREE.TorusGeometry(0.024, 0.0055, 8, 16), pal.steel(), 0.003));
+  ring.rotation.y = Math.PI / 2; ring.position.set(0, 0, KARAMBIT_RING_Z);
+}
+// Bayonetta (baioneta): lâmina reta de ponta cortada, guarda cruzada e o anel que entrava no cano.
+function fillBayonet(g, th, pal) {
+  const m = (geo, mat, t = th) => { const o = new THREE.Mesh(geo, mat); g.add(o); if (t) outline(o, t); return o; };
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.012); s.lineTo(0.3, 0.012); s.lineTo(0.38, -0.002); s.lineTo(0.32, -0.02); s.lineTo(0, -0.02); s.closePath();
+  pal.dress(knifeShape(g, th, s, pal.steel(), new THREE.Vector3(0, 0.008, -0.07)));
+  const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.006, 0.22), pal.fuller()); fuller.position.set(0, 0.012, -0.2); g.add(fuller); pal.dress(fuller);
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.004, 0.26), pal.edge()); edge.position.set(0, -0.012, -0.22); g.add(edge);
+  pal.dress(m(new THREE.BoxGeometry(0.09, 0.012, 0.014), pal.metal())).position.set(0, 0.004, -0.055);
+  const hoop = pal.dress(m(new THREE.TorusGeometry(0.016, 0.004, 6, 12), pal.metal(), 0.003));
+  hoop.rotation.x = Math.PI / 2; hoop.position.set(0.038, 0.004, -0.07);
+  m(new THREE.BoxGeometry(0.026, 0.032, 0.11), pal.dark()).position.set(0, 0, 0.012);
+  for (const z of [-0.02, 0.03]) for (const sx of [-1, 1]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 8), pal.metal()); r.rotation.z = Math.PI / 2; r.position.set(sx * 0.014, 0, z); g.add(r); pal.dress(r); }
+  pal.dress(m(new THREE.CylinderGeometry(0.016, 0.018, 0.02, 10), pal.metal())).rotation.z = Math.PI / 2;
+  g.children[g.children.length - 1].position.set(0, 0, 0.078);
+}
+// Butterfly (balisong): um cabo fica na mão e o outro gira no pino, junto com a lâmina.
+function fillButterfly(g, th, pal) {
+  const m = (parent, geo, mat, t = th) => { const o = new THREE.Mesh(geo, mat); parent.add(o); if (t) outline(o, t); return o; };
+  const pivot = new THREE.Group(); pivot.position.set(0, 0, -0.02); g.add(pivot);
+  const blade = new THREE.Group(); const bite = new THREE.Group();
+  pivot.add(blade); pivot.add(bite);
+  g.userData.bflyBlade = blade; g.userData.bflyBite = bite;
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.01); s.lineTo(0.16, 0.008); s.lineTo(0.22, -0.001); s.lineTo(0.16, -0.012); s.lineTo(0, -0.01); s.closePath();
+  pal.dress(knifeShape(blade, th, s, pal.steel(), new THREE.Vector3(0, 0.002, 0)));
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.004, 0.14), pal.edge()); edge.position.set(0, -0.01, -0.08); blade.add(edge);
+  const pin = pal.dress(m(g, new THREE.CylinderGeometry(0.008, 0.008, 0.046, 10), pal.metal(), 0.002));
+  pin.rotation.z = Math.PI / 2; pin.position.copy(pivot.position);
+  const channel = (parent, x) => {
+    m(parent, new THREE.BoxGeometry(0.011, 0.009, 0.16), pal.dark()).position.set(x, 0.013, 0.09);
+    m(parent, new THREE.BoxGeometry(0.011, 0.009, 0.16), pal.dark()).position.set(x, -0.013, 0.09);
+    pal.dress(m(parent, new THREE.BoxGeometry(0.018, 0.034, 0.016), pal.metal(), 0.002)).position.set(x, 0, 0.175);
+  };
+  const safe = new THREE.Group(); safe.position.copy(pivot.position); g.add(safe);
+  channel(safe, -0.011);
+  channel(bite, 0.011);
+}
+const KNIFE_FILL = { chef: fillChef, skeleton: fillSkeleton, karambit: fillKarambit, bayonet: fillBayonet, butterfly: fillButterfly };
+function fillKnife(g, kind, th, finish) {
+  g.userData.bflyBlade = null; g.userData.bflyBite = null;
+  if (kind === 'gold') { fillChef(g, th, true); return; }
+  if (!KNIFE_FILL[kind] || kind === 'chef') { fillChef(g, th, false); return; }
+  KNIFE_FILL[kind](g, th, knifePal(finish));
+}
+// O furo da argola. A inspeção da karambit gira em volta desse ponto.
+export const KARAMBIT_RING_Z = 0.086;
+// k 0 = aberta na mão, k 1 = aberta de novo. No meio a lâmina dá uma volta e o cabo de cima abre.
+// show (inspeção) deixa a lâmina e o cabo de cima abertos, pra olhar o fio.
+export function poseButterfly(group, k, show = 0) {
+  const blade = group && group.userData.bflyBlade, bite = group && group.userData.bflyBite;
+  if (!blade || !bite) return;
+  const a = butterflyInspectAngles(k, show);
+  blade.rotation.x = a.blade;
+  bite.rotation.x = a.bite;
+}
+function dropKnife(group) {
+  for (const c of group.children.slice()) {
+    group.remove(c);
+    c.traverse((o) => {
+      if (!o.isMesh || (o.userData && o.userData.isOutline)) return;
+      if (o.geometry) o.geometry.dispose();
+      if (o.material && o.material.dispose) o.material.dispose();
+    });
+  }
+}
+export function makeKnife(scale = 1, th = 0.004, kind = 'chef', finish = 'factory') {
+  const golden = kind === true || kind === 'gold';
+  const g = new THREE.Group();
+  g.userData.knifeSkin = true; g.userData.knifeGold = golden; g.userData.knifeTh = th;
+  g.userData.knifeKind = golden ? 'chef' : (kind || 'chef'); g.userData.knifeFinish = golden ? 'factory' : (finish || 'factory');
+  fillKnife(g, golden ? 'gold' : g.userData.knifeKind, th, g.userData.knifeFinish);
   g.scale.setScalar(scale); return g;
+}
+// Troca o modelo sem mexer na empunhadura (posição, giro e escala do grupo continuam).
+// A faca dourada da Corrida Armada não aceita skin do Brechó.
+export function applyKnifeSkin(group, kind = 'chef', finish = 'factory') {
+  if (!group || group.userData.knifeGold) return;
+  kind = KNIFE_FILL[kind] ? kind : 'chef';
+  finish = KNIFE_FINISH[finish] ? finish : 'factory';
+  if (kind === 'chef') finish = 'factory';
+  if (group.userData.knifeKind === kind && group.userData.knifeFinish === finish && group.children.length) return;
+  const scale = group.scale.x || 1;
+  const th = group.userData.knifeTh || 0.006;
+  dropKnife(group);
+  group.scale.setScalar(1);
+  fillKnife(group, kind, th, finish);
+  group.scale.setScalar(scale);
+  group.userData.knifeSkin = true; group.userData.knifeTh = th; group.userData.knifeKind = kind; group.userData.knifeFinish = finish;
 }
 
 // ---------- expressão: 'neutral' (sorrisão) e 'angry' (bravo ao atirar/golpear) ----------

@@ -2,7 +2,7 @@
 //  Peças da arma (bancada). Sem DOM e sem Three.js.
 //  Cliente e servidor importam o mesmo módulo. Ninguém muta WEAPONS.
 // ============================================================
-import { WEAPONS, MELEE, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE } from './rules.js';
+import { WEAPONS, MELEE, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE, RED_DOT, isAssault } from './rules.js';
 import { clampLoadout, normHand } from './loadout.js';
 
 export const CLASS_COUNT = 5;
@@ -61,6 +61,10 @@ const MIRA = [
   { id: 'arame', name: 'Alça de arame', blurb: 'Aproxima e fecha o tiro no botão direito. No quadril, abre um pouco.' },
   { id: 'barbante', name: 'Anel de barbante', blurb: 'Abre o campo. Acha o alvo mais rápido e fecha menos o tiro.' },
 ];
+const RED_DOT_PIECE = {
+  id: 'reddot', name: 'Red dot da granja',
+  blurb: 'Ponto vermelho no trilho. Mirando, o coice da câmera cai 65%. No quadril, o fuzil recua como sempre.',
+};
 const LUNETA = [
   { id: '', name: 'Luneta da casa', blurb: 'A lente que a arma já tinha.' },
   { id: 'vidro', name: 'Vidro de conserva', blurb: 'Aproxima mais. Sem a luneta, espalha mais. Anda um pouco menos.' },
@@ -95,7 +99,7 @@ export function piecesOf(i, slot) {
   const f = familyOf(i);
   const k = weaponKey(i);
   if (!f) return [];
-  if (slot === 'optic') return f === 'precisao' ? LUNETA : f === 'rajada' ? MIRA : [];
+  if (slot === 'optic') return f === 'precisao' ? LUNETA : f === 'rajada' ? (isAssault(i) ? [RED_DOT_PIECE, ...MIRA] : MIRA) : [];
   if (slot === 'barrel') return f === 'escopeta' ? BOCA : CANO;
   if (slot === 'mag') return f === 'escopeta' ? CARTUCHO : PENTE;
   if (slot === 'stock') {
@@ -119,6 +123,19 @@ export function pieceBlurb(i, slot, id) {
   return p.blurb;
 }
 
+export function defaultKit(i) {
+  const k = clampKit(i, {});
+  if (isAssault(i)) k.optic = 'reddot';
+  return k;
+}
+export function equippedKit(i, raw) {
+  if (raw == null) return defaultKit(i);
+  return clampKit(i, raw);
+}
+export function kitIsDefault(i, kit) {
+  const d = defaultKit(i), k = clampKit(i, kit);
+  return slotsOf(i).every((s) => (k[s.id] || '') === (d[s.id] || ''));
+}
 export function clampKit(i, kit) {
   const slots = slotsOf(i);
   if (!slots.length) return {};
@@ -143,7 +160,11 @@ export function clampKitMap(raw) {
 }
 
 function applyOptic(w, id) {
-  if (id === 'arame') { w.adsFov *= 0.85; w.adsSpread *= 0.75; w.spread *= 1.15; }
+  if (id === 'reddot') {
+    w.adsFov = RED_DOT.adsFov; w.adsSpread = RED_DOT.adsSpread;
+    w.redDot = true; w.redDotAds = RED_DOT.ads; w.adsRecoil = RED_DOT.recoil;
+  }
+  else if (id === 'arame') { w.adsFov *= 0.85; w.adsSpread *= 0.75; w.spread *= 1.15; }
   else if (id === 'barbante') { w.adsFov *= 1.2; w.adsSpread *= 1.25; w.spread *= 0.9; }
   else if (id === 'vidro') { w.adsFov *= 0.75; w.move = (w.move ?? 1) * 0.92; w.hipMul = (w.hipMul || 1) * 1.25; }
   else if (id === 'curta') { w.adsFov *= 1.35; w.move = (w.move ?? 1) * 1.03; w.hipMul = (w.hipMul || 1) * 0.85; }
@@ -212,6 +233,7 @@ export function compare(before, after) {
   pushDiff(rows, 'quadril', before.spread, after.spread, 3);
   pushDiff(rows, 'parede', before.pen || 0, after.pen || 0, 2);
   pushDiff(rows, 'recuo', before.recoil, after.recoil, 3);
+  if (!!before.redDot !== !!after.redDot) rows.push({ label: 'coice mirando', now: before.redDot ? '65% menos' : 'normal', next: after.redDot ? '65% menos' : 'normal' });
   pushDiff(rows, 'passo', before.move ?? 1, after.move ?? 1, 2);
   pushDiff(rows, 'pente', before.mag, after.mag, 0);
   pushDiff(rows, 'recarga', before.reload, after.reload, 2);
@@ -307,7 +329,7 @@ function readKits(raw) {
     const key = WEAPONS[i].key;
     if (raw[key] == null || !familyOf(i)) continue;
     const k = clampKit(i, raw[key]);
-    if (Object.values(k).some(Boolean)) kits[key] = k;
+    if (!kitIsDefault(i, k)) kits[key] = k;
   }
   return kits;
 }
@@ -341,7 +363,9 @@ export function classLoad(c, weapons) {
   const kits = {};
   for (const i of [load.primary, load.secondary, load.melee]) {
     const key = WEAPONS[i].key;
-    kits[key] = clampKit(i, row.kits && row.kits[key]);
+    const rawKits = row.kits || {};
+    const has = Object.prototype.hasOwnProperty.call(rawKits, key);
+    kits[key] = has ? clampKit(i, rawKits[key]) : defaultKit(i);
   }
   return { ...load, hand: normHand(row.hand), kits };
 }

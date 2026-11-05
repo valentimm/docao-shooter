@@ -1,176 +1,236 @@
 {
+  "carabina": {
+    "kind": "light",
+    "rate": 0.58,
+    "reload": 2.9,
+    "bolt_frac": {
+      "open": 0.16,
+      "shell": 0.5,
+      "close": 0.88
+    },
+    "reload_frac": {
+      "rounds": [
+        0.4,
+        0.53,
+        0.66
+      ],
+      "close": 0.86
+    },
+    "files": {
+      "carabina-near-a": {
+        "peak": 0.86,
+        "rms_db": -18.13,
+        "atk5ms": 0.86,
+        "hf_rms_db": -33.27,
+        "sec": 0.5,
+        "ogg_bytes": 9223
+      },
+      "carabina-near-b": {
+        "peak": 0.86,
+        "rms_db": -17.78,
+        "atk5ms": 0.86,
+        "hf_rms_db": -31.18,
+        "sec": 0.5,
+        "ogg_bytes": 9301
+      },
+      "carabina-far": {
+        "peak": 0.6231,
+        "rms_db": -18.91,
+        "atk5ms": 0.1509,
+        "hf_rms_db": -71.76,
+        "sec": 0.5,
+        "ogg_bytes": 6982
+      },
+      "carabina-bolt": {
+        "peak": 0.8,
+        "rms_db": -23.02,
+        "atk5ms": 0.0,
+        "hf_rms_db": -29.26,
+        "sec": 0.7,
+        "ogg_bytes": 22025,
+        "open": 0.1215,
+        "shell": 0.0939,
+        "close": 0.1141
+      },
+      "carabina-reload": {
+        "peak": 0.78,
+        "rms_db": -30.95,
+        "atk5ms": 0.0,
+        "hf_rms_db": -36.21,
+        "sec": 3.06,
+        "ogg_bytes": 64583,
+        "rounds": [
+          0.0685,
+          0.0599,
+          0.0744
+        ],
+        "close": 0.0922
+      }
+    },
+    "hf_attack": 0.3267,
+    "sub_body": 0.7276,
+    "tail_s": 0.18,
+    "near_corr": 0.6589,
+    "sub_db": -14.75,
+    "rms200_db": -11.96,
+    "sub_energy": 0.5265,
+    "peak_db": -1.31,
+    "echo_db": -222.0
+  },
   "torresmo": {
     "kind": "mid",
     "rate": 1.15,
     "reload": 2.3,
+    "bolt_frac": {
+      "open": 0.16,
+      "shell": 0.5,
+      "close": 0.88
+    },
+    "reload_frac": {
+      "rounds": [
+        0.4,
+        0.53,
+        0.66
+      ],
+      "close": 0.86
+    },
     "files": {
       "torresmo-near-a": {
-        "peak": 0.8898,
-        "rms_db": -26.07,
-        "atk5ms": 0.8898,
-        "hf_rms_db": -33.62,
-        "sec": 1.85,
-        "ogg_bytes": 33926
+        "peak": 0.86,
+        "rms_db": -14.23,
+        "atk5ms": 0.86,
+        "hf_rms_db": -33.6,
+        "sec": 0.72,
+        "ogg_bytes": 11524
       },
       "torresmo-near-b": {
-        "peak": 0.8892,
-        "rms_db": -27.01,
-        "atk5ms": 0.8892,
-        "hf_rms_db": -34.93,
-        "sec": 1.85,
-        "ogg_bytes": 33448
+        "peak": 0.86,
+        "rms_db": -14.44,
+        "atk5ms": 0.86,
+        "hf_rms_db": -36.26,
+        "sec": 0.72,
+        "ogg_bytes": 11606
       },
       "torresmo-far": {
-        "peak": 0.7863,
-        "rms_db": -24.65,
-        "atk5ms": 0.0562,
-        "hf_rms_db": -79.0,
-        "sec": 2.45,
-        "ogg_bytes": 38890
+        "peak": 0.7807,
+        "rms_db": -14.59,
+        "atk5ms": 0.2922,
+        "hf_rms_db": -72.15,
+        "sec": 0.72,
+        "ogg_bytes": 8249
       },
       "torresmo-bolt": {
         "peak": 0.8,
-        "rms_db": -22.23,
-        "atk5ms": 0.0001,
-        "hf_rms_db": -32.51,
+        "rms_db": -22.24,
+        "atk5ms": 0.0,
+        "hf_rms_db": -35.24,
         "sec": 1.27,
-        "ogg_bytes": 25601,
-        "open": 0.1669,
-        "shell": 0.1483,
-        "close": 0.2324
+        "ogg_bytes": 31009,
+        "open": 0.1616,
+        "shell": 0.1155,
+        "close": 0.1405
       },
       "torresmo-reload": {
         "peak": 0.78,
-        "rms_db": -24.65,
+        "rms_db": -28.97,
         "atk5ms": 0.0001,
-        "hf_rms_db": -34.04,
+        "hf_rms_db": -37.89,
         "sec": 2.46,
-        "ogg_bytes": 41800,
+        "ogg_bytes": 62857,
         "rounds": [
-          0.1515,
-          0.1507,
-          0.1511
+          0.0791,
+          0.073,
+          0.0774
         ],
-        "close": 0.2338
+        "close": 0.1095
       }
     },
-    "near_slap_db": -21.0,
-    "near_gap_db": -29.7
+    "hf_attack": 0.2504,
+    "sub_body": 0.9208,
+    "tail_s": 0.33,
+    "near_corr": 0.2671,
+    "sub_db": -7.6,
+    "rms200_db": -6.83,
+    "sub_energy": 0.8387,
+    "peak_db": -1.31,
+    "echo_db": -212.3
   },
   "canhao": {
     "kind": "heavy",
     "rate": 1.85,
     "reload": 3.1,
+    "bolt_frac": {
+      "open": 0.16,
+      "shell": 0.5,
+      "close": 0.88
+    },
+    "reload_frac": {
+      "rounds": [
+        0.4,
+        0.53,
+        0.66
+      ],
+      "close": 0.86
+    },
     "files": {
       "canhao-near-a": {
-        "peak": 0.8752,
-        "rms_db": -21.14,
-        "atk5ms": 0.7225,
-        "hf_rms_db": -44.95,
-        "sec": 2.4,
-        "ogg_bytes": 42956
+        "peak": 0.86,
+        "rms_db": -11.23,
+        "atk5ms": 0.86,
+        "hf_rms_db": -43.86,
+        "sec": 1.05,
+        "ogg_bytes": 15509
       },
       "canhao-near-b": {
-        "peak": 0.8749,
-        "rms_db": -22.99,
-        "atk5ms": 0.5403,
-        "hf_rms_db": -45.06,
-        "sec": 2.4,
-        "ogg_bytes": 43063
+        "peak": 0.86,
+        "rms_db": -11.21,
+        "atk5ms": 0.86,
+        "hf_rms_db": -43.73,
+        "sec": 1.05,
+        "ogg_bytes": 16457
       },
       "canhao-far": {
-        "peak": 0.7904,
-        "rms_db": -22.34,
-        "atk5ms": 0.0185,
-        "hf_rms_db": -76.68,
-        "sec": 3.05,
-        "ogg_bytes": 39568
+        "peak": 0.7997,
+        "rms_db": -10.64,
+        "atk5ms": 0.2943,
+        "hf_rms_db": -69.72,
+        "sec": 1.05,
+        "ogg_bytes": 10939
       },
       "canhao-bolt": {
         "peak": 0.8,
-        "rms_db": -22.86,
-        "atk5ms": 0.0001,
-        "hf_rms_db": -41.44,
+        "rms_db": -21.41,
+        "atk5ms": 0.0,
+        "hf_rms_db": -52.11,
         "sec": 1.97,
-        "ogg_bytes": 36389,
-        "open": 0.1832,
-        "shell": 0.1627,
-        "close": 0.2396
+        "ogg_bytes": 36238,
+        "open": 0.1849,
+        "shell": 0.1162,
+        "close": 0.2047
       },
       "canhao-reload": {
         "peak": 0.78,
         "rms_db": -26.26,
-        "atk5ms": 0.0001,
-        "hf_rms_db": -45.93,
-        "sec": 3.26,
-        "ogg_bytes": 43465,
-        "rounds": [
-          0.1119,
-          0.11,
-          0.1116
-        ],
-        "close": 0.2293
-      }
-    },
-    "near_slap_db": -18.1,
-    "near_gap_db": -30.3
-  },
-  "carabina": {
-    "kind": "light",
-    "rate": 0.58,
-    "reload": 2.9,
-    "files": {
-      "carabina-near-a": {
-        "peak": 0.8896,
-        "rms_db": -25.24,
-        "atk5ms": 0.8896,
-        "hf_rms_db": -30.87,
-        "sec": 1.05,
-        "ogg_bytes": 20790
-      },
-      "carabina-near-b": {
-        "peak": 0.8895,
-        "rms_db": -25.58,
-        "atk5ms": 0.8895,
-        "hf_rms_db": -30.81,
-        "sec": 1.05,
-        "ogg_bytes": 20657
-      },
-      "carabina-far": {
-        "peak": 0.7981,
-        "rms_db": -22.91,
-        "atk5ms": 0.1379,
-        "hf_rms_db": -73.1,
-        "sec": 1.45,
-        "ogg_bytes": 25925
-      },
-      "carabina-bolt": {
-        "peak": 0.8,
-        "rms_db": -19.83,
         "atk5ms": 0.0,
-        "hf_rms_db": -25.49,
-        "sec": 0.7,
-        "ogg_bytes": 17134,
-        "open": 0.1666,
-        "shell": 0.1547,
-        "close": 0.2466
-      },
-      "carabina-reload": {
-        "peak": 0.78,
-        "rms_db": -26.7,
-        "atk5ms": 0.0001,
-        "hf_rms_db": -35.12,
-        "sec": 3.06,
-        "ogg_bytes": 43420,
+        "hf_rms_db": -54.91,
+        "sec": 3.26,
+        "ogg_bytes": 65601,
         "rounds": [
-          0.1159,
-          0.1162,
-          0.1151
+          0.1019,
+          0.1025,
+          0.1073
         ],
-        "close": 0.2193
+        "close": 0.1703
       }
     },
-    "near_slap_db": -14.7,
-    "near_gap_db": -20.9
+    "hf_attack": 0.0724,
+    "sub_body": 0.9686,
+    "tail_s": 0.69,
+    "near_corr": 0.6364,
+    "sub_db": -4.32,
+    "rms200_db": -3.99,
+    "sub_energy": 0.9275,
+    "peak_db": -1.31,
+    "echo_db": -158.3
   }
 }

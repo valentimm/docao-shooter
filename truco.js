@@ -820,8 +820,8 @@ function bindTable() {
 }
 
 function bindMenu() {
-  $('modeShoot').addEventListener('click', () => { document.body.classList.remove('truco-menu'); $('modeShoot').classList.add('on'); $('modeTruco').classList.remove('on'); $('trucoPanel').hidden = true; });
-  $('modeTruco').addEventListener('click', () => { document.body.classList.add('truco-menu'); $('modeTruco').classList.add('on'); $('modeShoot').classList.remove('on'); $('trucoPanel').hidden = false; });
+  $('modeShoot').addEventListener('click', () => { document.body.classList.remove('truco-menu'); $('modeShoot').classList.add('on'); $('modeTruco').classList.remove('on'); $('trucoPanel').hidden = true; const unoPanel = $('unoPanel'); if (unoPanel) unoPanel.hidden = true; const modeUno = $('modeUno'); if (modeUno) modeUno.classList.remove('on'); document.body.classList.remove('uno-menu'); });
+  $('modeTruco').addEventListener('click', () => { document.body.classList.add('truco-menu'); document.body.classList.remove('uno-menu'); $('modeTruco').classList.add('on'); $('modeShoot').classList.remove('on'); $('trucoPanel').hidden = false; const unoPanel = $('unoPanel'); if (unoPanel) unoPanel.hidden = true; const modeUno = $('modeUno'); if (modeUno) modeUno.classList.remove('on'); });
   $('trucoBots').addEventListener('click', () => { $('trucoMenuErr').textContent = ''; startLocal($('trucoSeatsSel').value === '2' ? 2 : 4); });
   $('trucoCreate').addEventListener('click', () => { $('trucoMenuErr').textContent = ''; createOnline().catch((e) => { closeTable(); $('trucoMenuErr').textContent = e.message || 'Sem sala'; }); });
   $('trucoJoin').addEventListener('click', () => { $('trucoMenuErr').textContent = ''; joinOnline($('trucoCode').value); });

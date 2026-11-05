@@ -1,7 +1,7 @@
 // Snipers em 1ª pessoa: Torresmo, Canhão do Barril e Carabina da Granja.
 // Escala local da sniper atual (o root do jogo aplica 0.62 depois). Cano em −Z.
 import * as THREE from 'three';
-import { outline, toon } from './docao.js';
+import { outline, toon, drawLogo } from './docao.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _dir = new THREE.Vector3();
@@ -13,9 +13,10 @@ const BOLT_UP = 1.3;
 const BOLT_PULL = 0.16;
 const GRAB_X = 0.07;
 
-function mesh(parent, geo, mat, x, y, z, ol = 0.006) {
+function mesh(parent, geo, mat, x, y, z, ol = 0.006, part = '') {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
+  if (part) m.userData.gunPart = part;
   parent.add(m);
   if (ol) outline(m, ol);
   return m;
@@ -40,43 +41,43 @@ function lerp(a, b, t) {
 }
 
 function addScope(parent, s) {
-  const tube = mesh(parent, new THREE.CylinderGeometry(s.r, s.r, s.len, 14), toon(s.color), 0, s.y, s.z);
+  const tube = mesh(parent, new THREE.CylinderGeometry(s.r, s.r, s.len, 14), toon(s.color), 0, s.y, s.z, 0.006, 'scope');
   tube.rotation.x = Math.PI / 2;
-  const bell = mesh(parent, new THREE.CylinderGeometry(s.bellR, s.r * 1.02, s.bellLen, 14), toon(s.color), 0, s.y, s.bellZ);
+  const bell = mesh(parent, new THREE.CylinderGeometry(s.bellR, s.r * 1.02, s.bellLen, 14), toon(s.color), 0, s.y, s.bellZ, 0.006, 'scope');
   bell.rotation.x = Math.PI / 2;
-  const eye = mesh(parent, new THREE.CylinderGeometry(s.eyeR, s.r * 1.02, s.eyeLen, 14), toon(s.color), 0, s.y, s.eyeZ);
+  const eye = mesh(parent, new THREE.CylinderGeometry(s.eyeR, s.r * 1.02, s.eyeLen, 14), toon(s.color), 0, s.y, s.eyeZ, 0.006, 'scope');
   eye.rotation.x = Math.PI / 2;
   const lens = glass(s.lens);
-  const front = mesh(parent, new THREE.CircleGeometry(s.bellR * 0.78, 18), lens, 0, s.y, s.bellZ - s.bellLen * 0.5 - 0.002, 0);
+  const front = mesh(parent, new THREE.CircleGeometry(s.bellR * 0.78, 18), lens, 0, s.y, s.bellZ - s.bellLen * 0.5 - 0.002, 0, 'lens');
   front.rotation.y = Math.PI;
-  mesh(parent, new THREE.CircleGeometry(s.eyeR * 0.72, 18), lens, 0, s.y, s.eyeZ + s.eyeLen * 0.5 + 0.002, 0);
+  mesh(parent, new THREE.CircleGeometry(s.eyeR * 0.72, 18), lens, 0, s.y, s.eyeZ + s.eyeLen * 0.5 + 0.002, 0, 'lens');
   for (const z of s.mounts) {
-    mesh(parent, new THREE.BoxGeometry(s.mountW, s.mountH, s.mountD), toon('#22252c'), 0, s.y - s.r - s.mountH * 0.35, z, 0.004);
+    mesh(parent, new THREE.BoxGeometry(s.mountW, s.mountH, s.mountD), toon('#22252c'), 0, s.y - s.r - s.mountH * 0.35, z, 0.004, 'mount');
   }
 }
 
 function addBarrel(parent, b) {
-  const bar = mesh(parent, new THREE.CylinderGeometry(b.r0, b.r1, b.len, 14), toon(b.color), 0, b.y, b.z);
+  const bar = mesh(parent, new THREE.CylinderGeometry(b.r0, b.r1, b.len, 14), toon(b.color), 0, b.y, b.z, 0.006, 'barrel');
   bar.rotation.x = Math.PI / 2;
   if (b.flare) {
     // rotation.x = 90° manda o raio de baixo (−Y) para −Z, a boca.
-    const flare = mesh(parent, new THREE.CylinderGeometry(b.flare.rIn, b.flare.rOut, b.flare.len, 16), toon(b.color), 0, b.y, b.flare.z);
+    const flare = mesh(parent, new THREE.CylinderGeometry(b.flare.rIn, b.flare.rOut, b.flare.len, 16), toon(b.color), 0, b.y, b.flare.z, 0.006, 'barrel');
     flare.rotation.x = Math.PI / 2;
   }
   if (b.muzzle) {
-    mesh(parent, new THREE.BoxGeometry(b.muzzle.w, b.muzzle.h, b.muzzle.d), toon(b.color), 0, b.y, b.muzzle.z);
+    mesh(parent, new THREE.BoxGeometry(b.muzzle.w, b.muzzle.h, b.muzzle.d), toon(b.color), 0, b.y, b.muzzle.z, 0.006, 'barrel');
   }
 }
 
 function makeBolt(parent, b) {
   const bolt = new THREE.Group();
   bolt.position.set(b.x, b.y, b.z);
-  const shaft = mesh(bolt, new THREE.CylinderGeometry(b.leverR * 1.2, b.leverR * 1.2, 0.18, 8), toon('#aeb4be'), 0, 0, 0.01, 0.004);
+  const shaft = mesh(bolt, new THREE.CylinderGeometry(b.leverR * 1.2, b.leverR * 1.2, 0.18, 8), toon('#aeb4be'), 0, 0, 0.01, 0.004, 'bolt');
   shaft.rotation.x = Math.PI / 2;
-  const lever = mesh(bolt, new THREE.CylinderGeometry(b.leverR, b.leverR, b.lever, 8), toon('#c8ccd4'), b.lever / 2, 0, 0, 0.004);
+  const lever = mesh(bolt, new THREE.CylinderGeometry(b.leverR, b.leverR, b.lever, 8), toon('#c8ccd4'), b.lever / 2, 0, 0, 0.004, 'bolt');
   lever.rotation.z = Math.PI / 2;
   const knobX = b.lever + b.knob * 0.3;
-  mesh(bolt, new THREE.SphereGeometry(b.knob, 12, 10), toon(b.knobColor), knobX, 0, 0, 0.004);
+  mesh(bolt, new THREE.SphereGeometry(b.knob, 12, 10), toon(b.knobColor), knobX, 0, 0, 0.004, 'knob');
   parent.add(bolt);
   return { bolt, knobX };
 }
@@ -174,12 +175,13 @@ export function makeFPSniper(kind) {
   const spec = SPECS[kind] || SPECS.torresmo;
   const g = new THREE.Group();
   g.name = `fp-${SPECS[kind] ? kind : 'torresmo'}`;
+  g.userData.muzzle = -1;
   const body = spec.body;
-  mesh(g, new THREE.BoxGeometry(body.w, body.h, body.d), toon(body.color), 0, body.y, body.z);
+  mesh(g, new THREE.BoxGeometry(body.w, body.h, body.d), toon(body.color), 0, body.y, body.z, 0.006, 'body');
   addBarrel(g, spec.barrel);
-  const stock = mesh(g, new THREE.BoxGeometry(spec.stock.w, spec.stock.h, spec.stock.d), toon(spec.stock.color), 0, spec.stock.y, spec.stock.z);
+  const stock = mesh(g, new THREE.BoxGeometry(spec.stock.w, spec.stock.h, spec.stock.d), toon(spec.stock.color), 0, spec.stock.y, spec.stock.z, 0.006, 'stock');
   stock.rotation.x = spec.stock.rx;
-  const grip = mesh(g, new THREE.BoxGeometry(spec.grip.w, spec.grip.h, spec.grip.d), toon(spec.grip.color), 0, spec.grip.y, spec.grip.z);
+  const grip = mesh(g, new THREE.BoxGeometry(spec.grip.w, spec.grip.h, spec.grip.d), toon(spec.grip.color), 0, spec.grip.y, spec.grip.z, 0.006, 'grip');
   grip.rotation.x = spec.grip.rx;
   addScope(g, spec.scope);
   for (const p of spec.extras || []) mesh(g, new THREE.BoxGeometry(p.w, p.h, p.d), toon(p.color), 0, p.y, p.z, 0.005);
@@ -256,4 +258,134 @@ export function poseSniperBolt(group, ak) {
   hand.position.set(px, py, pz);
   hand.rotation.set(rx, ry, rz);
   aimArm(hand);
+}
+
+// A Docão Lore: ouro e dragão no jeito da Dragon Lore, mais focinho, orelha e o C! do Docão.
+const LORE_PAINT = {
+  body: '#e2b34a', stock: '#a56b2f', grip: '#8f1d22', barrel: '#3a2c1c',
+  scope: '#14382c', lens: '#2f9d5a', mount: '#d4af37', bolt: '#f0d78a', knob: '#f7a531',
+};
+
+function eachGunPart(group, fn) {
+  group.traverse((o) => {
+    if (!o.isMesh || (o.userData && o.userData.isOutline) || !o.userData.gunPart) return;
+    if (!o.material || !o.material.color) return;
+    fn(o);
+  });
+}
+
+function dropDress(group) {
+  const dress = group.userData.loreDress;
+  if (!dress) return;
+  group.remove(dress);
+  const mats = new Set();
+  dress.traverse((o) => {
+    if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+    if (o.isMesh && o.material && !mats.has(o.material)) {
+      mats.add(o.material);
+      if (o.material.map && o.material.map.dispose) o.material.map.dispose();
+      if (o.material.dispose) o.material.dispose();
+    }
+  });
+  group.userData.loreDress = null;
+}
+
+function loreMark() {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const x = c.getContext('2d');
+  x.fillStyle = '#d8261c';
+  x.beginPath(); x.roundRect(2, 2, 60, 60, 12); x.fill();
+  drawLogo(x, 30, 34, 28, '#fff0cc');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.07), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+  plate.userData.loreBit = true;
+  return plate;
+}
+
+function addLoreDress(group) {
+  const f = group.userData.muzzle || -1;
+  const zOf = (u) => f * u; // u > 0 aponta pra boca, nos dois modelos
+  const dress = new THREE.Group();
+  dress.name = 'lore-dress';
+  const gold = toon('#f3d78a');
+  const emerald = toon('#1f8f4a');
+  const deep = toon('#0e5a32');
+  const snoutC = toon('#f58a6e');
+  const skin = toon('#f7a531');
+  const earIn = toon('#e8682a');
+  const nose = toon('#3a0806');
+  const eyeC = toon('#d8261c');
+  const side = -0.078; // lateral esquerda: a que aparece ao lado da mira
+  for (const u of [-0.06, 0.06, 0.18, 0.3]) {
+    const i = u > 0.1 ? 1 : 0;
+    const seg = mesh(dress, new THREE.SphereGeometry(0.036, 10, 8), i ? emerald : deep, side, 0.018 + (u > 0 ? 0.01 : 0), zOf(u), 0);
+    seg.scale.set(0.82, 0.68, 1.4);
+    const spike = mesh(dress, new THREE.ConeGeometry(0.008, 0.028, 5), gold, side - 0.01, 0.05, zOf(u), 0);
+    spike.rotation.z = 0.7;
+  }
+  const headU = 0.4;
+  const head = mesh(dress, new THREE.SphereGeometry(0.05, 12, 10), emerald, side - 0.008, 0.04, zOf(headU), 0);
+  head.scale.set(0.95, 0.72, 1.2);
+  const jaw = mesh(dress, new THREE.ConeGeometry(0.02, 0.062, 8), deep, side - 0.008, 0.028, zOf(headU + 0.05), 0);
+  jaw.rotation.x = f > 0 ? -Math.PI / 2 : Math.PI / 2;
+  for (const s of [-1, 1]) {
+    const horn = mesh(dress, new THREE.ConeGeometry(0.009, 0.052, 6), gold, side + s * 0.016, 0.088, zOf(headU - 0.01), 0);
+    horn.rotation.z = s * -0.35;
+    horn.rotation.x = f > 0 ? 0.35 : -0.35;
+  }
+  mesh(dress, new THREE.SphereGeometry(0.009, 8, 6), eyeC, side - 0.038, 0.052, zOf(headU + 0.012), 0);
+  const wing = mesh(dress, new THREE.SphereGeometry(0.038, 8, 6), emerald, side - 0.04, 0.07, zOf(headU - 0.04), 0);
+  wing.scale.set(1.7, 0.28, 0.75);
+  wing.rotation.z = 0.8;
+  const wing2 = mesh(dress, new THREE.SphereGeometry(0.026, 8, 6), deep, side - 0.02, 0.055, zOf(headU - 0.08), 0);
+  wing2.scale.set(1.4, 0.3, 0.6);
+  wing2.rotation.z = 0.4;
+  for (const u of [0.55, 0.72, 0.88]) {
+    const ring = mesh(dress, new THREE.TorusGeometry(0.034, 0.006, 6, 14), gold, 0, 0.018, zOf(u), 0);
+    ring.rotation.y = Math.PI / 2;
+  }
+  // Focinho e orelha na face da coronha que a mira enxerga, mais o rabinho.
+  const cheekZ = zOf(-0.34);
+  const disc = mesh(dress, new THREE.CylinderGeometry(0.05, 0.05, 0.012, 16), gold, side + 0.01, 0.0, cheekZ, 0);
+  disc.rotation.z = Math.PI / 2;
+  const pig = mesh(dress, new THREE.CylinderGeometry(0.034, 0.036, 0.02, 14), snoutC, side - 0.008, 0.0, cheekZ, 0);
+  pig.rotation.z = Math.PI / 2;
+  for (const s of [-1, 1]) mesh(dress, new THREE.SphereGeometry(0.008, 8, 6), nose, side - 0.02, s * 0.01, cheekZ + f * 0.006, 0);
+  for (const s of [-1, 1]) {
+    const ear = mesh(dress, new THREE.SphereGeometry(0.024, 8, 6), skin, side - 0.01, 0.055, cheekZ + s * 0.03, 0);
+    ear.scale.set(0.45, 1.4, 0.7);
+    const inner = mesh(dress, new THREE.SphereGeometry(0.012, 8, 6), earIn, side - 0.02, 0.06, cheekZ + s * 0.03, 0);
+    inner.scale.set(0.3, 0.9, 0.45);
+  }
+  const tail = mesh(dress, new THREE.TorusGeometry(0.022, 0.006, 6, 12, Math.PI * 1.6), skin, side - 0.01, 0.02, zOf(-0.16), 0);
+  tail.rotation.x = Math.PI / 2;
+  const plate = loreMark();
+  plate.scale.setScalar(1.8);
+  plate.position.set(side - 0.02, 0.01, zOf(-0.2));
+  plate.rotation.y = -Math.PI / 2;
+  dress.add(plate);
+  group.add(dress);
+  return dress;
+}
+
+export function applySniperSkin(group, kind) {
+  if (!group) return;
+  const next = kind === 'lore' ? 'lore' : '';
+  if ((group.userData.sniperSkin || '') === next && (next !== 'lore' || group.userData.loreDress)) return;
+  eachGunPart(group, (o) => {
+    const base = o.material.userData && o.material.userData.loreHex;
+    if (base != null) o.material.color.setHex(base);
+  });
+  dropDress(group);
+  group.userData.sniperSkin = next;
+  if (!next) return;
+  eachGunPart(group, (o) => {
+    if (!o.material.userData) o.material.userData = {};
+    if (o.material.userData.loreHex == null) o.material.userData.loreHex = o.material.color.getHex();
+    const hex = LORE_PAINT[o.userData.gunPart];
+    if (hex) o.material.color.set(hex);
+  });
+  group.userData.loreDress = addLoreDress(group);
 }

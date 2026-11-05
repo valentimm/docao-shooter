@@ -1,0 +1,15 @@
+Posto Nevasca — raycast da rodada 4
+Método: olho a 1,60 m acima do pé, em todo par de nós alcançáveis a partir dos spawns (nav.good, grade de 2,5 m).
+losClear de shared/physics.js, a mesma física do servidor.
+Nós alcançáveis: 1005. Pares com distância ≥ 40 m: 266991.
+Pares com linha livre acima de 60 m: 0.
+
+Máximo: 59.42 m
+Origem (olho): x -10.1  y 5.2  z -44.1    pés em y 3.6
+Destino (olho): x 4.9  y 5  z 13.4    pés em y 3.4
+A linha liga os dois olhos. Não é um raio colado no chão nem um raio por cima de um telhado sem pé.
+Motor: +Z norte, −Z sul, −X oeste. Pesquisador: x = x_motor + 26, y = 60 − z_motor.
+Origem no eixo do pesquisador: x 15.90, y 104.10, altura do olho 5.2 m
+Destino no eixo do pesquisador: x 30.90, y 46.60, altura do olho 5 m
+
+A linha de ~78 m da rodada 3 (chão, sudeste–noroeste) foi cortada. O máximo desta passada fica na faixa de 40–60 m.

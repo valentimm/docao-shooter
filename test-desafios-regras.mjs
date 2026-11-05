@@ -30,8 +30,8 @@ const seen = new Set(); for (let a = 1; a <= 400; a++) dailyIds(a, d0).forEach((
 const findAcct = (pred, day = d0) => { for (let a = 1; a < 1e5; a++) if (pred(dailyIds(a, day).map((id) => CHAL_BY_ID[id]))) return a; return 0; };
 { const A = findAcct((L) => L[0].id === 'D02'); let s = parseChal(null, d0); // F = 10 abates somando o dia
   let r = applyChal(s, A, { k: 4 }, 'dm'); ok(r.changed && r.reward === 0 && r.state.p[0] === 4, 'soma: 4 de 10 abates, nada pago ainda'); s = r.state;
-  r = applyChal(s, A, { k: 9 }, 'bomb'); ok(r.reward === 20 && (r.state.k & 1) && r.state.p[0] === 10, 'completou (qualquer modo): paga 20 uma vez e trava em 10/10'); s = r.state;
-  r = applyChal(s, A, { k: 50 }, 'dm'); ok(r.reward === 0, 'já pago: não paga de novo');
+  r = applyChal(s, A, { k: 9 }, 'bomb'); ok(r.reward === 20 && r.boxes === 1 && (r.state.k & 1) && r.state.p[0] === 10, 'completou (qualquer modo): paga 20, entrega 1 caixote e trava em 10/10'); s = r.state;
+  r = applyChal(s, A, { k: 50 }, 'dm'); ok(r.reward === 0 && r.boxes === 0, 'já pago: não paga de novo nem entrega outro caixote');
   ok(parseChal(JSON.stringify(s), d0 + 1).k === 0 && parseChal(JSON.stringify(s), d0 + 1).p.join() === '0,0,0', 'dia novo: progresso e pagos zeram'); }
 { const A = findAcct((L) => L[1].id === 'D21'); let s = parseChal(null, d0); // M = 15 abates numa só partida de Mata-mata
   s = applyChal(s, A, { mk: 9 }, 'dm').state; s = applyChal(s, A, { mk: 7 }, 'dm').state;
@@ -69,32 +69,33 @@ function mk(mode = 'dm', map = 'arena') {
 
 // ---- gravação no D1 (SQLite em memória com as migrações) ----
 const db = new DatabaseSync(':memory:');
-for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql']) db.exec(readFileSync(new URL('./server/migrations/' + f, import.meta.url), 'utf8'));
+for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql', '0005_faca.sql', '0006_sniper.sql', '0007_caixote.sql']) db.exec(readFileSync(new URL('./server/migrations/' + f, import.meta.url), 'utf8'));
+const bound = (sql, args) => { if (!args.length) return []; if (/\?\d/.test(sql)) { const o = {}; args.forEach((v, i) => { o[i + 1] = v; }); return [o]; } return args; }; // node:sqlite liga ?1 como parâmetro nomeado
 const wrap = (sql, args = []) => ({ sql, args, bind(...a) { return wrap(sql, a); },
-  async all() { return { results: db.prepare(sql).all(...args) }; }, async first() { return db.prepare(sql).get(...args) || null; },
-  async run() { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } });
-const env = { DB: { prepare: (sql) => wrap(sql), async batch(list) { db.exec('BEGIN'); try { const out = []; for (const s of list) { const st = db.prepare(s.sql); out.push(/^\s*SELECT/i.test(s.sql) ? { results: st.all(...s.args) } : { meta: { changes: Number(st.run(...s.args).changes) } }); } db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; } } } };
+  async all() { return { results: db.prepare(sql).all(...bound(sql, args)) }; }, async first() { return db.prepare(sql).get(...bound(sql, args)) || null; },
+  async run() { const r = db.prepare(sql).run(...bound(sql, args)); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } });
+const env = { DB: { prepare: (sql) => wrap(sql), async batch(list) { db.exec('BEGIN'); try { const out = []; for (const s of list) { const st = db.prepare(s.sql); out.push(/^\s*SELECT/i.test(s.sql) ? { results: st.all(...bound(s.sql, s.args)) } : { meta: { changes: Number(st.run(...bound(s.sql, s.args)).changes) } }); } db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; } } } };
 const today = spDay();
 const A = findAcct((L) => L[0].id === 'D02', today);
 db.prepare('INSERT INTO accounts (id, nick, nick_key, pass_hash, created_at) VALUES (?, ?, ?, ?, ?)').run(A, 'Teste', 'teste', 'x', 1);
-const row = () => db.prepare('SELECT coins, earn_today, chal FROM accounts WHERE id = ?').get(A);
+const row = () => db.prepare('SELECT coins, earn_today, chal, boxes FROM accounts WHERE id = ?').get(A);
 let writes = 0; const origBatch = env.DB.batch; env.DB.batch = async (l) => { writes += l.filter((s) => /^\s*UPDATE accounts/i.test(s.sql)).length; return origBatch(l); };
 await recordStats(env, [{ acct: A, mode: 'dm', k: 6, d: 1, c: 6, w: 0, m: 0, q: { k: 6 } }]);
-let r = row(); ok(r.coins === 6 && JSON.parse(r.chal).p[0] === 6 && writes === 1, `6 abates: 6 Docoins da partida e progresso 6/10 no MESMO UPDATE (${writes} escrita na conta)`);
+let r = row(); ok(r.coins === 6 && r.boxes === 0 && JSON.parse(r.chal).p[0] === 6 && writes === 1, `6 abates: 6 Docoins da partida e progresso 6/10 no MESMO UPDATE (${writes} escrita na conta), sem caixote ainda`);
 await recordStats(env, [{ acct: A, mode: 'dom', k: 5, d: 0, c: 5, w: 0, m: 0, q: { k: 5 } }]);
-r = row(); ok(r.coins === 6 + 5 + 20 && (JSON.parse(r.chal).k & 1) && writes === 2, `completou o fácil: +5 da partida +20 do desafio (saldo ${r.coins})`);
+r = row(); ok(r.coins === 6 + 5 + 20 && r.boxes === 1 && (JSON.parse(r.chal).k & 1) && writes === 2, `completou o fácil: +5 da partida +20 do desafio e 1 caixote (saldo ${r.coins})`);
 db.prepare('UPDATE accounts SET earn_day = ?, earn_today = ? WHERE id = ?').run(Math.floor(Date.now() / 86400000), EARN.dayCap, A);
 const before = row().coins; const ids = dailyIds(A, today), M = CHAL_BY_ID[ids[1]];
 await recordStats(env, [{ acct: A, mode: M.mo || 'dm', k: 0, d: 0, c: 30, w: 0, m: 0, q: { [M.ev]: M.ty === 'bits' ? 7 : M.goal } }]);
-r = row(); ok(r.coins === before + M.reward && r.earn_today === EARN.dayCap, `teto diário das partidas cheio: partida rende 0, mas o desafio médio paga ${M.reward} (sem teto)`);
+r = row(); ok(r.coins === before + M.reward && r.boxes === 2 && r.earn_today === EARN.dayCap, `teto diário das partidas cheio: partida rende 0, mas o desafio médio paga ${M.reward} e mais 1 caixote (sem teto)`);
 await recordStats(env, [{ acct: A, mode: M.mo || 'dm', k: 0, d: 0, c: 0, w: 0, m: 0, q: { [M.ev]: M.goal } }]);
-ok(row().coins === before + M.reward, 'desafio já pago: gravar de novo não paga duas vezes');
+ok(row().coins === before + M.reward && row().boxes === 2, 'desafio já pago: gravar de novo não paga duas vezes nem entrega outro caixote');
 const w0 = writes; await recordStats(env, [{ acct: A, mode: 'dm', k: 1, d: 0, c: 0, w: 0, m: 0, q: { chat: 1 } }]);
 ok(writes === w0 || CHAL_BY_ID[ids[2]].ev === 'chat', 'contador que não é de nenhum desafio do dia não gera escrita na conta');
 // conflito: outra sala mudou o chal no meio (estado velho) → o UPDATE não paga em cima de estado velho
 db.prepare('UPDATE accounts SET chal = ? WHERE id = ?').run(JSON.stringify({ d: today, p: [0, 0, 0], k: 0 }), A);
 const { coinCreditStmt } = await import('./server/src/shop.js');
-const c0 = row().coins; await env.DB.batch([coinCreditStmt(env, A, 0, { old: '{"velho":1}', json: '{"d":1,"p":[1,1,1],"k":7}', reward: 999 })]);
-ok(row().coins === c0 && JSON.parse(row().chal).k === 0, 'corrida entre duas salas: estado mudou no meio, nada é pago em dobro');
+const c0 = row().coins, b0 = row().boxes; await env.DB.batch([coinCreditStmt(env, A, 0, { old: '{"velho":1}', json: '{"d":1,"p":[1,1,1],"k":7}', reward: 999, boxes: 3 })]);
+ok(row().coins === c0 && row().boxes === b0 && JSON.parse(row().chal).k === 0, 'corrida entre duas salas: estado mudou no meio, nada é pago em dobro nem entra caixote');
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK'); process.exit(fails.length ? 1 : 0);

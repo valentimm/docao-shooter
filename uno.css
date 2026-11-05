@@ -1,0 +1,114 @@
+/* Mesa de UNO. O tiro e o truco continuam com o visual de sempre. */
+body.uno-menu .mappick, body.uno-menu .match-options, body.uno-menu #menuRules, body.uno-menu .playrow,
+body.uno-menu #loadoutDock, body.uno-menu #danceDock, body.uno-menu #menuTrain, body.uno-menu #menuTeam { display: none !important; }
+
+#unoPanel .uno-cover {
+  position: relative; height: 148px; margin-bottom: 10px; border: 3px solid #34402e; border-radius: 8px;
+  background: #203e35; overflow: hidden;
+}
+#unoPanel .uno-cover i {
+  position: absolute; width: 52px; height: 76px; top: 28px; border: 3px solid #fff0cc; border-radius: 8px;
+}
+#unoPanel .uno-cover i::before {
+  content: ""; position: absolute; left: 7px; right: 7px; top: 16px; bottom: 16px;
+  background: #fffaf0; border-radius: 50%; transform: rotate(-18deg);
+}
+#unoPanel .uno-cover .r { background: #d32027; left: 16%; transform: rotate(-16deg); }
+#unoPanel .uno-cover .y { background: #e2a400; left: 33%; transform: rotate(-5deg); }
+#unoPanel .uno-cover .g { background: #2f8f45; left: 50%; transform: rotate(6deg); }
+#unoPanel .uno-cover .b { background: #2a62c9; left: 67%; transform: rotate(16deg); }
+#unoPanel .uno-cover b {
+  position: absolute; left: 12px; bottom: 8px; color: #fff0cc;
+  font: 900 18px/1 "Trebuchet MS", Arial, sans-serif; letter-spacing: 0.06em;
+}
+#unoPanel .uno-blurb { margin: 0 0 8px; color: #674029; font: 700 13px/1.35 "Trebuchet MS", Arial, sans-serif; }
+#unoPanel label { display: block; margin-top: 8px; }
+#unoPanel .uno-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+#unoPanel .uno-actions button, #unoJoin {
+  border: 2px solid #34402e; background: #a52e26; color: #fff0cc; font: 800 13px/1 "Trebuchet MS", Arial, sans-serif;
+  padding: 10px 12px; cursor: pointer; border-radius: 4px;
+}
+#unoPanel .uno-actions button.alt, #unoJoin { background: #536044; }
+#unoJoinRow { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+#unoCode {
+  display: block; width: 100%; box-sizing: border-box; margin: 0; min-height: 44px;
+  border: 2px solid #34402e; background: #fff0cc; color: #263d32; padding: 10px 12px;
+  font: 800 18px/1 "Trebuchet MS", Arial, sans-serif; letter-spacing: 0.18em; text-transform: uppercase; border-radius: 4px;
+}
+#unoJoin { width: 100%; margin: 0; }
+#unoMenuErr { min-height: 1.2em; color: #a52e26; font: 700 13px/1.3 "Trebuchet MS", Arial, sans-serif; }
+
+#unoApp { display: none; position: fixed; inset: 0; z-index: 40; background: #e7c48a; }
+#unoApp.on { display: block; }
+#unoApp canvas { width: 100%; height: 100%; display: block; }
+#unoHud { position: absolute; inset: 0; pointer-events: none; }
+#unoHud button, #unoHud input, #unoHud label, #unoHud .box, #unoHud select, #unoLog, #unoSay, #unoVoice, #unoEmotes, #unoColors { pointer-events: auto; }
+#unoScore {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  width: min(760px, 92vw); background: #f6e4bd; border: 3px solid #34402e; border-radius: 8px; padding: 8px 12px; box-shadow: 3px 3px 0 #291e18;
+}
+#unoScore .who { min-width: 78px; text-align: center; }
+#unoScore .who b { display: block; font: 900 22px/1 "Trebuchet MS", Arial, sans-serif; color: #a52e26; }
+#unoScore .who span, #unoScore .who small { display: block; font: 800 11px/1.2 "Trebuchet MS", Arial, sans-serif; color: #674029; }
+#unoScore .who.on { outline: 3px solid #203e35; border-radius: 4px; }
+#unoScore .mid { align-self: center; font: 800 13px/1.3 "Trebuchet MS", Arial, sans-serif; color: #203e35; text-align: center; max-width: 220px; }
+#unoBanner {
+  position: absolute; top: 196px; left: 50%; transform: translateX(-50%); z-index: 6;
+  max-width: min(560px, 78vw); padding: 8px 18px; border: 3px solid #fff0cc; border-radius: 8px;
+  background: #a52e26; color: #fff0cc; text-align: center; pointer-events: none;
+  font: 900 24px/1.2 "Trebuchet MS", Arial, sans-serif;
+}
+#unoBanner:empty { display: none; }
+#unoColors { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); display: none; gap: 8px; }
+#unoColors.on { display: flex; }
+#unoColors button { width: 64px; height: 64px; border: 3px solid #fff0cc; border-radius: 8px; cursor: pointer; font: 800 12px/1 "Trebuchet MS", Arial, sans-serif; color: #fff0cc; }
+#unoColors .r { background: #d32027; }
+#unoColors .y { background: #e2a400; color: #291e18; }
+#unoColors .g { background: #2f8f45; }
+#unoColors .b { background: #2a62c9; }
+#unoActs { position: absolute; right: 16px; top: 34%; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+#unoActs button, #unoTop button, #unoEmotes button, #unoOver button, #unoLobby button {
+  border: 2px solid #291e18; background: #a52e26; color: #fff0cc; font: 800 15px/1 "Trebuchet MS", Arial, sans-serif;
+  padding: 10px 14px; border-radius: 6px; cursor: pointer;
+}
+#unoActs button.alt, #unoTop button, #unoEmotes button { background: #536044; }
+#unoActs button.on { outline: 3px solid #fff0cc; }
+#unoTop { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; }
+#unoChat {
+  position: absolute; left: 16px; bottom: 16px; width: min(320px, 34vw);
+  display: flex; flex-direction: column-reverse; gap: 6px; align-items: stretch; pointer-events: none;
+}
+#unoLog {
+  position: relative; width: 100%; max-height: 180px; overflow: auto; box-sizing: border-box;
+  background: #203e35e6; color: #fff0cc; border-radius: 8px; padding: 8px; font: 600 13px/1.35 "Trebuchet MS", Arial, sans-serif;
+}
+#unoLog:empty { display: none; }
+#unoSay { position: relative; width: 100%; margin: 0; display: flex; }
+#unoSay input {
+  width: 100%; box-sizing: border-box; margin: 0;
+  border: 2px solid #34402e; border-radius: 4px; padding: 6px 8px; font: 700 14px "Trebuchet MS", Arial, sans-serif;
+}
+#unoVoice { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 6px; flex-wrap: wrap; width: 220px; justify-content: flex-end; }
+#unoVoice button.on { outline: 3px solid #fff0cc; }
+#unoEmotes {
+  position: absolute; right: 16px; bottom: 150px; display: none; grid-template-columns: 1fr 1fr; gap: 6px; width: 220px;
+  max-width: calc(100vw - 32px); box-sizing: border-box;
+  background: #f6e4bdf2; border: 3px solid #34402e; border-radius: 8px; padding: 8px;
+}
+#unoEmotes button { width: 100%; padding: 8px 6px; font-size: 13px; }
+#unoEmotes.on { display: grid; }
+#unoLobby, #unoOver {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, 92vw);
+  background: #f6e4bd; border: 4px solid #34402e; border-radius: 10px; padding: 16px; box-shadow: 4px 4px 0 #291e18;
+}
+#unoLobby h2, #unoOver h2 { margin: 0 0 8px; font: 900 22px/1.1 "Trebuchet MS", Arial, sans-serif; color: #a52e26; }
+#unoSetup { display: grid; gap: 8px; margin: 8px 0; }
+#unoSetup label { display: flex; justify-content: space-between; gap: 8px; align-items: center; font: 800 13px "Trebuchet MS", Arial, sans-serif; color: #203e35; }
+#unoSeats { display: grid; gap: 6px; margin: 10px 0; }
+#unoSeats button { text-align: left; background: #fff0cc; color: #203e35; }
+#unoSeats button.me { outline: 3px solid #a52e26; }
+#unoLobby button.alt { background: #536044; }
+#unoHint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; color: #fff0cc; background: #291e18; padding: 6px 12px; border-radius: 6px; font: 700 14px/1.3 "Trebuchet MS", Arial, sans-serif; max-width: 70vw; text-align: center; }
+#unoToast { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: #291e18; color: #fff0cc; padding: 8px 12px; border-radius: 6px; font: 700 14px "Trebuchet MS", Arial, sans-serif; }
+#unoClock { position: absolute; top: 96px; left: 50%; width: 180px; transform: translateX(-50%); height: 6px; background: #674029; border-radius: 3px; overflow: hidden; }
+#unoClock i { display: block; height: 100%; width: 100%; background: #fff0cc; transform-origin: left center; }

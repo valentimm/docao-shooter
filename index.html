@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="hud-death.css">
 <link rel="stylesheet" href="acessorios.css">
 <link rel="stylesheet" href="truco.css">
+<link rel="stylesheet" href="uno.css">
 <link rel="stylesheet" href="arsenal.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
@@ -17,6 +18,7 @@
 
 <div id="hud" class="hidden">
   <div id="crosshair"></div>
+  <div id="reddot" class="hidden"><span class="ring"></span><span class="dot"></span></div>
   <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
   <div id="points"></div>
   <div id="medals"></div>
@@ -24,10 +26,11 @@
   <div id="vignette"></div>
   <div id="eggsplat"><canvas id="eggcanvas" width="480" height="270"></canvas></div>
   <div id="adsvig"></div>
-  <div id="scope" class="hidden"><div class="lens"></div><div class="hair h"></div><div class="hair v"></div><div class="dot"></div></div>
+  <div id="scope" class="hidden"><div class="frost"></div><div class="lens"></div><div class="hair h"></div><div class="hair v"></div><div class="dot"></div></div>
   <div id="topbar">
     <div id="timer">5:00</div>
     <div id="leader"></div>
+    <div id="noclipHud" class="hidden">NOCLIP</div>
     <div id="trainInfo" class="hidden"></div>
   </div>
   <div id="tl"><div id="lb"></div><div id="netbar" class="hidden"><span id="netRoom"></span> · <span id="netPing">-- ms</span><span id="netStatus"></span></div></div>
@@ -47,6 +50,10 @@
     <div class="cls-sheet"><div id="bLoadList" class="cls-list"></div><div id="bLoadGun" class="cls-gun"></div><div id="bLoadArms" class="cls-arms" aria-label="Arsenal"></div></div>
   </div>
   <div id="bPrompt" class="hidden"><div class="bp1"></div><div class="bp2"></div></div>
+  <div id="sPrompt" class="hidden"><div class="bp1"></div><div class="bp2"></div></div>
+  <div id="papMark" class="bmark hidden"><div class="zarrow">▲</div><div class="zlbl"><b>PAPADA</b> <span></span></div></div>
+  <div id="boxMark" class="bmark hidden"><div class="zarrow">▲</div><div class="zlbl"><b>BARRACA</b> <span></span></div></div>
+  <div id="papCard" class="hidden"></div>
   <div id="bombBanner" class="hidden"><div class="b1"></div><div class="b2"></div></div>
   <div id="siteMark0" class="bmark hidden"><div class="zarrow">▲</div><div class="zlbl"><b>A</b> <span></span></div></div>
   <div id="siteMark1" class="bmark hidden"><div class="zarrow">▲</div><div class="zlbl"><b>B</b> <span></span></div></div>
@@ -57,7 +64,7 @@
   <div id="killfeed"></div>
   <div id="centermsg"></div>
   <!-- Modo Invasão 🎃 -->
-  <div id="invhud" class="hidden"><b id="invWaveN">WAVE 1/20</b><small id="invWaveSub"></small><div id="invLives" title="vidas"></div></div>
+  <div id="invhud" class="hidden"><b id="invWaveN">WAVE 1/20</b><small id="invWaveSub"></small><b id="survPts" class="hidden">0 pts</b><div id="invLives" title="vidas"></div></div>
   <div id="invBoss" class="hidden"><span>🎃 DOCÃO ABÓBORA</span><div class="ibar"><i id="invBossFill"></i></div></div>
   <div id="invBanner" class="hidden"></div>
   <div id="invPowers" class="hidden"><div id="invSlots"></div><div class="ikeys"><kbd>G</kbd> usa · <kbd>X</kbd> troca</div></div>
@@ -104,24 +111,29 @@
   </div>
   <div id="powermeter" class="hidden"><div id="powertext">Força do arremesso</div><div id="powerbar"><div id="powerfill"></div></div></div>
     <div id="deathpick" class="cls-screen hidden">
-      <header class="cls-top">
-        <div class="cls-clockbox">
-          <p id="deathGunHint" class="death-gun-hint hidden">B — armas</p>
-          <div id="classClock" class="cls-clock" aria-hidden="true"><span id="classClockTxt">Renasce em 5,0s</span><i id="classClockBar"></i></div>
+      <div class="death-frame">
+        <aside class="death-side">
+          <p class="death-kicker">Classes</p>
+          <div id="deathList" class="cls-list" role="listbox" aria-label="Classes"></div>
+        </aside>
+        <div class="death-main">
+          <header class="death-top">
+            <div class="death-headline">
+              <h2 id="deathWho">Você foi pururucado</h2>
+              <p id="deathSub"></p>
+            </div>
+            <div class="death-actions">
+              <button type="button" id="deathArmsBtn" aria-expanded="false" aria-controls="deathBoard"><b>Armas</b><kbd>B</kbd></button>
+              <button type="button" id="respawnBtn" disabled><i id="respawnFill" aria-hidden="true"></i><span><b>Nascer em 5,0s</b><small>Espaço</small></span></button>
+            </div>
+          </header>
+          <div class="death-panels" id="deathBoard">
+            <div class="death-gunpanel">
+              <div id="classGun" class="cls-gun"></div>
+            </div>
+            <div id="deathArms" class="death-arms" aria-label="Arsenal"></div>
+          </div>
         </div>
-        <div class="cls-headline">
-          <h2 id="deathWho">Você foi pururucado</h2>
-          <p>1–5 a classe · o arsenal grava a arma nela · U volta na última</p>
-        </div>
-      </header>
-      <div class="cls-pig" aria-hidden="true"></div>
-      <div class="cls-sheet">
-        <div id="deathList" class="cls-list" role="listbox" aria-label="Classes"></div>
-        <div class="cls-main">
-          <div id="classGun" class="cls-gun"></div>
-          <button id="respawnBtn" disabled><b>Nascer em 5,0s</b><small>Espaço</small></button>
-        </div>
-        <div id="deathArms" class="cls-arms" aria-label="Arsenal"></div>
       </div>
     </div>
   <div id="tabboard" class="board hidden"></div>
@@ -156,6 +168,7 @@
       <div id="gameSwitch" role="tablist" aria-label="Jogo">
         <button type="button" id="modeShoot" class="on">Tiroteio</button>
         <button type="button" id="modeTruco">Truco</button>
+        <button type="button" id="modeUno">UNO</button>
       </div>
       <section id="menu-match" aria-label="Preparar partida" tabindex="0">
         <div class="section-heading"><span class="ticket-stamp" aria-hidden="true"><svg viewBox="0 0 96 96">
@@ -183,7 +196,13 @@
       <button id="mapBtn" class="mapcard current" title="Escolher mapa"><span class="thumb"></span><span class="mtxt"><b id="mapName">Arena da Fazendinha</b><small id="mapDesc"></small></span><span class="mchange">↻ TROCAR</span></button>
     </div>
     <div class="row match-options">
-      <label><span class="field-caption">Modo de jogo</span><select id="modeSel"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="explore">Exploração</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option></select></label>
+      <label><span class="field-caption">Modo de jogo</span><select id="modeSel"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="explore">Exploração</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="hide">Docão Escondido · estilo Prop Hunt (protótipo, offline)</option></select></label>
+      <label id="survLabel" class="hidden"><span class="field-caption">Variante</span>
+        <select aria-label="Variante da Invasão" id="survSel">
+          <option value="padrao" selected>Clássica</option>
+          <option value="survival">Survival</option>
+        </select>
+      </label>
       <label><span class="field-caption">Bots</span>
         <select aria-label="Bots" id="botCount"><option>4</option><option selected>5</option><option>6</option></select>
       </label>
@@ -198,6 +217,7 @@
       </label>
     </div>
     <p id="botDiffNote" class="diffnote">Ceva: o Docão de sempre. A mira, a reação e o jeito de jogar mudam — a vida não.</p>
+    <p id="survNote" class="diffnote hidden">Padrão: o loadout de sempre, sem loja na partida.</p>
     <div id="menuTrain" class="trainnote hidden">Treino: abre sempre no <b>Estande do Docão</b>. Os alvos não atacam e voltam em 2 s · B/N/M trocam a arma na hora · munição infinita · sem tempo.</div>
     <div id="menuTeam" class="teampick hidden"><div class="label2">Seu time</div><div class="teamrow" id="menuTeamBtns"></div></div>
         <section id="trucoPanel" hidden aria-label="Truco Paulista">
@@ -211,6 +231,25 @@
           </div>
           <div id="trucoJoinRow"><input id="trucoCode" maxlength="4" placeholder="CÓDIGO" autocomplete="off" spellcheck="false"><button type="button" id="trucoJoin">Entrar</button></div>
           <p id="trucoMenuErr"></p>
+        </section>
+        <section id="unoPanel" hidden aria-label="UNO">
+          <div class="uno-cover" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i><i class="b"></i><b>UNO DO DOCÃO</b></div>
+          <p class="uno-blurb">7 cartas. +2 empilha em +2, +4 empilha em +4. Grita UNO com uma carta na mão.</p>
+          <label><span class="field-caption">Pessoas</span>
+            <select id="unoSeatsSel"><option value="2">2 pessoas</option><option value="4" selected>4 pessoas</option><option value="6">6 pessoas</option></select>
+          </label>
+          <label><span class="field-caption">Nível</span>
+            <select id="unoLevelSel"><option value="facil">Facinho</option><option value="medio" selected>Médio</option><option value="pro">Docão Profissional</option></select>
+          </label>
+          <label><span class="field-caption">Meta</span>
+            <select id="unoTargetSel"><option value="200">200 pontos</option><option value="500" selected>500 pontos</option></select>
+          </label>
+          <div class="uno-actions">
+            <button type="button" id="unoBots">Jogar com bots</button>
+            <button type="button" id="unoCreate" class="alt">Criar sala</button>
+          </div>
+          <div id="unoJoinRow"><input id="unoCode" maxlength="4" placeholder="CÓDIGO" autocomplete="off" spellcheck="false"><button type="button" id="unoJoin">Entrar</button></div>
+          <p id="unoMenuErr"></p>
         </section>
       </section>
       <section id="menu-arsenal" aria-label="Arsenal" tabindex="0" hidden>
@@ -238,8 +277,10 @@
         </div>
       </section>
       <section id="menu-operator" aria-label="Visual do personagem" tabindex="0" hidden>
-        <div class="section-heading"><span>VESTIDO PRA CONFUSÃO</span><h2>Seu Docão, seu estilo</h2><p>Escolha seu figurino e confira o Docão.</p></div>
+        <div class="section-heading"><span>VESTIDO PRA CONFUSÃO</span><h2>Seu Docão, seu estilo</h2><p>Escolha uma skin pronta ou monte com o que já está na mochila. Comprar continua no Brechó.</p></div>
     <div class="skinpick">
+      <div id="wardrobeOwned"></div>
+      <p id="wardrobeOwnedMsg" class="wardrobe-note" role="status"></p>
       <div class="label2">Skin do Docão <span id="skinIdx"></span></div>
       <div class="skinrow"><button id="skinPrev" class="arrow">◀</button><div id="skinName">Clássico</div><button id="skinNext" class="arrow">▶</button></div>
       <div id="skinList"></div>
@@ -259,6 +300,7 @@
     <div class="controls">
       <b>Controles</b>
       <div>WASD mover · Mouse mirar · Espaço pular · Segurar Shift: agachar · Botão direito: mirar/zoom (com a faca: estocada)</div>
+      <div>Exploração: N liga e desliga o noclip. WASD segue a mira, atravessa parede e não cai. Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Nos outros modos o N não faz nada.</div>
       <div>Clique atirar · R recarregar · 1 primária / 2 pistola / 3 faca (ou rodinha) · V faca rápida · I inspecionar · B dança (sem atirar até acabar)</div>
       <div>Na morte, na Bomba e entre waves a lista de classes abre na tela cheia. Na pausa, Trocar classe abre a mesma lista. 1–5 escolhe, W/S ou setas andam, U volta pra última, Espaço nasce</div>
       <div>Tampa do Tacho: clique dá a porrada · botão direito investe · no celular, um dedo golpeia e dois dedos investem</div>
@@ -331,9 +373,10 @@
     <div class="otabs"><button id="tabCreate" class="otab active">Criar sala</button><button id="tabJoin" class="otab">Entrar na sala</button></div>
     <div id="paneCreate">
       <label>Mapa<select id="roomMap"></select></label>
-      <label>Modo<select id="roomMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option></select></label>
+      <label>Modo<select id="roomMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option></select></label>
+      <label id="roomSurvLabel" class="hidden">Variante<select id="roomSurv" aria-label="Variante da Invasão"><option value="padrao" selected>Clássica</option><option value="survival">Survival</option></select></label>
       <div class="row">
-        <label>Máx. jogadores<select id="roomMax"><option>2</option><option>3</option><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+        <label>Máx. jogadores<select id="roomMax"><option>2</option><option>3</option><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option><option>29</option><option>30</option></select></label>
         <label>Completar com bots<select id="roomBots"><option value="1" selected>Sim</option><option value="0">Não</option></select></label>
         <label>Dificuldade<select id="roomDiff" aria-label="Dificuldade dos bots da sala"><option value="leitao">Leitão · fácil</option><option value="ceva" selected>Ceva · normal</option><option value="javali">Javali · difícil</option><option value="cachaco">Cachaço · pesadelo</option></select></label>
         <label>Tempo<select id="roomTime"><option value="0">Padrão</option><option value="3">3 min</option><option value="5">5 min</option><option value="7">7 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option></select></label>
@@ -391,14 +434,31 @@
         <div id="closetWallet" class="closet-wallet"></div>
       </div>
       <div class="closet-right">
-        <div class="otabs"><button type="button" id="closetTabLook" class="otab active">Personalizar</button><button type="button" id="closetTabShop" class="otab">Loja</button><button type="button" id="closetTabChal" class="otab">🎯 Desafios</button></div>
+        <div class="otabs"><button type="button" id="closetTabLook" class="otab active">Personalizar</button><button type="button" id="closetTabShop" class="otab">Loja</button><button type="button" id="closetTabBox" class="otab">🌽 Caixote</button><button type="button" id="closetTabChal" class="otab">🎯 Desafios</button></div>
         <div id="closetLook"></div>
         <div id="closetShop" class="hidden"></div>
+        <div id="closetBox" class="hidden"></div>
         <div id="closetChal" class="hidden"></div>
         <div id="closetMsg" class="acct-err" role="status"></div>
       </div>
     </div>
     <button type="button" id="closetClose" class="ticket-btn ghost">VOLTAR</button>
+  </div>
+  <div id="closetReveal" class="closet-ask hidden" role="dialog" aria-modal="true" aria-labelledby="closetLootKicker">
+    <div class="loot-show" id="closetLootShow">
+      <div class="loot-fx" aria-hidden="true"><div class="loot-rays"></div></div>
+      <p class="loot-kicker" id="closetLootKicker" aria-live="polite"></p>
+      <div class="loot-window">
+        <div class="loot-marker" id="closetLootMarker" aria-hidden="true"></div>
+        <div class="loot-track" id="closetLootTrack" aria-hidden="true"></div>
+      </div>
+      <div class="loot-sparks" id="closetLootSparks" aria-hidden="true"></div>
+      <p id="closetRevealText"></p>
+      <div class="closet-ask-acts hidden" id="closetRevealActs">
+        <button type="button" id="closetRevealOk">FECHAR</button>
+        <button type="button" id="closetRevealEquip">EQUIPAR</button>
+      </div>
+    </div>
   </div>
   <div id="closetBuyAsk" class="closet-ask hidden" role="dialog" aria-modal="true" aria-labelledby="closetBuyAskText">
     <div class="closet-ask-card">
@@ -466,10 +526,11 @@
     <div id="hostCtl">
       <div class="row">
         <label>Mapa<select id="lobbyMap"></select></label>
-        <label>Máx.<select id="lobbyMax"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+        <label>Máx.<select id="lobbyMax"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option><option>29</option><option>30</option></select></label>
         <label>Bots<select id="lobbyBots"><option value="1">Sim</option><option value="0">Não</option></select></label>
         <label>Dificuldade<select id="lobbyDiff" aria-label="Dificuldade dos bots da sala"><option value="leitao">Leitão · fácil</option><option value="ceva">Ceva · normal</option><option value="javali">Javali · difícil</option><option value="cachaco">Cachaço · pesadelo</option></select></label>
         <label>Modo<select id="lobbyMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação</option><option value="treino">Treino (Estande)</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba (protótipo)</option></select></label>
+        <label id="lobbySurvLabel" class="hidden">Variante<select id="lobbySurv" aria-label="Variante da Invasão na sala"><option value="padrao">Clássica</option><option value="survival">Survival</option></select></label>
         <label>Tempo<select id="lobbyTime"><option value="0">Padrão</option><option value="3">3 min</option><option value="5">5 min</option><option value="7">7 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option></select></label>
         <label>Chat<select id="lobbyChatOn"><option value="1">Sim</option><option value="0">Não</option></select></label>
       </div>
@@ -483,41 +544,73 @@
 </div>
 
 <div id="pause" class="overlay hidden">
-  <div class="panel small">
-    <h2>Pausa na chapa</h2>
-    <label class="checkline nade-voice-hl" id="pauseNadeVoice"><input type="checkbox" data-nade-voice checked> <span>🔊 Vozes da granada <small>(&quot;granada!&quot; e &quot;banana!&quot;) · tecla H</small></span></label>
-    <label class="checkline"><input type="checkbox" data-reduced-anim> Animações reduzidas</label>
-    <div class="invite hidden" id="pauseInvite">
-      <input class="invite-link" readonly>
-      <div class="invite-btns">
-        <button type="button" class="small" data-act="link">Copiar link</button>
-        <button type="button" class="small" data-act="code">Copiar código</button>
-        <button type="button" class="small" data-act="wa">WhatsApp</button>
-        <button type="button" class="small" data-act="tg">Telegram</button>
-        <button type="button" class="small" data-act="slack">Slack</button>
-        <button type="button" class="small hidden" data-act="native">Compartilhar</button>
+  <div class="panel small pause-board">
+    <aside class="pause-side">
+      <p class="pause-kicker">Pausa</p>
+      <h2>Pausa na chapa</h2>
+      <nav class="pause-nav" id="pauseNav" aria-label="Ações da pausa">
+        <button type="button" id="resumeBtn" class="pause-act is-focus" data-pause-act>Continuar</button>
+        <button type="button" id="pauseClassBtn" class="pause-act hidden" data-pause-act>Trocar classe</button>
+        <button type="button" id="pauseOptBtn" class="pause-act" data-pause-act>Opções</button>
+        <div id="pauseClasses" class="pause-classes">
+          <p class="pause-kicker">Classes</p>
+          <div id="pauseGuns" class="pause-class-list"></div>
+        </div>
+        <button type="button" id="quitBtn" class="pause-act pause-act-danger" data-pause-act>Sair pro menu</button>
+      </nav>
+    </aside>
+    <section class="pause-options" id="pauseOptions" aria-label="Opções">
+      <h3>Opções da chapa</h3>
+      <label class="checkline nade-voice-hl" id="pauseNadeVoice"><input type="checkbox" data-nade-voice checked> <span>🔊 Vozes da granada <small>(&quot;granada!&quot; e &quot;banana!&quot;) · tecla H</small></span></label>
+      <label class="checkline"><input type="checkbox" data-reduced-anim> Animações reduzidas</label>
+      <label class="checkline"><input type="checkbox" data-chat-toggle checked> Mostrar chat</label>
+      <div class="invite hidden" id="pauseInvite">
+        <input class="invite-link" readonly>
+        <div class="invite-btns">
+          <button type="button" class="small" data-act="link">Copiar link</button>
+          <button type="button" class="small" data-act="code">Copiar código</button>
+          <button type="button" class="small" data-act="wa">WhatsApp</button>
+          <button type="button" class="small" data-act="tg">Telegram</button>
+          <button type="button" class="small" data-act="slack">Slack</button>
+          <button type="button" class="small hidden" data-act="native">Compartilhar</button>
+        </div>
+        <div class="invite-toast" data-toast></div>
       </div>
-      <div class="invite-toast" data-toast></div>
-    </div>
-    <label class="checkline"><input type="checkbox" data-chat-toggle checked> Mostrar chat</label>
-    <div class="voicebox hidden" data-voicebox id="pauseVoice">
-      <button type="button" class="small" data-voice="off">Mudo</button>
-      <button type="button" class="small" data-voice="all">Todos</button>
-      <button type="button" class="small" data-voice="team">Time</button>
-      <button type="button" class="small" data-mic="hold">Apertar</button>
-      <button type="button" class="small" data-mic="open">Aberto</button>
-      <span class="voicehint">J troca a voz · segure K para falar</span>
-    </div>
-    <section id="pauseLoadout" aria-label="Trocar equipamento">
-      <p class="pause-note" id="pauseClassNote">A classe escolhida entra na próxima vida. Não derruba.</p>
-      <button type="button" id="pauseClassBtn">TROCAR CLASSE</button>
+      <div class="voicebox hidden" data-voicebox id="pauseVoice">
+        <button type="button" class="small" data-voice="off">Mudo</button>
+        <button type="button" class="small" data-voice="all">Todos</button>
+        <button type="button" class="small" data-voice="team">Time</button>
+        <button type="button" class="small" data-mic="hold">Apertar</button>
+        <button type="button" class="small" data-mic="open">Aberto</button>
+        <span class="voicehint">J troca a voz · segure K para falar</span>
+      </div>
+      <section id="pauseLoadout" aria-label="Trocar equipamento">
+        <p class="pause-note" id="pauseClassNote">A classe escolhida entra na próxima vida. Não derruba.</p>
+      </section>
+      <section id="pauseDance" aria-label="Dança da vitória">
+        <p class="pause-note">Dança da vitória</p>
+        <div class="dance-picks" id="pauseDancePicks"></div>
+      </section>
     </section>
-    <section id="pauseDance" aria-label="Dança da vitória">
-      <p class="pause-note">Dança da vitória</p>
-      <div class="dance-picks" id="pauseDancePicks"></div>
-    </section>
-    <button id="resumeBtn">CONTINUAR</button>
-    <button id="quitBtn" class="secondary">SAIR PRO MENU</button>
+    <aside class="pause-brief" id="pauseBrief" aria-label="Partida">
+      <p class="pause-kicker">Agora</p>
+      <h3>A partida</h3>
+      <p class="pause-obj" id="pauseObjective">Primeiro a 20 abates.</p>
+      <dl class="pause-facts">
+        <div><dt>Modo</dt><dd id="pauseMode">Mata-mata</dd></div>
+        <div><dt>Mapa</dt><dd id="pauseMap">—</dd></div>
+        <div><dt>Tempo</dt><dd id="pauseTime">—</dd></div>
+        <div><dt>Você</dt><dd id="pauseKd">—</dd></div>
+        <div><dt>Placar</dt><dd id="pauseScore">—</dd></div>
+      </dl>
+    </aside>
+    <div id="pauseLoadoutView" class="pause-loadout hidden">
+      <div class="pause-loadout-gun">
+        <button type="button" id="pauseLoadoutBack" class="pause-back">← A partida</button>
+        <div id="pauseGun" class="cls-gun"></div>
+      </div>
+      <div id="pauseArms" class="pause-arms" aria-label="Arsenal"></div>
+    </div>
   </div>
 </div>
 
@@ -530,7 +623,6 @@
     </div>
   </header>
   <div class="cls-pig" aria-hidden="true"></div>
-  <div class="cls-sheet"><div id="pauseGuns" class="cls-list"></div><div id="pauseGun" class="cls-gun"></div><div id="pauseArms" class="cls-arms" aria-label="Arsenal"></div></div>
 </div>
 
 <div id="matchResult" class="hidden" role="status" aria-live="polite">
@@ -595,7 +687,54 @@
     </div>
   </div>
 </div>
+<div id="unoApp" aria-label="Mesa de UNO">
+  <canvas id="unoCanvas"></canvas>
+  <div id="unoHud">
+    <div id="unoScore"></div>
+    <div id="unoBanner"></div>
+    <div id="unoClock"><i></i></div>
+    <div id="unoColors"></div>
+    <div id="unoActs"></div>
+    <p id="unoHint"></p>
+    <div id="unoTop"><button type="button" id="unoEmoteBtn">Sinais</button><button type="button" id="unoLeave">Sair</button></div>
+    <div id="unoChat">
+      <div id="unoLog" class="chatlog" data-chat="keep"></div>
+      <form id="unoSay"><input id="unoSayInput" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Mensagem da mesa"></form>
+    </div>
+    <div id="unoVoice" class="voicebox" data-voicebox>
+      <button type="button" class="small" data-voice="off">Mudo</button>
+      <button type="button" class="small" data-voice="all">Mesa</button>
+      <button type="button" class="small" data-mic="hold">Apertar</button>
+      <button type="button" class="small" data-mic="open">Aberto</button>
+    </div>
+    <div id="unoEmotes"></div>
+    <div id="unoToast" style="display:none"></div>
+    <div id="unoLobby" class="box" style="display:none">
+      <h2>Mesa de UNO</h2>
+      <p id="unoLobbyCode"></p>
+      <div id="unoSetup">
+        <label>Pessoas
+          <select id="unoLobbySeats"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option></select>
+        </label>
+        <label>Nível
+          <select id="unoLobbyLevel"><option value="facil">Facinho</option><option value="medio" selected>Médio</option><option value="pro">Docão Profissional</option></select>
+        </label>
+        <label>Meta
+          <select id="unoLobbyTarget"><option value="200">200</option><option value="500" selected>500</option></select>
+        </label>
+      </div>
+      <div id="unoSeats"></div>
+      <label><input type="checkbox" id="unoFill" checked> Completar com bots</label>
+      <div><button type="button" id="unoStart">Iniciar partida</button><button type="button" id="unoCopy" class="alt">Copiar link</button></div>
+    </div>
+    <div id="unoOver" class="box" style="display:none">
+      <h2 id="unoOverTitle">Fim de jogo</h2>
+      <button type="button" id="unoAgain">Jogar de novo</button>
+    </div>
+  </div>
+</div>
 <script type="module" src="main.js"></script>
 <script type="module" src="truco.js"></script>
+<script type="module" src="uno.js"></script>
 </body>
 </html>

@@ -249,13 +249,15 @@ button.clsrow:active{transform:none}
 #hud #deathpick.cls-screen #respawnBtn.ready:hover{background:#d4473a;color:#fff6e8;-webkit-text-fill-color:#fff6e8;animation:none}
 #hud #deathpick.cls-screen #respawnBtn:disabled,
 #hud #deathpick.cls-screen #respawnBtn:disabled:hover{background:#c4372f;color:#fff6e8;-webkit-text-fill-color:#fff6e8;cursor:not-allowed;animation:none;transform:none}
-#pause #pauseClassBtn{
-  width:100%;min-height:48px;margin:0 0 4px;padding:10px 8px;border-radius:6px;
-  background:#a52e26;color:#fff0cc;border:2px solid #34402e;
-  box-shadow:inset 0 2px #e76a45,0 3px #6a2d20;
-  font:900 16px/1.1 "Arial Black",Impact,sans-serif;letter-spacing:.4px
+#pause .pause-nav #pauseClassBtn{
+  width:100%;min-height:48px;margin:0;padding:12px 16px 12px 18px;border:0;border-radius:2px;
+  background:transparent;color:#f3e2c0;box-shadow:none;
+  font:800 22px/1.15 var(--font);letter-spacing:.2px;text-align:left
 }
-#pause #pauseClassBtn:hover{background:#be3b2d}
+#pause .pause-nav #pauseClassBtn:hover,
+#pause .pause-nav #pauseClassBtn.is-focus{
+  background:linear-gradient(90deg,#a52e26 0%,#a52e26 88%,rgba(165,46,38,0) 100%);color:#fff6e4
+}
 #pauseClass #pauseGuns{max-height:none;overflow:visible}
 #lobbyClasses{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
 .cls-list .wthumb,#deathList .wthumb,#pauseGuns.cls-list .wthumb,#bLoadList .wthumb,#iLoadList .wthumb{
@@ -339,11 +341,12 @@ button.clsrow:active{transform:none}
 #pause.overlay{z-index:90}
 #pauseClass.cls-screen{z-index:100}
 body.dead #stamp,body.dead #killfeed,body.dead #centermsg,body.dead #streakBar,body.dead #streakCount,
+body.deadgray #streakBar,body.deadgray #streakCount,body.killcam #streakBar,body.killcam #streakCount,
 body.dead #topbar,body.dead #score,body.dead #tl,body.dead #socialHud,body.dead #bottomleft,body.dead #bottomright,
-body.dead #medals,body.dead #points,body.dead #crosshair,body.dead #domhud,body.dead #bombhud,body.dead #inspect,
+body.dead #medals,body.dead #points,body.dead #crosshair,body.dead #reddot,body.dead #domhud,body.dead #bombhud,body.dead #inspect,
 body.cls-on #stamp,body.cls-on #killfeed,body.cls-on #centermsg,body.cls-on #streakBar,body.cls-on #streakCount,
 body.cls-on #topbar,body.cls-on #score,body.cls-on #tl,body.cls-on #socialHud,body.cls-on #bottomleft,body.cls-on #bottomright,
-body.cls-on #medals,body.cls-on #points,body.cls-on #crosshair,body.cls-on #domhud,body.cls-on #bombhud,
+body.cls-on #medals,body.cls-on #points,body.cls-on #crosshair,body.cls-on #reddot,body.cls-on #domhud,body.cls-on #bombhud,
 body.cls-on #bombBanner,body.cls-on #bPrompt,body.cls-on #invhud,body.cls-on #invBanner,body.cls-on #invBoss,
 body.cls-on #invPowers,body.cls-on #inspect,body.bombpick #bombBanner,body.invpick #invBanner{
   display:none!important
@@ -380,46 +383,261 @@ body.cls-on #invPowers,body.cls-on #inspect,body.bombpick #bombBanner,body.invpi
   #hud #deathpick.cls-screen #respawnBtn small{white-space:normal}
 }
 
-/* Kill cam: a ficha de armas é tela cheia e tapava quem matou.
-   No canto ficam só o nome de quem matou e o Renascer. Placar e chat não entram aqui. */
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick.cls-screen{
-  position:fixed !important;inset:auto !important;left:auto !important;right:12px !important;top:auto !important;bottom:12px !important;
-  transform:none !important;width:max-content !important;max-width:min(340px,92vw) !important;height:auto !important;max-height:none !important;
-  margin:0 !important;padding:0 !important;background:transparent !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;
-  opacity:1 !important;overflow:visible !important;z-index:8 !important;pointer-events:none !important;display:flex !important;text-align:right !important
+/* Tela de morte no mesmo papel da pausa: faixa escura, prancheta creme, arsenal em abas.
+   Na kill cam só ficam o nome de quem matou e dois botões no canto. */
+#hud #deathpick.cls-screen{
+  inset:0;padding:0 !important;overflow:hidden;color:#fff0cc;text-align:left;
+  background:rgba(16,10,8,.42);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+  font-family:var(--font)
 }
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-pig,
+body.dead #game{filter:blur(7px) grayscale(.35) brightness(.58) saturate(.9)}
+#hud #deathpick .death-frame{
+  display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);
+  width:100%;height:100%;min-height:0;flex:1
+}
+#hud #deathpick .death-side{
+  display:flex;flex-direction:column;min-height:0;padding:28px 18px 22px 26px;
+  background:linear-gradient(180deg,rgba(36,24,18,.94),rgba(22,14,11,.9));
+  border-right:3px solid #6b4a32;box-shadow:10px 0 28px rgba(0,0,0,.35);color:#fff0cc
+}
+#hud #deathpick .death-kicker{
+  margin:0 0 12px;font:800 12px/1 var(--font);letter-spacing:2.4px;text-transform:uppercase;color:#e7b15a
+}
+#hud #deathpick .death-side .cls-list{flex:1;min-height:0;overflow:auto;gap:4px;scrollbar-width:thin;scrollbar-color:#8e7855 transparent}
+#hud #deathpick.cls-screen .death-side button.clsrow,
+#hud #deathpick.cls-screen .death-side button.clsrow:hover,
+#hud #deathpick.cls-screen .death-side button.clsrow:focus,
+#hud #deathpick.cls-screen .death-side button.clsrow:active{
+  min-height:48px;padding:4px 8px;background:transparent;color:#f3e2c0;
+  border:0;border-radius:2px;box-shadow:none;font:800 15px/1.15 var(--font);transition:background .15s ease,color .15s ease
+}
+#hud #deathpick.cls-screen .death-side button.clsrow:hover,
+#hud #deathpick.cls-screen .death-side button.clsrow:focus-visible{
+  background:rgba(165,46,38,.55);color:#fff6e4
+}
+#hud #deathpick.cls-screen .death-side button.clsrow.on,
+#hud #deathpick.cls-screen .death-side button.clsrow.on:hover,
+#hud #deathpick.cls-screen .death-side button.clsrow.on:focus{
+  background:linear-gradient(90deg,#a52e26,rgba(165,46,38,0));color:#fff6e4;
+  border-color:transparent;box-shadow:none
+}
+#hud #deathpick .death-side .clsmeta small{color:#e7b15a}
+#hud #deathpick.cls-screen .death-side .cls-list .wthumb{width:52px;height:30px}
+#hud #deathpick .death-side .clsmeta b{color:#fff6e4}
+#hud #deathpick .death-side .clsrow kbd{width:24px;height:24px;font-size:14px;background:#2a1c16;color:#ffe3a5}
+#hud #deathpick .death-side .clslast{background:#e7b15a;color:#2a1c16}
+#hud #deathpick .death-main{
+  display:flex;flex-direction:column;min-width:0;min-height:0;padding:22px 28px 18px 18px
+}
+#hud #deathpick .death-top{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex:none;margin:0 0 14px
+}
+#hud #deathpick .death-headline{min-width:0}
+#hud #deathpick .death-headline h2{
+  margin:0;color:#fff0cc;text-align:left;text-shadow:0 2px 0 #1a100c;
+  font:900 clamp(22px,2.2vw,32px)/1.05 var(--font);letter-spacing:.3px
+}
+#hud #deathpick #deathSub{margin:4px 0 0;color:#e7b15a;font:700 13px/1.3 var(--font)}
+#hud #deathpick #deathSub:empty{display:none}
+#hud #deathpick .death-actions{display:flex;align-items:stretch;gap:10px;flex:none}
+#hud #deathpick .death-panels{
+  display:grid;grid-template-columns:minmax(420px,.85fr) minmax(520px,1.15fr);
+  gap:16px;flex:1;min-height:0
+}
+@media (max-width:1360px){
+  #hud #deathpick .arm-tab{font-size:11px;padding:6px 5px}
+}
+#hud #deathpick .death-gunpanel,
+#hud #deathpick .death-arms{
+  min-height:0;overflow:auto;padding:18px 18px 16px;
+  background:#f6e4bd url('./assets/menu/clipboard-wood.svg') center top/100% auto repeat-y;
+  border:3px solid #5c4632;border-radius:2px;box-shadow:6px 8px 0 rgba(41,30,24,.35);color:#203e35;
+  scrollbar-width:thin;scrollbar-color:#8e7855 transparent
+}
+#hud #deathpick .death-arms{display:flex;flex-direction:column}
+#hud #deathpick .death-gunpanel .gs-head b{font:900 32px/1.05 var(--font);color:#203e35}
+#hud #deathpick .death-gunpanel .gs-head small{color:#8a5a32;font:800 13px/1.3 var(--font)}
+#hud #deathpick .death-gunpanel .gs-stage{min-height:200px}
+#hud #deathpick.cls-screen .death-gunpanel .gs-stage .wthumb.is-big{
+  height:188px;min-height:160px;background-color:#efe0c0;border-radius:6px;box-shadow:none
+}
+#hud #deathpick .death-gunpanel .gs-slot{background:#fff6e4;color:#203e35;border-color:#8a5a32}
+#hud #deathpick .death-gunpanel .gs-slot small{color:#a52e26}
+#hud #deathpick .death-gunpanel .gbar{grid-template-columns:108px minmax(0,1fr) auto;color:#34402e}
+#hud #deathpick .death-gunpanel .gbar>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hud #deathpick .death-gunpanel .gs-hint{color:#34402e;max-width:62ch}
+#hud #deathpick .death-gunpanel .gbar b,
+#hud #deathpick .death-gunpanel .gs-side-card small{color:#8a5a32}
+#hud #deathpick .death-gunpanel .gs-side-card{background:#fff6e4;border-color:#c9b48a;color:#203e35}
+#hud #deathpick .death-gunpanel .gs-side-card em{color:#674029}
+#hud #deathpick .death-gunpanel .gtrack{background:#e4d3ae}
+#hud #deathpick .death-gunpanel .gtrack i{background:#a52e26}
+#hud #deathpick .death-gunpanel .gtrack em{background:#fff}
+#hud #deathpick .arm-tabs{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 10px}
+#hud #deathpick .arm-tab{
+  flex:1 1 auto;width:auto;min-width:max-content;margin:0;padding:7px 8px;background:#efe0c0;color:#34402e;
+  border:2px solid #5c4632;border-radius:3px;box-shadow:none;font:800 12px/1 var(--font);cursor:pointer;
+  text-align:center;white-space:nowrap;transition:background .15s ease,color .15s ease
+}
+#hud #deathpick .arm-tab:hover{background:#fff6e4}
+#hud #deathpick .arm-tab.on,#hud #deathpick .arm-tab.on:hover{background:#a52e26;color:#fff0cc;border-color:#2a1410}
+#hud #deathpick .arm-tab:active{transform:none;box-shadow:none}
+#hud #deathpick .arm-list{display:flex;flex-direction:column;gap:4px}
+#hud #deathpick .death-arms button.primchip,
+#hud #deathpick.cls-screen .death-arms button.primchip{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:40px;margin:0;padding:4px 8px;
+  background:#fff6e4;color:#203e35;border:2px solid transparent;border-radius:3px;box-shadow:none;
+  text-align:left;font:800 14px/1.2 var(--font);cursor:pointer;
+  transition:background .15s ease,color .15s ease,border-color .15s ease
+}
+#hud #deathpick .death-arms button.primchip:hover,
+#hud #deathpick.cls-screen .death-arms button.primchip:hover{background:#fffaf0}
+#hud #deathpick .death-arms button.primchip.active,
+#hud #deathpick .death-arms button.primchip.active:hover,
+#hud #deathpick.cls-screen .death-arms button.primchip.active,
+#hud #deathpick.cls-screen .death-arms button.primchip.active:hover{
+  background:#a52e26;color:#fff0cc;border-color:#2a1410;box-shadow:none
+}
+#hud #deathpick .death-arms button.primchip:active{transform:none}
+#hud #deathpick .death-arms button.primchip .wthumb{
+  width:64px;height:32px;background-color:#efe0c0;background-size:contain;background-repeat:no-repeat;background-position:center;box-shadow:none
+}
+#hud #deathpick .death-arms .cls-arms-empty{margin:0;color:#674029}
+#hud #deathpick #deathArmsBtn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:auto;min-width:132px;min-height:64px;margin:0;padding:8px 16px;
+  background:#f6e4bd;color:#203e35;border:3px solid #34402e;border-radius:4px;
+  box-shadow:3px 4px 0 #291e18;font:800 18px/1 var(--font);cursor:pointer;
+  transition:background .15s ease,transform .12s ease,box-shadow .12s ease
+}
+#hud #deathpick #deathArmsBtn b{font:inherit}
+#hud #deathpick #deathArmsBtn kbd{
+  display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;
+  background:#203e35;color:#fff0cc;border-radius:3px;font:800 12px/1 var(--font)
+}
+#hud #deathpick #deathArmsBtn:hover{background:#fff6e4}
+#hud #deathpick #deathArmsBtn:active{transform:translateY(2px);box-shadow:2px 2px 0 #291e18}
+#hud #deathpick #deathArmsBtn.is-open{
+  min-width:0;min-height:48px;padding:8px 4px;background:transparent;color:#f3e2c0;
+  border-color:transparent;box-shadow:none
+}
+#hud #deathpick #deathArmsBtn.is-open:hover{background:transparent;color:#fff6e4}
+#hud #deathpick #deathArmsBtn.is-open:active{transform:none;box-shadow:none}
+#hud #deathpick.cls-screen #respawnBtn{
+  position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  width:auto;min-width:230px;min-height:64px;margin:0;padding:8px 18px;
+  background:#3c4934;color:#fff0cc;-webkit-text-fill-color:#fff0cc;
+  border:3px solid #2c3828;border-radius:4px;box-shadow:3px 4px 0 #291e18;
+  text-align:center;letter-spacing:0;cursor:not-allowed;animation:none;opacity:1;
+  font:900 20px/1.1 var(--font);transition:background .15s ease,transform .12s ease,box-shadow .12s ease
+}
+#hud #deathpick #respawnFill{
+  position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#6d8a52,#8eaa68);pointer-events:none
+}
+body:not(.reduced-motion) #hud #deathpick #respawnFill{transition:width .12s linear}
+#hud #deathpick #respawnBtn span{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+#hud #deathpick.cls-screen #respawnBtn b{display:block;color:#fff0cc;-webkit-text-fill-color:#fff0cc;font:900 20px/1.05 var(--font);white-space:nowrap}
+#hud #deathpick.cls-screen #respawnBtn small{display:block;margin:0;color:#e7e0c4;-webkit-text-fill-color:#e7e0c4;font:700 11px/1.2 var(--font);letter-spacing:.4px;text-transform:uppercase}
+#hud #deathpick.cls-screen #respawnBtn.ready{
+  background:#c4372f;border-color:#2a1410;cursor:pointer
+}
+#hud #deathpick.cls-screen #respawnBtn.ready #respawnFill{opacity:0}
+#hud #deathpick.cls-screen #respawnBtn.ready:hover{background:#d4473a}
+#hud #deathpick.cls-screen #respawnBtn.ready:active{transform:translateY(2px);box-shadow:2px 2px 0 #291e18}
+#hud #deathpick.cls-screen #respawnBtn:disabled,
+#hud #deathpick.cls-screen #respawnBtn:disabled:hover,
+#hud #deathpick.cls-screen #respawnBtn:disabled:active{
+  background:#3c4934;color:#fff0cc;-webkit-text-fill-color:#fff0cc;
+  transform:none;cursor:not-allowed;animation:none;box-shadow:3px 4px 0 #291e18
+}
+#hud #deathpick #deathArmsBtn:focus-visible,
+#hud #deathpick #respawnBtn:focus-visible,
+#hud #deathpick .arm-tab:focus-visible,
+#hud #deathpick .death-arms button.primchip:focus-visible{
+  outline:3px solid #e7b15a;outline-offset:2px
+}
+@keyframes deathIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes deathOut{to{opacity:0;transform:translateY(8px)}}
+#hud #deathpick.guns-on .death-side{animation:deathIn .26s cubic-bezier(.2,.8,.2,1) both}
+#hud #deathpick.guns-on .death-gunpanel{animation:deathIn .32s cubic-bezier(.2,.8,.2,1) both}
+#hud #deathpick.guns-on .death-arms{animation:deathIn .38s cubic-bezier(.2,.8,.2,1) both}
+#hud #deathpick .cls-gun.is-fresh{animation:gunFresh .22s ease}
+@keyframes gunFresh{from{opacity:.4}to{opacity:1}}
+#hud #deathpick.is-closing .death-frame{animation:deathOut .16s ease forwards}
+body.reduced-motion #hud #deathpick.guns-on .death-side,
+body.reduced-motion #hud #deathpick.guns-on .death-gunpanel,
+body.reduced-motion #hud #deathpick.guns-on .death-arms,
+body.reduced-motion #hud #deathpick .cls-gun.is-fresh,
+body.reduced-motion #hud #deathpick.is-closing .death-frame,
+:is(body.killcam,body.armsmode.deadgray) #hud #deathpick .death-top{animation:none}
+@media (prefers-reduced-motion:reduce){
+  #hud #deathpick.guns-on .death-side,#hud #deathpick.guns-on .death-gunpanel,
+  #hud #deathpick.guns-on .death-arms,#hud #deathpick .cls-gun.is-fresh,
+  #hud #deathpick.is-closing .death-frame{animation:none}
+}
+
+/* Kill cam e modos sem classe: canto inferior direito, só o nome e os dois botões. */
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick.cls-screen,
+#hud #deathpick.cls-screen.x1{
+  position:fixed !important;inset:auto !important;left:auto !important;right:16px !important;top:auto !important;bottom:16px !important;
+  transform:none !important;width:max-content !important;max-width:min(320px,92vw) !important;height:auto !important;max-height:none !important;
+  margin:0 !important;padding:0 !important;background:transparent !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important;
+  border:0 !important;border-radius:0 !important;box-shadow:none !important;
+  opacity:1 !important;overflow:visible !important;z-index:8 !important;pointer-events:none !important;display:flex !important
+}
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-frame,
+#hud #deathpick.x1 .death-frame{
+  display:block !important;width:auto !important;height:auto !important;min-height:0 !important;animation:deathIn .22s ease
+}
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-side,
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-panels,
 :is(body.killcam, body.armsmode.deadgray) #hud #deathpick #deathList,
 :is(body.killcam, body.armsmode.deadgray) #hud #deathpick #classGun,
 :is(body.killcam, body.armsmode.deadgray) #hud #deathpick #deathArms,
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-headline p{display:none !important}
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-sheet{
-  display:flex !important;flex:none !important;grid-template-columns:none !important;width:auto !important;min-height:0 !important;margin:0 !important;
-  padding:0 !important;gap:0 !important;background:transparent !important;border:0 !important;box-shadow:none !important
+#hud #deathpick.x1 .death-side,
+#hud #deathpick.x1 .death-panels,
+#hud #deathpick.x1 #deathList,
+#hud #deathpick.x1 #classGun,
+#hud #deathpick.x1 #deathArms,
+#hud #deathpick.x1 #deathArmsBtn{display:none !important}
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-main,
+#hud #deathpick.x1 .death-main{display:block !important;padding:0 !important;min-height:0}
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-top,
+#hud #deathpick.x1 .death-top{
+  display:flex !important;flex-direction:column !important;align-items:stretch !important;
+  gap:8px !important;margin:0 !important;text-align:right
 }
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-main{display:flex !important;min-width:0 !important;background:transparent !important}
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-top{min-height:0 !important;flex-direction:column !important;align-items:flex-end !important;gap:6px !important}
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-headline{
-  position:static !important;left:auto !important;top:auto !important;transform:none !important;width:auto !important;max-width:320px !important;text-align:right !important
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-headline,
+#hud #deathpick.x1 .death-headline{text-align:right}
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-headline h2,
+#hud #deathpick.x1 .death-headline h2{
+  font-size:18px !important;line-height:1.2 !important;text-align:right !important;
+  text-shadow:0 2px 0 #000,0 0 10px rgba(0,0,0,.55)
 }
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-headline h2{
-  font-size:16px !important;line-height:1.2 !important;text-shadow:0 2px 0 #000
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-actions,
+#hud #deathpick.x1 .death-actions{
+  flex-direction:column;align-items:stretch;width:min(280px,86vw);margin-left:auto;pointer-events:auto
 }
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-clockbox{width:min(240px,70vw) !important;align-items:stretch}
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .cls-clock{width:100% !important;margin-left:0}
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-gun-hint{display:block}
-:is(body.killcam, body.armsmode.deadgray) #hud #deathpick #respawnBtn{
-  pointer-events:auto !important;width:min(280px,86vw) !important;min-width:0 !important;margin:8px 0 0 auto !important
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick #respawnBtn,
+#hud #deathpick.x1 #respawnBtn{order:1}
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick #deathArmsBtn{order:2}
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick #respawnBtn,
+:is(body.killcam, body.armsmode.deadgray) #hud #deathpick #deathArmsBtn,
+#hud #deathpick.x1 #respawnBtn{
+  pointer-events:auto !important;width:100% !important;min-width:0 !important;margin:0 !important
 }
 :is(body.killcam, body.armsmode.deadgray) #bottomleft,
 :is(body.killcam, body.armsmode.deadgray) #bottomright,
 :is(body.killcam, body.armsmode.deadgray) #inspect{visibility:hidden}
 :is(body.killcam, body.armsmode.deadgray) #stamp{opacity:.55;zoom:.55;top:9%}
+body.reduced-motion :is(body.killcam, body.armsmode.deadgray) #hud #deathpick .death-frame,
+#hud #deathpick.x1 .death-frame{animation:none}
 
-/* Corrida Armada: apenas relógio e renascimento, sem classes em nenhum estado. */
+/* Corrida Armada: apenas o renascimento, sem classes em nenhum estado. */
 body.armsmode #deathList,
 body.armsmode #classGun,
 body.armsmode #deathArms,
+body.armsmode #deathArmsBtn,
 body.armsmode #deathGunHint,
 body.armsmode #pauseClass,
 body.armsmode #bLoad,

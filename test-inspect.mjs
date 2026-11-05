@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 import { readFileSync } from 'fs';
 import { Game } from './server/src/game.js';
 import { WEAPONS } from './shared/rules.js';
-import { INSPECT_DUR, INSPECT_PROFILES, inspectKind, inspectPose } from './inspect.js';
+import { INSPECT_DUR, INSPECT_PROFILES, inspectKind, inspectPose, knifeInspectLocal, fadeFullTurn, butterflyInspectAngles } from './inspect.js';
 const SITE = process.env.SITE || 'http://localhost:8123/';
 const fails = [], errors = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 
@@ -26,6 +26,41 @@ const fails = [], errors = []; const ok = (c, m) => { console.log((c ? 'OK   ' :
   const wrong = Object.entries(want).filter(([i, k]) => WEAPONS[i] && inspectKind(WEAPONS[i]) !== k).map(([i, k]) => `${WEAPONS[i].key}=${inspectKind(WEAPONS[i])}≠${k}`);
   ok(wrong.length === 0 && WEAPONS.every((w) => INSPECT_PROFILES[inspectKind(w)]), `perfil por arma (${WEAPONS.length} armas)${wrong.length ? ' — ' + wrong.join(' ') : ''}`);
   if (WEAPONS.length < 21) console.log('AVISO: WEAPONS tem só', WEAPONS.length, 'armas');
+  const kinds = ['chef', 'skeleton', 'karambit', 'bayonet', 'butterfly'];
+  const LIN = ['x', 'y', 'z', 'rx', 'ry', 'rz', 'flick', 'show'];
+  const ang = (a) => { const t = Math.PI * 2; let d = a % t; if (d > Math.PI) d -= t; if (d < -Math.PI) d += t; return d; };
+  bad = [];
+  for (const kind of kinds) {
+    const a0 = knifeInspectLocal(kind, 0), a1 = knifeInspectLocal(kind, 1);
+    if (LIN.some((c) => Math.abs(a0[c]) > 1e-9 || Math.abs(a1[c]) > 1e-9) || Math.abs(ang(a0.spin)) > 1e-6 || Math.abs(ang(a1.spin)) > 1e-6) bad.push(kind + ':pontas');
+    let jump = 0, prev = knifeInspectLocal(kind, 0);
+    for (let k = 0.001; k <= 1.0000001; k += 0.001) {
+      const c = knifeInspectLocal(kind, Math.min(1, k));
+      for (const x of LIN) if (kind !== 'butterfly' || x !== 'flick') jump = Math.max(jump, Math.abs(c[x] - prev[x]));
+      jump = Math.max(jump, Math.abs(ang(c.spin - prev.spin)));
+      if (kind === 'butterfly') {
+        const a = butterflyInspectAngles(prev.flick, prev.show), b = butterflyInspectAngles(c.flick, c.show);
+        jump = Math.max(jump, Math.abs(ang(b.blade - a.blade)), Math.abs(ang(b.bite - a.bite)));
+      }
+      prev = c;
+    }
+    if (jump > 0.05) bad.push(`${kind}:salto ${jump.toFixed(3)}`);
+  }
+  const at = (kind, k) => knifeInspectLocal(kind, k);
+  const chef = at('chef', 0.5), kara = at('karambit', 0.25), bay = at('bayonet', 0.7), skel = at('skeleton', 0.7), fly = at('butterfly', 0.7);
+  if (!chef.finger || kara.finger || bay.finger || skel.finger || fly.finger) bad.push('dedo');
+  if (!(kara.spin > 2)) bad.push('karambit sem volta na argola');
+  if (!(bay.rz > 0.8 && bay.z < 0)) bad.push('baioneta sem o anel');
+  if (!(skel.rx > 0.5 && skel.z > 0.05 && skel.ry < bay.ry)) bad.push('skeleton sem a face furada');
+  if (!(fly.flick > 0.9 && fly.show > 0.9)) bad.push('butterfly sem o flick');
+  const sig = [kara, bay, skel, fly].map((p) => [p.spin, p.rx, p.ry, p.rz, p.flick, p.show].map((n) => n.toFixed(2)).join(','));
+  if (new Set(sig).size !== sig.length) bad.push('modelos iguais');
+  const open = butterflyInspectAngles(1, 0), shown = butterflyInspectAngles(1, 1), half = butterflyInspectAngles(0.5, 0);
+  if (Math.abs(open.blade - Math.PI * 2) > 1e-6 || Math.abs(open.bite) > 1e-6) bad.push('butterfly fechou diferente');
+  if (Math.abs(shown.bite - Math.PI) > 1e-6 || shown.blade < Math.PI * 2) bad.push('butterfly não mostra a lâmina');
+  if (Math.abs(half.blade - Math.PI) > 1e-6) bad.push('flick pela metade');
+  if (Math.abs(fadeFullTurn(Math.PI * 2, 0) - Math.PI * 2) > 1e-6 || Math.abs(fadeFullTurn(0.4, 0)) > 1e-6) bad.push('fade da volta');
+  ok(bad.length === 0, `cada faca inspeciona diferente e volta ao descanso${bad.length ? ' — ' + bad.join(' ') : ''}`);
 }
 
 // ---- servidor: só visual, nada muda lá ----

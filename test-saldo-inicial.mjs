@@ -33,7 +33,7 @@ ok(coins('Nova') === START_COINS && coins('Rica') === 620, `conta criada depois 
 
 // cadastro de verdade (PBKDF2 + D1 falso): o INSERT do Worker grava 500, e a migração já aplicada não soma de novo
 const live = new DatabaseSync(':memory:');
-for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql']) live.exec(read('./server/migrations/' + f));
+for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql', '0005_faca.sql']) live.exec(read('./server/migrations/' + f));
 const wrap = (sql, args = []) => ({ sql, args, bind(...a) { return wrap(sql, a); },
   async all() { return { results: live.prepare(sql).all(...args) }; },
   async first() { return live.prepare(sql).get(...args) || null; },

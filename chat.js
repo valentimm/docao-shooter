@@ -141,7 +141,13 @@ function lineHtml(l) {
   if (l.sys) return `<div class="cline sys">${esc(l.text)}</div>`;
   const who = l.scope === 'team' ? teamWord : 'Todos';
   const tm = l.team === 0 ? 'tm0' : l.team === 1 ? 'tm1' : 'tmx';
-  return `<div class="cline${l.dead ? ' dead' : ''}"><i>${who}</i> <b class="${tm}">${esc(l.name)}</b> ${esc(l.text)}${l.dead ? ' <em>(morto)</em>' : ''}</div>`;
+  const nem = !l.sys && hooks.nemesis && hooks.nemesis(l.id);
+  return `<div class="cline${l.dead ? ' dead' : ''}"><i>${who}</i> <b class="${tm}${nem ? ' nemesis' : ''}">${nem ? '<span class="nemesis-skull">💀</span>' : ''}${esc(l.name)}</b> ${esc(l.text)}${l.dead ? ' <em>(morto)</em>' : ''}</div>`;
+}
+export function chatRefresh() {
+  if (!$('chat')) return;
+  sig = '';
+  render(true);
 }
 function render(force) {
   const next = (typing ? '1' : '0') + lines.map((l) => (l.at || 0) + l.text).join('|');

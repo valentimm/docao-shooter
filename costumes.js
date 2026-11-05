@@ -2,7 +2,7 @@
 // (userData.anchor = 'head' para prender na cabeça) ou null quando só altera o rig.
 // A identidade do Docão (cabeça, focinho, orelhas, bochechas, olhos, contorno) nunca é removida.
 import * as THREE from 'three';
-import { PARTS, SHIRT_DETAILS, toon, toonWarm, basic, outline, canvasTex, headR, headPoint, HEAD, TORSO_PTS, torsoR, gloveMat, addSparkles, drawLogo, headNormal } from './docao.js';
+import { PARTS, SHIRT_DETAILS, toon, toonWarm, basic, outline, canvasTex, headR, headPoint, HEAD, TORSO_PTS, torsoR, gloveMat, gloveSparkles, addSparkles, drawLogo, headNormal } from './docao.js';
 
 const V3 = THREE.Vector3, V2 = THREE.Vector2, TAU = Math.PI * 2;
 const M = (geo, mat, parent, th = 0.01) => { const m = new THREE.Mesh(geo, mat); if (parent) parent.add(m); if (th) outline(m, th); m.castShadow = true; return m; };
@@ -81,9 +81,9 @@ Object.assign(PARTS, {
   glove(o, rig) { // luva (ex.: uma luva branca brilhante)
     const sides = o.hand === 'both' ? [0, 1] : [(o.hand || 'right') === 'right' ? 0 : 1];
     for (const i of sides) {
-      const { fist, thumb } = rig.fists[i]; const gm = gloveMat(o.color);
+      const { fist, thumb } = rig.fists[i]; const gm = gloveMat(o.color, o);
       fist.material = gm; thumb.material = gm; fist.scale.multiplyScalar(1.04);
-      if (o.sparkle !== false) addSparkles(fist, 16, 0.158);
+      gloveSparkles(fist, o, 0.158);
       const cuff = M(new THREE.TorusGeometry(0.12, 0.03, 8, 18), gm, rig.arms[i], 0.008); cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.45;
     }
     return null;
@@ -370,6 +370,38 @@ Object.assign(SHIRT_DETAILS, {
     x.fillStyle = c; x.fillRect(0, y, W, h * 0.6);
     x.beginPath(); x.moveTo(0, y); for (let k = 0; k <= W; k += 32) { x.lineTo(k + 16, y - h); x.lineTo(k + 32, y); } x.closePath(); x.fill();
   },
+  backNumber(x, d, PT, W) { // nome + número de camisa nas costas (th = ±π fica na emenda: desenha nas duas pontas)
+    const c = d.color || '#f4f4f4';
+    x.save(); x.fillStyle = c; x.textAlign = 'center'; x.textBaseline = 'middle';
+    if (d.outline) { x.strokeStyle = d.outline; x.lineJoin = 'round'; }
+    for (const th of [Math.PI, -Math.PI]) {
+      const [nx, ny] = PT(th, d.nameY || 1.02), [cx, cy] = PT(th, d.numY || 0.66);
+      x.font = `900 ${d.nameSize || 34}px Arial Black, Arial, sans-serif`;
+      if (d.outline) { x.lineWidth = 6; x.strokeText(d.name || '', nx, ny); }
+      x.fillText(d.name || '', nx, ny);
+      x.font = `900 ${d.numSize || 96}px Arial Black, Arial, sans-serif`;
+      if (d.outline) { x.lineWidth = 8; x.strokeText(String(d.number ?? ''), cx, cy); }
+      x.fillText(String(d.number ?? ''), cx, cy);
+    }
+    x.restore();
+  },
+  jersey(x, d, PT) { // camisa de futebol branca: risquinhas verticais finas, gola V preta, trevo (esq.) e escudo (dir.)
+    x.save();
+    const cols = d.stripes || ['#2a2a2e', '#c9a23a', '#2a2a2e', '#b8202a'];
+    for (let i = 0; i < 28; i++) { const th = -Math.PI + (i + 0.5) * Math.PI * 2 / 28; const a = PT(th, 1.2), b = PT(th, 0.0); x.strokeStyle = cols[i % cols.length]; x.globalAlpha = 0.75; x.lineWidth = 3; x.beginPath(); x.moveTo(...a); x.lineTo(...b); x.stroke(); }
+    x.globalAlpha = 1; x.fillStyle = d.trim || '#111114';
+    x.beginPath(); x.moveTo(...PT(-0.42, 1.25)); x.lineTo(...PT(0, 0.9)); x.lineTo(...PT(0.42, 1.25)); x.lineTo(...PT(0.28, 1.25)); x.lineTo(...PT(0, 0.98)); x.lineTo(...PT(-0.28, 1.25)); x.closePath(); x.fill();
+    // trevo de 3 folhas (lado direito de quem veste = esquerda de quem olha)
+    const [tx, ty] = PT(-0.32, 0.8); x.fillStyle = '#111114';
+    for (const [dx, dy, r] of [[-14, 4, 11], [0, -6, 12], [14, 4, 11]]) { x.beginPath(); x.ellipse(tx + dx, ty + dy, r * 0.7, r, dx / 30, 0, Math.PI * 2); x.fill(); }
+    x.fillRect(tx - 22, ty + 14, 44, 4); x.fillRect(tx - 22, ty + 20, 44, 3);
+    // escudo
+    const [cx, cy] = PT(0.32, 0.8);
+    x.beginPath(); x.moveTo(cx - 18, cy - 20); x.lineTo(cx + 18, cy - 20); x.lineTo(cx + 18, cy + 4); x.quadraticCurveTo(cx, cy + 26, cx - 18, cy + 4); x.closePath(); x.fillStyle = '#111114'; x.fill();
+    x.fillStyle = '#f4f4f4'; x.fillRect(cx - 12, cy - 15, 24, 18); x.fillStyle = '#111114'; x.beginPath(); x.arc(cx, cy - 6, 6, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#d4af37'; x.fillRect(cx - 12, cy - 28, 24, 4);
+    x.restore();
+  },
   diagStripes(x, d, PT) { // listras diagonais esportivas nas laterais e nos ombros
     const c = d.color || '#1fb89a';
     x.save(); x.strokeStyle = c; x.lineCap = 'round';
@@ -468,6 +500,12 @@ Object.assign(PARTS, {
     for (const [i, piv] of rig.arms.entries()) for (const y of [-0.02, -0.08, -0.14]) { const t = M(new THREE.TorusGeometry(0.163, 0.014, 6, 24), m, piv, 0); t.rotation.set(Math.PI / 2, 0.45 * (i ? 1 : -1), 0); t.position.y = y; }
     return null;
   },
+  watch(o, rig) { // relógio no pulso esquerdo (pulseira colorida + mostrador)
+    const i = o.hand === 'right' ? 0 : 1; const piv = rig.arms[i];
+    const band = M(new THREE.TorusGeometry(0.135, 0.035, 8, 20), toon(o.color || '#2f8a3c'), piv, 0.006); band.rotation.x = Math.PI / 2; band.position.y = -0.38;
+    const face = M(new THREE.CylinderGeometry(0.07, 0.07, 0.035, 18), toon(o.face || '#e8e4d8'), piv, 0.006); face.rotation.z = Math.PI / 2; face.position.set((i ? 1 : -1) * 0.16, -0.38, 0);
+    return null;
+  },
   shortsStripes(o, rig) { // faixas laterais no shorts
     const g = new THREE.Group(); const m = toon(o.color || '#1fb89a');
     for (const s of [-1, 1]) for (const dz of [-0.035, 0.035]) { const b = M(new THREE.BoxGeometry(0.02, 0.22, 0.03), m, g, 0); b.position.set(s * 0.413, 0.47, dz); }
@@ -497,6 +535,10 @@ Object.assign(PARTS, {
       const p = headPoint(0, 1.16, 0.02);
       const patch = M(new THREE.CapsuleGeometry(0.014, 0.03, 3, 6), m, g, 0.003);
       patch.position.copy(p).add(new V3(0, -0.012, 0.02)); patch.scale.set(0.7, 1, 0.4);
+    }
+    if (o.goatee) { // cavanhaque curto em ponta no queixo + bigode mais grosso (JanorDoc)
+      for (const s of [-1, 1]) { const q = headPoint(s * 0.24, 1.3, 0.04); const c = M(new THREE.CapsuleGeometry(0.04, 0.14, 4, 8), m, g, 0.004); c.position.copy(q).add(new V3(0, -0.02, 0.06)); c.rotation.set(0, 0, s * 1.0); c.scale.z = 0.6; }
+      const q = headPoint(0, 1.08, 0.03); const gt = M(new THREE.ConeGeometry(0.09, 0.16, 12), m, g, 0.005); gt.position.copy(q).add(new V3(0, -0.04, 0.0)); gt.rotation.x = Math.PI + 0.3; gt.scale.z = 0.5;
     }
     return onHead(g);
   },
@@ -734,4 +776,94 @@ Object.assign(PARTS, {
     M(new THREE.TubeGeometry(strap, 16, 0.016, 6, false), toon('#1a1c20'), root, 0.003);
     return root;
   },
+});
+// ---------- Docão Coelho (cabeça de coelho + dreads) ----------
+Object.assign(PARTS, {
+  rabbitHead(o, rig) { // capuz de pelúcia de coelho: abertura pro rosto, orelhonas em pé, dentinhos e bigodes
+    hideTuft(rig); if (rig.ears) rig.ears.forEach((e) => (e.visible = false)); // só no Coelho: orelhas de porco somem sob o capuz
+    const g = new THREE.Group(); const c = o.color || '#f1ece4';
+    const fur = toonWarm(c, 0.2, { side: THREE.DoubleSide }), inner = toonWarm(o.inner || '#f3a6b8', 0.2, { side: THREE.DoubleSide });
+    const shell = M(new THREE.SphereGeometry(0.655, 44, 30, 0, TAU, 1.05, Math.PI - 1.05), fur, g, 0.012);
+    shell.rotation.x = Math.PI / 2 - 0.38; shell.scale.set(1.03, 1, 0.97);
+    // bochechas fofas dos lados do rosto
+    for (const s of [-1, 1]) { const ch = M(new THREE.SphereGeometry(0.17, 18, 12), fur, g, 0.01); ch.position.set(s * 0.43, -0.2, 0.3); ch.scale.set(0.8, 1, 0.75); }
+    // orelhonas
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Group(); ear.position.set(s * 0.2, 0.55, -0.12); ear.rotation.set(-0.18, 0, -s * 0.16); g.add(ear);
+      const e = M(new THREE.CapsuleGeometry(0.12, 0.62, 6, 16), fur, ear, 0.012); e.position.y = 0.4; e.scale.z = 0.42;
+      const ei = M(new THREE.CapsuleGeometry(0.075, 0.5, 6, 14), inner, ear, 0); ei.position.set(0, 0.4, 0.035); ei.scale.z = 0.25;
+      if (s > 0) { ear.rotation.z = -0.5; } // uma orelha meio caída, charme de coelho
+    }
+    // focinho de coelho: narizinho rosa por cima do focinho do Docão, dentinhos e bigodes
+    const head = new THREE.Group(); // coordenadas da cabeça do Docão (o grupo g fica em y=1.52)
+    head.position.set(0, -1.52, 0.02); g.add(head);
+    const sp = headPoint(0, 1.47);
+    const nose = M(new THREE.SphereGeometry(0.06, 14, 10), toon(o.nose || '#f07a96'), head, 0.006); nose.position.set(0, 1.58, sp.z + 0.15); nose.scale.set(1.3, 0.8, 0.7);
+    const tw = basic('#fbfbf6');
+    for (const s of [-1, 1]) {
+      const t = M(new THREE.BoxGeometry(0.07, 0.1, 0.03), tw, head, 0.005); t.position.set(s * 0.038, 1.27, sp.z + 0.06); t.rotation.x = -0.15;
+      for (const k of [-1, 0, 1]) {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.003, 0.34, 4), basic('#2a2a2e'), undefined); head.add(w);
+        w.position.set(s * 0.36, 1.47 + k * 0.045, sp.z - 0.02); w.rotation.set(0, 0, Math.PI / 2 + s * k * 0.18);
+      }
+    }
+    g.position.set(0, 1.52, -0.02); return onHead(g);
+  },
+  dreads(o, rig) { // dreadlocks grossos saindo de baixo do capuz, caindo pelas costas e ombros, com contas coloridas
+    hideTuft(rig); const g = new THREE.Group(); const m = toonWarm(o.color || '#3a2414', 0.12);
+    const beads = (o.beads || ['#d81e2a', '#f2c230', '#2a9a3a']).map((b) => toon(b));
+    let k = 0;
+    for (const row of [{ y: 1.66, out: 0.16 }, { y: 1.5, out: 0.2 }]) {
+      for (let a = -2.1; a <= 2.1 + 1e-6; a += 0.3) {
+        const th = Math.PI + a + (row.y < 1.6 ? 0.15 : 0); const p = headPoint(th, row.y, row.out); const n = headNormal(th, row.y);
+        const len = 0.55 + ((k * 37) % 7) * 0.05; const sway = ((k % 3) - 1) * 0.05;
+        const pts = [p, p.clone().addScaledVector(n, 0.08).add(new V3(sway, -len * 0.35, 0)), p.clone().addScaledVector(n, 0.1).add(new V3(sway * 2, -len * 0.7, 0)), p.clone().addScaledVector(n, 0.08).add(new V3(sway, -len, 0))];
+        const curve = new THREE.CatmullRomCurve3(pts);
+        M(new THREE.TubeGeometry(curve, 14, 0.048, 8, false), m, g, 0.008);
+        const cap = M(new THREE.SphereGeometry(0.048, 10, 8), m, g, 0); cap.position.copy(pts[3]);
+        if (k % 2 === 0) { const b = M(new THREE.CylinderGeometry(0.062, 0.062, 0.06, 12), beads[k % beads.length], g, 0.004); b.position.copy(curve.getPointAt(0.55)); }
+        k++;
+      }
+    }
+    return onHead(g);
+  },
+});
+// ---------- Docão Boi (cabeça de boi comum, nada de Caprichoso) ----------
+Object.assign(PARTS, {
+  bullHead(o, rig) { // capuz de boi: pelagem marrom, chifres curvos creme, orelhas de lado, focinho largo escuro com narinas
+    hideTuft(rig); if (rig.ears) rig.ears.forEach((e) => (e.visible = false)); // só no Boi: orelhas de porco somem sob o capuz
+    const g = new THREE.Group();
+    const fur = toonWarm(o.color || '#6b3e22', 0.15, { side: THREE.DoubleSide });
+    const dark = toonWarm(o.dark || '#2b1a10', 0.1, { side: THREE.DoubleSide });
+    const hornM = toonWarm(o.horn || '#efe2c4', 0.2), tipM = toon(o.hornTip || '#3a3026');
+    const shell = M(new THREE.SphereGeometry(0.655, 44, 30, 0, TAU, 1.05, Math.PI - 1.05), fur, g, 0.012);
+    shell.rotation.x = Math.PI / 2 - 0.38; shell.scale.set(1.06, 1, 0.97);
+    // topete escuro na testa
+    const tuft = M(new THREE.SphereGeometry(0.2, 18, 12), dark, g, 0.008); tuft.position.set(0, 0.5, 0.22); tuft.scale.set(1.3, 0.55, 0.8);
+    // chifres: base grossa saindo de lado, curvando pra cima e pra frente
+    for (const s of [-1, 1]) {
+      const curve = new THREE.CatmullRomCurve3([new V3(s * 0.5, 0.38, 0.0), new V3(s * 0.78, 0.46, 0.04), new V3(s * 0.94, 0.66, 0.1), new V3(s * 0.96, 0.86, 0.16)]);
+      const n = 16, pts = curve.getPoints(n);
+      for (let i = 0; i < n; i++) {
+        const a = pts[i], b = pts[i + 1], r = 0.1 * (1 - i / n) + 0.02;
+        const seg = M(new THREE.CylinderGeometry(r * 0.92, r, a.distanceTo(b) * 1.15, 12), i > n - 4 ? tipM : hornM, g, 0.006);
+        seg.position.copy(a).lerp(b, 0.5); seg.quaternion.setFromUnitVectors(new V3(0, 1, 0), b.clone().sub(a).normalize());
+      }
+      // orelha de boi: de lado, abaixo do chifre
+      const ear = new THREE.Group(); ear.position.set(s * 0.6, 0.18, 0.0); ear.rotation.set(0, s * 0.3, -s * 1.25); g.add(ear);
+      const e = M(new THREE.CapsuleGeometry(0.09, 0.2, 6, 14), fur, ear, 0.01); e.position.y = 0.16; e.scale.z = 0.4;
+      const ei = M(new THREE.CapsuleGeometry(0.055, 0.15, 6, 12), toon(o.inner || '#d9a48a'), ear, 0); ei.position.set(0, 0.16, 0.03); ei.scale.z = 0.25;
+    }
+    // focinho de boi largo por cima do focinho do Docão, com narinas
+    const head = new THREE.Group(); head.position.set(0, -1.52, 0.02); g.add(head);
+    const sp = headPoint(0, 1.47);
+    const muzzle = M(new THREE.SphereGeometry(0.2, 22, 16), toonWarm(o.muzzle || '#3a2a22', 0.15), head, 0.01);
+    muzzle.position.set(0, 1.42, sp.z + 0.08); muzzle.scale.set(1.35, 0.85, 0.7);
+    for (const s of [-1, 1]) { const ns = M(new THREE.SphereGeometry(0.04, 12, 8), basic('#120c08'), head, 0); ns.position.set(s * 0.1, 1.45, sp.z + 0.215); ns.scale.set(1, 1.3, 0.5); }
+    g.position.set(0, 1.52, -0.02); return onHead(g);
+  },
+});
+// ---------- Docão Él Big: rabinho some pra não cobrir o BIG 67 das costas ----------
+Object.assign(PARTS, {
+  hideTail(o, rig) { if (rig.tail) rig.tail.visible = false; },
 });

@@ -222,6 +222,7 @@ function walk(obj, level) {
 
 export function applyWeaponCamo(root, level) {
   if (!root) return;
+  if (root.userData && (root.userData.sniperSkin || root.userData.gunPaint)) return;
   walk(root, asLevel(level));
 }
 

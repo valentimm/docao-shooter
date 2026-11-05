@@ -5,6 +5,7 @@
 import { getAccount, getStats, getChal, onAccount, register, login, logout, loadRank, refreshStats } from './account.js';
 import { nickError, passError, cleanNick } from './shared/nick.js';
 import { COIN_ICON, CURRENCY } from './shared/closet.js';
+import { BOX_PRICE } from './shared/lootbox.js';
 import { TIERS } from './shared/challenges.js';
 
 const $ = (id) => document.getElementById(id);
@@ -25,11 +26,12 @@ function renderDaily() {
   box.innerHTML = `<div class="daily-head"><b>🎯 Desafios do dia <em>${done}/${c.list.length}</em></b><span title="Novos desafios à meia-noite de Brasília">⏳ novos em <b>${left(c.resetIn)}</b></span></div>`
     + c.list.map((x) => `<button type="button" class="daily-row t${x.tier}${x.done ? ' done' : ''}" data-open-chal title="${esc(x.text + ' — ' + TIERS[x.tier] + ' · ' + x.mode)}"><span class="daily-text">${esc(x.text)}</span>`
       + `<span class="daily-prize">${x.done ? '✓ ' : ''}${COIN_ICON} ${x.reward}</span><span class="daily-bar"><i style="width:${Math.round(100 * Math.min(1, x.prog / x.goal))}%"></i></span><span class="daily-prog">${x.prog}/${x.goal}</span></button>`).join('')
+    + `<p class="daily-note">🌽 <b>${a.boxes | 0}</b> caixote${(a.boxes | 0) === 1 ? '' : 's'} · 1 ao entrar, +1 por desafio e 1 comprado por ${BOX_PRICE}. <button type="button" data-open-box>ABRIR</button></p>`
     + '<p class="daily-note">🌐 Conta só em <b>partida online</b> logado (sala com bots vale). Offline e Treino não contam.</p>';
 }
 function renderStrip(a) {
   const t = $('acctTxt'), b = $('acctBtn');
-  if (a) { t.innerHTML = `🐷 <b>${esc(a.nick)}</b> · <span class="nw">${COIN_ICON} <b>${a.coins | 0}</b> ${CURRENCY}</span>`; b.textContent = 'MINHA CONTA'; }
+  if (a) { t.innerHTML = `🐷 <b>${esc(a.nick)}</b> · <span class="nw">${COIN_ICON} <b>${a.coins | 0}</b> ${CURRENCY}</span> · 🌽 <b>${a.boxes | 0}</b>`; b.textContent = 'MINHA CONTA'; }
   else { t.textContent = 'Convidado · com conta: apelido só seu, skin guardada e ranking'; b.textContent = 'ENTRAR'; }
 }
 function renderUser() {

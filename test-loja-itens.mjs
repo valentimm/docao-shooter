@@ -1,4 +1,4 @@
-// Itens novos da loja (sem navegador): fantasia completa é exclusiva, dança não entra no código do visual, todas as peças usam partes que já existem.
+// Itens novos da loja (sem navegador): fantasia mistura com acessório, dança não entra no código do visual, todas as peças usam partes que já existem.
 // Uso: node test-loja-itens.mjs
 import { ITEMS, SLOTS, SHOP_TEAMS, encodeLook, parseLook, lookToSkin, itemById, itemPrice, isFreeItem, priceOfLook, danceItems, itemForDance, teamItems } from './shared/closet.js';
 import { SKINS } from './skins.js';
@@ -6,7 +6,8 @@ import { DANCE_IDS, FREE_DANCES, PAID_DANCES, danceId } from './shared/emote.js'
 import { normDance, isPaidDance, ALL_DANCES } from './victory-dance.js';
 const fails = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 ok(new Set(ITEMS.map((i) => i.id)).size === ITEMS.length, 'ids únicos');
-ok(ITEMS.filter((i) => !i.free).every((i) => i.price > 0 && Number.isInteger(i.price)), 'item pago tem preço inteiro (os de graça ficam de fora)');
+ok(ITEMS.filter((i) => !i.free && !i.loot).every((i) => i.price > 0 && Number.isInteger(i.price)), 'item pago tem preço inteiro (os de graça e os do caixote ficam de fora)');
+ok(ITEMS.filter((i) => i.loot).every((i) => i.weight > 0 && Number.isInteger(i.weight) && !(i.price > 0) && !isFreeItem(i.id)), 'skin de caixote tem peso inteiro, sem preço, e não conta como grátis');
 ok(SLOTS[0][0] === 'c' && ITEMS.filter((i) => i.slot === 'c').length === 17, '17 fantasias completas no slot c');
 const paid = { h1: 60, c1: 900, c8: 1500, d8: 400, b3: 100 };
 ok(Object.entries(paid).every(([id, p]) => itemPrice(id) === p), 'preço dos itens que já existiam não mudou');
@@ -25,14 +26,14 @@ ok(c11 && c11.name === 'Docão Bigzão' && c11.price === 0 && c11.free === true 
 ok(priceOfLook('x1.0.c.c11', []) === 0, 'Docão Bigzão não custa Docoin mesmo com a mochila vazia');
 const sk11 = lookToSkin('x1.0.c.c11');
 ok(sk11 && sk11.name === 'Docão Bigzão' && sk11.custom === true && sk11.shirt.color === '#3f291c' && sk11.pants === '#243044' && sk11.shirt.details.some((d) => d.type === 'polo') && sk11.parts.length === 3, 'código x1.0.c.c11 vira a fantasia completa');
-ok(parseLook('x1.0.c.c11.h1') === null && encodeLook({ shirt: 0, pants: 12, items: { c: 'c11' } }) === 'x1.0.c.c11', 'Docão Bigzão não mistura com outras partes');
+ok(parseLook('x1.0.c.c11.h1') && parseLook('x1.0.c.c11.h1').items.h === 'h1' && encodeLook({ shirt: 0, pants: 12, items: { c: 'c11' } }) === 'x1.0.c.c11', 'Docão Bigzão mistura com outras partes e sozinho continua o mesmo código');
 const c12 = itemById('c12');
 const c12Parts = ['roundCap', 'headphones', 'beard', 'hoodDown', 'hoodStrings', 'longPants', 'shoes'];
 ok(c12 && c12.name === 'DocHiro' && c12.emoji === '🎧' && c12.price === 0 && c12.free === true && c12.slot === 'c' && isFreeItem('c12') && c12.line && c12.costume.shirt.color === '#1a1f2e' && c12.costume.shirt.sleeves === 'long' && c12.costume.shirt.details.some((d) => d.type === 'hoodie') && c12.costume.shirt.logo && c12.costume.shirt.logo.text === 'C!' && c12Parts.every((t) => c12.costume.parts.some((p) => p.type === t)), 'DocHiro é a fantasia c12, de graça, gorro, fone, moletom e barba');
 ok(priceOfLook('x1.0.c.c12', []) === 0, 'DocHiro não custa Docoin mesmo com a mochila vazia');
 const sk12 = lookToSkin('x1.0.c.c12');
 ok(sk12 && sk12.name === 'DocHiro' && sk12.custom === true && sk12.shirt.color === '#1a1f2e' && sk12.pants === '#15151a' && sk12.shirt.details.some((d) => d.type === 'hoodie') && sk12.parts.length === c12Parts.length, 'código x1.0.c.c12 vira a fantasia completa');
-ok(parseLook('x1.0.c.c12.h1') === null && encodeLook({ shirt: 0, pants: 12, items: { c: 'c12' } }) === 'x1.0.c.c12', 'DocHiro não mistura com outras partes');
+ok(parseLook('x1.0.c.c12.h1') && parseLook('x1.0.c.c12.h1').items.h === 'h1' && encodeLook({ shirt: 0, pants: 12, items: { c: 'c12' } }) === 'x1.0.c.c12', 'DocHiro mistura com outras partes e sozinho continua o mesmo código');
 const c13 = itemById('c13');
 const c13Parts = ['messyHair', 'beard', 'longPants', 'shoes'];
 const c13Beard = c13 && c13.costume.parts.find((p) => p.type === 'beard');
@@ -40,7 +41,7 @@ ok(c13 && c13.name === 'DocYuri' && c13.emoji === '💙' && c13.price === 0 && c
 ok(priceOfLook('x1.0.c.c13', []) === 0, 'DocYuri não custa Docoin mesmo com a mochila vazia');
 const sk13 = lookToSkin('x1.0.c.c13');
 ok(sk13 && sk13.name === 'DocYuri' && sk13.custom === true && sk13.shirt.color === '#2b6cb0' && sk13.pants === '#1a1c20' && sk13.shirt.details.some((d) => d.type === 'hoodie') && sk13.parts.length === c13Parts.length && sk13.parts.find((p) => p.type === 'beard').stubble === false, 'código x1.0.c.c13 vira a fantasia completa, só com bigode');
-ok(parseLook('x1.0.c.c13.h1') === null && encodeLook({ shirt: 0, pants: 12, items: { c: 'c13' } }) === 'x1.0.c.c13', 'DocYuri não mistura com outras partes');
+ok(parseLook('x1.0.c.c13.h1') && parseLook('x1.0.c.c13.h1').items.h === 'h1' && encodeLook({ shirt: 0, pants: 12, items: { c: 'c13' } }) === 'x1.0.c.c13', 'DocYuri mistura com outras partes e sozinho continua o mesmo código');
 const c14 = itemById('c14');
 const c14Parts = ['messyHair', 'beard', 'beachRacket', 'shoes'];
 const c14Beard = c14 && c14.costume.parts.find((p) => p.type === 'beard');
@@ -48,7 +49,7 @@ ok(c14 && c14.name === 'DocOny' && c14.emoji === '🎾' && c14.price === 0 && c1
 ok(priceOfLook('x1.0.c.c14', []) === 0, 'DocOny não custa Docoin mesmo com a mochila vazia');
 const sk14 = lookToSkin('x1.0.c.c14');
 ok(sk14 && sk14.name === 'DocOny' && sk14.custom === true && sk14.shirt.color === '#d4ff00' && sk14.pants === '#3a3e46' && sk14.parts.length === c14Parts.length && sk14.parts.find((p) => p.type === 'beachRacket') && sk14.parts.find((p) => p.type === 'beard').stubble === false, 'código x1.0.c.c14 vira a fantasia completa, com raquete nas costas');
-ok(parseLook('x1.0.c.c14.h1') === null && encodeLook({ shirt: 0, pants: 12, items: { c: 'c14' } }) === 'x1.0.c.c14', 'DocOny não mistura com outras partes');
+ok(parseLook('x1.0.c.c14.h1') && parseLook('x1.0.c.c14.h1').items.h === 'h1' && encodeLook({ shirt: 0, pants: 12, items: { c: 'c14' } }) === 'x1.0.c.c14', 'DocOny mistura com outras partes e sozinho continua o mesmo código');
 const beardOf = (it) => (it.part && it.part.type === 'beard' ? it.part : (it.costume && it.costume.parts || []).find((p) => p.type === 'beard'));
 ok(['f4', 'c6', 'c12'].every((id) => { const b = beardOf(itemById(id)); return b && b.stubble !== false && !b.soul; }) && SKINS.find((s) => s.id === 'docao-matheus').parts.find((p) => p.type === 'beard').stubble !== false, 'Bigode de Açougueiro, Capitão, DocHiro e Docão Matheus continuam com a barba rala no queixo');
 ok(ITEMS.filter((i) => beardOf(i) && beardOf(i).stubble === false).map((i) => i.id).sort().join() === 'c13,c14', 'só DocYuri e DocOny desligam a barba do queixo');
@@ -70,8 +71,12 @@ ok(danceItems().length === 8 && danceItems().every((i) => PAID_DANCES.includes(i
 ok(FREE_DANCES.join() === 'moonwalk,mewing,sixseven' && DANCE_IDS.length === 11, 'as 3 danças grátis continuam as mesmas');
 ok(PAID_DANCES.every((d) => itemForDance(d) && isPaidDance(d) && normDance(d) === d && danceId(d) === d), 'dança paga é reconhecida no cliente e no servidor');
 ok(!isPaidDance('moonwalk') && normDance('xyz') === 'moonwalk' && ALL_DANCES.length === 11, 'grátis não é paga; id estranho cai no Moonwalk');
-ok(encodeLook({ shirt: 1, pants: 2, items: { c: 'c1', h: 'h1' } }) === 'x1.1.2.c1', 'fantasia no visual descarta as outras partes');
-ok(parseLook('x1.1.2.c1.h1') === null, 'servidor recusa código com fantasia + outra parte');
+ok(encodeLook({ shirt: 1, pants: 2, items: { c: 'c1', h: 'h1' } }) === 'x1.1.2.c1.h1', 'fantasia no visual guarda as outras partes');
+ok(parseLook('x1.1.2.c1.h1') && parseLook('x1.1.2.c1.h1').items.c === 'c1' && parseLook('x1.1.2.c1.h1').items.h === 'h1', 'servidor aceita fantasia junto com outra parte');
+const belly = lookToSkin('x1.0.c.c10.g1');
+ok(belly && belly.parts.some((p) => p.type === 'bellyOut') && belly.parts.some((p) => p.type === 'glove' && p.color === '#f4f4f4'), 'Barriguinha aceita luva por cima da fantasia');
+const overGlove = lookToSkin(encodeLook({ shirt: 0, pants: 12, items: { c: 'c8', g: 'g1' } }));
+ok(overGlove && overGlove.parts.filter((p) => p.type === 'glove').length === 1 && overGlove.parts.find((p) => p.type === 'glove').color === '#f4f4f4', 'luva equipada substitui a luva que já vinha na fantasia');
 ok(parseLook('x1.1.2.d1') === null, 'dança não é parte de visual (código recusado)');
 const sk = lookToSkin(parseLook('x1.1.2.c8'));
 ok(sk && sk.float === true && sk.custom === true && sk.name === itemById('c8').name, 'fantasia vira skin no formato de skins.js (Docão Dourado flutua)');

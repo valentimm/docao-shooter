@@ -1,6 +1,10 @@
 node_modules/
 package-lock.json
 .vercel
+dist/
+.cache/
+*.log
+.DS_Store
 
 # servidor online
 server/node_modules/

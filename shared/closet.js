@@ -54,12 +54,14 @@ export const ITEMS = [
   { id: 'g1', name: 'Luvas Brancas', emoji: '🧤', price: 70, part: { type: 'glove', hand: 'both', color: '#f4f4f4' } },
   { id: 'g2', name: 'Luvas Pretas', emoji: '🧤', price: 70, part: { type: 'glove', hand: 'both', color: '#15151a' } },
   { id: 'g3', name: 'Luvas Brilhantes', emoji: '✨', price: 260, part: { type: 'glove', hand: 'both', color: '#f4f4f4', sparkle: true } },
+  { id: 'g4', name: 'Luvas Rainbow', emoji: '🌈', weight: 1250, loot: true, part: { type: 'glove', hand: 'both', color: '#ffffff', rainbow: true, sparkle: true } },
+  { id: 'g5', name: 'Luvas Docão Gold', emoji: '👑', weight: 2000, loot: true, part: { type: 'glove', hand: 'both', color: '#f3d78a', gold: true, sparkle: true } },
   { id: 's1', name: 'Tênis do Torresmo', emoji: '👟', price: 80, part: { type: 'shoes', color: '#141416', sole: '#f4f4f4' } },
   { id: 's2', name: 'Botinha Vermelha', emoji: '🥾', price: 80, part: { type: 'shoes', color: '#7d1f19', sole: '#f2c94c' } },
   { id: 's3', name: 'Meiões Brancos', emoji: '🧦', price: 40, part: { type: 'socks', color: '#f4f4f4' } },
   { id: 's4', name: 'Tênis Azul Royal', emoji: '👟', price: 80, part: { type: 'shoes', color: '#1446b8', sole: '#f4f4f4' } },
 ];
-// ---------- FANTASIAS COMPLETAS (espaço "c"): trocam camiseta, shorts e peças de uma vez, como as skins prontas; não combinam com outras partes ----------
+// ---------- FANTASIAS COMPLETAS (espaço "c"): trocam camiseta e shorts, e as peças da fantasia continuam. Acessório equipado entra junto e, se for do mesmo tipo, fica por cima. ----------
 // costume = mesmo formato de skins.js (shirt, pants, parts, face, eyes), só com peças que o modelo já tem.
 ITEMS.push(
   { id: 'c1', name: 'Super Porco', emoji: '🦸', price: 900, costume: { shirt: { color: '#1446b8', trim: '#d8261c', details: [{ type: 'star', color: '#f2c94c', outline: '#7d1f19', size: 0.3 }] }, pants: '#d8261c',
@@ -162,11 +164,50 @@ ITEMS.push(
       { type: 'shortsStripes', color: '#17b394' },
       { type: 'shoes', color: '#141416', sole: '#f4f4f4', strap: '#f4f4f4' },
     ] } },
-  { id: 'c17', name: 'JanorDoc', emoji: '💇', price: 0, free: true, team: 'tech', teamOrder: 7, line: 'Cabelo comprido, faixa vermelha e camisa OINK', costume: {
-    shirt: { color: '#1a1a1d', trim: '#1a1a1d', logo: { text: 'OINK', color: '#e8e8e8', outline: '#c0121e', size: 0.2 } },
-    pants: '#2e3a55',
-    parts: [{ type: 'longHair', color: '#3b2414', headband: '#c0121e' }],
+  { id: 'c17', name: 'JanorDoc', emoji: '💇', price: 0, free: true, team: 'tech', teamOrder: 7, line: 'Cabelão, boné preto, óculos escuros e camisa de futebol', costume: {
+    shirt: { color: '#f6f6f4', trim: '#111114', sleeveColor: '#f6f6f4', details: [{ type: 'jersey', trim: '#111114' }] },
+    pants: '#141416',
+    parts: [
+      { type: 'longHair', color: '#5a3518' },
+      { type: 'cap', color: '#1a1a1d', brim: '#111114', logo: 'arcs', logoColor: '#2ec4b6', scale: 1.14, lift: 0.06 },
+      { type: 'sunglasses', color: '#111114', lens: '#1b2a3a' },
+      { type: 'beard', color: '#5a3518', stubble: false, goatee: true },
+      { type: 'sleeveStripes', color: '#111114' },
+      { type: 'shortsStripes', color: '#f4f4f4' },
+      { type: 'watch', color: '#2f8a3c' },
+      { type: 'shoes', color: '#141416', sole: '#f4f4f4', strap: '#f4f4f4' },
+    ],
   } },
+);
+// Docão Coelho: cabeça de coelho (capuz de pelúcia com orelhonas, dentinhos e bigodes) + dreads com contas rasta. Fantasia paga do Brechó.
+ITEMS.push(
+  { id: 'c18', name: 'SARKAO', emoji: '🐰', price: 0, free: true, line: 'Cabeça de coelho com orelhonas, dentinhos e dreads com contas', costume: {
+    shirt: { color: '#2a7a3a', trim: '#f2c230', logo: { text: 'C!', color: '#f2c230' } }, pants: '#2c2c30',
+    parts: [
+      { type: 'dreads', color: '#3a2414', beads: ['#d81e2a', '#f2c230', '#2a9a3a'] },
+      { type: 'rabbitHead', color: '#f1ece4', inner: '#f3a6b8', nose: '#f07a96' },
+      { type: 'shoes', color: '#f4f4f4', sole: '#2a2a2e', strap: '#d81e2a' },
+    ] } },
+);
+// Docão Boizão: boi comum (marrom, chifres creme), nada de Caprichoso. Fantasia paga do Brechó.
+ITEMS.push(
+  { id: 'c19', name: 'Boizão', emoji: '🐂', price: 0, free: true, line: 'Cabeça de boi com chifrões, focinho largo e camisa de peão', costume: {
+    shirt: { color: '#8a5a2b', trim: '#3a2414' }, pants: '#3b4a63',
+    parts: [
+      { type: 'bullHead', color: '#6b3e22', dark: '#2b1a10', horn: '#efe2c4', muzzle: '#3a2a22' },
+      { type: 'shoes', color: '#5a3518', sole: '#2a1a10', strap: '#3a2414' },
+    ] } },
+);
+// Docão Él Big: bonezinho preto, jaqueta escura e camisa com BIG 67 nas costas. Fantasia paga do Brechó.
+ITEMS.push(
+  { id: 'c20', name: 'Él Big', emoji: '🧢', price: 0, free: true, line: 'Bonezinho preto e camisa escura com BIG 67 nas costas', costume: {
+    shirt: { color: '#1c1c20', trim: '#0e0e10', sleeveColor: '#26262b', details: [{ type: 'backNumber', name: 'BIG', number: 67, color: '#f4f4f4', outline: '#c9a23a', nameY: 0.92, nameSize: 44, numY: 0.62, numSize: 96 }] },
+    pants: '#2a2f3a',
+    parts: [
+      { type: 'cap', color: '#141416', brim: '#0c0c0e', scale: 1.1, lift: 0.04 },
+      { type: 'hideTail' },
+      { type: 'shoes', color: '#f4f4f4', sole: '#141416', strap: '#141416' },
+    ] } },
 );
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
@@ -179,16 +220,118 @@ ITEMS.push(
   { id: 'd7', name: 'Passinho do Jamal', emoji: '🕺', price: 450, dance: 'jamal', line: 'Pé cruzando e ombro gingando' },
   { id: 'd8', name: 'Macarena', emoji: '🎶', price: 400, dance: 'macarena', line: 'Braço, braço, ombro, cabeça e rebola' },
 );
+// Facas (espaço "k"): não entram no visual do Docão. Cada modelo tem as mesmas cores; quem equipa escolhe uma.
+export const KNIFE_MODELS = [
+  { knife: 'skeleton', name: 'Skeleton Knife', emoji: '🔪', line: 'Três furos pequenos na lâmina e um furo grande no meio.' },
+  { knife: 'karambit', name: 'Karambit', emoji: '🪝', line: 'Garra curva e argola no dedo.' },
+  { knife: 'bayonet', name: 'Bayonetta', emoji: '🗡️', line: 'Baioneta: lâmina reta, guarda cruzada e anel do cano.' },
+  { knife: 'butterfly', name: 'Butterfly', emoji: '🦋', line: 'Cabo duplo: a lâmina gira no pino e abre.' },
+];
+// Peso = raridade no Caixote (não é preço). Skin de arma/faca não se compra: loot:true.
+export const KNIFE_COLORS = [
+  { finish: 'factory', name: 'Fábrica', weight: 500, line: 'Cor de fábrica.' },
+  { finish: 'rusty', name: 'Rusty', weight: 750, line: 'Aspecto enferrujado.' },
+  { finish: 'rainbow', name: 'Rainbow', weight: 1250, line: 'Aspecto de arco-íris.' },
+  { finish: 'sapphire', name: 'Sapphire', weight: 1000, line: 'Aspecto de safira.' },
+  { finish: 'emerald', name: 'Emerald', weight: 1000, line: 'Aspecto de esmeralda.' },
+  { finish: 'ruby', name: 'Ruby', weight: 1000, line: 'Aspecto de rubi.' },
+  { finish: 'camo', name: 'Camuflagem', weight: 500, line: 'Verde de exército, manchas de camuflagem.' },
+  { finish: 'obsidian', name: 'Obsidian', weight: 1250, line: 'Preto metálico com detalhes roxos.' },
+];
+const KNIFE_ID = {
+  skeleton: ['k1', 'k4', 'k7', 'k10', 'k13', 'k16', 'k25', 'k29'],
+  karambit: ['k2', 'k5', 'k8', 'k11', 'k14', 'k17', 'k26', 'k30'],
+  bayonet: ['k3', 'k6', 'k9', 'k12', 'k15', 'k18', 'k27', 'k31'],
+  butterfly: ['k19', 'k20', 'k21', 'k22', 'k23', 'k24', 'k28', 'k32'],
+};
+ITEMS.push(...KNIFE_MODELS.flatMap((model) => KNIFE_COLORS.map((color, i) => ({
+  id: KNIFE_ID[model.knife][i],
+  name: `${model.name} · ${color.name}`,
+  emoji: color.finish === 'camo' ? '🪖' : model.emoji,
+  weight: color.weight,
+  loot: true,
+  knife: model.knife,
+  finish: color.finish,
+  line: `${model.line} ${color.line}`,
+}))));
+// Sniper Torresmo (espaço "t"): não entra no código do visual. A equipada troca a pintura da arma.
+export const SNIPER_SKINS = [
+  { id: 't1', name: 'A Docão Lore', emoji: '🐉', weight: 2000, loot: true, gun: 'sniper', paint: 'lore', sniper: 'lore', line: 'Dourada no jeito da Dragon Lore, com dragão, focinho, orelha e o C! do Docão.' },
+];
+ITEMS.push(...SNIPER_SKINS);
+// Pinturas de arma do Caixote da Primeira Safra. sniper também preenche o campo sniper (a coluna da conta continua uma só).
+const GUN_LABEL = { pistol: 'Pistola', sniper: 'Sniper Torresmo', p90: 'P90', carabina: 'Carabina', rifle: 'Fuzil' };
+const GUN_PAINTS = [
+  { paint: 'camo', name: 'Camuflagem', weight: 500, emoji: '🪖', line: 'Verde de exército, manchas de camuflagem.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'rust', name: 'Ferrugem', weight: 750, emoji: '🪨', line: 'Aspecto enferrujado.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'waves', name: 'Ferrugem Waves', weight: 750, emoji: '🌊', line: 'Tema aquático, com desenho de onda.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'rainbow', name: 'Rainbow', weight: 1250, emoji: '🌈', line: 'Arco-íris na Pistolinha.', guns: ['pistol'] },
+  { paint: 'gold', name: 'Gold Docão', weight: 2000, emoji: '👑', line: 'Fuzil dourado com focinho, orelha e o C! do Docão.', guns: ['rifle'] },
+  { paint: 'obsidian', name: 'Obsidian', weight: 1000, emoji: '🖤', line: 'Preto metálico com detalhes roxos.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'onca', name: 'Onça', weight: 500, emoji: '🐆', line: 'Amarelo de onça com rosetas pretas.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+  { paint: 'cheers', name: 'Cheers Base', weight: 750, emoji: '🔴', line: 'Vermelho da Cheers com o símbolo C!.', guns: ['pistol', 'sniper', 'p90', 'carabina', 'rifle'] },
+];
+GUN_PAINTS.forEach((paint) => paint.guns.forEach((gun) => {
+  const it = {
+    id: 'a' + (ITEMS.filter((i) => i.gun && i.id[0] === 'a').length + 1),
+    name: `${GUN_LABEL[gun]} · ${paint.name}`,
+    emoji: paint.emoji,
+    weight: paint.weight,
+    loot: true,
+    gun,
+    paint: paint.paint,
+    line: paint.line,
+  };
+  if (gun === 'sniper') it.sniper = paint.paint;
+  ITEMS.push(it);
+}));
+// Linhas que já existiam em outra arma ou na faca, e não tinham o Fuzil Pururuca. Entram no fim para não deslocar os ids a1–a32.
+const RIFLE_GAPS = [
+  { paint: 'rainbow', name: 'Rainbow', weight: 1250, emoji: '🌈', line: 'Arco-íris no Fuzil Pururuca.' },
+  { paint: 'sapphire', name: 'Sapphire', weight: 1000, emoji: '💎', line: 'Azul de safira no Fuzil Pururuca.' },
+  { paint: 'emerald', name: 'Emerald', weight: 1000, emoji: '💚', line: 'Verde de esmeralda no Fuzil Pururuca.' },
+  { paint: 'ruby', name: 'Ruby', weight: 1000, emoji: '♦️', line: 'Vermelho de rubi no Fuzil Pururuca.' },
+  { paint: 'lore', name: 'A Docão Lore', weight: 2000, emoji: '🐉', line: 'Dourada no jeito da Dragon Lore, no Fuzil Pururuca.' },
+];
+for (const paint of RIFLE_GAPS) {
+  ITEMS.push({
+    id: 'a' + (ITEMS.filter((i) => i.gun && i.id[0] === 'a').length + 1),
+    name: `Fuzil · ${paint.name}`,
+    emoji: paint.emoji,
+    weight: paint.weight,
+    loot: true,
+    gun: 'rifle',
+    paint: paint.paint,
+    line: paint.line,
+  });
+}
 for (const it of ITEMS) it.slot = it.id[0];
-export const COSTUME_SLOT = 'c', DANCE_SLOT = 'd';
+export const COSTUME_SLOT = 'c', DANCE_SLOT = 'd', KNIFE_SLOT = 'k';
 export const isLookSlot = (k) => SLOTS.some(([x]) => x === k);
 export const danceItems = () => ITEMS.filter((i) => i.slot === DANCE_SLOT);
 export const itemForDance = (dance) => ITEMS.find((i) => i.dance === dance) || null;
 export const itemById = (id) => ITEMS.find((i) => i.id === id) || null;
+export const GUN_GROUPS = [['pistol', 'Pistola'], ['sniper', 'Sniper Torresmo'], ['p90', 'P90'], ['carabina', 'Carabina'], ['rifle', 'Fuzil']];
+export const GUN_EQUIP_KEYS = ['pistol', 'p90', 'carabina', 'rifle']; // a Torresmo fica na coluna sniper
+export const knifeKind = (id) => { const i = itemById(id); return (i && i.knife) || ''; };
+export const knifeFinish = (id) => { const i = itemById(id); return (i && i.finish) || ''; };
+export const sniperKind = (id) => { const i = itemById(id); return (i && i.sniper) || ''; };
+export const gunKey = (id) => { const i = itemById(id); return (i && i.gun) || ''; };
+export const gunPaint = (id) => { const i = itemById(id); return (i && i.paint) || ''; };
+export function parseGuns(raw) {
+  let o = null; try { o = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { o = null; }
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const k of GUN_EQUIP_KEYS) { const id = o[k]; if (typeof id === 'string' && gunKey(id) === k) out[k] = id; }
+  return out;
+}
 export const teamItems = (team) => ITEMS.filter((i) => i.team === team).sort((a, b) => (a.teamOrder | 0) - (b.teamOrder | 0) || (a.id < b.id ? -1 : 1));
-export const itemPrice = (id) => { const i = itemById(id); return i ? i.price : 0; };
+export const itemPrice = (id) => { const i = itemById(id); return i && !i.loot && i.price > 0 ? i.price : 0; };
+export const itemWeight = (id) => { const i = itemById(id); return i && i.weight > 0 ? i.weight : 0; };
 // Padrão de graça: não passa pela compra nem precisa de linha na mochila. Preço 0 sozinho também conta, pra não cobrar por engano.
-export const isFreeItem = (id) => { const i = itemById(id); return !!(i && (i.free || !(i.price > 0))); };
+// Skin de caixote (loot) nunca é grátis: sem a linha na mochila, não equipa.
+export const isLootItem = (id) => { const i = itemById(id); return !!(i && i.loot); };
+export const isFreeItem = (id) => { const i = itemById(id); return !!(i && !i.loot && (i.free || !(i.price > 0))); };
 
 // ---------- visual personalizado ----------
 export const LOOK_PREFIX = 'x1.';
@@ -197,8 +340,7 @@ export const DEFAULT_LOOK = { shirt: 0, pants: 12, items: {} }; // camiseta verm
 export const isLookCode = (s) => typeof s === 'string' && s.length <= 48 && LOOK_RE.test(s);
 export function encodeLook(look) {
   const sh = Math.max(0, Math.min(COLORS.length - 1, look.shirt | 0)), pn = Math.max(0, Math.min(COLORS.length - 1, look.pants | 0));
-  let its = SLOTS.map(([k]) => look.items && look.items[k]).filter((id) => id && itemById(id));
-  const cos = its.find((id) => id[0] === COSTUME_SLOT); if (cos) its = [cos]; // fantasia completa: sozinha
+  const its = SLOTS.map(([k]) => look.items && look.items[k]).filter((id) => id && itemById(id) && isLookSlot(itemById(id).slot));
   return LOOK_PREFIX + sh.toString(16) + '.' + pn.toString(16) + its.map((i) => '.' + i).join('');
 }
 // Devolve { shirt, pants, items:{slot:id} } ou null se o código for inválido (formato, cor fora da paleta, item inexistente, dois itens no mesmo espaço).
@@ -208,7 +350,6 @@ export function parseLook(code) {
   if (!(shirt < COLORS.length) || !(pants < COLORS.length)) return null;
   const items = {};
   for (const id of f.slice(3)) { const it = itemById(id); if (!it || !isLookSlot(it.slot) || items[it.slot]) return null; items[it.slot] = id; }
-  if (items[COSTUME_SLOT] && Object.keys(items).length > 1) return null; // fantasia não mistura com outras partes
   if (encodeLook({ shirt, pants, items }) !== code) return null; // só a forma canônica (ordem dos espaços fixa)
   return { shirt, pants, items };
 }
@@ -217,7 +358,13 @@ export const lookItemIds = (code) => { const l = parseLook(code); return l ? Obj
 export function lookToSkin(code) {
   const l = typeof code === 'string' ? parseLook(code) : code; if (!l) return null;
   const cid = l.items[COSTUME_SLOT];
-  if (cid) { const c = itemById(cid).costume; return { ...JSON.parse(JSON.stringify(c)), id: typeof code === 'string' ? code : encodeLook(l), name: itemById(cid).name, custom: true }; }
+  if (cid) {
+    const c = JSON.parse(JSON.stringify(itemById(cid).costume));
+    const extras = Object.entries(l.items).filter(([slot]) => slot !== COSTUME_SLOT).map(([, id]) => ({ ...itemById(id).part }));
+    const types = new Set(extras.map((p) => p.type));
+    c.parts = [...(c.parts || []).filter((p) => !types.has(p.type)), ...extras];
+    return { ...c, id: typeof code === 'string' ? code : encodeLook(l), name: itemById(cid).name, custom: true };
+  }
   const parts = Object.values(l.items).map((id) => ({ ...itemById(id).part }));
   return { id: typeof code === 'string' ? code : encodeLook(l), name: 'Visual personalizado', custom: true,
     shirt: { color: COLORS[l.shirt], trim: '#1d1410', logo: { text: 'C!', color: '#f5e6d0' } }, pants: COLORS[l.pants], parts };

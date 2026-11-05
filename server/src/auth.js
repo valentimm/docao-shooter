@@ -8,7 +8,7 @@
 import { cleanNick, nickKey, nickError, passError } from '../../shared/nick.js';
 import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
-import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin } from './shop.js';
+import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, buyBox, openBox, spinWheel } from './shop.js';
 
 const ITERS = 100000; // teto do WebCrypto do Workers
 const SESSION_TTL = 30 * 24 * 3600; // s
@@ -73,7 +73,7 @@ async function newSession(env, accountId) {
 // token → { id, nick, skin } ou null (inexistente/vencido/inválido)
 export async function accountFromToken(env, token) {
   if (!env.DB || typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
-  return env.DB.prepare('SELECT a.id, a.nick, a.skin FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?').bind(await sha256hex(token), now()).first();
+  return env.DB.prepare('SELECT a.id, a.nick, a.skin, a.knife, a.sniper, a.guns FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?').bind(await sha256hex(token), now()).first();
 }
 // apelido pertence a uma conta? (convidados não podem usar)
 export async function nickRegistered(env, raw) {
@@ -89,7 +89,9 @@ export async function recordStats(env, items) {
   const c = (n) => Math.max(0, Math.min(5000, n | 0));
   const st = items.filter((i) => i && STAT_MODES.includes(i.mode) && i.acct > 0).map((i) => env.DB.prepare('INSERT INTO stats (account_id, mode, kills, deaths, wins, matches) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(account_id, mode) DO UPDATE SET kills = kills + ?3, deaths = deaths + ?4, wins = wins + ?5, matches = matches + ?6').bind(i.acct, i.mode, c(i.k), c(i.d), c(i.w), c(i.m)));
   const ok = items.filter((i) => i && i.acct > 0 && STAT_MODES.includes(i.mode));
-  const ch = await chalUpdates(env, ok).catch((e) => { console.error('desafios', e && e.message); return new Map(); }); // só lê se a sala contou algo
+  // desafios valem em QUALQUER sala online (Corrida Armada, X1...): antes só os 4 modos do ranking chegavam aqui e o resto sumia
+  const chOk = items.filter((i) => i && i.acct > 0 && typeof i.mode === 'string' && i.mode !== 'treino');
+  const ch = await chalUpdates(env, chOk).catch((e) => { console.error('desafios', e && e.message); return new Map(); }); // só lê se a sala contou algo
   const coins = new Map(); for (const i of ok) if (i.c > 0) coins.set(i.acct, (coins.get(i.acct) || 0) + i.c);
   const cs = [...new Set([...coins.keys(), ...ch.keys()])].map((a) => coinCreditStmt(env, a, coins.get(a) || 0, ch.get(a) || null)).filter(Boolean);
   if (st.length || cs.length) await env.DB.batch([...st, ...cs]);
@@ -112,7 +114,7 @@ async function myStats(env, id) {
 // devolve Response ou null (rota não é de conta). json(obj, status, extraHeaders)
 export async function handleAccountRoute(req, env, url, json) {
   const p = url.pathname, m = req.method;
-  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/shop/buy' || p === '/api/rank')) return null;
+  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/buy' || p === '/api/lootbox/wheel' || p === '/api/rank')) return null;
   if (!env.DB) return json({ error: 'Contas indisponíveis no momento. Você pode jogar como convidado.' }, 503);
   const ip = req.headers.get('CF-Connecting-IP') || 'local';
   try {
@@ -167,13 +169,47 @@ export async function handleAccountRoute(req, env, url, json) {
     }
     if (p === '/api/me' && m === 'GET') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const boxGrant = await grantLoginBox(env, a.id);
       const w = await wallet(env, a.id);
-      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins }, stats: await myStats(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal });
+      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant });
     }
     if (p === '/api/me/skin' && m === 'PUT') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
       const b = await readJson(req); if (!b || typeof b.skin !== 'string' || !(await saveSkin(env, a.id, b.skin))) return json({ error: 'Skin inválida ou com partes que você ainda não comprou' }, 400);
       return json({ ok: true, skin: b.skin });
+    }
+    if (p === '/api/me/knife' && m === 'PUT') {
+      const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const b = await readJson(req); if (!b || typeof b.knife !== 'string' || !(await equipKnife(env, a.id, b.knife))) return json({ error: 'Essa faca não está na sua mochila' }, 400);
+      return json({ ok: true, knife: b.knife || null });
+    }
+    if (p === '/api/me/sniper' && m === 'PUT') {
+      const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const b = await readJson(req); if (!b || typeof b.sniper !== 'string' || !(await equipSniper(env, a.id, b.sniper))) return json({ error: 'Essa skin não está na sua mochila' }, 400);
+      return json({ ok: true, sniper: b.sniper || null });
+    }
+    if (p === '/api/me/gun' && m === 'PUT') {
+      const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const b = await readJson(req); if (!b || typeof b.key !== 'string' || typeof b.item !== 'string') return json({ error: 'Pedido inválido' }, 400);
+      const guns = await equipGun(env, a.id, b.key, b.item);
+      if (!guns) return json({ error: 'Essa skin não está na sua mochila' }, 400);
+      return json({ ok: true, guns });
+    }
+    if (p === '/api/lootbox/buy' && m === 'POST') {
+      const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const r = await buyBox(env, a.id);
+      return r.status === 200 ? json({ ok: true, coins: r.coins, boxes: r.boxes, boxBought: true }) : json({ error: r.error }, r.status);
+    }
+    if (p === '/api/lootbox/open' && m === 'POST') {
+      const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const r = await openBox(env, a.id);
+      return r.status === 200 ? json({ ok: true, dupe: r.dupe, item: r.item, coins: r.coins, gain: r.gain, boxes: r.boxes }) : json({ error: r.error }, r.status);
+    }
+    if (p === '/api/lootbox/wheel' && m === 'POST') {
+      const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
+      const b = await readJson(req); if (!b || !Array.isArray(b.items)) return json({ error: 'Pedido inválido' }, 400);
+      const r = await spinWheel(env, a.id, b.items);
+      return r.status === 200 ? json({ ok: true, dupe: r.dupe, item: r.item, coins: r.coins, gain: r.gain, spent: r.spent, knife: r.knife, sniper: r.sniper, guns: r.guns }) : json({ error: r.error }, r.status);
     }
     if (p === '/api/shop/buy' && m === 'POST') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);

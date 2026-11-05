@@ -108,16 +108,16 @@ const pop = (x) => { let n = 0; while (x) { n += x & 1; x >>>= 1; } return n; };
 const progOf = (c, v) => (c.ty === 'bits' ? pop(v) : v);
 // aplica os contadores de uma gravação da sala (q = { ev: n }, mode = modo da sala). Devolve o estado novo e quanto pagar agora.
 export function applyChal(state, acct, q, mode) {
-  const ids = dailyIds(acct, state.d), s = { d: state.d, p: state.p.slice(), k: state.k }; let reward = 0, changed = false;
+  const ids = dailyIds(acct, state.d), s = { d: state.d, p: state.p.slice(), k: state.k }; let reward = 0, boxes = 0, changed = false;
   ids.forEach((id, i) => {
     const c = CHAL_BY_ID[id], v = q && q[c.ev] | 0; if (!v || (c.mo && c.mo !== mode) || (s.k & (1 << i))) return;
     const before = s.p[i];
     if (c.ty === 'max') s.p[i] = Math.max(before, v); else if (c.ty === 'bits') s.p[i] = before | v; else s.p[i] = before + v;
     if (c.ty !== 'bits') s.p[i] = Math.min(s.p[i], c.goal);
     if (s.p[i] !== before) changed = true;
-    if (progOf(c, s.p[i]) >= c.goal) { s.k |= 1 << i; reward += c.reward; changed = true; }
+    if (progOf(c, s.p[i]) >= c.goal) { s.k |= 1 << i; reward += c.reward; boxes += 1; changed = true; }
   });
-  return { state: s, reward, changed };
+  return { state: s, reward, boxes, changed };
 }
 // o que a tela mostra
 export function chalView(acct, raw, ms = Date.now()) {
