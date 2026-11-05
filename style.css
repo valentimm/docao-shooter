@@ -2056,6 +2056,15 @@ button.loot-chip.pick{outline:3px solid var(--red);outline-offset:1px;background
   background:radial-gradient(circle at 35% 30%,#fff8,#0000 55%),linear-gradient(160deg,#ffe58a,#b8860b);
   animation:loot-shine 1.15s linear infinite
 }
+.loot-photo.has-preview{
+  width:100px;height:62px;font-size:0;
+  background-color:#140f0c !important;
+  background-repeat:no-repeat !important;
+  background-position:center !important;
+  background-size:contain !important;
+  box-shadow:inset 0 0 0 1px #000a
+}
+.loot-card[data-tier="gold"] .loot-photo.has-preview{animation:loot-shine 1.15s linear infinite}
 .loot-card.hit{z-index:4}
 .loot-show.land .loot-window{overflow:visible;-webkit-mask-image:none;mask-image:none}
 @keyframes loot-shine{0%{filter:brightness(1)}40%{filter:brightness(1.45)}100%{filter:brightness(1)}}
@@ -2118,6 +2127,7 @@ button.loot-chip.pick{outline:3px solid var(--red);outline-offset:1px;background
   .loot-window{height:132px}
   .loot-card{width:92px;height:112px}
   .loot-photo{width:54px;height:54px;font-size:30px}
+  .loot-photo.has-preview{width:80px;height:48px;font-size:0}
 }
 @media(prefers-reduced-motion:reduce){
   .loot-show.land,.loot-show.land .loot-rays,.loot-show.land .loot-card.hit,.loot-show.land .loot-card.hit .loot-photo,.loot-spark,.loot-kicker.pop,.loot-show.land #closetRevealText,.loot-show.land.is-gold::after{animation:none}

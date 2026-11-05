@@ -7,14 +7,16 @@ import * as THREE from 'three';
 import { makeDocao, makeKnife, poseButterfly } from './docao.js';
 import { poseVictory, resetVictoryPose, ALL_DANCES, isPaidDance, normDance } from './victory-dance.js';
 import './costumes.js';
-import { getAccount, getItems, getEarn, getChal, onAccount, refreshStats, equipLook, buyItem, equipKnife, equipSniper, equipGun, openBox, spinWheel } from './account.js';
+import { getAccount, getItems, getEarn, getChal, onAccount, refreshStats, equipLook, buyItem, equipKnife, equipSniper, equipGun, openBox, buyBox, spinWheel } from './account.js';
 import { CHAL_PER_DAY, TIERS } from './shared/challenges.js';
 import { COLORS, SLOTS, ITEMS, SHOP_TEAMS, CURRENCY, COIN_ICON, SHOP_NAME, SHOP_EMOJI, SHOP_BUTTON, DEFAULT_LOOK, COSTUME_SLOT, DANCE_SLOT, KNIFE_SLOT, KNIFE_MODELS, KNIFE_COLORS, GUN_GROUPS, encodeLook, parseLook, itemById, itemForDance, isFreeItem, teamItems } from './shared/closet.js';
-import { BOX_NAME, BOX_EMOJI, lootItems, wheelFloor } from './shared/lootbox.js';
+import { BOX_NAME, BOX_EMOJI, BOX_PRICE, lootItems, wheelFloor } from './shared/lootbox.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let look = { ...DEFAULT_LOOK, items: {} }, tab = 'look', trial = null, busy = false, three = null, raf = 0, pendingBuy = null, pendingWheel = null, wheelPick = [];
+let look = { ...DEFAULT_LOOK, items: {} }, tab = 'look', trial = null, busy = false, three = null, raf = 0, pendingBuy = null, pendingBox = false, pendingWheel = null, wheelPick = [];
+let lootThumbOf = () => '';
+export function setLootThumbSource(fn) { lootThumbOf = typeof fn === 'function' ? fn : () => ''; }
 
 const currentCode = () => { const items = { ...look.items }; const trialItem = trial && itemById(trial.id); if (trial && trial.slot !== DANCE_SLOT && trial.slot !== KNIFE_SLOT && !(trialItem && (trialItem.sniper || trialItem.gun))) items[trial.slot] = trial.id; return encodeLook({ shirt: look.shirt, pants: look.pants, items }); };
 const previewKnife = () => {
@@ -75,7 +77,7 @@ function stopThree() { if (raf) cancelAnimationFrame(raf); raf = 0; } // o rende
 // ---------- telas ----------
 function renderWallet() {
   const a = getAccount(), e = getEarn(); if (!a) return;
-  $('closetWallet').innerHTML = `${COIN_ICON} <b>${a.coins | 0}</b> ${CURRENCY} · ${BOX_EMOJI} <b>${a.boxes | 0}</b> caixote${(a.boxes | 0) === 1 ? '' : 's'}<small>Partidas hoje: ${e.today | 0}/${e.cap | 0} · desafios sem teto · 1 caixote por dia e +1 por desafio</small>`;
+  $('closetWallet').innerHTML = `${COIN_ICON} <b>${a.coins | 0}</b> ${CURRENCY} · ${BOX_EMOJI} <b>${a.boxes | 0}</b> caixote${(a.boxes | 0) === 1 ? '' : 's'}<small>Partidas hoje: ${e.today | 0}/${e.cap | 0} · desafios sem teto · 1 grátis ao entrar, +1 por desafio e 1 comprado por dia</small>`;
 }
 const curDance = () => { try { return normDance(localStorage.getItem('docao.dance')); } catch (e) { return 'moonwalk'; } };
 function renderLook() {
@@ -155,8 +157,12 @@ function renderBox() {
   const wheel = `<div class="wheel-box"><div class="chal-head"><b>🎡 Roleta</b></div><div class="wheel-slots">${slots}</div>`
     + (mine.length < 3 ? '<p class="closet-note">Precisa de 3 skins na mochila.</p>' : `<div class="loot-catalog">${picks}</div>`)
     + `<button type="button" id="closetSpin" class="ticket-btn"${wheelPick.length === 3 ? '' : ' disabled'}>${wheelPick.length === 3 ? 'GIRAR A ROLETA' : 'ESCOLHA 3 SKINS'}</button></div>`;
+  const coins = a ? a.coins | 0 : 0, bought = !!(a && a.boxBought), canBuy = !bought && coins >= BOX_PRICE;
+  const buyLabel = bought ? 'CAIXOTE DE HOJE JÁ COMPRADO' : canBuy ? `COMPRAR 1 CAIXOTE · ${BOX_PRICE}` : `FALTAM ${BOX_PRICE - coins} DOCOINS`;
   box.innerHTML = `<div class="chal-head"><b>${BOX_EMOJI} ${esc(BOX_NAME)}</b> <span>${n} fechado${n === 1 ? '' : 's'}</span></div>`
     + `<button type="button" id="closetOpenBox" class="ticket-btn"${n ? '' : ' disabled'}>${n ? 'ABRIR UM CAIXOTE' : 'SEM CAIXOTE AGORA'}</button>`
+    + `<button type="button" id="closetBuyBox" class="ticket-btn alt"${canBuy ? '' : ' disabled'}>${buyLabel}</button>`
+    + `<p class="closet-note">Dá pra comprar 1 caixote por dia por ${BOX_PRICE} ${CURRENCY}, além do grátis e dos desafios. O dia vira à meia-noite de Brasília.</p>`
     + wheel + catalog;
 }
 function renderChal() {
@@ -189,6 +195,13 @@ export function openCloset(want) {
   else render();
 }
 function closeAsk() { pendingBuy = null; const d = $('closetBuyAsk'); if (d) d.classList.add('hidden'); }
+function closeBoxAsk() { pendingBox = false; const d = $('closetBuyAsk'); if (d) d.classList.add('hidden'); }
+function askBox() {
+  pendingBox = true;
+  $('closetBuyAskText').textContent = `Comprar um caixote por ${BOX_PRICE} Docoins? Só dá pra comprar 1 por dia.`;
+  $('closetBuyAsk').classList.remove('hidden');
+  $('closetBuyNo').focus();
+}
 function askBuy(it) {
   pendingBuy = it;
   $('closetBuyAskText').textContent = `Deseja comprar ${it.name} por ${it.price} Docoins?`;
@@ -196,7 +209,7 @@ function askBuy(it) {
   $('closetBuyNo').focus();
 }
 function closeWheelAsk() { pendingWheel = null; $('closetBuyAsk').classList.add('hidden'); }
-function closeCloset() { clearInterval(chalTimer); closeAsk(); pendingWheel = null; abortReel(); $('closetReveal').classList.add('hidden'); $('closetModal').classList.add('hidden'); trial = null; stopDance(); stopThree(); }
+function closeCloset() { clearInterval(chalTimer); closeAsk(); closeBoxAsk(); pendingWheel = null; abortReel(); $('closetReveal').classList.add('hidden'); $('closetModal').classList.add('hidden'); trial = null; stopDance(); stopThree(); }
 async function finishBuy(it) {
   busy = true; msg('Comprando…'); const r = await buyItem(it.id); busy = false;
   if (r.error) msg(r.error); else {
@@ -214,6 +227,11 @@ async function onClick(e) {
   const t = e.target;
   if (reel) { reel.skip(); return; }
   if (busy) return;
+  if (pendingBox) {
+    if (t.id === 'closetBuyAsk' || t.closest('#closetBuyNo')) { closeBoxAsk(); return; }
+    if (t.closest('#closetBuyYes')) { closeBoxAsk(); await finishBoxBuy(); return; }
+    return;
+  }
   if (pendingBuy) {
     if (t.id === 'closetBuyAsk' || t.closest('#closetBuyNo')) { closeAsk(); return; }
     if (t.closest('#closetBuyYes')) { const it = pendingBuy; closeAsk(); await finishBuy(it); return; }
@@ -252,6 +270,7 @@ async function onClick(e) {
     return;
   }
   if (t.closest('#closetOpenBox')) { await finishOpen(); return; }
+  if (t.closest('#closetBuyBox')) { askBox(); return; }
   const wp = t.closest('[data-wheel-pick]');
   if (wp) {
     const id = wp.dataset.wheelPick, at = wheelPick.indexOf(id);
@@ -298,6 +317,8 @@ const LOOT_LADDER = [
 ];
 const LOOT_RANK = { 500: 0, 750: 1, 1000: 2, 1250: 3, 2000: 5 };
 const SPIN_MS = [3600, 5000, 6400, 8000, 9600, 11000];
+// A roleta percorre a mesma fita, só que um pouco mais devagar que o caixote.
+const WHEEL_SPIN = 1.3;
 const SPIN_LEAD = [16, 22, 30, 38, 44, 52];
 const SPIN_OVER = [8, 16, 32, 52, 64, 78];
 const lookOf = (it) => LOOT_LADDER[LOOT_RANK[it && it.weight | 0] ?? 0];
@@ -320,6 +341,21 @@ const cardHtml = (it) => {
   const look = lookOf(it);
   return `<div class="loot-card" data-tier="${look.id}" style="--loot:${look.hex};--loot-glow:${look.glow}"><span class="loot-photo">${it.emoji || '🎁'}</span><span class="loot-name">${esc(it.name || 'Skin')}</span><span class="loot-tier">${look.label}</span></div>`;
 };
+function paintCardPreviews(trackEl, cards) {
+  const seen = new Map();
+  for (let i = 0; i < cards.length; i++) {
+    const it = cards[i];
+    if (!seen.has(it.id)) seen.set(it.id, lootThumbOf(it) || '');
+    const url = seen.get(it.id);
+    const photo = trackEl.children[i] && trackEl.children[i].querySelector('.loot-photo');
+    if (!url || !photo) continue;
+    photo.classList.add('has-preview');
+    photo.style.backgroundImage = `url("${url}")`;
+    photo.textContent = '';
+    photo.setAttribute('role', 'img');
+    photo.setAttribute('aria-label', it.name || 'Arma');
+  }
+}
 function pickFrom(pool) { return pool[Math.floor(Math.random() * pool.length)]; }
 function buildStrip(pool, winner, rank) {
   const lead = SPIN_LEAD[rank] || SPIN_LEAD[0];
@@ -433,6 +469,7 @@ async function presentDrop(r, kind, pool) {
   const { cards, winAt } = buildStrip(source, it, reduce ? 0 : look.rank);
   revealDrop = r.dupe ? null : it;
   track.innerHTML = cards.map(cardHtml).join('');
+  if (kind === 'wheel') paintCardPreviews(track, cards);
   track.style.transform = 'translate3d(0,0,0)';
   sparks.innerHTML = '';
   show.className = 'loot-show';
@@ -451,7 +488,8 @@ async function presentDrop(r, kind, pool) {
   const center = (view - w) / 2;
   const jitter = (Math.random() - 0.5) * w * 0.2;
   const target = center - winAt * step + jitter;
-  const ms = reduce || !(w > 0) ? 0 : SPIN_MS[look.rank];
+  const spinMs = SPIN_MS[look.rank] || SPIN_MS[0];
+  const ms = reduce || !(w > 0) ? 0 : (kind === 'wheel' ? Math.round(spinMs * WHEEL_SPIN) : spinMs);
   let skipped = false, dead = false;
   reel = { skip() { skipped = true; }, abort() { dead = true; } };
   await spinTrack({
@@ -485,6 +523,14 @@ async function equipReveal() {
   else if (it.gun === 'sniper' || it.sniper) document.dispatchEvent(new CustomEvent('docao-sniper-pick', { detail: it.id }));
   else document.dispatchEvent(new CustomEvent('docao-gun-pick', { detail: { key: it.gun, id: it.id } }));
   msg(`${it.name} equipada.`, true); render();
+}
+async function finishBoxBuy() {
+  busy = true; msg('Comprando caixote…');
+  try {
+    const r = await buyBox();
+    if (r.error) msg(r.error); else msg('Caixote comprado. Já pode abrir.', true);
+    render();
+  } finally { busy = false; }
 }
 async function finishOpen() {
   busy = true; msg('Abrindo…');
@@ -634,7 +680,7 @@ export function initCloset() {
   $('closetLogin').onclick = () => { closeCloset(); $('acctBtn').click(); };
   $('closetTabLook').onclick = () => setTab('look'); $('closetTabShop').onclick = () => setTab('shop'); $('closetTabChal').onclick = () => setTab('chal'); $('closetTabBox').onclick = () => setTab('box');
   $('closetModal').addEventListener('click', onClick);
-  $('closetModal').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { if (reel) { reel.skip(); return; } if (!$('closetReveal').classList.contains('hidden')) { $('closetReveal').classList.add('hidden'); return; } if (pendingBuy) closeAsk(); else if (pendingWheel) closeWheelAsk(); else closeCloset(); } });
+  $('closetModal').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { if (reel) { reel.skip(); return; } if (!$('closetReveal').classList.contains('hidden')) { $('closetReveal').classList.add('hidden'); return; } if (pendingBox) closeBoxAsk(); else if (pendingBuy) closeAsk(); else if (pendingWheel) closeWheelAsk(); else closeCloset(); } });
   $('closetModal').addEventListener('mousedown', (e) => e.stopPropagation());
   const ownedBox = $('wardrobeOwned'); if (ownedBox) ownedBox.addEventListener('click', onWardrobeClick);
   document.addEventListener('docao-skin-catalog', () => { wardrobeDirty = false; wardrobeCustom = false; refreshWardrobeLook(); });
