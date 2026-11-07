@@ -77,6 +77,8 @@ import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, set
 import { getAccount, getItems, onAccount, loadMe, equipKnife, equipSniper, equipGun, saveSkin as saveAcctSkin, dropSession } from './account.js';
 import { knifeKind, knifeFinish, sniperKind, itemById, gunPaint, GUN_EQUIP_KEYS } from './shared/closet.js';
 import { lootItems } from './shared/lootbox.js';
+import { deathSkinShow } from './shared/death-skin.js';
+import { createDeathSkinFx } from './death-skin-fx.js';
 import { applyGunPaint } from './gun-paint.js';
 import { initAccountUI } from './account-ui.js';
 import { initCloset, refreshWardrobeLook, setLootThumbSource } from './closet-ui.js';
@@ -1060,6 +1062,7 @@ const DEATHCAM_HOLD = 1.1; // s de câmera em 3ª pessoa no seu bacon antes dos 
 let ghost = null; // Docão do jogador local (ele não tem modelo em 1ª pessoa) só pra animação de morte
 const deathCamState = { on: false, dist: 0, target: null };
 let killcamGuns = false; // B na kill cam: a ficha de armas abre por cima; B ou Esc devolve a visão limpa
+const deathSkinFx = createDeathSkinFx(scene, groundAt);
 function deathFx(e) { // dispara uma vez por morte (offline: kill(); online: evento 'k' ou snapshot)
   if (e.swallowedAt != null && e.swallowedAt === e.deathAt) { if (e.model) e.model.group.visible = false; e.fxDeath = e.deathAt; return; } // engolido pela Pokébola
   if (e.fxDeath === e.deathAt) return; e.fxDeath = e.deathAt;
@@ -1074,6 +1077,10 @@ function deathFx(e) { // dispara uma vez por morte (offline: kill(); online: eve
     if (atk && atk !== e) {
       const dx = atk.pos.x - e.pos.x, dz = atk.pos.z - e.pos.z;
       if (dx * dx + dz * dz > 0.04) deathCamState.ang = Math.atan2(-dx, -dz);
+    }
+    if (!reducedAnims()) {
+      const show = deathSkinShow(getAccount());
+      if (show.dragon || show.coins) deathSkinFx.play(e.pos, show, scene, deathCamState.ang);
     }
   }
 }
@@ -1201,7 +1208,7 @@ function updateMatchEnding(realDt) {
       if (e.alive) { moveEntity(e, dt); animateBot(e, dt); }
       else { deathFx(e); if (e.fxDeath === e.deathAt && e.baconOk && e.swallowedAt !== e.deathAt) popModel(e.model.group, gameTime - e.deathAt, e.yaw); }
     }
-    updateGrenades(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updateShocks(dt); updatePokeFx(dt); updateParticles(dt); updateBacon(dt); updateEffects(dt); updateShafts(dt);
+    updateGrenades(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updateShocks(dt); updatePokeFx(dt); updateParticles(dt); updateDeathSkinFx(dt); updateBacon(dt); updateEffects(dt); updateShafts(dt);
     gameTime = finalTime;
   }
   if (end.elapsed >= Math.min(END_MENU_DELAY, end.duration)) revealEndMenu();
@@ -6942,8 +6949,9 @@ function pause() { if (state !== 'playing') return; softPauseOn = false; state =
 // ` solta o mouse como o Esc, sem a pausa na chapa: o HUD fica como estava. Clique ou ` de novo volta a mirar.
 function softPause() { if (state !== 'playing') return; state = 'paused'; softPauseOn = true; releaseLook(); if (document.pointerLockElement) document.exitPointerLock(); }
 function resume() { closePauseClass(); showPauseLoadout(false); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); lockPointer(); }
+function updateDeathSkinFx(dt) { deathSkinFx.update(dt); }
 function toMenu() {
-  clearMatchEnding();
+  clearMatchEnding(); deathSkinFx.clear();
   if (online) leaveOnline();
   endVictory(); stopEmote(); document.body.classList.remove('deadgray');
   zone = null; mode = 'dm'; document.body.classList.remove('armsmode'); endBomb(); $('domhud').classList.add('hidden'); $('zoneMark').classList.add('hidden'); $('teamPick').classList.add('hidden');
@@ -7170,7 +7178,7 @@ function loop() {
     updateFootsteps(dt);
     if (gasSim && !online) stepGasLocal();
     if (gasView) gasView.update(dt, gameTime, player ? player.pos : null);
-    updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
+    updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateDeathSkinFx(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
     updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud();
     try { flushSleigh(); } catch (e) { /* trenó espera o contexto */ }
     if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; queueSleigh(); });
@@ -7188,6 +7196,7 @@ function loop() {
     const showIdle = showDrag || Math.abs(showSpinVel) > 0.05 ? 0 : Math.sin(menuT * 1.8) * 0.12;
     showcase.rotation.y = showCamYaw + 0.15 + showSpin + showIdle; showcase.position.y = showBaseY + (getSkin(selectedSkin).float ? 0.1 + Math.sin(menuT * 10) * 0.06 : Math.abs(Math.sin(menuT * 6)) * 0.06);
     for (const p of pickups) p.mesh.rotation.y += dt;
+    updateDeathSkinFx(dt);
     renderDanceShadows(danceT);
   } else if (state === 'over' && (victory.on || matchEnding)) {
     if (matchEnding) updateMatchEnding(realDt); // câmera lenta do fim, na visão do jogador (e o relógio que leva à dança)
