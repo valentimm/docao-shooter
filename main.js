@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, KARAMBIT_RING_Z } from './docao.js';
+import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
 import { makeFPSniper, poseSniperBolt, applySniperSkin } from './sniper-view.js';
@@ -3969,12 +3969,30 @@ function paintThumbGun(clone, it) {
   }
   applyGunPaint(clone, it.paint || '');
 }
+function lootGloveThumb(it) {
+  const part = it.part || {};
+  const mat = gloveMat(part.color, part);
+  const g = new THREE.Group();
+  const fist = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), mat);
+  fist.scale.set(1.15, 0.82, 1.05);
+  outline(fist, 0.007);
+  g.add(fist);
+  const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.05, 4, 8), mat);
+  thumb.position.set(0.07, 0.02, 0.04);
+  thumb.rotation.set(0.5, 0.2, 0.9);
+  outline(thumb, 0.004);
+  g.add(thumb);
+  gloveSparkles(fist, part, 0.12);
+  return renderWeaponThumb(g, 192, 112);
+}
 function lootItemThumb(it) {
-  if (!it || !(it.gun || it.knife)) return '';
+  const glove = !!(it && it.part && it.part.type === 'glove');
+  if (!it || !(it.gun || it.knife || glove)) return '';
   if (lootThumbs.has(it.id)) return lootThumbs.get(it.id);
   let url = '';
   try {
-    if (it.knife) {
+    if (glove) url = lootGloveThumb(it);
+    else if (it.knife) {
       const knife = makeKnife(1, 0.004, it.knife, it.finish || 'factory');
       if (it.knife === 'butterfly') poseButterfly(knife, 0, 1);
       url = renderWeaponThumb(knife, 192, 112);
@@ -3987,11 +4005,11 @@ function lootItemThumb(it) {
     console.warn('prévia da roleta', it.id, e);
     url = '';
   }
-  lootThumbs.set(it.id, url || '');
+  if (url) lootThumbs.set(it.id, url);
   return url || '';
 }
 function warmLootThumbs() {
-  const list = lootItems().filter((it) => it.gun || it.knife);
+  const list = lootItems().filter((it) => it.gun || it.knife || (it.part && it.part.type === 'glove'));
   let i = 0;
   const next = () => {
     if (i >= list.length) { window.__lootThumbs = lootThumbs.size; return; }
