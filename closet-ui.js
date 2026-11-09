@@ -472,7 +472,7 @@ async function presentDrop(r, kind, pool) {
   const { cards, winAt } = buildStrip(source, it, reduce ? 0 : look.rank);
   revealDrop = r.dupe ? null : it;
   track.innerHTML = cards.map(cardHtml).join('');
-  if (kind === 'wheel') paintCardPreviews(track, cards);
+  paintCardPreviews(track, cards);
   track.style.transform = 'translate3d(0,0,0)';
   sparks.innerHTML = '';
   show.className = 'loot-show';
