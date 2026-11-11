@@ -22,7 +22,7 @@ function lootOption(it, separator = ' ') {
   const name = esc(it.name);
   const url = it.gun ? lootThumbOf(it) : '';
   if (!url) return `${it.emoji}${separator}${name}`;
-  return `<img class="closet-gun-thumb" src="${esc(url)}" alt="${name}" title="${name}" width="112" height="64" loading="lazy">`;
+  return `<span class="closet-gun-thumb"><img src="${esc(url)}" alt="${name}" title="${name}" width="112" height="64" loading="lazy"></span>`;
 }
 
 const currentCode = () => { const items = { ...look.items }; const trialItem = trial && itemById(trial.id); if (trial && trial.slot !== DANCE_SLOT && trial.slot !== KNIFE_SLOT && !(trialItem && (trialItem.sniper || trialItem.gun))) items[trial.slot] = trial.id; return encodeLook({ shirt: look.shirt, pants: look.pants, items }); };
