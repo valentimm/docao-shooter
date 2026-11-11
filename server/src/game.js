@@ -39,10 +39,11 @@ import { SHOCK, stepShock, shockTop, shockReach, shockDmg, shockStun } from '../
 import { streakRewards, PREDATOR, HELI, GUNNER, NUKE, heliOrbit, heliPos, AC130 } from '../../shared/killstreaks.js';
 import { DOM, pickZone, newZoneState, zoneCounts, stepZone, canJoinTeam, smallerTeam, inZone } from '../../shared/domination.js';
 import { BOMB, W_BOMB, bombLayout, newBombState, startRound, stepBomb, blastVictims, packBomb, spawnList, botObjective, bombFrozen } from '../../shared/bomb.js';
+import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, compEnterRound, buyWeapon, buyArmor, buyUtil, applyBuy, isPistolRound, flashSeconds } from '../../shared/comp.js';
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, pickBotSecondary, akimboReady, ammoLow } from '../../shared/revolver.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc } from '../../shared/saber.js';
 const CHAL_WEAPONS = { shotgun: 'w_shot', semi: 'w_shot', sniper: 'w_snip', canhao: 'w_snip', carabina: 'w_snip', besta: 'w_bow', arco: 'w_bow', estilingue: 'w_bow', sabre: 'w_saber', sabre2: 'w_saber', bazooka: 'w_boom', milho: 'w_boom' }; // grupos de armas dos desafios
-const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isTraining(m) || isInvasion(m) || m === 'survival' || isX1(m) ? m : 'dm');
+const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || isTraining(m) || isInvasion(m) || m === 'survival' || isX1(m) ? m : 'dm');
 
 export const MAX_PLAYERS = 30;
 const RS_SAFETY = 60; // s: cliente antigo que nunca manda 'rs' renasce sozinho depois disso
@@ -66,21 +67,23 @@ export class Game {
   constructor(cfg, io) {
     this.test = !!cfg.test; // só no `wrangler dev` com ALLOW_TEST=1: aceita teleporte (testes automatizados)
     const variant = cfg.variant === 'survival' || cfg.mode === 'survival' || cfg.survival === true || cfg.survival === 1 || isSurvival(cfg.surv) ? 'survival' : '';
-    this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers) };
+    this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), side: normSide(cfg.side), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers) };
+    if (this.cfg.mode === COMP.mode) { this.cfg.side = normSide(cfg.side); this.cfg.max = this.cfg.side * 2; this.cfg.fillBots = false; if (!BOMB_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = 'rodizio'; }
     if (isX1(this.cfg.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; }
     this.chatLog = Array.isArray(cfg.chatLog) ? cfg.chatLog.filter((x) => x && typeof x.text === 'string').slice(-30) : [];
     this.io = io; // { send(id, obj), broadcast(obj), startLoop(), stopLoop() }
     this.ents = new Map(); this.nextId = 1; this.hostId = 0;
     this.state = 'lobby'; this.mapId = null; this.T = 0; this.t0 = 0;
-    this.events = []; this.personal = new Map(); this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.pickups = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = null; this.projId = 1;
+    this.events = []; this.personal = new Map(); this.nades = []; this.shocks = []; this.tacs = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.pickups = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = null; this.projId = 1;
     this.forcedWinTeam = null; this.nukeWinner = 0; this.x1Gun = 0; this.x1Hold = 0; // max de antes do X1, pra voltar ao sair
   }
   now() { return Date.now() / 1000; }
   // o mundo só avança com mensagens (limite de CPU): depois de um tempo parado, T fica velho. Acerta pelo relógio de parede antes de usar.
   syncClock() { if (this.state === 'playing' && this.t0) this.T = Math.max(this.T, this.now() - this.t0); }
-  get teamMode() { return this.cfg.mode === 'dom' || this.armsMode || this.cfg.mode === 'bomb'; } // Dominação e Bomba têm times
+  get teamMode() { return this.cfg.mode === 'dom' || this.armsMode || this.cfg.mode === 'bomb' || this.compMode; } // Dominação, Bomba e Competitivo têm times
+  get compMode() { return this.cfg.mode === COMP.mode; }
   get armsMode() { return isArmsRace(this.cfg.mode); }
-  get bombMode() { return this.cfg.mode === 'bomb'; }
+  get bombMode() { return this.cfg.mode === 'bomb' || this.compMode; }
   get x1Mode() { return isX1(this.cfg.mode); } // X1: duelo, mapa pequeno, mesma arma
   get survival() { return isSurvivalMode(this.cfg.mode, this.cfg); } // HOTMILK à Noite: portas, Papada, barraca, parede e Ray Gun
   get invasion() { return isInvasion(this.cfg.mode) || this.survival; } // Invasão, e o Survival que corre em cima das mesmas waves
@@ -192,6 +195,7 @@ export class Game {
   }
   entInfo(e) { const o = { id: e.id, name: e.name, skin: e.skin, bot: e.bot, tag: e.tag, kills: e.kills, deaths: e.deaths, alive: e.alive, primary: e.primary, w: e.weapon, team: e.team, caps: e.caps, pend: e.pendingTeam ? 1 : 0, kn: e.knife || undefined, sn: e.sniper || undefined, gn: e.guns && Object.keys(e.guns).length ? e.guns : undefined };
     if (this.armsMode) { o.arms = [e.armsStage, e.armsKills]; }
+    if (this.compMode) o.gr = [e.cash | 0, e.armor | 0, e.helmet ? 1 : 0, (e.slots && e.slots[0]) ?? e.primary, (e.slots && e.slots[1]) ?? PISTOL, (e.slots && e.slots[2]) ?? KNIFE, e.weapon, e.nades | 0, e.smokeNades | 0, e.flashNades | 0];
     if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); }
     if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pn = e.purseN | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
     return o; }
@@ -254,7 +258,7 @@ export class Game {
     const navSeeds = map.spawns.map(([x, z, y = 0]) => [x, this.P.groundAt(x, z, y + 0.3), z]);
     this.nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds: navSeeds, extra: map.waypoints || [], avoid: map.navAvoid || [] });
     const rawPicks = this.invasion && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups;
-    this.pickups = (this.x1Mode ? rawPicks.filter((p) => p[0] === 'ammo') : rawPicks).map(([type, x, z, y]) => { const on = (!this.armsMode || type === 'ammo' || type === 'health') && powerOn(type, this.cfg.powers); return { type, pos: { x, y: this.P.groundAt(x, z, (y || 0) + 0.3), z }, active: on, respawnAt: on ? 0 : 1e9 }; });
+    this.pickups = (this.x1Mode ? rawPicks.filter((p) => p[0] === 'ammo') : rawPicks).map(([type, x, z, y]) => { const on = !this.compMode && (!this.armsMode || type === 'ammo' || type === 'health') && powerOn(type, this.cfg.powers); return { type, pos: { x, y: this.P.groundAt(x, z, (y || 0) + 0.3), z }, active: on, respawnAt: on ? 0 : 1e9 }; });
     this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = createGasSim(id); this.events = []; this.personal.clear();
     this.state = 'playing'; this.t0 = this.now(); this.T = 0; this.lastTick = this.now();
     this.curLimit = this.cfgLimit;
@@ -265,6 +269,7 @@ export class Game {
       // (lastShot/lastCt/lastMelee no futuro) fazem o servidor rejeitar todo tiro no "Próximo mapa"/"Jogar de novo" (sem dano)
       e.lastShot = WEAPONS.map(() => -9); e.lastShotL = WEAPONS.map(() => -9); e.lastCt = []; e.lastCtL = []; e.maxOff = undefined; e.lastMeleeCt = undefined; e.lastMeleeT = undefined; e.lastMeleeRate = 0; e.lastKnock = -9; e.mg = null; e.shotBud = [];
       e.pap = {}; e.hitFarm = {}; e.slotOn = null; e.papUntil = 0; e.papGun = -1;
+      e.cash = 0; e.armor = 0; e.helmet = false; e.loss = 0; e.keepKit = false; e.pistolLock = false;
       clearDownFlags(e);
       this.resetStreak(e); e.pokeballs = 0; e.rejectedShots = 0; e.rejectedMelee = 0; e.reload = null; e.hist = []; e.nextFire = 0; e.reloadEnd = 0; e.knifeRoll = 0; e.knifeMode = false;
       if (e.bot) Object.assign(e, { think: 0, lastSeenAt: -99, nextNade: 0, repathAt: 0 });
@@ -282,8 +287,8 @@ export class Game {
     if (this.teamMode) { for (const b of [...this.ents.values()].filter((x) => x.bot)) b.team = -1; for (const b of [...this.ents.values()].filter((x) => x.bot)) b.team = smallerTeam(this.teamCounts(null, false)); }
     this.armsWinner = 0; this.pendingEnd = false; this.teamScore = [0, 0]; this.forcedWinTeam = null; this.nukeWinner = 0; this.zone = this.cfg.mode === 'dom' ? newZoneState(pickZone(this.nav)) : null;
     this.bomb = null; this.bombL = null;
-    if (this.bombMode) { // Modo Bomba (protótipo): lados + sites A/B do mapa, rodada 1 começa na preparação
-      this.bombL = bombLayout(this.nav, this.spawns, map, this.P.groundAt); this.bomb = newBombState(); this.teamScore = this.bomb.score;
+    if (this.bombMode) { // Bomba e Competitivo: lados + sites A/B. O competitivo arma economia, eliminação e prorrogação.
+      this.bombL = bombLayout(this.nav, this.spawns, map, this.P.groundAt); this.bomb = newBombState(); if (this.compMode) armComp(this.bomb); this.teamScore = this.bomb.score;
       for (const ev of startRound(this.bomb, 0, this.live())) this.events.push(['bb', ...ev]);
     }
     this.inv = this.invasion ? this.makeInvasion() : null; if (this.inv) this.inv.start();
@@ -294,7 +299,7 @@ export class Game {
       const duelists = [...this.ents.values()].filter((e) => e.bot || e.connected).sort((a, b) => a.id - b.id);
       duelists.forEach((e, i) => { e.x1Side = i % 2; });
     }
-    let si = 0; for (const e of this.ents.values()) if (e.bot || e.connected) { if (this.inv && !e.bot) e.firstSpawn = si++; this.spawn(e, true); }
+    let si = 0; for (const e of this.ents.values()) if (e.bot || e.connected) { if (this.inv && !e.bot) e.firstSpawn = si++; if (this.compMode && this.bomb) compEnterRound(e, this.bomb.round); this.spawn(e, true); if (this.compMode) this.pushGr(e); }
     if (this.survival) {
       const hs = [...this.ents.values()].filter((e) => !e.bot && e.pos);
       const anchor = hs.length ? { x: hs.reduce((s, e) => s + e.pos.x, 0) / hs.length, z: hs.reduce((s, e) => s + e.pos.z, 0) / hs.length } : null;
@@ -372,12 +377,12 @@ startMsg() {
     const isHost = id === this.hostId;
     switch (m.t) {
       case 'u': this.onUpdate(e, m); break;
-      case 'rs': if (this.state === 'playing' && !e.alive) e.rsReq = true; break; // botão Renascer
+      case 'rs': if (this.state === 'playing' && !e.alive && !this.compMode) e.rsReq = true; break; // botão Renascer. Competitivo só volta na rodada seguinte.
       case 'prof': if (typeof m.name === 'string' && this.state !== 'playing' && !e.acct) e.name = this.freeName(m.name, e); // nome só muda fora da partida (as plaquinhas são criadas no início)
          if (SKINS.some((s) => s.id === m.skin)) e.skin = m.skin; this.applyLoadout(e, m.primary, m.secondary, m.melee, this.state === 'lobby', m.kit); this.sendLobby(); break;
       case 'cfg': if (!isHost) return;
         {
-          const modeOk = (m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode)) && this.state !== 'playing';
+          const modeOk = (m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode)) && this.state !== 'playing';
           if (modeOk && isX1(m.mode) && !this.x1Mode && this.humans().length > X1.MAX) { this.io.send(id, { t: 'hostMsg', msg: `X1 é duelo: só cabem ${X1.MAX} jogadores. Tem ${this.humans().length} na sala.` }); this.sendLobby(); break; } // não chuta ninguém: a troca nem entra
           if (modeOk && isX1(m.mode) && !this.x1Mode) this.x1Hold = this.cfg.max;
         }
@@ -388,7 +393,15 @@ startMsg() {
         if (typeof m.botDiff === 'string') { const next = normBotDiff(m.botDiff); if (next !== this.cfg.botDiff) { this.cfg.botDiff = next; for (const b of this.ents.values()) if (b.bot && !b.zt && !b.dummy) applyBotDiff(b, next); } else this.cfg.botDiff = next; }
         if (m.surv !== undefined && this.state !== 'playing') this.cfg.surv = normSurv(m.surv);
         if (m.time !== undefined) this.cfg.time = normTime(m.time);
-          if ((m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode)) && this.state !== 'playing') { const leaving = this.x1Mode && !isX1(m.mode); this.cfg.mode = m.mode; if (isX1(m.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; } if (leaving) { const back = this.x1Hold >= 2 ? this.x1Hold : 6; this.x1Hold = 0; this.cfg.max = clamp(back, Math.max(2, this.humans().length), MAX_PLAYERS); } for (const h of this.humans()) { if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb') this.chooseTeam(h, h.teamPref); else { h.team = -1; if (h.voice === 'team') h.voice = 'all'; } } }
+          if ((m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode)) && this.state !== 'playing') { const leaving = this.x1Mode && !isX1(m.mode); this.cfg.mode = m.mode; if (isX1(m.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; } if (leaving) { const back = this.x1Hold >= 2 ? this.x1Hold : 6; this.x1Hold = 0; this.cfg.max = clamp(back, Math.max(2, this.humans().length), MAX_PLAYERS); } for (const h of this.humans()) { if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode)) this.chooseTeam(h, h.teamPref); else { h.team = -1; if (h.voice === 'team') h.voice = 'all'; } } }
+        if (this.cfg.mode === COMP.mode && this.state !== 'playing') {
+          const side = normSide(m.side != null ? m.side : this.cfg.side);
+          const need = side * 2;
+          if (this.humans().length > need) this.io.send(id, { t: 'hostMsg', msg: `Competitivo ${side}v${side} cabe ${need}. Tem ${this.humans().length} na sala.` });
+          else { this.cfg.side = side; this.cfg.max = need; }
+          if (this.cfg.map === 'random' || !BOMB_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = 'rodizio';
+        }
+        if (this.cfg.mode === COMP.mode) this.cfg.fillBots = false;
         if (m.variant === 'survival' || m.variant === 'padrao' || m.variant === 'standard' || m.variant === '') this.cfg.variant = m.variant === 'survival' ? 'survival' : '';
         if (typeof m.survival === 'boolean') this.cfg.variant = m.survival ? 'survival' : (this.cfg.mode === 'survival' ? 'survival' : '');
         if (this.survival && this.cfg.map !== 'random' && !SURVIVAL_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = SURVIVAL.DEFAULT_MAP;
@@ -452,7 +465,7 @@ startMsg() {
     const times = e.sayAt = (e.sayAt || []).filter((t) => now - t < 5000);
     if (times.length >= 4) return;
     times.push(now);
-    if (isMiniCode(text) && this.state === 'playing' && !this.inv && !this.x1Mode && !this.armsMode && e.alive && !e.slots.includes(MINIGUN)) this.giveMinigun(e); // código da minigun (passa pelo limite do chat; já tendo, não reabastece nem esfria)
+    if (isMiniCode(text) && this.state === 'playing' && !this.inv && !this.x1Mode && !this.armsMode && !this.compMode && e.alive && !e.slots.includes(MINIGUN)) this.giveMinigun(e); // código da minigun (passa pelo limite do chat; já tendo, não reabastece nem esfria)
     const scope = m.scope === 'team' && this.teamMode ? 'team' : 'all';
     const dead = this.state === 'playing' && !e.alive ? 1 : 0;
     this.postChat({ id: e.id, name: e.name, team: e.team, scope, dead, text }); this.cq(e, 'chat');
@@ -528,11 +541,11 @@ startMsg() {
   onEvent(e, ev) {
     if (!Array.isArray(ev)) return;
     const [k] = ev;
-    if (k === 'pr') { if (this.x1Mode || this.armsMode) return; this.applyLoadout(e, ev[1], ev[2], ev[3], false, ev[4]); if ((this.training || bombFrozen(this.bomb) || (this.inv && (this.inv.phase === 'break' || this.inv.phase === 'prep'))) && e.alive) this.equipNow(e); return; } // Treino, preparação da Bomba e pausas da Invasão: troca na hora. X1 ignora o arsenal.
+    if (k === 'pr') { if (this.x1Mode || this.armsMode || this.compMode) return; this.applyLoadout(e, ev[1], ev[2], ev[3], false, ev[4]); if ((this.training || bombFrozen(this.bomb) || (this.inv && (this.inv.phase === 'break' || this.inv.phase === 'prep'))) && e.alive) this.equipNow(e); return; } // Treino, preparação da Bomba e pausas da Invasão: troca na hora. X1 e Competitivo ignoram o arsenal.
     // pausa: troca o loadout. Treino equipa na hora. Invasão: só como o 'pr' do main (preparação/pausa entre waves, sem matar nem gastar vida).
     // Nos outros modos morre (sem abate) e nasce neste tick, no máximo 1 vez a cada PX_COOLDOWN s (senão vira fuga de tiroteio).
     if (k === 'px') {
-      if (this.x1Mode || this.armsMode) return; // X1: a arma é da rodada, não do arsenal
+      if (this.x1Mode || this.armsMode || this.compMode) return; // X1: a arma é da rodada. Competitivo: a arma se compra.
       this.applyLoadout(e, ev[1], ev[2], ev[3], false, ev[4]);
       if (!e.alive) return;
       if (this.bombMode) { if (bombFrozen(this.bomb)) this.equipNow(e); return; } // Bomba: na preparação troca na hora; no meio da rodada só vale na próxima (nunca mata pra trocar de arma)
@@ -546,9 +559,12 @@ startMsg() {
       return;
     }
     if (!e.alive) return;
+    if (k === 'by') return this.compBuy(e, ev[1]);
+    if (k === 'tn') return this.humanTac(e, ev[1], ev[2], ev[3]);
+    if (this.compMode && (k === 'r' || k === 'cn' || k === 'ry' || k === 'sk' || k === 'ks')) return;
     if (e.down && k !== 'f') return; // caído: só a pistolinha. Loja, porta, poder, granada e troca ficam de fora.
     if (this.emoting(e) && (k === 'f' || k === 'mgs' || k === 'r' || k === 'dk' || k === 'ry' || k === 'cn' || k === 'eg' || k === 'n' || k === 'm' || k === 'sw' || k === 'sd' || k === 'ss' || k === 'sbg' || k === 'tb' || k === 'gf' || k === 'af' || k === 'rl' || k === 'sk')) return;
-    if (e.stunUntil > this.T && this.T - (e.stunAt ?? -9) > 0.3 && (k === 'f' || k === 'r' || k === 'dk' || k === 'ry' || k === 'cn' || k === 'eg' || k === 'n' || k === 'm' || k === 'sw' || k === 'sd' || k === 'ss' || k === 'tb' || k === 'sk')) { if (k === 'sk') this.toMe(e, ['skn', e.shocks | 0]); else if (k === 'n') this.toMe(e, ev[3] === 'p' ? ['pkb', e.pokeballs | 0] : ['ndn', e.nades | 0]); return; } // levou choque: não atira (0,3 s de folga pra rede)
+    if ((e.stunUntil > this.T || e.flashUntil > this.T) && this.T - (e.stunAt ?? -9) > 0.3 && (k === 'f' || k === 'r' || k === 'dk' || k === 'ry' || k === 'cn' || k === 'eg' || k === 'n' || k === 'm' || k === 'sw' || k === 'sd' || k === 'ss' || k === 'tb' || k === 'sk' || k === 'tn')) { if (k === 'sk') this.toMe(e, ['skn', e.shocks | 0]); else if (k === 'n') this.toMe(e, ev[3] === 'p' ? ['pkb', e.pokeballs | 0] : ['ndn', e.nades | 0]); else if (k === 'tn') this.pushGr(e); return; } // levou choque ou flash: não atira (0,3 s de folga pra rede)
     if (k === 'rl') { const w = ev[1], W = e.slots.includes(w) ? this.resolvedW(e, w) : null; const full = W && (W.revolver ? drumsFull(e, w) : e.mag[w] >= W.mag); if (W && !full && !W.melee && !W.shield && e.reserve[w] > 0) e.reload = { w, start: this.T, done: 0 }; return; }
     if (k === 'f') { const Wf = WEAPONS[ev[3]]; const hand = Wf && Wf.akimbo ? ev[6] : 0; if (Wf && Wf.akimbo && hand !== 0 && hand !== 1) { e.rejectedShots = (e.rejectedShots || 0) + 1; return; } return this.clockOk(e, ev[4], ev[3], hand) && this.mgOk(e, ev[3], ev[4]) && this.humanFire(e, ev[1], ev[2], ev[3], ev[5], ev[6]); }
     if (k === 'mgs') return this.mgSpin(e, ev[1], ev[2]);
@@ -852,6 +868,46 @@ startMsg() {
     if (e.nades <= 0) return;
     e.nades--; e.lastNadeT = this.T; this.throwNade(e, o, v);
   }
+  humanTac(e, kind, oA, vA) {
+    if (!this.compMode || (kind !== 'smoke' && kind !== 'flash')) return;
+    const key = kind === 'smoke' ? 'smokeNades' : 'flashNades';
+    const o = obj3(oA), v = obj3(vA);
+    const cap = kind === 'smoke' ? 24 : 28;
+    if (!(e[key] > 0) || !this.eyeOk(e, o) || !v || vlen(v) > cap) { this.pushGr(e); return; }
+    e[key]--;
+    const tac = { id: this.projId++, owner: e, kind, pos: { ...o }, vel: { ...v }, until: this.T + (kind === 'smoke' ? COMP.SMOKE_FUSE : COMP.FLASH_FUSE) };
+    this.tacs.push(tac);
+    this.events.push(['tn', tac.id, e.id, kind, arr3(o), arr3(v)]);
+    this.pushGr(e);
+  }
+  stepTacs(dt) {
+    for (let i = this.tacs.length - 1; i >= 0; i--) {
+      const t = this.tacs[i];
+      this.P.advanceNade(t, dt);
+      if (this.T < t.until) continue;
+      this.tacs.splice(i, 1);
+      if (t.kind === 'flash') {
+        const hit = [];
+        for (const who of this.live()) {
+          if (!who.alive) continue;
+          const eye = center(who, 1.5);
+          if (!this.P.losClear(eye, t.pos)) continue;
+          const dx = t.pos.x - eye.x, dy = t.pos.y - eye.y, dz = t.pos.z - eye.z;
+          const dist = Math.hypot(dx, dy, dz) || 1;
+          const fwd = { x: Math.sin(who.yaw), y: Math.sin(who.pitch || 0), z: Math.cos(who.yaw) };
+          const fl = Math.hypot(fwd.x, fwd.y, fwd.z) || 1;
+          const sec = flashSeconds(dist, (fwd.x * dx + fwd.y * dy + fwd.z * dz) / (fl * dist));
+          if (sec <= 0) continue;
+          who.flashUntil = Math.max(who.flashUntil || 0, this.T + sec);
+          if (!(who.stunUntil > this.T)) who.stunAt = this.T;
+          who.stunUntil = Math.max(who.stunUntil || 0, this.T + sec);
+          if (who.bot) { who.target = null; who.aim = 0; }
+          hit.push([who.id, sec]);
+        }
+        this.events.push(['tx', t.id, 'flash', arr3(t.pos), hit]);
+      } else this.events.push(['tx', t.id, 'smoke', arr3(t.pos)]);
+    }
+  }
   // Pau de choque (tecla 5): servidor confere carga/poder/origem, simula a estaca (shared/shock.js), dá dano que não mata e atordoa
   humanShock(e, oA, vA) {
     const o = obj3(oA), v = obj3(vA); if (!powerOn('stun', this.cfg.powers) || !(e.shocks > 0) || !this.eyeOk(e, o) || !v || vlen(v) > SHOCK.speed + 9) { this.toMe(e, ['skn', e.shocks | 0]); return; }
@@ -1149,6 +1205,7 @@ startMsg() {
   friends(a, b) { if (this.invasion) return !!(a && b && a !== b && !a.zt === !b.zt); return this.teamMode && a && b && a !== b && a.team === b.team && a.team >= 0; }
   damage(t, amount, a, w, head, back = false, ks = null, fx = 0, origin = a && a !== t && !a.fog ? a.pos : null) {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb)) return false; // sem fogo amigo; Bomba: ninguém leva dano na preparação
+    if (this.compMode) amount = mitigate(t, amount, head);
     if (t.down && !t.zt) return false; // já está caído: o sangramento finaliza, dano extra não cria outra morte
     if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
     t.hp -= amount; t.lastAttacker = a ? a.id : 0; noteHurt(t, a, this.T); // regen só com dano de outro
@@ -1157,6 +1214,7 @@ startMsg() {
     if (this.survival && t.zt && a && !a.bot && !a.zt && t.hp > 0) { const add = grantHit(a, t.id); if (add) this.events.push(['spts', a.id, a.pts | 0, add, a.purseN | 0]); }
     if (t.bot && a && a !== t && !t.target) { t.target = a; t.aim = t.reaction * 0.5; }
     this.events.push(['h', t.id, a ? a.id : 0, Math.max(0, Math.round(t.hp)), head ? 1 : 0, Math.round(amount), fx, origin ? arr3(origin) : null]); // [5] = dano, [6] = parede/collateral, [7] = origem no instante do golpe
+    if (this.compMode) this.events.push(['ga', t.id, t.armor | 0, t.helmet ? 1 : 0]);
     if (falling) { this.enterDown(t); return false; }
     if (t.hp <= 0) { this.kill(t, a, w, head, back, ks, fx); return true; }
     return false;
@@ -1190,8 +1248,9 @@ startMsg() {
     if (this.state !== 'playing' || !t.alive || (this.armsMode && this.pendingEnd)) return;
     if (this.survival && !t.bot && !t.zt && !t.downFinal) t.loadSnap = snapshotLoadout(t);
     if (this.inv && t.zt) return this.killZombie(t, a, w, head, back, ks);
-    t.alive = false; t.hp = 0; t.deaths++; if (t.acct) t.sd++; t.respawnAt = this.T + (t.dummy ? TRAIN.respawn : this.armsMode ? ARMS_RACE.respawnTime : RESPAWN_TIME); if (!t.bot) { t.needRs = true; t.rsReq = false; } // humano: só renasce clicando em Renascer
-    if (a && a !== t && !this.friends(a, t)) { a.kills++; if (a.acct) { a.sk++; if (!this.inv && !(this.teamMode && a.team === t.team)) a.ck = (a.ck | 0) + (t.bot || t.zt ? EARN.killBot : EARN.killHuman); this.chalKill(a, w, head, back, ks, fx); } if (a.alive && !this.x1Mode && ks !== 'h' && ks !== 'x' && ks !== 'g' && ks !== 'a') this.streakKill(a); }
+    t.alive = false; t.hp = 0; t.deaths++; if (t.acct) t.sd++; t.respawnAt = this.compMode ? Infinity : this.T + (t.dummy ? TRAIN.respawn : this.armsMode ? ARMS_RACE.respawnTime : RESPAWN_TIME); if (!t.bot) { t.needRs = !this.compMode; t.rsReq = false; } // humano: só renasce clicando em Renascer. Competitivo espera a próxima rodada.
+    if (this.compMode) { t.armor = 0; t.helmet = false; t.keepKit = false; }
+    if (a && a !== t && !this.friends(a, t)) { a.kills++; if (this.compMode) payKill(a); if (a.acct) { a.sk++; if (!this.inv && !(this.teamMode && a.team === t.team)) a.ck = (a.ck | 0) + (t.bot || t.zt ? EARN.killBot : EARN.killHuman); this.chalKill(a, w, head, back, ks, fx); } if (a.alive && !this.x1Mode && !this.compMode && ks !== 'h' && ks !== 'x' && ks !== 'g' && ks !== 'a') this.streakKill(a); }
     if (this.armsMode) {
       const result = armsRaceKill(a, t, w);
       for (const e of result.changed) this.equipArms(e);
@@ -1204,8 +1263,9 @@ startMsg() {
     const ev = ['k', a ? a.id : 0, t.id, knifeKill ? PISTOL : (w === W_BOMB || gasKill) ? W_NADE : w, head ? 1 : 0, a ? a.kills : 0, t.deaths]; if (knifeKill) ev.push(back ? 2 : 1); else if (w === W_BOMB) ev.push(3); else if (gasKill) ev.push(4); // 3 = botijão da Bomba, 4 = botijão do mapa (clientes antigos veem Copo Bomba). Faca dourada usa o mesmo sinal da faca.
     if (ks || fx) { while (ev.length < 8) ev.push(0); ev.push(ks || 0); } if (fx) ev.push(fx); // ev[9]: 1 pela parede, 2 collateral
     this.events.push(ev);
+    if (this.compMode) { if (a && a !== t) this.pushGr(a); this.pushGr(t); }
     // vira bacon que cura: fica no chão onde morreu pelo mesmo tempo que o bacon aparece no cliente
-    if (!this.x1Mode) { // X1 não deixa bacon que cura no chão
+    if (!this.x1Mode && !this.compMode) { // X1 e Competitivo não deixam bacon que cura no chão
       this.bacons = this.bacons.filter((b) => b.id !== t.id);
       this.bacons.push({ id: t.id, x: t.pos.x, y: this.P.groundAt(t.pos.x, t.pos.z, t.pos.y + 0.3), z: t.pos.z, born: this.T });
     }
@@ -1410,7 +1470,7 @@ startMsg() {
     if (ok && t.alive) { t.eggUntil = this.T + EGG.splat; this.toMe(t, ['egg', EGG.splat]); } // tela suja só pra quem levou e continua vivo
   }
   stepProjectiles(dt) {
-    this.stepDiscs(dt); this.stepRays(dt); this.stepEggs(dt); this.stepCorns(dt); this.stepShocks(dt);
+    this.stepDiscs(dt); this.stepRays(dt); this.stepEggs(dt); this.stepCorns(dt); this.stepShocks(dt); this.stepTacs(dt);
     for (let i = this.nades.length - 1; i >= 0; i--) {
       const n = this.nades[i]; this.P.advanceNade(n, dt);
       if (this.T >= n.explodeAt && n.poke) { this.nades.splice(i, 1); this.pokeOpen(n); continue; }
@@ -1489,7 +1549,14 @@ startMsg() {
     const s = this.pickSpawn(e); e.pos = { ...s }; e.vel = { x: 0, y: 0, z: 0 }; e.crouch = 0; e.hp = 100; e.alive = true; resetRegen(e); e.needRs = false; e.rsReq = false; e.invulnUntil = this.T + INVULN; e.sq++;
     if (this.armsMode) this.equipArms(e);
     else if (this.x1Mode) this.equipX1(e);
-    else if (this.survival && !e.bot) {
+    else if (this.compMode) {
+      if (!e.slots || e.slots.length < 3) compEnterRound(e, this.bomb ? this.bomb.round : 1);
+      e.primary = e.slots[0]; e.secondary = e.slots[1]; e.melee = e.slots[2]; e.weapon = e.slots.includes(e.weapon) ? e.weapon : e.primary;
+      e.nextPrimary = e.primary; e.nextSecondary = e.secondary; e.nextMelee = e.melee;
+      e.knifeMode = false; e.mg = null; e.kit = e.bot ? {} : copyKit(e.nextKit); e.reload = null; e.shocks = 0; e.stunUntil = 0; e.flashUntil = 0; e.lastShockT = -99; resetShield(e); resetDrums(e);
+      for (const w of e.slots) { e.mag[w] = (this.resolvedW(e, w) || WEAPONS[w]).mag; e.reserve[w] = WEAPONS[w].reserve; }
+      this.toMe(e, ['skn', 0]);
+    } else if (this.survival && !e.bot) {
       const snap = e.loadSnap;
       e.down = false; e.downFinal = false; e.revP = 0; e.revBy = 0; e.downMag = 0; e.revHold = false;
       if (snap) restoreLoadout(e, snap);
@@ -1568,7 +1635,7 @@ startMsg() {
       }
     }
     this.updatePickups(); this.updateBacons();
-    { const rt = clamp(this.T - (this.lastRegenT ?? this.T), 0, 0.25); this.lastRegenT = this.T; if (!this.x1Mode) for (const e of this.ents.values()) if (!e.zt) regenStep(e, this.T, rt); }
+    { const rt = clamp(this.T - (this.lastRegenT ?? this.T), 0, 0.25); this.lastRegenT = this.T; if (!this.x1Mode && !this.compMode) for (const e of this.ents.values()) if (!e.zt) regenStep(e, this.T, rt); }
     if (this.zone) this.updateZone(TICK_DT(this));
     if (this.bomb) this.updateBomb(clamp(this.T - (this.lastBombT ?? this.T), 0, 0.25)); this.lastBombT = this.T;
     if (this.survival) { this.stepBox(); this.stepDown(frameDt); }
@@ -1593,12 +1660,25 @@ startMsg() {
     const S = this.bomb, live = this.live();
     for (const ev of stepBomb(S, live, this.T, dt, this.bombL.sites)) {
       this.events.push(['bb', ...ev]);
-      if (ev[0] === 'plant' || ev[0] === 'defuse') { const e = this.ents.get(ev[1]); if (e) { e.caps++; this.cq(e, ev[0]); if (ev[0] === 'plant') e.cpl = (e.cpl | 0) + 1; else e.cdf = (e.cdf | 0) + 1; } } // conta como objetivo no placar
-      else if (ev[0] === 'win') { for (const e of live) if (!e.bot && e.team === ev[1]) this.cq(e, 'rw'); }
+      if (ev[0] === 'plant' || ev[0] === 'defuse') { const e = this.ents.get(ev[1]); if (e) { e.caps++; this.cq(e, ev[0]); if (ev[0] === 'plant') e.cpl = (e.cpl | 0) + 1; else e.cdf = (e.cdf | 0) + 1; if (this.compMode) { payObj(e, ev[0]); this.pushGr(e); } } }
+      else if (ev[0] === 'win') { for (const e of live) if (!e.bot && e.team === ev[1]) this.cq(e, 'rw'); if (this.compMode) { payRound(live, ev[1]); for (const e of live) this.pushGr(e); } }
       else if (ev[0] === 'boom') { const pl = this.ents.get(ev[4]); for (const v of blastVictims(S, live, { x: ev[1], y: ev[2], z: ev[3] })) this.kill(v, pl && pl !== v && !this.friends(pl, v) ? pl : null, W_BOMB, false); }
-      else if (ev[0] === 'round') { this.bombRoundStreaks(); this.nades = []; this.rockets = []; this.blades = []; for (const e of live) if (!e.pendingTeam) this.spawn(e); } // rodada nova: todo mundo volta pro spawn com vida cheia
+      else if (ev[0] === 'round') { this.bombRoundStreaks(); this.nades = []; this.tacs = []; this.rockets = []; this.blades = []; for (const e of live) { if (this.compMode) compEnterRound(e, S.round); if (!e.pendingTeam) this.spawn(e); if (this.compMode) this.pushGr(e); } }
       else if (ev[0] === 'over') this.pendingEnd = true;
     }
+  }
+  pushGr(e) {
+    if (!e) return;
+    const s = e.slots || [e.primary, PISTOL, KNIFE];
+    this.events.push(['gr', e.id, e.cash | 0, e.armor | 0, e.helmet ? 1 : 0, s[0], s[1], s[2], e.weapon, e.nades | 0, e.smokeNades | 0, e.flashNades | 0]);
+  }
+  compBuy(e, what) {
+    if (!this.compMode || !bombFrozen(this.bomb)) { this.toMe(e, ['grn', 'A loja só abre na preparação.']); return; }
+    const pistol = isPistolRound(this.bomb.round);
+    const r = what === 'nade' || what === 'smoke' || what === 'flash' ? buyUtil(e, what) : typeof what === 'string' ? buyArmor(e, what) : buyWeapon(e, what | 0, pistol);
+    if (!r.ok) { this.toMe(e, ['grn', r.why || 'Não deu.']); return; }
+    if (r.id != null) applyBuy(e, r);
+    this.pushGr(e);
   }
   // rodada nova: sequência e streaks guardados continuam; o que estava no ar acaba (Gavião sai; míssil no ar e nuke na contagem voltam pro banco)
   bombRoundStreaks() {
@@ -1807,7 +1887,7 @@ startMsg() {
         const score = considerTarget(mind, d, { attacker: o.id === b.lastAttacker, player: !o.bot, hp: o.hp });
         if (score != null && score < bs && this.P.losClear(eye, center(o, 1.2))) { best = o; bs = score; }
       }
-      if (b.stunUntil > this.T) best = null; // levou choque: não trava alvo
+      if (b.stunUntil > this.T || b.flashUntil > this.T) best = null; // levou choque ou flash: não trava alvo
       if (best !== b.target) { b.target = best; b.aim = 0; }
       if (best) {
         b.lastSeen = { ...best.pos }; b.lastSeenAt = this.T;
@@ -1893,7 +1973,7 @@ startMsg() {
     if (!this.x1Mode) for (const i of b.slots) if (b.reserve[i] < WEAPONS[i].mag && !(WEAPONS[i].rocket && b.reserve[i] > 0)) b.reserve[i] = WEAPONS[i].reserve;
   }
   botSaberThink(b, t, d) {
-    const prof = saberProfile(WEAPONS[b.weapon]); if (!prof || b.stunUntil > this.T) return;
+    const prof = saberProfile(WEAPONS[b.weapon]); if (!prof || b.stunUntil > this.T || b.flashUntil > this.T) return;
     const st = ensureSaber(b);
     const skill = botSkill(b.reaction, b.accuracy);
     if (this.T >= (b.saberPlanUntil || 0)) {
@@ -1923,7 +2003,7 @@ startMsg() {
   }
   botShoot(b, t, d) {
     const w = WEAPONS[b.weapon];
-    if (b.stunUntil > this.T) return; // atordoado não atira
+    if (b.stunUntil > this.T || b.flashUntil > this.T) return; // atordoado ou cego não atira
     if (isSaber(b.weapon)) return; // o sabre age em botSaberThink (combo, bloqueio, investida, especial)
     if (w.shield) { // porrada; de vez em quando investe pra fechar (não rola o dado todo quadro)
       if (this.T < b.nextFire || b.shieldBroken) return;

@@ -17,8 +17,11 @@ export const SIDE_NAMES = ['Ataque', 'Defesa'];
 export const SITE_NAMES = ['A', 'B'];
 export const PHASES = ['prep', 'live', 'planted', 'end', 'over'];
 // time que ataca na rodada n (1-based): Vermelho até a 12ª, Azul depois
-export const attackTeam = (round) => (round <= BOMB.HALF ? 0 : 1);
-export const sideOf = (S, team) => (team === 0 || team === 1 ? (attackTeam(S.round) === team ? 0 : 1) : -1); // 0 = Ataque, 1 = Defesa
+export function attackTeam(round, S) {
+  if (S && typeof S.attackOf === 'function') return S.attackOf(round);
+  return round <= BOMB.HALF ? 0 : 1;
+}
+export const sideOf = (S, team) => (team === 0 || team === 1 ? (attackTeam(S.round, S) === team ? 0 : 1) : -1); // 0 = Ataque, 1 = Defesa
 export const inSite = (s, p) => !!s && Math.hypot(p.x - s.x, p.z - s.z) <= BOMB.SITE_R && p.y >= s.y - 1.2 && p.y <= s.y + BOMB.SITE_H;
 export const siteAt = (sites, p) => { for (let i = 0; i < sites.length; i++) if (inSite(sites[i], p)) return i; return -1; };
 const hd = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -102,20 +105,20 @@ export function bombCanUse(S, e, sites) {
 }
 // começa uma rodada: sorteia quem carrega o botijão e o site-alvo dos bots. Devolve eventos.
 export function startRound(S, T, ents, rnd = Math.random) {
-  S.round++; S.phase = 'prep'; S.phaseEnd = T + BOMB.PREP;
+  S.round++; S.phase = 'prep'; S.phaseEnd = T + (S.prep > 0 ? S.prep : BOMB.PREP);
   Object.assign(S, { bomb: null, dropped: false, planted: false, site: -1, explodeAt: 0, plantProg: 0, defuseProg: 0, planter: 0, defuser: 0, reason: '' });
-  const atk = attackTeam(S.round), c = ents.filter((e) => e.team === atk);
+  const atk = attackTeam(S.round, S), c = ents.filter((e) => e.team === atk);
   const hum = c.filter((e) => e.isPlayer || e.bot === false); // prefere um humano (é mais divertido carregar)
   const pool = hum.length && rnd() < 0.6 ? hum : c;
   S.carrier = pool.length ? pool[Math.floor(rnd() * pool.length)].id : 0;
   S.target = rnd() < 0.5 ? 0 : 1;
   const ev = [['round', S.round, atk, S.carrier]];
-  if (S.round === BOMB.HALF + 1) ev.push(['swap']);
+  if (S.round > 1 && attackTeam(S.round, S) !== attackTeam(S.round - 1, S)) ev.push(['swap']);
   return ev;
 }
 function endRound(S, T, team, reason) {
   S.score[team]++; S.phase = 'end'; S.phaseEnd = T + BOMB.END; S.lastWin = team; S.reason = reason; S.carrier = 0; S.plantProg = 0;
-  S.over = S.score[team] >= BOMB.WIN;
+  S.over = typeof S.matchOver === 'function' ? !!S.matchOver(S.score) : S.score[team] >= BOMB.WIN;
   return ['win', team, reason, S.score[0], S.score[1], S.over ? 1 : 0];
 }
 export function plantNow(S, T, e, site) {
@@ -129,7 +132,17 @@ export function plantNow(S, T, e, site) {
 export function stepBomb(S, ents, T, dt, sites, rnd = Math.random) {
   const ev = []; if (S.phase === 'over') return ev;
   const byId = (id) => ents.find((e) => e.id === id);
-  const atk = attackTeam(S.round), def = 1 - atk;
+  const atk = attackTeam(S.round, S), def = 1 - atk;
+  const wiped = () => {
+    if (!S.elim) return null;
+    const has = (team) => ents.some((e) => e.team === team);
+    const up = (team) => ents.some((e) => e.alive && e.team === team);
+    if (S.phase === 'live') {
+      if (has(atk) && !up(atk)) return def;
+      if (has(def) && !up(def)) return atk;
+    } else if (S.phase === 'planted' && has(def) && !up(def)) return atk;
+    return null;
+  };
   if (S.phase === 'prep') {
     if (S.carrier && !byId(S.carrier)) { const c = ents.filter((e) => e.team === atk); S.carrier = c.length ? c[0].id : 0; }
     if (T >= S.phaseEnd) { S.phase = 'live'; S.phaseEnd = T + BOMB.ROUND; ev.push(['go']); }
@@ -149,7 +162,9 @@ export function stepBomb(S, ents, T, dt, sites, rnd = Math.random) {
     const cc = S.carrier ? byId(S.carrier) : null, st = cc ? siteAt(sites, cc.pos) : -1;
     if (cc && cc.alive && cc.useHold && st >= 0) { S.plantProg += dt; S.planter = cc.id; if (S.plantProg >= BOMB.PLANT) ev.push(plantNow(S, T, cc, st)); }
     else { S.plantProg = 0; S.planter = 0; }
-    if (S.phase === 'live' && T >= S.phaseEnd) ev.push(endRound(S, T, def, 'time'));
+    const wipe = S.phase === 'live' ? wiped() : null;
+    if (wipe != null) ev.push(endRound(S, T, wipe, 'elim'));
+    else if (S.phase === 'live' && T >= S.phaseEnd) ev.push(endRound(S, T, def, 'time'));
     return ev;
   }
   if (S.phase === 'planted') {
@@ -158,7 +173,9 @@ export function stepBomb(S, ents, T, dt, sites, rnd = Math.random) {
     if (!can(d)) d = ents.find(can) || null;
     if (d) { S.defuser = d.id; S.defuseProg += dt; if (S.defuseProg >= BOMB.DEFUSE) { ev.push(['defuse', d.id]); ev.push(endRound(S, T, def, 'defuse')); return ev; } }
     else { S.defuser = 0; S.defuseProg = S.defuseProg >= BOMB.HALF_DEFUSE ? BOMB.HALF_DEFUSE : 0; } // passou da metade: fica salvo
-    if (T >= S.explodeAt) { const b = S.bomb; ev.push(['boom', +b.x.toFixed(2), +b.y.toFixed(2), +b.z.toFixed(2), S.planter]); ev.push(endRound(S, T, atk, 'boom')); }
+    const wipe = wiped();
+    if (wipe != null) ev.push(endRound(S, T, wipe, 'elim'));
+    else if (T >= S.explodeAt) { const b = S.bomb; ev.push(['boom', +b.x.toFixed(2), +b.y.toFixed(2), +b.z.toFixed(2), S.planter]); ev.push(endRound(S, T, atk, 'boom')); }
     return ev;
   }
   if (S.phase === 'end' && T >= S.phaseEnd) {

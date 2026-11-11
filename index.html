@@ -49,6 +49,16 @@
     <div class="cls-pig" aria-hidden="true"></div>
     <div class="cls-sheet"><div id="bLoadList" class="cls-list"></div><div id="bLoadGun" class="cls-gun"></div><div id="bLoadArms" class="cls-arms" aria-label="Arsenal"></div></div>
   </div>
+  <div id="cBuy" class="hidden">
+    <header>
+      <b id="cBuyCash">$800</b>
+      <span id="cBuyClock">preparação</span>
+      <button type="button" id="cBuyClose">Fechar · B</button>
+    </header>
+    <p id="cBuyNote"></p>
+    <div id="cBuyArmor"></div>
+    <div id="cBuyList"></div>
+  </div>
   <div id="bPrompt" class="hidden"><div class="bp1"></div><div class="bp2"></div></div>
   <div id="sPrompt" class="hidden"><div class="bp1"></div><div class="bp2"></div></div>
   <div id="downHud" class="hidden"><b id="downTitle">Caído</b><div id="downBar"><i id="downFill"></i></div><span id="downSub"></span></div>
@@ -168,6 +178,7 @@
     <div class="menu-content">
       <div id="gameSwitch" role="tablist" aria-label="Jogo">
         <button type="button" id="modeShoot" class="on">Tiroteio</button>
+        <button type="button" id="modeComp">Competitivo</button>
         <button type="button" id="modeTruco">Truco</button>
         <button type="button" id="modeUno">UNO</button>
       </div>
@@ -197,7 +208,7 @@
       <button id="mapBtn" class="mapcard current" title="Escolher mapa"><span class="thumb"></span><span class="mtxt"><b id="mapName">Arena da Fazendinha</b><small id="mapDesc"></small></span><span class="mchange">↻ TROCAR</span></button>
     </div>
     <div class="row match-options">
-      <label><span class="field-caption">Modo de jogo</span><select id="modeSel"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="explore">Exploração</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="hide">Docão Escondido · estilo Prop Hunt (protótipo, offline)</option></select></label>
+      <label><span class="field-caption">Modo de jogo</span><select id="modeSel"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="explore">Exploração</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="comp" hidden>Competitivo</option><option value="hide">Docão Escondido · estilo Prop Hunt (protótipo, offline)</option></select></label>
       <label id="survLabel" class="hidden"><span class="field-caption">Variante</span>
         <select aria-label="Variante da Invasão" id="survSel">
           <option value="padrao" selected>Clássica</option>
@@ -217,6 +228,12 @@
         </select>
       </label>
     </div>
+    <section id="compPanel" hidden>
+      <p class="diffnote">Sala sem bots. O tamanho do time é o máximo: 3 cabem 6, 4 cabem 8, 5 cabem 10.</p>
+      <label id="compSideLabel"><span class="field-caption">Jogadores por time</span>
+        <select aria-label="Jogadores por time" id="compSide"><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select>
+      </label>
+    </section>
     <p id="botDiffNote" class="diffnote">Ceva: o Docão de sempre. A mira, a reação e o jeito de jogar mudam — a vida não.</p>
     <p id="survNote" class="diffnote hidden">Padrão: o loadout de sempre, sem loja na partida.</p>
     <div id="menuTrain" class="trainnote hidden">Treino: abre sempre no <b>Estande do Docão</b>. Os alvos não atacam e voltam em 2 s · B/N/M trocam a arma na hora · munição infinita · sem tempo.</div>
@@ -374,7 +391,8 @@
     <div class="otabs"><button id="tabCreate" class="otab active">Criar sala</button><button id="tabJoin" class="otab">Entrar na sala</button></div>
     <div id="paneCreate">
       <label>Mapa<select id="roomMap"></select></label>
-      <label>Modo<select id="roomMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option></select></label>
+      <label>Modo<select id="roomMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação (times)</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="comp">Competitivo · plantar o botijão</option></select></label>
+      <label id="roomSideLabel" class="hidden">Por time<select id="roomSide" aria-label="Jogadores por time na sala"><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select></label>
       <label id="roomSurvLabel" class="hidden">Variante<select id="roomSurv" aria-label="Variante da Invasão"><option value="padrao" selected>Clássica</option><option value="survival">Survival</option></select></label>
       <div class="row">
         <label>Máx. jogadores<select id="roomMax"><option>2</option><option>3</option><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option><option>29</option><option>30</option></select></label>
@@ -387,7 +405,7 @@
     </div>
     <div id="paneJoin" class="hidden">
       <label>Código da sala<input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false"></label>
-      <p class="sub">Se a partida já começou e ainda tem bot, você entra no lugar de um.</p>
+      <p class="sub">Dá para entrar até lotar o máximo da sala, mesmo com a partida já começada. Se ainda tem bot, você entra no lugar de um.</p>
       <p class="diffnote" id="joinDiffNote">A dificuldade dos bots (Leitão, Ceva, Javali ou Cachaço) é a da sala. Quem cria escolhe, e a sala lembra.</p>
       <button id="joinBtn">ENTRAR</button>
     </div>
@@ -530,7 +548,8 @@
         <label>Máx.<select id="lobbyMax"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option><option>29</option><option>30</option></select></label>
         <label>Bots<select id="lobbyBots"><option value="1">Sim</option><option value="0">Não</option></select></label>
         <label>Dificuldade<select id="lobbyDiff" aria-label="Dificuldade dos bots da sala"><option value="leitao">Leitão · fácil</option><option value="ceva">Ceva · normal</option><option value="javali">Javali · difícil</option><option value="cachaco">Cachaço · pesadelo</option></select></label>
-        <label>Modo<select id="lobbyMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação</option><option value="treino">Treino (Estande)</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba (protótipo)</option></select></label>
+        <label>Modo<select id="lobbyMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="dom">Dominação</option><option value="treino">Treino (Estande)</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba (protótipo)</option><option value="comp">Competitivo</option></select></label>
+        <label id="lobbySideLabel" class="hidden">Por time<select id="lobbySide" aria-label="Jogadores por time"><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select></label>
         <label id="lobbySurvLabel" class="hidden">Variante<select id="lobbySurv" aria-label="Variante da Invasão na sala"><option value="padrao">Clássica</option><option value="survival">Survival</option></select></label>
         <label>Tempo<select id="lobbyTime"><option value="0">Padrão</option><option value="3">3 min</option><option value="5">5 min</option><option value="7">7 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option></select></label>
         <label>Chat<select id="lobbyChatOn"><option value="1">Sim</option><option value="0">Não</option></select></label>
