@@ -27,7 +27,8 @@ ok(itemById('g5') && itemById('g5').weight === 2000 && itemById('g5').loot && it
 ok(has('rifle', 'gold', 2000) && has('rifle', 'lore', 2000) && itemById('t1') && itemById('t1').weight === 2000 && itemById('t1').loot, 'fuzil gold, fuzil lore e a lore da Torresmo no peso 2000');
 ok(has('rifle', 'sapphire', 1000) && has('rifle', 'emerald', 1000) && has('rifle', 'ruby', 1000), 'safira, esmeralda e rubi no fuzil, peso 1000');
 ok(itemById('a16') && itemById('a16').paint === 'rainbow' && itemById('a16').gun === 'pistol' && itemById('a17') && itemById('a17').paint === 'gold', 'os ids antigos da rainbow e da gold não andaram');
-ok(lootPool(500).length === 18 && lootPool(750).length === 19 && lootPool(1000).length === 20 && lootPool(1250).length === 11 && lootPool(2000).length === 4, 'tamanho de cada faixa');
+ok(has('rifle', 'asiimov', 1250) && itemById('a38').paint === 'asiimov', 'Asiimov exclusiva do fuzil no peso 1250');
+ok(lootPool(500).length === 18 && lootPool(750).length === 19 && lootPool(1000).length === 20 && lootPool(1250).length === 12 && lootPool(2000).length === 4, 'tamanho de cada faixa');
 ok(lootItems().every((i) => [500, 750, 1000, 1250, 2000].includes(i.weight) && !isFreeItem(i.id) && !(i.price > 0)), 'skin de caixote tem peso e não tem preço');
 ok(ITEMS.filter((i) => i.loot).length === lootItems().length, 'o caixote usa o catálogo inteiro de skins');
 

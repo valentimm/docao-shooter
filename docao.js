@@ -406,9 +406,10 @@ export function makeDocao(skinOrId, opts = {}) {
   const guns = [];
   let backLid = null;
   if (withGun) {
-    const r = new THREE.Group(); r.position.set(0.0, 0.9, 0.62); g.add(r);
-    mesh(new THREE.BoxGeometry(0.11, 0.13, 0.62), toon('#3b3f4a'), r, 0.01);
-    mesh(new THREE.BoxGeometry(0.07, 0.2, 0.1), toon('#e63946'), r, 0.01).position.set(0, -0.13, 0.02);
+    const r = new THREE.Group(); r.position.set(0.0, 0.9, 0.62); g.add(r); r.userData.rifleForward = 1;
+    mesh(new THREE.BoxGeometry(0.11, 0.13, 0.62), toon('#3b3f4a'), r, 0.01).userData.gunPart = 'body';
+    const mag = mesh(new THREE.BoxGeometry(0.07, 0.2, 0.1), toon('#e63946'), r, 0.01);
+    mag.position.set(0, -0.13, 0.02); mag.userData.gunPart = 'mag';
     const br = mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 8), toon('#222'), r, 0); br.position.set(0, 0.01, 0.42); br.rotation.x = Math.PI / 2;
     // Calibre 12 em 3ª pessoa: SPAS-12 (preta, protetor de calor furado, tubo, telha com sulcos, coronha dobrada por cima)
     const sg = new THREE.Group(); sg.position.copy(r.position); g.add(sg);
