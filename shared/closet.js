@@ -319,6 +319,10 @@ for (const paint of RIFLE_GAPS) {
     line: paint.line,
   });
 }
+ITEMS.push({
+  id: 'a38', name: 'Fuzil · Asiimov', emoji: '🔶', weight: 1250, loot: true,
+  gun: 'rifle', paint: 'asiimov', line: 'Branco com faixas laranja e detalhes em grafite no Fuzil Pururuca.',
+});
 for (const it of ITEMS) it.slot = it.id[0];
 export const COSTUME_SLOT = 'c', DANCE_SLOT = 'd', KNIFE_SLOT = 'k';
 export const isLookSlot = (k) => SLOTS.some(([x]) => x === k);

@@ -3709,11 +3709,12 @@ const fp = (() => {
   const add = (geo, mat, x, y, z, parent, ol = 0.006) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); if (ol) outline(m, ol); return m; };
   const guns = [];
   // fuzil
-  const r = new THREE.Group(); root.add(r);
-  add(new THREE.BoxGeometry(0.11, 0.13, 0.62), toon(0x3b3f4a), 0, 0, -0.1, r);
+  const r = new THREE.Group(); root.add(r); r.userData.rifleForward = -1;
+  add(new THREE.BoxGeometry(0.11, 0.13, 0.62), toon(0x3b3f4a), 0, 0, -0.1, r).userData.gunPart = 'body';
   add(new THREE.CylinderGeometry(0.022, 0.022, 0.32, 10), toon(0x22252c), 0, 0.01, -0.56, r).rotation.x = Math.PI / 2;
   const rMag = add(new THREE.BoxGeometry(0.075, 0.22, 0.11), toon(COLORS.red), 0, -0.15, -0.12, r); rMag.rotation.x = 0.2; // pente (sai/entra na recarga)
-  add(new THREE.BoxGeometry(0.1, 0.15, 0.24), toon(COLORS.red), 0, -0.03, 0.3, r);
+  rMag.userData.gunPart = 'mag';
+  add(new THREE.BoxGeometry(0.1, 0.15, 0.24), toon(COLORS.red), 0, -0.03, 0.3, r).userData.gunPart = 'stock';
   const rIron = add(new THREE.BoxGeometry(0.04, 0.04, 0.1), toon(COLORS.cyan), 0, 0.09, -0.02, r);
   const rDot = makeRedDot(); rDot.position.set(0, 0.118, -0.04); r.add(rDot); r.userData.redDot = rDot; r.userData.iron = rIron;
   const rCh = add(new THREE.BoxGeometry(0.03, 0.025, 0.04), toon(0x22252c), 0.07, 0.035, 0.08, r, 0.004); // alavanca de manejo
@@ -4011,7 +4012,7 @@ function detachThumbMaterials(root) {
   root.traverse((o) => {
     if (o.name === 'gold-dress' || o.name === 'lore-dress') drop.push(o);
     if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
-    const mat = o.material.clone();
+    const mat = (o.material.userData.paintSrc || o.material).clone();
     mat.userData = { thumbOwn: true };
     o.material = mat;
   });

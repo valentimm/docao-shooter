@@ -156,7 +156,17 @@ export function createWeaponViewer() {
       if (!model) return;
       clone = cloneWeapon(model); stripNoCamo(clone);
       clone.visible = true; clone.position.set(0, 0, 0); clone.rotation.set(0, 0, 0);
-      clone.traverse(o => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(m => m.clone()) : o.material.clone(); });
+      clone.traverse(o => {
+        if (!o.isMesh) return;
+        if (Array.isArray(o.material)) {
+          o.material = o.material.map(m => m.clone());
+          return;
+        }
+        const source = o.material;
+        o.material = source.clone();
+        // Material.clone serializa userData e perde a referência usada para restaurar a pintura.
+        if (source.userData.paintSrc) o.material.userData.paintSrc = source.userData.paintSrc;
+      });
       if (prepare) prepare(clone);
       const box = boundsOfVisibleMeshes(clone), center = box.getCenter(new THREE.Vector3());
       const size = Math.max(box.getSize(new THREE.Vector3()).length() * .5, .01);

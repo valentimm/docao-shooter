@@ -156,6 +156,68 @@ function loreTex() {
 
 const TEX_OF = { camo: camoTex, rust: rustTex, waves: wavesTex, rainbow: rainbowTex, obsidian: obsidianTex, onca: oncaTex, cheers: cheersTex(), sapphire: sapphireTex, emerald: emeraldTex, ruby: rubyTex, lore: loreTex() };
 
+const ASIIMOV_WHITE = '#f0f2ee', ASIIMOV_ORANGE = '#ff5315', ASIIMOV_DARK = '#20252c';
+
+function asiimovTexture(width, height, base, draw) {
+  const texture = canvasTex(width, height, (ctx) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, width, height);
+    const poly = (color, points) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.closePath();
+      ctx.fill();
+    };
+    draw(poly);
+  });
+  texture.channel = 1;
+  return texture;
+}
+
+const ASIIMOV_TEXTURES = {
+  body: asiimovTexture(512, 128, ASIIMOV_WHITE, (poly) => {
+    poly(ASIIMOV_ORANGE, [[0, 0], [136, 0], [86, 128], [0, 128]]);
+    poly(ASIIMOV_DARK, [[0, 0], [104, 0], [91, 24], [0, 24]]);
+    poly(ASIIMOV_WHITE, [[112, 0], [119, 0], [69, 128], [62, 128]]);
+    poly(ASIIMOV_DARK, [[451, 0], [512, 0], [512, 128], [354, 128]]);
+    poly(ASIIMOV_WHITE, [[486, 0], [497, 0], [400, 128], [389, 128]]);
+    poly(ASIIMOV_ORANGE, [[179, 37], [222, 37], [208, 60], [166, 60]]);
+    poly(ASIIMOV_ORANGE, [[236, 37], [273, 37], [252, 71], [215, 71]]);
+    poly(ASIIMOV_ORANGE, [[287, 37], [327, 37], [348, 3], [367, 3], [324, 73], [265, 73]]);
+    poly(ASIIMOV_DARK, [[148, 85], [185, 85], [160, 105], [138, 105]]);
+    poly(ASIIMOV_ORANGE, [[193, 85], [205, 85], [193, 105], [181, 105]]);
+  }),
+  stock: asiimovTexture(256, 128, ASIIMOV_WHITE, (poly) => {
+    poly(ASIIMOV_DARK, [[0, 0], [46, 0], [17, 128], [0, 128]]);
+    poly(ASIIMOV_DARK, [[69, 92], [122, 36], [156, 36], [103, 92]]);
+    poly(ASIIMOV_DARK, [[116, 92], [169, 36], [186, 36], [133, 92]]);
+    poly(ASIIMOV_ORANGE, [[224, 0], [256, 0], [256, 128], [184, 128]]);
+  }),
+  mag: asiimovTexture(128, 128, ASIIMOV_DARK, (poly) => {
+    poly(ASIIMOV_WHITE, [[0, 97], [128, 107], [128, 128], [0, 128]]);
+    poly(ASIIMOV_ORANGE, [[0, 104], [128, 114], [128, 128], [0, 128]]);
+    poly(ASIIMOV_ORANGE, [[59, 46], [78, 46], [67, 64], [48, 64]]);
+  }),
+};
+
+// UV separado para a pintura. A coordenada horizontal vai da frente à traseira
+// nos dois modelos, inclusive por cima da arma, onde o padrão contorna a quina.
+function asiimovUV(geometry, forward) {
+  if (geometry.hasAttribute('uv1')) return;
+  const { width, height, depth } = geometry.parameters;
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const uv = new THREE.Float32BufferAttribute(position.count * 2, 2);
+  for (let i = 0; i < position.count; i++) {
+    const u = 0.5 - forward * position.getZ(i) / depth;
+    const v = 0.5 + position.getY(i) / height;
+    const top = normal.getY(i) > 0;
+    uv.setXY(i, u, top ? 1 - 0.02 * Math.abs(2 * position.getX(i) / width) : v);
+  }
+  geometry.setAttribute('uv1', uv);
+}
+
 function skip(obj) {
   if (!obj) return true;
   if (obj.name === 'red-dot' || obj.name === 'gold-dress' || obj.name === 'lore-dress') return true;
@@ -195,10 +257,15 @@ function ownMaterial(mesh) {
   return clone;
 }
 
-function paintMesh(mesh, paint) {
+function paintMesh(mesh, paint, rifleForward) {
   const mat = ownMaterial(mesh);
   if (!mat) return;
-  if (paint === 'gold') {
+  if (paint === 'asiimov') {
+    const texture = ASIIMOV_TEXTURES[mesh.userData.gunPart];
+    if (texture) asiimovUV(mesh.geometry, rifleForward);
+    mat.color.set(texture ? '#ffffff' : ASIIMOV_DARK);
+    mat.map = texture || null;
+  } else if (paint === 'gold') {
     mat.color.set('#e8c56b');
     mat.map = null;
     if (mat.emissive && mat.emissive.set) { mat.emissive.set('#c4892a'); mat.emissiveIntensity = 0.38; }
@@ -254,12 +321,13 @@ function addGoldDress(group) {
 
 export function applyGunPaint(root, paint) {
   if (!root) return;
-  const next = paint === 'gold' || TEX_OF[paint] ? paint : '';
+  const rifleForward = root.userData.rifleForward;
+  const next = paint === 'gold' || TEX_OF[paint] || (paint === 'asiimov' && rifleForward) ? paint : '';
   if ((root.userData.gunPaint || '') === next && (next !== 'gold' || root.userData.goldDress)) return;
   clearPaint(root);
   resetWeaponCamo(root);
   root.userData.gunPaint = next;
   if (!next) return;
-  walk(root, (o) => paintMesh(o, next));
+  walk(root, (o) => paintMesh(o, next, rifleForward));
   if (next === 'gold') root.userData.goldDress = addGoldDress(root);
 }
