@@ -18,6 +18,13 @@ let look = { ...DEFAULT_LOOK, items: {} }, tab = 'look', trial = null, busy = fa
 let lootThumbOf = () => '';
 export function setLootThumbSource(fn) { lootThumbOf = typeof fn === 'function' ? fn : () => ''; }
 
+function lootOption(it, separator = ' ') {
+  const name = esc(it.name);
+  const url = it.gun ? lootThumbOf(it) : '';
+  if (!url) return `${it.emoji}${separator}${name}`;
+  return `<img class="closet-gun-thumb" src="${esc(url)}" alt="${name}" title="${name}" width="112" height="64" loading="lazy">`;
+}
+
 const currentCode = () => { const items = { ...look.items }; const trialItem = trial && itemById(trial.id); if (trial && trial.slot !== DANCE_SLOT && trial.slot !== KNIFE_SLOT && !(trialItem && (trialItem.sniper || trialItem.gun))) items[trial.slot] = trial.id; return encodeLook({ shirt: look.shirt, pants: look.pants, items }); };
 const previewKnife = () => {
   if (trial) { const it = itemById(trial.id); if (it && it.knife) return it; }
@@ -101,7 +108,7 @@ function renderLook() {
     const curG = key === 'sniper' ? (acct && acct.sniper) || '' : (acct && acct.guns && acct.guns[key]) || '';
     const mine = ITEMS.filter((i) => i.gun === key && owned.has(i.id));
     const attr = key === 'sniper' ? 'data-sniper' : 'data-gun';
-    const chips = mine.map((i) => `<button type="button" ${attr}="${key === 'sniper' ? i.id : key}"${key === 'sniper' ? '' : ` data-gid="${i.id}"`}${curG === i.id ? ' class="on"' : ''}>${i.emoji} ${esc(i.name)}</button>`).join('');
+    const chips = mine.map((i) => `<button type="button" ${attr}="${key === 'sniper' ? i.id : key}"${key === 'sniper' ? '' : ` data-gid="${i.id}"`} aria-pressed="${curG === i.id}"${curG === i.id ? ' class="on"' : ''}>${lootOption(i)}</button>`).join('');
     h += `<div class="closet-slot"><h4>${esc(label)}</h4><div class="closet-chips"><button type="button" ${attr}="${key === 'sniper' ? '' : key}"${key === 'sniper' ? '' : ' data-gid=""'}${!curG ? ' class="on"' : ''}>De fábrica</button>${chips || '<span class="closet-note">Nenhuma pintura na mochila. Sai no Caixote.</span>'}</div></div>`;
   }
   const cur = curDance(), mineD = ALL_DANCES.filter((d) => !isPaidDance(d.id) || owned.has(d.item));
@@ -146,16 +153,16 @@ function renderBox() {
   wheelPick = wheelPick.filter((id) => owned.has(id)).slice(0, 3);
   const weights = [...new Set(lootItems().map((i) => i.weight))].sort((x, y) => x - y);
   const catalogBody = weights.map((w) => {
-    const list = lootItems().filter((i) => i.weight === w).map((i) => `<span class="loot-chip${owned.has(i.id) ? ' mine' : ''}">${i.emoji} ${esc(i.name)}</span>`).join('');
+    const list = lootItems().filter((i) => i.weight === w).map((i) => `<span class="loot-chip${owned.has(i.id) ? ' mine' : ''}">${lootOption(i)}</span>`).join('');
     return `<div class="closet-sec"><h4>Peso ${w}</h4><div class="loot-catalog">${list}</div></div>`;
   }).join('');
   const catalog = `<details class="loot-fold"><summary>Ver prêmios do caixote</summary>${catalogBody}</details>`;
   const mine = lootItems().filter((i) => owned.has(i.id)).sort((x, y) => x.weight - y.weight || x.name.localeCompare(y.name, 'pt'));
   const slots = [0, 1, 2].map((i) => {
     const it = itemById(wheelPick[i]);
-    return `<button type="button" class="wheel-slot${it ? ' fill' : ''}" data-wheel-slot="${i}">${it ? `${it.emoji}<br>${esc(it.name)}` : 'vazia'}</button>`;
+    return `<button type="button" class="wheel-slot${it ? ' fill' : ''}" data-wheel-slot="${i}">${it ? lootOption(it, '<br>') : 'vazia'}</button>`;
   }).join('');
-  const picks = mine.map((i) => `<button type="button" class="loot-chip${wheelPick.includes(i.id) ? ' pick' : ''}" data-wheel-pick="${i.id}">${i.emoji} ${esc(i.name)}</button>`).join('');
+  const picks = mine.map((i) => `<button type="button" class="loot-chip${wheelPick.includes(i.id) ? ' pick' : ''}" data-wheel-pick="${i.id}">${lootOption(i)}</button>`).join('');
   const wheel = `<div class="wheel-box"><div class="chal-head"><b>🎡 Roleta</b></div><div class="wheel-slots">${slots}</div>`
     + (mine.length < 3 ? '<p class="closet-note">Precisa de 3 skins na mochila.</p>' : `<div class="loot-catalog">${picks}</div>`)
     + `<button type="button" id="closetSpin" class="ticket-btn"${wheelPick.length === 3 ? '' : ' disabled'}>${wheelPick.length === 3 ? 'GIRAR A ROLETA' : 'ESCOLHA 3 SKINS'}</button></div>`;
@@ -180,7 +187,7 @@ function renderChal() {
 function render() {
   const a = getAccount(); $('closetGuest').classList.toggle('hidden', !!a); $('closetMain').classList.toggle('hidden', !a);
   if (!a) return; renderWallet(); renderLook(); renderShop();
-  renderChal(); renderBox();
+  renderChal(); if (tab === 'box') renderBox();
   $('closetLook').classList.toggle('hidden', tab !== 'look'); $('closetShop').classList.toggle('hidden', tab !== 'shop'); $('closetChal').classList.toggle('hidden', tab !== 'chal'); $('closetBox').classList.toggle('hidden', tab !== 'box');
   $('closetTabLook').classList.toggle('active', tab === 'look'); $('closetTabShop').classList.toggle('active', tab === 'shop'); $('closetTabChal').classList.toggle('active', tab === 'chal'); $('closetTabBox').classList.toggle('active', tab === 'box');
   showModel();
@@ -692,6 +699,6 @@ export function initCloset() {
   onAccount((a) => {
     if (!wardrobeDirty) refreshWardrobeLook();
     if (!a && !$('closetModal').classList.contains('hidden')) { stopThree(); render(); }
-    else if (a && !$('closetModal').classList.contains('hidden') && !busy) { renderWallet(); renderShop(); renderChal(); renderBox(); }
+    else if (a && !$('closetModal').classList.contains('hidden') && !busy) { renderWallet(); renderShop(); renderChal(); if (tab === 'box') renderBox(); }
   });
 }
