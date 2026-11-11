@@ -58,6 +58,22 @@ enter(fullRoom, 'Um'); enter(fullRoom, 'Dois');
 const tres = fullRoom.join({ name: 'Tres', skin: 'classico', primary: 0, secondary: 4, melee: 7 });
 ok(tres.error === 'Sala cheia', 'sala sem vaga continua cheia');
 
+const aberta = room({ max: 4, fillBots: false, mode: 'dm' });
+const um = enter(aberta, 'Um');
+aberta.onMessage(um.ent.id, { t: 'start', map: 'arena' });
+ok(bots(aberta).length === 0, 'mata-mata sem bots começa só com quem está na sala');
+ok(!enter(aberta, 'Dois').error && !enter(aberta, 'Tres').error && aberta.humans().length === 3, 'sem bots, a partida aceita gente até o máximo');
+const vazia = room({ max: 6, fillBots: true, mode: 'comp', side: 3 });
+ok(vazia.cfg.fillBots === false && vazia.cfg.max === 6, 'competitivo 3v3 cabe 6 e não completa com bot');
+const dono = enter(vazia, 'Dono');
+vazia.onMessage(dono.ent.id, { t: 'start', map: 'rodizio' });
+ok(bots(vazia).length === 0, 'a partida sem bots não inventa jogador');
+const dois = enter(vazia, 'Dois');
+const tresComp = enter(vazia, 'Tres');
+ok(!dois.error && !tresComp.error && vazia.humans().length === 3 && bots(vazia).length === 0, 'com a partida no ar, gente entra até o máximo e o lugar continua sem bot');
+vazia.onMessage(dono.ent.id, { t: 'cfg', fillBots: true, side: 3, mode: 'comp', max: 6 });
+ok(vazia.cfg.fillBots === false && vazia.cfg.max === 6, 'competitivo não liga bot no meio da configuração');
+
 const train = new Game({ code: 'TR', map: 'arena', max: 4, fillBots: true, mode: 'treino' }, { send() {}, broadcast() {}, startLoop() {}, stopLoop() {} });
 const t0 = enter(train, 'Treinador');
 train.onMessage(t0.ent.id, { t: 'start' });

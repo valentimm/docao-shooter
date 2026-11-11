@@ -34,6 +34,16 @@ function flat(geo, color, extra) {
   return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, ...extra }));
 }
 
+export function makeFlashMesh() {
+  const g = new THREE.Group();
+  const body = flat(bodyGeo, 0xf4f1e8);
+  body.position.y = 0.1;
+  g.add(body);
+  const band = flat(bandGeo, 0xf2c230);
+  band.position.y = 0.12;
+  g.add(band);
+  return g;
+}
 export function makeTacticalMesh() { // fumaça
   const g = new THREE.Group();
   const body = flat(bodyGeo, 0x8d939b);

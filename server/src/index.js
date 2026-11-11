@@ -165,8 +165,9 @@ export class Room extends DurableObject {
     if (url.pathname === '/init') {
       if (this.game) return new Response('exists', { status: 409 });
       const b = await req.json();
-      const mode = b.mode === 'arms' || b.mode === 'dom' || b.mode === 'treino' || b.mode === 'inv' || b.mode === 'bomb' || b.mode === 'x1' || b.mode === 'survival' ? b.mode : 'dm';
-      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: mode === 'x1' ? 'random' : (typeof b.map === 'string' ? b.map : 'arena'), max: mode === 'x1' ? 2 : b.max, fillBots: b.fillBots !== false, mode, variant: b.variant === 'survival' ? 'survival' : '', survival: b.survival === true, surv: b.surv, time: b.time, weapons: b.weapons, powers: b.powers });
+      const mode = b.mode === 'arms' || b.mode === 'dom' || b.mode === 'treino' || b.mode === 'inv' || b.mode === 'bomb' || b.mode === 'comp' || b.mode === 'x1' || b.mode === 'survival' ? b.mode : 'dm';
+      const side = b.side | 0;
+      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: mode === 'x1' ? 'random' : (typeof b.map === 'string' ? b.map : 'arena'), max: mode === 'x1' ? 2 : (mode === 'comp' ? (side >= 3 && side <= 5 ? side : 5) * 2 : b.max), fillBots: mode === 'comp' ? false : b.fillBots !== false, mode, side, variant: b.variant === 'survival' ? 'survival' : '', survival: b.survival === true, surv: b.surv, time: b.time, weapons: b.weapons, powers: b.powers });
       this.persist(); await this.ctx.storage.setAlarm(Date.now() + EMPTY_TTL); // ninguém entrou? some
       return new Response('ok');
     }
