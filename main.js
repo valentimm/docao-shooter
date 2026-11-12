@@ -796,7 +796,7 @@ function invMusicOn(on) {
 const friends = (a, b) => (invMode() ? !!(a && b && a !== b && !a.zt === !b.zt) : teamMode() && a && b && a !== b && a.team === b.team && a.team >= 0);
 let online = null; // modo online: { net, code, myId, hostId, ents: Map(id → entidade), evq, ... } (ver seção Online)
 let ads = 0; // 0 = normal, 1 = mirando (zoom)
-const keys = {}; let mouseDown = false, firedThisPress = false, lookInputSeq = 0;
+const keys = {}; let mouseDown = false, firedThisPress = false, lookInputSeq = 0, utilArm = null;
 
 function makeEntity(name, isPlayer, skinId, tag = '#ffffff') {
   const skin = getSkin(skinId);
@@ -1327,9 +1327,29 @@ function poseChargeCup(k) {
   fp.cup.rotation.set(0.25 - k * 0.5, 0.4, 0.15 + k * 0.3);
   fp.cup.updateMatrixWorld(true);
 }
+function heldUtilMesh() {
+  if (player && player.utilSel === 'smoke' && fp.smokeCan) return fp.smokeCan;
+  if (player && player.utilSel === 'flash' && fp.flashCan) return fp.flashCan;
+  return fp.cup;
+}
+function poseHeldUtil() {
+  const item = heldUtilMesh();
+  item.position.set(0.22, -0.2, -0.62);
+  item.rotation.set(player && player.utilSel === 'nade' ? 0.35 : 0.15, -0.45, -0.2);
+  item.updateMatrixWorld(true);
+  fp.cupHand.position.copy(item.position).add(new V3(0.02, -0.05, 0.08));
+  fp.cupHand.quaternion.copy(item.quaternion);
+  return item;
+}
+function utilToss(speed, lift) {
+  const dir = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
+  dir.y += lift; dir.normalize();
+  return dir.multiplyScalar(speed).add(new V3(player.vel.x * 0.4, 0, player.vel.z * 0.4));
+}
 function throwOrigin() {
-  poseChargeCup(player.charging ? chargePower() : 0);
-  const local = fp.cup.localToWorld(new V3(0, 0.1, 0));
+  if (player && player.utilSel && !player.charging) poseHeldUtil();
+  else poseChargeCup(player.charging ? chargePower() : 0);
+  const local = heldUtilMesh().localToWorld(new V3(0, 0.1, 0));
   const fovRatio = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(fpCam.fov / 2));
   local.x *= fovRatio; local.y *= fovRatio;
   const desired = local.applyQuaternion(camera.quaternion).add(camera.position);
@@ -1411,15 +1431,13 @@ function explode(n) { playGrenadeVoice('banana', nadeEarVol(n.pos), 0.25); blast
 
 const tacticals = [], smokes = [];
 function smoked(a, b) { for (const s of smokes) if (s.blocks(a, b)) return true; return false; }
-function throwTactical() { // fumaça (tecla 4)
+function throwTactical(strong = false) { // fumaça: esquerdo curto, direito longe
   if (!player || !player.alive) return;
   if (!compOn() && !clientPower('smoke')) { flashMsg('Fumaça desligada nesta sala'); return; }
   if (online && !compOn()) { flashMsg('Fumaça só na partida com bots'); return; }
   if (player.smokeNades <= 0) { flashMsg('Sem fumaça'); return; }
   const origin = throwOrigin();
-  const dir = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
-  dir.y += 0.22; dir.normalize();
-  const vel = dir.multiplyScalar(SMOKE.speed).add(new V3(player.vel.x * 0.4, 0, player.vel.z * 0.4));
+  const vel = utilToss(strong ? 16 : 8.5, strong ? 0.14 : 0.42);
   if (compOn() && online) { netEv(['tn', 'smoke', v3a(origin), v3a(vel)]); return; }
   player.smokeNades--;
   const mesh = makeTacticalMesh();
@@ -1427,13 +1445,11 @@ function throwTactical() { // fumaça (tecla 4)
   tacticals.push({ kind: 'smoke', pos: origin.clone(), vel, mesh, explodeAt: gameTime + COMP.SMOKE_FUSE, spin: new V3(rand(-6, 6), rand(-3, 3), rand(-6, 6)), lastBounce: 0 });
   sfx.toss(1);
 }
-function throwFlash() {
+function throwFlash(strong = false) {
   if (!player || !player.alive || !compOn()) return;
   if (!(player.flashNades > 0)) { flashMsg('Sem flashbang'); return; }
   const origin = throwOrigin();
-  const dir = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
-  dir.y += 0.16; dir.normalize();
-  const vel = dir.multiplyScalar(17).add(new V3(player.vel.x * 0.4, 0, player.vel.z * 0.4));
+  const vel = utilToss(strong ? 18 : 9, strong ? 0.1 : 0.4);
   if (online) { netEv(['tn', 'flash', v3a(origin), v3a(vel)]); return; }
   player.flashNades--;
   const mesh = makeFlashMesh();
@@ -1549,16 +1565,51 @@ function requestDropBomb() {
   if (ev) { applyBombEvOffline(ev); sfx.toss(0.8); }
 }
 const UTIL_NAME = { nade: 'Copo Bomba', smoke: 'Fumaça', flash: 'Flashbang' };
+function cancelUtilPress() {
+  if (!utilArm) return;
+  utilArm = null; firedThisPress = true; clickLatch = 0; rightLatch = 0;
+}
 function selectGun(idx) {
   if (!player) return;
+  cancelUtilPress();
   player.utilSel = '';
   if (player.weapon === idx) return;
   switchWeapon(player, idx);
 }
 function selectUtil(k) {
-  if (!compOn() || !player || !player.alive) return;
-  if (utilCount(player, k) <= 0) { flashMsg(`Sem ${UTIL_NAME[k] || 'granada'}`); return; }
+  if (!player || !player.alive || emote.on) return;
+  if (k === 'flash' && !compOn()) return;
+  if (k === 'smoke' && !compOn() && !clientPower('smoke')) { flashMsg('Fumaça desligada nesta sala'); return; }
+  if (k === 'smoke' && online && !compOn()) { flashMsg('Fumaça só na partida com bots'); return; }
+  if (utilCount(player, k) <= 0) { flashMsg(k === 'nade' ? 'Sem Copo Bomba! Pegue um copo vermelho' : `Sem ${UTIL_NAME[k] || 'granada'}`); return; }
+  cancelUtilPress();
   player.utilSel = k;
+  player.charging = false;
+  arcLine.visible = arcMark.visible = false;
+}
+function armUtil(button) {
+  if (!player || !player.alive || !player.utilSel || emote.on) return;
+  if (button === 'right' && player.utilSel === 'nade') return;
+  utilArm = button;
+}
+function releaseUtil(button) {
+  if (utilArm !== button) return;
+  utilArm = null;
+  const p = player;
+  if (!p || !p.alive || !p.utilSel || emote.on || p.switchEnd > gameTime) return;
+  if (p.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; }
+  const k = p.utilSel;
+  if (k === 'nade' && button !== 'left') return;
+  if (utilCount(p, k) <= 0) { p.utilSel = ''; return; }
+  const item = poseHeldUtil();
+  fp.cupReleasePos = item.position.clone();
+  fp.cupReleaseRot = item.quaternion.clone();
+  fp.cupThrowT = 0.25;
+  firedThisPress = true; clickLatch = 0; rightLatch = 0; rightFired = true;
+  if (k === 'nade') throwGrenade(p, throwOrigin(), utilToss(16, 0.22));
+  else if (k === 'smoke') throwTactical(button === 'right');
+  else if (k === 'flash') throwFlash(button === 'right');
+  if (utilCount(p, k) <= 0) p.utilSel = '';
 }
 function cycleComp(dir) {
   const list = compWheel(player);
@@ -1568,13 +1619,6 @@ function cycleComp(dir) {
   const next = list[(Math.max(0, cur) + (dir < 0 ? list.length - 1 : 1)) % list.length];
   if (next.t === 'gun') selectGun(player.slots[next.i]);
   else selectUtil(next.k);
-}
-function throwSelected() {
-  const k = player && player.utilSel;
-  if (k === 'nade') throwGrenade(player, throwOrigin(), throwVelocity(0.55));
-  else if (k === 'smoke') throwTactical();
-  else if (k === 'flash') throwFlash();
-  if (player && utilCount(player, k) <= 0) player.utilSel = '';
 }
 function lookDot(e, pos) {
   const eye = center(e, 1.5);
@@ -2308,6 +2352,7 @@ function setWeapon(e, idx) { if (e.weapon !== idx) resetRecoil(e); e.weapon = id
 // pinta as lâminas dos dois sabres (e do par do Sabre Duplo)
 function colorSabers(guns, hex) { for (const i of [SABER, SABER2]) { const g = guns[i]; if (!g) continue; setSaberColor(g, hex); if (g.userData.twin) setSaberColor(g.userData.twin, hex); } }
 function switchWeapon(e, idx) {
+  if (e === player) { cancelUtilPress(); e.utilSel = ''; }
   if (e.down) return; // caído: a pistolinha temporária não troca o loadout
   if (armsMode() && !e.slots.includes(idx)) return;
   if (idx == null || !WEAPONS[idx] || idx === e.weapon || !e.alive || (isShieldW(idx) && e.shieldBroken)) return; // tampa quebrada só volta ao nascer
@@ -3736,7 +3781,7 @@ function updateHud(dt) {
   hpBar.classList.toggle('regen', !!(p.alive && p.regenOn)); // brilho verde + "+" pulsando enquanto regenera
   const ammoEl = $('ammo'); if (ammoEl) ammoEl.classList.toggle('dual', !!w.akimbo);
   $('mag').textContent = p.down ? (p.downMag | 0) : w.shield ? Math.ceil(p.shieldHp || 0) : w.melee ? '∞' : w.akimbo ? `${rounds(p, p.weapon, 0)}·${rounds(p, p.weapon, 1)}` : p.mag[p.weapon]; $('reserve').textContent = p.down ? ' / chão' : w.shield ? ' TAMPA' : w.melee ? '' : ' / ' + p.reserve[p.weapon];
-  { const title = weaponTitleParts(p), name = $('wtitle'), meta = $('wmeta'), mode = $('wmode'); if (compOn() && p.utilSel) { if (name) name.textContent = UTIL_NAME[p.utilSel] || 'Granada'; if (meta) meta.textContent = ''; if (mode) mode.textContent = 'clique joga'; } else { if (name) name.textContent = title.name; if (meta) meta.textContent = title.meta ? '| ' + title.meta : ''; if (mode) mode.textContent = fireModeLabel(w); } }
+  { const title = weaponTitleParts(p), name = $('wtitle'), meta = $('wmeta'), mode = $('wmode'); if (p.utilSel) { if (name) name.textContent = UTIL_NAME[p.utilSel] || 'Granada'; if (meta) meta.textContent = ''; if (mode) mode.textContent = p.utilSel === 'nade' ? 'solte o clique' : 'esquerdo curto · direito longe'; } else { if (name) name.textContent = title.name; if (meta) meta.textContent = title.meta ? '| ' + title.meta : ''; if (mode) mode.textContent = fireModeLabel(w); } }
   for (let i = 0; i < NADE.max; i++) $('nade' + i).classList.toggle('on', i < p.nades);
   const pm = $('powermeter');
   const pulling = !!(p.alive && ((p.weapon === BOW && p.bowDraw) || (p.weapon === EGG_W && p.eggDraw)) && !p.charging && !gunner && !predator && !radioCall);
@@ -3750,13 +3795,13 @@ function updateHud(dt) {
   $('slot1').classList.toggle('active', !p.utilSel && p.weapon === p.slots[0]); $('slot2').classList.toggle('active', !p.utilSel && p.weapon === p.slots[1]); $('slot3').classList.toggle('active', !p.utilSel && p.weapon === p.slots[2]);
   const smokeN = $('smokeN'), stunN = $('stunN');
   const nlab = document.querySelector('#nades .nlabel');
-  if (nlab) { nlab.textContent = compOn() ? '4' : 'Q'; nlab.parentElement.classList.toggle('on-sel', !!(compOn() && p.utilSel === 'nade')); }
-  if (smokeN) { smokeN.textContent = p.smokeNades || 0; smokeN.parentElement.classList.toggle('out', !(p.smokeNades > 0)); if (smokeN.parentElement.firstChild) smokeN.parentElement.firstChild.textContent = compOn() ? '5' : '4'; smokeN.parentElement.classList.toggle('on-sel', !!(compOn() && p.utilSel === 'smoke')); }
+  if (nlab) { nlab.textContent = compOn() ? '4' : 'Q'; nlab.parentElement.classList.toggle('on-sel', p.utilSel === 'nade'); }
+  if (smokeN) { smokeN.textContent = p.smokeNades || 0; smokeN.parentElement.classList.toggle('out', !(p.smokeNades > 0)); if (smokeN.parentElement.firstChild) smokeN.parentElement.firstChild.textContent = compOn() ? '5' : '4'; smokeN.parentElement.classList.toggle('on-sel', p.utilSel === 'smoke'); }
   if (stunN) {
     const n = compOn() ? (p.flashNades || 0) : (p.stunNades || 0);
     stunN.textContent = n; stunN.parentElement.classList.toggle('out', !n);
     if (stunN.parentElement.firstChild) stunN.parentElement.firstChild.textContent = compOn() ? '6' : '5';
-    stunN.parentElement.classList.toggle('on-sel', !!(compOn() && p.utilSel === 'flash'));
+    stunN.parentElement.classList.toggle('on-sel', p.utilSel === 'flash');
     stunN.parentElement.title = compOn() ? 'Flashbang · 6' : 'Pau de choque';
   }
   {
@@ -4124,6 +4169,8 @@ const fp = (() => {
   const brass = add(new THREE.CylinderGeometry(0.012, 0.012, 0.045, 6), toon(0xd9a441), 0, 0, 0, root, 0); brass.visible = false; brass.rotation.z = Math.PI / 2; // molde da cápsula (uma malha só, reaproveitada)
   return { root, guns, flash, setSkin, knifeRigs: [[kr, kpiv], [krGold, kpivGold]], cup, cupHand, cupThrowT: 0, kick: 0, bob: 0, flashT: 0, pumpPart, get pumpHand() { return pumpHand; }, pumpShoulder, rocketTip, slide, fpRef, actionT: 0, actionLen: 1, shellT: 0, stringT: 0, kr, kpiv, rMag, rCh, cMag, cCh, pMag, uMag, uCh, p90Mag, p90Ch, nStrip, semiMag, semiCh, lmgMag, lmgCh, lmgBarrel, brass, discLoaded, famasMag, famasCh, famasCase, cornCob, cornCore, cornCrank, cornBits, cornKernels, cornCrankT: 0, sling, mini: { group: mini, barrels: mgBarrels, glow: mgGlow, glowMat: mgGlowMat }, mgBox, mgCase, cycT: 0, climb: 0, sShell, sRound, loadRocket, drops: [], reloadSeen: 0, knifeT: 9, knifeKind: 'slash', knifeDrawT: 0 };
 })();
+fp.smokeCan = makeTacticalMesh(); fp.smokeCan.scale.setScalar(1.15); fp.smokeCan.visible = false; fpScene.add(fp.smokeCan);
+fp.flashCan = makeFlashMesh(); fp.flashCan.scale.setScalar(1.15); fp.flashCan.visible = false; fpScene.add(fp.flashCan);
 function knifeLook(id) {
   const kind = knifeKind(id);
   return { kind: kind || 'chef', finish: kind ? (knifeFinish(id) || 'factory') : 'factory' };
@@ -4495,7 +4542,7 @@ function updateFP(dt) {
   if (fp.lmgBarrel) { const h = fp.lmgHeat || 0; fp.lmgBarrel.material.emissive.setRGB(h, h * 0.22, 0.02); }
   if (fp.pigAt && gameTime >= fp.pigAt) { fp.pigAt = 0; spawnPigSmoke(); }
   fp.breakT = Math.max(0, (fp.breakT || 0) - dt);
-  fp.guns.forEach((g, i) => { g.visible = i === p.weapon && !(compOn() && p.utilSel); if (g.userData.twin) g.userData.twin.visible = g.visible; if (g.userData.extra) g.userData.extra.visible = g.visible; });
+  fp.guns.forEach((g, i) => { g.visible = i === p.weapon && !p.utilSel; if (g.userData.twin) g.userData.twin.visible = g.visible; if (g.userData.extra) g.userData.extra.visible = g.visible; });
   const shatter = fp.breakT > 0.4 && fp.guns[TAMPA]; // cacos primeiro; depois a pistola fica na mão
   if (shatter) { fp.guns.forEach((g, i) => { if (i !== TAMPA) g.visible = false; }); fp.guns[TAMPA].visible = true; if (fp.guns[TAMPA].userData.setStage) fp.guns[TAMPA].userData.setStage(3); if (fp.guns[TAMPA].userData.tickBreak) fp.guns[TAMPA].userData.tickBreak(fp.breakT / 1.1); }
   const w = gunOf(p, p.weapon);
@@ -4651,12 +4698,16 @@ function updateFP(dt) {
   laptopScreenLive(!!predator); // a tela já mostra o míssil enquanto o laptop abre
   poseTablet(fp.tablet, tabletK); poseRadio(fp.radio, radioK); poseLaptop(fp.laptop, laptopK, laptopBig);
   if (radioCall) { const talk = clamp((gameTime - radioCall.at + RADIO_CALL - 0.25) / 0.6, 0, 1) * (1 - clamp((gameTime - radioCall.at + 0.15) / 0.15, 0, 1)); fp.radio.rotation.z += Math.sin(gameTime * 26) * 0.04 * talk; fp.radio.position.y += Math.sin(gameTime * 13) * 0.006 * talk; } // falando: o rádio treme de leve perto da boca
-  if (tabletK > 0.2 || radioK > 0.2 || laptopK > 0.2) fp.root.visible = false; // guarda a arma para segurar o tablet, o laptop ou o rádio
-  // copo na mão enquanto carrega o arremesso
+  if (tabletK > 0.2 || radioK > 0.2 || laptopK > 0.2 || p.utilSel) fp.root.visible = false; // guarda a arma para o tablet, o rádio ou a granada na mão
   fp.cupThrowT = Math.max(0, fp.cupThrowT - dt);
-  fp.cup.visible = p.charging && p.alive;
-  fp.cupHand.visible = p.alive && (p.charging || fp.cupThrowT > 0);
-  if (p.charging && p.alive) {
+  const held = !!(p.alive && p.utilSel && !p.charging);
+  const flick = fp.cupThrowT > 0;
+  fp.cup.visible = p.alive && !flick && (p.utilSel === 'nade' || (p.charging && !p.utilSel));
+  if (fp.smokeCan) fp.smokeCan.visible = p.alive && !flick && p.utilSel === 'smoke';
+  if (fp.flashCan) fp.flashCan.visible = p.alive && !flick && p.utilSel === 'flash';
+  fp.cupHand.visible = p.alive && (held || p.charging || flick);
+  if (held && !flick) poseHeldUtil();
+  else if (p.charging && p.alive) {
     poseChargeCup(chargePower());
     fp.cupHand.position.copy(fp.cup.position); fp.cupHand.quaternion.copy(fp.cup.quaternion);
     if (!reducedAnims()) { // o copo que mira a trajetória não mexe; quem chacoalha é a mão
@@ -5427,7 +5478,7 @@ function updatePlayer(dt) {
   const guiding = !!predator || !!gunner || !!ac130;
   stepCrouch(p, p.down ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
   const bolting = fp.actionT > 0 && WEAPONS[p.weapon].bolt;
-  updateAds(dt, !p.down && !guiding && !bolting && !emote.on && !isKnife(p.weapon) && !isSaber(p.weapon) && !WEAPONS[p.weapon].noAds && rightDown && p.reloadEnd <= gameTime && p.switchEnd <= gameTime); // minigun sem zoom: o botão direito só embala. Caído não mira.
+  updateAds(dt, !p.utilSel && !p.down && !guiding && !bolting && !emote.on && !isKnife(p.weapon) && !isSaber(p.weapon) && !WEAPONS[p.weapon].noAds && rightDown && p.reloadEnd <= gameTime && p.switchEnd <= gameTime); // minigun sem zoom: o botão direito só embala. Caído não mira. Granada na mão: o direito é o arremesso longo.
   if (p.weapon !== MINIGUN && p.mgHeat) { p.mgHeat = Math.max(0, p.mgHeat - WEAPONS[MINIGUN].spin.cool * dt); if (p.mgHeat <= 0) p.mgHot = false; } // guardada também esfria
   saberSfx.hum(isSaber(p.weapon) && !guiding);
   if (isSaber(p.weapon) && !guiding) saberSfx.humDrive(Math.min(1, Math.hypot(p.vel.x, p.vel.z) / SPEED + (fp.actionT > 0 ? 0.65 : 0) + (p.saber && p.saber.blocking ? 0.3 : 0)));
@@ -5469,11 +5520,7 @@ function updatePlayer(dt) {
       return;
     }
   }
-  if (compOn() && p.utilSel) {
-    const utilLatch = !mouseDown && clickLatch && performance.now() - clickLatch < 250;
-    if ((mouseDown || utilLatch) && !firedThisPress && p.stunUntil <= gameTime && p.switchEnd <= gameTime) { firedThisPress = true; clickLatch = 0; throwSelected(); }
-    return;
-  }
+  if (p.utilSel) { arcLine.visible = arcMark.visible = false; return; } // na mão até soltar o clique: o mouseup é quem joga
   // tiro
   finishReload(p);
   const w = gunOf(p, p.weapon);
@@ -7093,7 +7140,7 @@ function closePauseClass() {
 let pauseSwapLast = -1e9; // online: último pedido que derrubou (o servidor também limita; aqui é só pra avisar)
 const PX_COOLDOWN = 10; // s, igual ao servidor
 buildPauseGuns();
-function releaseLook() { mouseDown = false; rightDown = false; keys.Space = keys.ShiftLeft = keys.ShiftRight = false; resetAds(); if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } if (pickingStrike) { pickingStrike = false; closeStrikeMap(); } }
+function releaseLook() { mouseDown = false; rightDown = false; utilArm = null; keys.Space = keys.ShiftLeft = keys.ShiftRight = false; resetAds(); if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } if (pickingStrike) { pickingStrike = false; closeStrikeMap(); } }
 function tuckDeathMenu() { const el = $('deathpick'); if (el) el.classList.add('hidden'); killcamGuns = false; }
 function pauseClassesAllowed() { return !(invMode() || x1Mode() || armsMode()); }
 function showPauseLoadout(on) {
@@ -7241,23 +7288,23 @@ canvas.addEventListener('mousedown', (e) => {
   if ((player && !player.alive) || invPick) return; // morto ou com o painel de armas (B) aberto: o clique no jogo NÃO recaptura o mouse, o cursor fica livre pra clicar nas armas (volta ao renascer/fechar o B)
   if (chatTyping()) closeChat(false);
   if (e.button === 2) e.preventDefault(); // senão o navegador solta o mouse ao abrir o menu
-  if (e.button === 0 && (document.pointerLockElement || !deathUnlock)) { mouseDown = true; firedThisPress = false; }
-  if (e.button === 2 && (document.pointerLockElement || !deathUnlock)) { rightDown = true; rightFired = false; rightStale = false; }
+  if (e.button === 0 && (document.pointerLockElement || !deathUnlock)) { mouseDown = true; firedThisPress = false; armUtil('left'); }
+  if (e.button === 2 && (document.pointerLockElement || !deathUnlock)) { rightDown = true; rightFired = false; rightStale = false; armUtil('right'); }
   if (!document.pointerLockElement) lockPointer();
 });
 // botão direito: mira (ADS) nas armas de fogo; com a faca na mão vira a estocada
 let clickLatch = 0, rightDown = false, rightLatch = 0, rightFired = false, rightStale = false; // clique mais curto que um frame ainda dispara (máquinas lentas)
 document.addEventListener('contextmenu', (e) => { if (state === 'playing' || document.pointerLockElement) e.preventDefault(); });
 document.addEventListener('mouseup', (e) => {
-  if (e.button === 0) { if (mouseDown && !firedThisPress) clickLatch = performance.now(); mouseDown = false; }
-  if (e.button === 2) { const ww = player && WEAPONS[player.weapon]; if (rightDown && !rightFired && !rightStale && player && (isKnife(player.weapon) || (ww && (ww.shield || ww.akimbo)))) rightLatch = performance.now(); rightDown = false; rightStale = false; }
+  if (e.button === 0) { if (utilArm === 'left') releaseUtil('left'); else if (mouseDown && !firedThisPress) clickLatch = performance.now(); mouseDown = false; }
+  if (e.button === 2) { if (utilArm === 'right') releaseUtil('right'); else { const ww = player && WEAPONS[player.weapon]; if (rightDown && !rightFired && !rightStale && player && (isKnife(player.weapon) || (ww && (ww.shield || ww.akimbo)))) rightLatch = performance.now(); } rightDown = false; rightStale = false; }
 });
 // celular: um dedo é o clique (porrada), dois dedos é a investida, arrastar olha. Andar continua no teclado. Na Grelha o toque mira o avião.
 canvas.addEventListener('pointerdown', (e) => {
   if (e.pointerType === 'mouse' || ac130 || state !== 'playing' || !player || !player.alive) return;
   touchIds.add(e.pointerId); try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* sem capture */ }
-  if (touchIds.size >= 2) { rightDown = true; rightFired = false; rightStale = false; }
-  else { mouseDown = true; firedThisPress = false; }
+  if (touchIds.size >= 2) { rightDown = true; rightFired = false; rightStale = false; armUtil('right'); }
+  else { mouseDown = true; firedThisPress = false; armUtil('left'); }
 });
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse' || ac130 || !touchIds.has(e.pointerId) || state !== 'playing' || !player || !player.alive) return;
@@ -7267,8 +7314,8 @@ canvas.addEventListener('pointermove', (e) => {
 function touchUp(e) {
   if (!e.pointerId || !touchIds.has(e.pointerId)) return;
   touchIds.delete(e.pointerId);
-  if (touchIds.size < 2) { if (rightDown && !rightFired) rightLatch = performance.now(); rightDown = false; }
-  if (!touchIds.size) { if (mouseDown && !firedThisPress) clickLatch = performance.now(); mouseDown = false; }
+  if (touchIds.size < 2) { if (utilArm === 'right') releaseUtil('right'); else if (rightDown && !rightFired) rightLatch = performance.now(); rightDown = false; }
+  if (!touchIds.size) { if (utilArm === 'left') releaseUtil('left'); else if (mouseDown && !firedThisPress) clickLatch = performance.now(); mouseDown = false; }
 }
 canvas.addEventListener('pointerup', touchUp);
 canvas.addEventListener('pointercancel', touchUp);
@@ -7339,7 +7386,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (state === 'playing' && player) {
-    if (!emote.on && e.code === 'KeyR' && !(player && player.down)) startReload(player);
+    if (!emote.on && e.code === 'KeyR' && !(player && player.down) && !player.utilSel) startReload(player);
     if (!player.alive && (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat && requestRespawn()) keys[e.code] = false; // Espaço não vira pulo ao renascer
     else {
       if (!emote.on && e.code === 'Digit1') selectGun(player.slots[0]);
@@ -7350,7 +7397,7 @@ document.addEventListener('keydown', (e) => {
       if (!emote.on && e.code === 'KeyC' && player.alive && !e.repeat && !noclipOn) saberDash(player);
       if (!emote.on && e.code === 'KeyZ' && player.alive && !e.repeat) saberSpecial(player);
       if (!emote.on && e.code === 'KeyI' && player.alive && !e.repeat) startInspect(player);
-      if (!emote.on && e.code === 'Digit4' && player.alive && !e.repeat) { if (compOn()) selectUtil('nade'); else throwTactical(); }
+      if (!emote.on && e.code === 'Digit4' && player.alive && !e.repeat) { if (compOn()) selectUtil('nade'); else selectUtil('smoke'); }
       if (!emote.on && e.code === 'Digit5' && player.alive && !e.repeat) { if (compOn()) selectUtil('smoke'); else throwShock(); }
       if (!emote.on && e.code === 'Digit6' && player.alive && !e.repeat && compOn()) selectUtil('flash');
       if (!emote.on && e.code === 'KeyG' && player.alive && !e.repeat && compOn() && !compBuy && !bombPick) requestDropGun();
@@ -7360,7 +7407,7 @@ document.addEventListener('keydown', (e) => {
       else if (e.code === 'KeyB' && !e.repeat && player.alive && !invMode() && !invPick) startEmote(); // Invasão: B é só o painel de armas (invKey), nunca dança
       if (exploreMode() && player.alive && !emote.on && !e.repeat && (e.code === 'Comma' || e.code === 'Period' || e.code === 'BracketLeft' || e.code === 'BracketRight')) cycleExplorePrimary(e.code === 'Period' || e.code === 'BracketRight' ? 1 : -1);
     }
-    if (!emote.on && e.code === 'KeyQ' && !e.repeat && !(player && player.down)) startCharge();
+    if (!emote.on && e.code === 'KeyQ' && !e.repeat && !(player && player.down)) { if (player.pokeballs > 0) { cancelUtilPress(); player.utilSel = ''; startCharge(); } else selectUtil('nade'); }
     if (e.code === 'Tab') $('tabboard').classList.remove('hidden');
     if (e.code === 'Escape' || e.code === 'KeyP') pause();
     if (e.code === 'Backquote') { e.preventDefault(); softPause(); }
@@ -7373,7 +7420,7 @@ document.addEventListener('keydown', (e) => {
   } else if (state === 'paused' && (e.code === 'KeyP')) resume();
 });
 document.addEventListener('keyup', (e) => { if (e.code === 'KeyK') voicePtt(false); if (e.code === 'Space') spaceHold = false; keys[e.code] = false; if (e.code === 'KeyQ' && state === 'playing') releaseCharge(); if (e.code === 'Tab') $('tabboard').classList.add('hidden'); });
-addEventListener('blur', () => { voicePtt(false); spaceHold = false; for (const k in keys) keys[k] = false; mouseDown = false; rightDown = false; if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } });
+addEventListener('blur', () => { voicePtt(false); spaceHold = false; for (const k in keys) keys[k] = false; mouseDown = false; rightDown = false; utilArm = null; if (player) { player.charging = false; player.bowDraw = 0; player.eggDraw = 0; arcLine.visible = arcMark.visible = false; } });
 
 // ---------------- Loop ----------------
 const clock = new THREE.Clock(); let menuT = 0, danceT = 0;
@@ -7608,7 +7655,7 @@ const MENU_RULES = {
   dom: 'Times · capture a zona · o primeiro a completar as capturas vence',
   treino: 'Estande do Docão: alvos que não atacam e voltam em 2 s. B/N/M trocam a arma, munição infinita, sem tempo.',
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
-  comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho e ray gun. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). O clique joga a que está na mão. Q ainda carrega o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
+  comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho e ray gun. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. Fumaça e flashbang: esquerdo curto, direito longe. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
   survival: 'Survival, dentro da Invasão: o mapa trava na HOTMILK à Noite. Nasce de pistola e faca. F usa a loja (parede, Barraca da Sorte e Papada). E compra a porta. A Ray Gun só sai na barraca.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. N liga o noclip: voa na direção da mira, atravessa parede, Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Munição não acaba e a partida não termina.',
@@ -8287,7 +8334,7 @@ function requestRespawn() {
 }
 $('respawnBtn').onclick = (ev) => { ev.stopPropagation(); requestRespawn(); };
 if ($('deathArmsBtn')) $('deathArmsBtn').onclick = (ev) => { ev.stopPropagation(); toggleDeathGuns(); };
-function onPlayerDeath(opts) { clearHitMarks(); noclipOn = false; paintNoclip(); if (player) { player.flinch = null; player.mgWant = false; player.mgSpin = 0; player.mgFiring = false; } rsSent = false; resetRewards(true); if (!(opts && opts.keepAim) && document.pointerLockElement) { deathUnlock = true; document.exitPointerLock(); } mouseDown = false; rightDown = false; if (player) player.bowDraw = player.eggDraw = 0; }
+function onPlayerDeath(opts) { clearHitMarks(); noclipOn = false; paintNoclip(); if (player) { player.flinch = null; player.mgWant = false; player.mgSpin = 0; player.mgFiring = false; player.utilSel = ''; } rsSent = false; resetRewards(true); if (!(opts && opts.keepAim) && document.pointerLockElement) { deathUnlock = true; document.exitPointerLock(); } mouseDown = false; rightDown = false; utilArm = null; if (player) player.bowDraw = player.eggDraw = 0; }
 let lastRespawnMs = -1e9;
 function onPlayerRespawn() { if (player) resetRecoil(player); clearHitMarks(); rsSent = false; lastRespawnMs = performance.now(); if (gunner) endGunner(false); if (predator) clearPredator(); closeBench(); // nada de mira guiada nem bancada sobrando da vida anterior (travava o andar)
   deathCamState.on = false; deathCamState.killer = null; killcamGuns = false; tuckDeathMenu(); document.body.classList.remove('deadgray', 'dead', 'killcam'); if (!bombPick && !invPick && !pauseClassOpen()) document.body.classList.remove('cls-on'); if (ghost) ghost.model.group.visible = false;
@@ -8935,7 +8982,7 @@ initChat({
   },
   shouldLock: () => state === 'playing' && !!player && player.alive && $('pause').classList.contains('hidden') && $('teamPick').classList.contains('hidden'),
   lockPointer,
-  clearKeys: () => { for (const k in keys) keys[k] = false; mouseDown = false; rightDown = false; if (player) player.charging = false; },
+  clearKeys: () => { for (const k in keys) keys[k] = false; mouseDown = false; rightDown = false; utilArm = null; if (player) player.charging = false; },
   nemesis: (id) => {
     if (!id) return false;
     const e = online && online.ents ? online.ents.get(id) : entities.find((x) => x.id === id);
@@ -9781,7 +9828,7 @@ function invEndText() {
 
 // ganchos para testes automatizados
 window.__docao = { renderer, get state() { return state; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
-  set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible }; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get noclip() { return noclipLive(); }, get noclipSpeed() { return noclipSpeed; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); },
+  set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible, cupX: heldUtilMesh().position.x, smokeVisible: !!(fp.smokeCan && fp.smokeCan.visible), flashVisible: !!(fp.flashCan && fp.flashCan.visible) }; }, get tacticals() { return tacticals; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get noclip() { return noclipLive(); }, get noclipSpeed() { return noclipSpeed; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); },
   MAPS, loadMap, selectMap, get map() { return currentMap; }, get gas() { return gasSim ? gasSim.list.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, r: c.r, h: c.h, hp: +c.hp.toFixed(1), phase: c.phase, explodeAt: +c.explodeAt.toFixed(2), respawnAt: +c.respawnAt.toFixed(2) })) : []; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
   get online() { return online; }, joinRoom, leaveOnline, netEv,
   get mode() { return mode; }, get botDiff() { return botDiff; }, get zone() { return zone; }, set zone(v) { zone = v; }, get teamScore() { return teamScore; }, get spawnHold() { return spawnHold; }, get selectedPrimary() { return selectedPrimary; },
@@ -9816,7 +9863,7 @@ window.__docao = { renderer, get state() { return state; }, toMenu: () => toMenu
   get saber() { return player && player.saber; }, get blades() { return blades; }, SABER_KIT,
   sniperAudioReady: () => ['sniper', 'canhao', 'carabina'].every((k) => sniperSfx.ready(k)),
   sniperHeard: (key, dist = 28) => { const vol = clamp(1 - dist / 60, 0.05, 1) * (dist > 0.5 ? 0.7 : 1); const shot = sniperSfx.shot(key, vol, dist, 0); if (shot) sniperSfx.bolt(key, vol * 0.7, dist, 0); return shot; },
-  holdFire: (button, down) => { if (button === 2) { rightDown = !!down; if (down) { rightFired = false; rightStale = false; } else if (!rightFired) rightLatch = performance.now(); } else { mouseDown = !!down; if (down) firedThisPress = false; else if (!firedThisPress) clickLatch = performance.now(); } },
+  holdFire: (button, down) => { if (button === 2) { rightDown = !!down; if (down) { rightFired = false; rightStale = false; armUtil('right'); } else if (utilArm === 'right') releaseUtil('right'); else if (!rightFired) rightLatch = performance.now(); } else { mouseDown = !!down; if (down) { firedThisPress = false; armUtil('left'); } else if (utilArm === 'left') releaseUtil('left'); else if (!firedThisPress) clickLatch = performance.now(); } },
   forceFumble: () => { if (player) player.forceFumble = true; },
   rev: () => capatazRead(),
   revFrame: () => {
