@@ -1451,6 +1451,7 @@ body.invout #deathpick,body.invout #stamp,body.invout #centermsg{display:none!im
 #hud #tac b{color:var(--cream);font-weight:800}
 #hud .gitem{display:inline-flex;align-items:center;gap:3px}
 #hud .gitem.out{opacity:.35}
+#hud .gitem.on-sel, #hud #nades.on-sel .nlabel{box-shadow:inset 0 -3px 0 #d23b32}
 #hud .tico{display:block;flex:none}
 #hud .tico circle,#hud .tico path{fill:currentColor}
 #hud .tico.smoke{width:22px;height:16px;color:var(--cream)}

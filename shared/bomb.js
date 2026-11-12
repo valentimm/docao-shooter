@@ -121,6 +121,12 @@ function endRound(S, T, team, reason) {
   S.over = typeof S.matchOver === 'function' ? !!S.matchOver(S.score) : S.score[team] >= BOMB.WIN;
   return ['win', team, reason, S.score[0], S.score[1], S.over ? 1 : 0];
 }
+export function releaseBomb(S, id, pos, until = 0) {
+  if (!S || S.carrier !== id || S.phase === 'planted' || S.phase === 'over' || S.phase === 'end' || !pos) return null;
+  S.bomb = { x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), z: +pos.z.toFixed(2) };
+  S.dropped = true; S.carrier = 0; S.plantProg = 0; S.pickSkip = id; S.pickAfter = until;
+  return ['drop', id, S.bomb.x, S.bomb.y, S.bomb.z];
+}
 export function plantNow(S, T, e, site) {
   S.planted = true; S.dropped = false; S.phase = 'planted'; S.site = site; S.explodeAt = T + BOMB.FUSE; S.planter = e ? e.id : 0; S.carrier = 0; S.plantProg = 0; S.defuseProg = 0; S.defuser = 0;
   S.bomb = e ? { x: e.pos.x, y: e.pos.y, z: e.pos.z } : S.bomb;
@@ -155,7 +161,7 @@ export function stepBomb(S, ents, T, dt, sites, rnd = Math.random) {
       S.bomb = { x: p.x, y: p.y, z: p.z }; S.dropped = true; ev.push(['drop', S.carrier, +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)]); S.carrier = 0; S.plantProg = 0;
     } else if (c) S.lastCarrierPos = { x: c.pos.x, y: c.pos.y, z: c.pos.z };
     if (!S.carrier && S.dropped && S.bomb) {
-      for (const e of ents) if (e.alive && e.team === atk && hd(e.pos, S.bomb) <= BOMB.PICK_R && Math.abs(e.pos.y - S.bomb.y) < 1.6) { S.carrier = e.id; S.dropped = false; S.bomb = null; ev.push(['pick', e.id]); break; }
+      for (const e of ents) if (e.alive && e.team === atk && !(S.pickSkip && e.id === S.pickSkip && T < (S.pickAfter || 0)) && hd(e.pos, S.bomb) <= BOMB.PICK_R && Math.abs(e.pos.y - S.bomb.y) < 1.6) { S.carrier = e.id; S.dropped = false; S.bomb = null; S.pickSkip = 0; ev.push(['pick', e.id]); break; }
     } else if (!S.carrier && !S.dropped) { // ninguém recebeu (ex.: time vazio no começo): o primeiro atacante vivo pega
       const e = ents.find((x) => x.alive && x.team === atk); if (e) { S.carrier = e.id; ev.push(['pick', e.id]); }
     }

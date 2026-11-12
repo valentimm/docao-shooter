@@ -1,6 +1,6 @@
 // Regras do competitivo, sem navegador: node test-comp.mjs
-import { newBombState, startRound, stepBomb, attackTeam } from './shared/bomb.js';
-import { COMP, normSide, sideSlots, compAttackTeam, isPistolRound, compOver, armComp, buyWeapon, buyArmor, buyUtil, mitigate, payRound, payKill, compEnterRound, isExplosiveWeapon, stripToPistol, flashSeconds } from './shared/comp.js';
+import { newBombState, startRound, stepBomb, attackTeam, releaseBomb } from './shared/bomb.js';
+import { COMP, normSide, sideSlots, compAttackTeam, isPistolRound, compOver, armComp, buyWeapon, buyArmor, buyUtil, mitigate, payRound, payKill, compEnterRound, isExplosiveWeapon, stripToPistol, flashSeconds, deathGun, primaryGun, dropFromHand, takeGun, tossSpot, compWheel } from './shared/comp.js';
 import { PISTOL, KNIFE } from './shared/rules.js';
 
 const fails = [];
@@ -95,6 +95,44 @@ ok(!still.some((e) => e[0] === 'win'), 'protótipo da bomba não acaba por elimi
 
 stripToPistol(lived);
 ok(lived.weapon === PISTOL && lived.melee === KNIFE, 'volta pra pistolinha e faca');
+
+const holder = guy();
+holder.slots = [0, PISTOL, KNIFE]; holder.primary = 0; holder.weapon = 0; holder.guns = { rifle: 'gold' };
+holder.mag[0] = 10; holder.reserve[0] = 40;
+ok(deathGun(holder) === 0 && primaryGun(holder) === 0, 'a arma na mão é a que cai');
+const swapped = takeGun(holder, { w: 0, skin: 'red', mag: 3, reserve: 9 });
+ok(swapped.ok && holder.guns.rifle === 'red' && holder.mag[0] === 3 && swapped.dumped && swapped.dumped.skin === 'gold' && swapped.dumped.mag === 10, 'recolher troca a arma e a skin');
+holder.ownGuns = { rifle: 'gold' }; holder.keepKit = true;
+compEnterRound(holder, 2);
+ok(holder.slots[0] === 0 && holder.guns.rifle === 'red' && holder.mag[0] === 3, 'a arma recolhida continua com você, skin inclusive');
+const fallen = guy();
+fallen.slots = [0, PISTOL, KNIFE]; fallen.weapon = 0; fallen.guns = { rifle: 'red' }; fallen.ownGuns = { rifle: 'gold' }; fallen.keepKit = false;
+compEnterRound(fallen, 2);
+ok(fallen.slots[0] === PISTOL && fallen.guns.rifle === 'gold', 'quem morreu não leva a arma do chão: a skin volta a ser a sua');
+
+const pistolHand = guy();
+pistolHand.weapon = PISTOL;
+ok(primaryGun(pistolHand) < 0, 'sem primária não tem o que jogar no chão');
+const armed = guy();
+armed.slots = [0, PISTOL, KNIFE]; armed.primary = 0; armed.weapon = 0; armed.guns = { rifle: 'gold' }; armed.mag[0] = 8; armed.reserve[0] = 20;
+const tossed = dropFromHand(armed, 0);
+ok(tossed && tossed.w === 0 && tossed.skin === 'gold' && armed.slots[0] === PISTOL && armed.weapon === PISTOL, 'dropar a primária devolve a pistolinha');
+const spot = tossSpot({ x: 0, y: 0, z: 0 }, 0, 0, () => 0);
+ok(spot.z > 1.4, 'o arremesso cai pra frente');
+
+const nadeHand = guy();
+nadeHand.nades = 2; nadeHand.smokeNades = 0; nadeHand.flashNades = 1;
+const wheel = compWheel(nadeHand);
+ok(wheel.some((x) => x.k === 'nade') && wheel.some((x) => x.k === 'flash') && !wheel.some((x) => x.k === 'smoke'), 'a rodinha só passa nas granadas que você tem');
+
+const bomb = armComp(newBombState());
+const crew = [{ id: 7, team: 0, alive: true, pos: { x: 0, y: 0, z: 0 } }, { id: 8, team: 1, alive: true, pos: { x: 6, y: 0, z: 0 } }];
+startRound(bomb, 0, crew);
+const dropEv = releaseBomb(bomb, bomb.carrier, { x: 3, y: 0, z: 1 }, 9);
+ok(dropEv && dropEv[0] === 'drop' && bomb.carrier === 0 && bomb.dropped && bomb.bomb.z === 1, 'o botijão também pode ser jogado pra frente');
+bomb.phase = 'live'; bomb.phaseEnd = 1000;
+const stuck = stepBomb(bomb, crew, 1, 0.05, [{ x: 10, y: 0, z: 0 }, { x: -10, y: 0, z: 0 }]);
+ok(!stuck.some((e) => e[0] === 'pick'), 'quem soltou o botijão não pega de volta na hora');
 
 if (fails.length) { console.error(fails.length + ' falha(s)'); process.exit(1); }
 console.log('competitivo ok');

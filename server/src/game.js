@@ -38,8 +38,8 @@ import { explosionHits, rayCapsule, ROCKET_PAD, shotKnock } from '../../shared/c
 import { SHOCK, stepShock, shockTop, shockReach, shockDmg, shockStun } from '../../shared/shock.js';
 import { streakRewards, PREDATOR, HELI, GUNNER, NUKE, heliOrbit, heliPos, AC130 } from '../../shared/killstreaks.js';
 import { DOM, pickZone, newZoneState, zoneCounts, stepZone, canJoinTeam, smallerTeam, inZone } from '../../shared/domination.js';
-import { BOMB, W_BOMB, bombLayout, newBombState, startRound, stepBomb, blastVictims, packBomb, spawnList, botObjective, bombFrozen } from '../../shared/bomb.js';
-import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, compEnterRound, buyWeapon, buyArmor, buyUtil, applyBuy, isPistolRound, flashSeconds } from '../../shared/comp.js';
+import { BOMB, W_BOMB, bombLayout, newBombState, startRound, stepBomb, blastVictims, packBomb, spawnList, botObjective, bombFrozen, releaseBomb } from '../../shared/bomb.js';
+import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, compEnterRound, buyWeapon, buyArmor, buyUtil, applyBuy, isPistolRound, flashSeconds, deathGun, primaryGun, packGun, tossSpot, dropFromHand, takeGun } from '../../shared/comp.js';
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, pickBotSecondary, akimboReady, ammoLow } from '../../shared/revolver.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc } from '../../shared/saber.js';
 const CHAL_WEAPONS = { shotgun: 'w_shot', semi: 'w_shot', sniper: 'w_snip', canhao: 'w_snip', carabina: 'w_snip', besta: 'w_bow', arco: 'w_bow', estilingue: 'w_bow', sabre: 'w_saber', sabre2: 'w_saber', bazooka: 'w_boom', milho: 'w_boom' }; // grupos de armas dos desafios
@@ -74,7 +74,7 @@ export class Game {
     this.io = io; // { send(id, obj), broadcast(obj), startLoop(), stopLoop() }
     this.ents = new Map(); this.nextId = 1; this.hostId = 0;
     this.state = 'lobby'; this.mapId = null; this.T = 0; this.t0 = 0;
-    this.events = []; this.personal = new Map(); this.nades = []; this.shocks = []; this.tacs = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.pickups = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = null; this.projId = 1;
+    this.events = []; this.personal = new Map(); this.nades = []; this.shocks = []; this.tacs = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.pickups = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = null; this.projId = 1; this.ground = [];
     this.forcedWinTeam = null; this.nukeWinner = 0; this.x1Gun = 0; this.x1Hold = 0; // max de antes do X1, pra voltar ao sair
   }
   now() { return Date.now() / 1000; }
@@ -120,7 +120,7 @@ export class Game {
       e.token = token && /^[a-z0-9]{8,32}$/i.test(token) ? token : Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8);
       e.arrived = true;
     }
-    if (acct) { e.knife = knifeKind(acct.knife) ? acct.knife : ''; e.sniper = sniperKind(acct.sniper) ? acct.sniper : ''; e.guns = parseGuns(acct.guns); }
+    if (acct) { e.knife = knifeKind(acct.knife) ? acct.knife : ''; e.sniper = sniperKind(acct.sniper) ? acct.sniper : ''; e.guns = parseGuns(acct.guns); e.ownGuns = { ...e.guns }; }
     // Partida no ar: o humano ocupa a vaga de um bot (mata-mata e dominação). Reconectar também, porque a saída tinha preenchido o lugar.
     if (this.state === 'playing' && this.P && !this.training && !this.invasion) this.syncBots();
     if (!this.hostId || !this.ents.get(this.hostId)?.connected) this.hostId = e.id;
@@ -259,7 +259,7 @@ export class Game {
     this.nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds: navSeeds, extra: map.waypoints || [], avoid: map.navAvoid || [] });
     const rawPicks = this.invasion && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups;
     this.pickups = (this.x1Mode ? rawPicks.filter((p) => p[0] === 'ammo') : rawPicks).map(([type, x, z, y]) => { const on = !this.compMode && (!this.armsMode || type === 'ammo' || type === 'health') && powerOn(type, this.cfg.powers); return { type, pos: { x, y: this.P.groundAt(x, z, (y || 0) + 0.3), z }, active: on, respawnAt: on ? 0 : 1e9 }; });
-    this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = createGasSim(id); this.events = []; this.personal.clear();
+    this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = createGasSim(id); this.events = []; this.personal.clear(); this.ground = [];
     this.state = 'playing'; this.t0 = this.now(); this.T = 0; this.lastTick = this.now();
     this.curLimit = this.cfgLimit;
     for (const e of this.ents.values()) { e.ck = 0; e.cpaid = 0; e.jt = 0; e.cpl = 0; e.cdf = 0; e.vu = e.voice && e.voice !== 'off' ? 1 : 0;
@@ -314,7 +314,7 @@ export class Game {
   zoneArr() { const z = this.zone; return z ? [r2(z.x), r2(z.y), r2(z.z), +z.progress.toFixed(3), z.team, z.contested ? 1 : 0, z.counts[0], z.counts[1], this.teamScore[0], this.teamScore[1]] : null; }
 startMsg() {
     const doors = this.surv ? { open: [...this.surv.open], areas: [...this.surv.areas] } : undefined;
-    return { t: 'start', mode: this.cfg.mode, variant: this.cfg.variant || undefined, surv: this.survival ? 1 : 0, stations: this.stations || undefined, doors, iv: this.inv ? this.inv.stateArr() : undefined, drops: this.inv ? this.inv.drops.map((d) => [d.id, DROP_KEYS.indexOf(d.kind), [r2(d.x), r2(d.y), r2(d.z)]]) : undefined, zone: this.zoneArr(), bomb: this.bomb ? { sites: this.bombL.sites.map((s) => [r2(s.x), r2(s.y), r2(s.z)]), atk: this.bombL.atk, def: this.bombL.def, pts: this.bombL.pts ? this.bombL.pts.map((p) => [r2(p.x), r2(p.y), r2(p.z)]) : undefined, s: packBomb(this.bomb) } : undefined, win: DOM.WIN_CAPS, map: this.mapId, gas: this.gas ? this.gas.pack() : undefined, T: r2(this.T), limit: Number.isFinite(this.timeLimit) ? this.timeLimit : 0, kills: this.x1Mode ? X1.KILLS : KILL_LIMIT, gun: this.x1Mode ? this.x1Gun : undefined, hostId: this.hostId, ents: [...this.ents.values()].filter((e) => e.bot || e.connected).map((e) => this.entInfo(e)), pk: this.pickups.map((p) => (p.active ? 1 : 0)) };
+    return { t: 'start', mode: this.cfg.mode, variant: this.cfg.variant || undefined, surv: this.survival ? 1 : 0, stations: this.stations || undefined, doors, iv: this.inv ? this.inv.stateArr() : undefined, drops: this.inv ? this.inv.drops.map((d) => [d.id, DROP_KEYS.indexOf(d.kind), [r2(d.x), r2(d.y), r2(d.z)]]) : undefined, zone: this.zoneArr(), bomb: this.bomb ? { sites: this.bombL.sites.map((s) => [r2(s.x), r2(s.y), r2(s.z)]), atk: this.bombL.atk, def: this.bombL.def, pts: this.bombL.pts ? this.bombL.pts.map((p) => [r2(p.x), r2(p.y), r2(p.z)]) : undefined, s: packBomb(this.bomb) } : undefined, win: DOM.WIN_CAPS, map: this.mapId, gas: this.gas ? this.gas.pack() : undefined, T: r2(this.T), limit: Number.isFinite(this.timeLimit) ? this.timeLimit : 0, gg: (this.ground || []).map((g) => [g.id, g.w, g.skin || '', g.mag | 0, g.reserve | 0, g.x, g.y, g.z]), kills: this.x1Mode ? X1.KILLS : KILL_LIMIT, gun: this.x1Mode ? this.x1Gun : undefined, hostId: this.hostId, ents: [...this.ents.values()].filter((e) => e.bot || e.connected).map((e) => this.entInfo(e)), pk: this.pickups.map((p) => (p.active ? 1 : 0)) };
   }
   // ranking: soma abates/mortes (e partida/vitória no fim) das contas. Treino não conta. Falha de gravação nunca derruba a sala.
   // Docoins (moeda do jogo): o SERVIDOR calcula tudo aqui. Abates contam na hora (e.ck); fim de partida/vitória/waves só no flush final ou na saída.
@@ -560,6 +560,8 @@ startMsg() {
     }
     if (!e.alive) return;
     if (k === 'by') return this.compBuy(e, ev[1]);
+    if (k === 'dg') return this.dropPrimary(e);
+    if (k === 'db') return this.dropBomb(e);
     if (k === 'tn') return this.humanTac(e, ev[1], ev[2], ev[3]);
     if (this.compMode && (k === 'r' || k === 'cn' || k === 'ry' || k === 'sk' || k === 'ks')) return;
     if (e.down && k !== 'f') return; // caído: só a pistolinha. Loja, porta, poder, granada e troca ficam de fora.
@@ -1249,7 +1251,7 @@ startMsg() {
     if (this.survival && !t.bot && !t.zt && !t.downFinal) t.loadSnap = snapshotLoadout(t);
     if (this.inv && t.zt) return this.killZombie(t, a, w, head, back, ks);
     t.alive = false; t.hp = 0; t.deaths++; if (t.acct) t.sd++; t.respawnAt = this.compMode ? Infinity : this.T + (t.dummy ? TRAIN.respawn : this.armsMode ? ARMS_RACE.respawnTime : RESPAWN_TIME); if (!t.bot) { t.needRs = !this.compMode; t.rsReq = false; } // humano: só renasce clicando em Renascer. Competitivo espera a próxima rodada.
-    if (this.compMode) { t.armor = 0; t.helmet = false; t.keepKit = false; }
+    if (this.compMode) { t.armor = 0; t.helmet = false; t.keepKit = false; this.dropDeath(t); }
     if (a && a !== t && !this.friends(a, t)) { a.kills++; if (this.compMode) payKill(a); if (a.acct) { a.sk++; if (!this.inv && !(this.teamMode && a.team === t.team)) a.ck = (a.ck | 0) + (t.bot || t.zt ? EARN.killBot : EARN.killHuman); this.chalKill(a, w, head, back, ks, fx); } if (a.alive && !this.x1Mode && !this.compMode && ks !== 'h' && ks !== 'x' && ks !== 'g' && ks !== 'a') this.streakKill(a); }
     if (this.armsMode) {
       const result = armsRaceKill(a, t, w);
@@ -1623,7 +1625,7 @@ startMsg() {
     this.T = t - this.t0; this.purge();
     if (this.mapId === 'posto-nevasca' && this.P.setMovers) this.P.setMovers(nevascaSolids(this.T));
     while (dt > 1e-4) { const h = Math.min(TICK, dt); dt -= h; for (const e of this.ents.values()) if (e.bot && !e.zt) this.updateBot(e, h); this.stepSabers(h); if (this.inv) this.inv.step(h); this.stepProjectiles(h); this.stepHelis(h); this.stepGunships(); }
-    this.stepNukes(); if (this.gas) this.stepGas();
+    this.stepNukes(); if (this.gas) this.stepGas(); if (this.compMode) this.stepGround();
     for (const e of this.ents.values()) {
       if (!e.alive && (e.bot || e.connected) && this.T >= e.respawnAt && !(e.needRs && !e.rsReq && this.T < e.respawnAt + RS_SAFETY) && !(e.pendingTeam && this.now() - (e.pendingSince || 0) < PENDING_WAIT)) { if (e.pendingTeam) { e.pendingTeam = false; this.syncBots(); } this.spawn(e); }
       if (e.bot) this.pushHist(e);
@@ -1663,8 +1665,70 @@ startMsg() {
       if (ev[0] === 'plant' || ev[0] === 'defuse') { const e = this.ents.get(ev[1]); if (e) { e.caps++; this.cq(e, ev[0]); if (ev[0] === 'plant') e.cpl = (e.cpl | 0) + 1; else e.cdf = (e.cdf | 0) + 1; if (this.compMode) { payObj(e, ev[0]); this.pushGr(e); } } }
       else if (ev[0] === 'win') { for (const e of live) if (!e.bot && e.team === ev[1]) this.cq(e, 'rw'); if (this.compMode) { payRound(live, ev[1]); for (const e of live) this.pushGr(e); } }
       else if (ev[0] === 'boom') { const pl = this.ents.get(ev[4]); for (const v of blastVictims(S, live, { x: ev[1], y: ev[2], z: ev[3] })) this.kill(v, pl && pl !== v && !this.friends(pl, v) ? pl : null, W_BOMB, false); }
-      else if (ev[0] === 'round') { this.bombRoundStreaks(); this.nades = []; this.tacs = []; this.rockets = []; this.blades = []; for (const e of live) { if (this.compMode) compEnterRound(e, S.round); if (!e.pendingTeam) this.spawn(e); if (this.compMode) this.pushGr(e); } }
+      else if (ev[0] === 'round') { this.bombRoundStreaks(); this.nades = []; this.tacs = []; this.rockets = []; this.blades = []; this.ground = []; this.events.push(['wc']); for (const e of live) { if (this.compMode) { compEnterRound(e, S.round); this.pushGuns(e); } if (!e.pendingTeam) this.spawn(e); if (this.compMode) this.pushGr(e); } }
       else if (ev[0] === 'over') this.pendingEnd = true;
+    }
+  }
+  pushGuns(e) {
+    if (!e) return;
+    const g = e.guns || {};
+    this.events.push(['gns', e.id, g.pistol || '', g.p90 || '', g.carabina || '', g.rifle || '']);
+  }
+  pushWw(e) {
+    if (!e) return;
+    const s = e.slots || [PISTOL, PISTOL, KNIFE], w = e.weapon;
+    this.events.push(['ww', e.id, s[0], s[1], s[2], w, e.mag ? (e.mag[w] | 0) : 0, e.reserve ? (e.reserve[w] | 0) : 0]);
+  }
+  spawnGround(packed, pos, ignoreId) {
+    if (!packed) return;
+    const id = this.projId++;
+    const row = { id, w: packed.w, skin: packed.skin || '', mag: packed.mag | 0, reserve: packed.reserve | 0, x: pos.x, y: pos.y, z: pos.z, ignore: ignoreId || 0, until: ignoreId ? this.T + 0.7 : 0 };
+    this.ground.push(row);
+    this.events.push(['wd', id, row.w, row.skin, row.mag, row.reserve, row.x, row.y, row.z]);
+  }
+  dropDeath(t) {
+    const id = deathGun(t);
+    if (id < 0) return;
+    const packed = dropFromHand(t, id) || packGun(t, id);
+    const y = this.P.groundAt(t.pos.x, t.pos.z, t.pos.y + 0.4);
+    this.spawnGround(packed, { x: +t.pos.x.toFixed(2), y: +(y + 0.14).toFixed(2), z: +t.pos.z.toFixed(2) }, 0);
+    this.pushWw(t);
+  }
+  dropPrimary(e) {
+    if (!this.compMode || !e.alive) return;
+    const id = primaryGun(e);
+    if (id < 0) { this.toMe(e, ['grn', 'Sem arma principal.']); return; }
+    const packed = dropFromHand(e, id);
+    const spot = tossSpot(e.pos, e.yaw, e.pitch, (x, z, y) => this.P.groundAt(x, z, y));
+    this.spawnGround(packed, spot, e.id);
+    this.pushWw(e);
+  }
+  dropBomb(e) {
+    if (!this.compMode || !this.bomb || !e.alive || this.bomb.carrier !== e.id) { this.toMe(e, ['grn', 'Você não está com o botijão.']); return; }
+    const spot = tossSpot(e.pos, e.yaw, e.pitch, (x, z, y) => this.P.groundAt(x, z, y));
+    const ev = releaseBomb(this.bomb, e.id, spot, this.T + 0.7);
+    if (ev) this.events.push(['bb', ...ev]);
+  }
+  stepGround() {
+    if (!this.ground || !this.ground.length) return;
+    const R = 1.35;
+    for (let i = this.ground.length - 1; i >= 0; i--) {
+      const g = this.ground[i];
+      for (const e of this.ents.values()) {
+        if (!e.alive || e.zt) continue;
+        if (g.ignore === e.id && this.T < g.until) continue;
+        const dx = e.pos.x - g.x, dz = e.pos.z - g.z;
+        if (dx * dx + dz * dz > R * R || Math.abs(e.pos.y - g.y) > 1.7) continue;
+        const r = takeGun(e, g);
+        this.ground.splice(i, 1);
+        this.events.push(['wx', g.id]);
+        if (r.ok) {
+          if (r.dumped) this.spawnGround(r.dumped, { x: g.x, y: g.y, z: g.z }, e.id);
+          this.pushWw(e);
+          this.pushGuns(e);
+        }
+        break;
+      }
     }
   }
   pushGr(e) {

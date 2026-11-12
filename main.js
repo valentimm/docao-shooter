@@ -55,8 +55,8 @@ import { BACON_ITEM, noteHurt, resetRegen, regenStep, W_FALL } from './shared/ru
 import { fellOff } from './shared/physics.js';
 import { rideShift, nevascaSolids } from './shared/nevasca.js';
 import { mountNevasca, updateNevasca } from './nevasca-show.js';
-import { BOMB, W_BOMB, SIDE_NAMES, SITE_NAMES, attackTeam, sideOf, bombLayout, newBombState, startRound, stepBomb, blastVictims, unpackBomb, spawnList, botObjective, bombFrozen, bombCanUse, plantNow, siteAt } from './shared/bomb.js';
-import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, compEnterRound, buyWeapon, buyArmor, buyUtil, applyBuy, isPistolRound, shopRows, armorLabel, cashLabel, fillGun, flashSeconds } from './shared/comp.js';
+import { BOMB, W_BOMB, SIDE_NAMES, SITE_NAMES, attackTeam, sideOf, bombLayout, newBombState, startRound, stepBomb, blastVictims, unpackBomb, spawnList, botObjective, bombFrozen, bombCanUse, plantNow, siteAt, releaseBomb } from './shared/bomb.js';
+import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, compEnterRound, buyWeapon, buyArmor, buyUtil, applyBuy, isPistolRound, shopRows, armorLabel, cashLabel, fillGun, flashSeconds, deathGun, primaryGun, packGun, tossSpot, dropFromHand, takeGun, compWheel, utilCount } from './shared/comp.js';
 import { makeBotijao, makeSiteMark } from './bomb-gfx.js';
 import { KS_KILL_NAME, heliPos, GUNNER, heliOrbit, AC130 } from './shared/killstreaks.js';
 import { DISC, stepDisc } from './shared/disc.js';
@@ -1441,6 +1441,141 @@ function throwFlash() {
   tacticals.push({ kind: 'flash', pos: origin.clone(), vel, mesh, explodeAt: gameTime + COMP.FLASH_FUSE, spin: new V3(rand(-6, 6), rand(-3, 3), rand(-6, 6)), lastBounce: 0 });
   sfx.toss(1);
 }
+const groundGuns = [];
+let groundSeq = 1;
+function clearGroundGuns() {
+  for (const g of groundGuns) if (g.mesh) scene.remove(g.mesh);
+  groundGuns.length = 0;
+}
+function makeGunDropMesh(w, skinId) {
+  const src = player && player.model && player.model.guns && player.model.guns[w];
+  const holder = new THREE.Group();
+  if (src) {
+    const mesh = src.clone(true);
+    mesh.traverse((o) => {
+      o.userData = { ...(o.userData || {}) };
+      delete o.userData.gunPaint; delete o.userData.goldDress;
+      if (!o.isMesh) return;
+      o.material = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone();
+      o.castShadow = true; o.visible = true;
+    });
+    mesh.visible = true; mesh.position.set(0, 0, 0); mesh.rotation.set(Math.PI / 2, 0, 0.35);
+    if (skinId) applyGunPaint(mesh, gunPaint(skinId));
+    holder.add(mesh);
+  } else holder.add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.12, 0.16), new THREE.MeshToonMaterial({ color: 0xd7b15a })));
+  return holder;
+}
+function showGroundGun(id, w, skin, mag, reserve, x, y, z) {
+  let row = groundGuns.find((g) => g.id === id);
+  if (!row) {
+    const mesh = makeGunDropMesh(w, skin);
+    scene.add(mesh);
+    row = { id, mesh }; groundGuns.push(row);
+  }
+  Object.assign(row, { w, skin: skin || '', mag: mag | 0, reserve: reserve | 0, x, y, z });
+  row.mesh.position.set(x, y, z);
+  return row;
+}
+function removeGroundGun(id) {
+  const i = groundGuns.findIndex((g) => g.id === id);
+  if (i < 0) return;
+  scene.remove(groundGuns[i].mesh); groundGuns.splice(i, 1);
+}
+function syncGround(list) {
+  clearGroundGuns();
+  for (const row of list || []) showGroundGun(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]);
+}
+function putGround(packed, pos, ignoreId) {
+  const row = showGroundGun(groundSeq++, packed.w, packed.skin, packed.mag, packed.reserve, pos.x, pos.y, pos.z);
+  row.ignore = ignoreId || 0; row.until = ignoreId ? gameTime + 0.7 : 0;
+  return row;
+}
+function paintGunLook(e) {
+  if (!e) return;
+  if (e === player) applyHeldGuns(e.guns);
+  applyWorldGuns(e, e.guns);
+}
+function applyWield(e, s0, s1, s2, w, mag, reserve) {
+  if (!e) return;
+  e.slots = [s0, s1, s2]; e.primary = e.nextPrimary = s0; e.secondary = e.nextSecondary = s1; e.melee = e.nextMelee = s2;
+  if (e.mag && w >= 0) { e.mag[w] = mag | 0; e.reserve[w] = reserve | 0; }
+  setWeapon(e, e.slots.includes(w) ? w : s0);
+  if (e === player) e.utilSel = '';
+}
+function applyGunSkins(e, pistol, p90, carabina, rifle) {
+  if (!e) return;
+  e.guns = {};
+  if (pistol) e.guns.pistol = pistol;
+  if (p90) e.guns.p90 = p90;
+  if (carabina) e.guns.carabina = carabina;
+  if (rifle) e.guns.rifle = rifle;
+  paintGunLook(e);
+}
+function grabGround(e, g) {
+  const r = takeGun(e, g);
+  removeGroundGun(g.id);
+  if (!r.ok) return;
+  if (r.dumped) putGround(r.dumped, { x: g.x, y: g.y, z: g.z }, e.id);
+  setWeapon(e, e.weapon);
+  paintGunLook(e);
+  if (e === player) { e.utilSel = ''; sfx.pickup(); }
+}
+function stepGroundGuns(dt) {
+  for (const g of groundGuns) if (g.mesh) g.mesh.rotation.y += dt * 1.4;
+  if (online || !compOn()) return;
+  for (let i = groundGuns.length - 1; i >= 0; i--) {
+    const g = groundGuns[i];
+    for (const e of entities) {
+      if (!e.alive) continue;
+      if (g.ignore === e.id && gameTime < g.until) continue;
+      const dx = e.pos.x - g.x, dz = e.pos.z - g.z;
+      if (dx * dx + dz * dz > 1.35 * 1.35 || Math.abs(e.pos.y - g.y) > 1.7) continue;
+      grabGround(e, g); break;
+    }
+  }
+}
+function requestDropGun() {
+  if (!compOn() || !player || !player.alive || emote.on) return;
+  if (primaryGun(player) < 0) { flashMsg('Sem arma principal.'); return; }
+  if (online) { netEv(['dg']); return; }
+  const packed = dropFromHand(player, primaryGun(player));
+  putGround(packed, tossSpot(player.pos, player.yaw + Math.PI, player.pitch, groundAt), player.id);
+  setWeapon(player, player.weapon); sfx.toss(1);
+}
+function requestDropBomb() {
+  if (!compOn() || !player || !player.alive || !bombS || bombS.carrier !== player.id) { if (compOn() && player && player.alive) flashMsg('Você não está com o botijão.'); return; }
+  if (online) { netEv(['db']); return; }
+  const ev = releaseBomb(bombS, player.id, tossSpot(player.pos, player.yaw + Math.PI, player.pitch, groundAt), gameTime + 0.7);
+  if (ev) { applyBombEvOffline(ev); sfx.toss(0.8); }
+}
+const UTIL_NAME = { nade: 'Copo Bomba', smoke: 'Fumaça', flash: 'Flashbang' };
+function selectGun(idx) {
+  if (!player) return;
+  player.utilSel = '';
+  if (player.weapon === idx) return;
+  switchWeapon(player, idx);
+}
+function selectUtil(k) {
+  if (!compOn() || !player || !player.alive) return;
+  if (utilCount(player, k) <= 0) { flashMsg(`Sem ${UTIL_NAME[k] || 'granada'}`); return; }
+  player.utilSel = k;
+}
+function cycleComp(dir) {
+  const list = compWheel(player);
+  const cur = player.utilSel
+    ? list.findIndex((x) => x.t === 'util' && x.k === player.utilSel)
+    : list.findIndex((x) => x.t === 'gun' && player.slots[x.i] === player.weapon);
+  const next = list[(Math.max(0, cur) + (dir < 0 ? list.length - 1 : 1)) % list.length];
+  if (next.t === 'gun') selectGun(player.slots[next.i]);
+  else selectUtil(next.k);
+}
+function throwSelected() {
+  const k = player && player.utilSel;
+  if (k === 'nade') throwGrenade(player, throwOrigin(), throwVelocity(0.55));
+  else if (k === 'smoke') throwTactical();
+  else if (k === 'flash') throwFlash();
+  if (player && utilCount(player, k) <= 0) player.utilSel = '';
+}
 function lookDot(e, pos) {
   const eye = center(e, 1.5);
   const dx = pos.x - eye.x, dy = pos.y - eye.y, dz = pos.z - eye.z;
@@ -2119,7 +2254,11 @@ function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx
   if (!online && survOn() && goesDown(t)) { enterDownLocal(t); return; } // Survival offline: corações esgotados viram down, sem killcam
   if (!online && survOn() && !t.downFinal) t.loadSnap = snapshotLoadout(t);
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = compOn() ? Infinity : gameTime + (t.dummy ? TRAIN.respawn : exploreMode() && t.isPlayer ? 1 : respawnDelay()); t.killW = wIdx; t.killBack = !!back;
-  if (compOn() && !online) { t.armor = 0; t.helmet = false; if (a && a !== t && !friends(a, t)) payKill(a); }
+  if (compOn() && !online) {
+    t.armor = 0; t.helmet = false; if (a && a !== t && !friends(a, t)) payKill(a);
+    const dw = deathGun(t);
+    if (dw >= 0) { const packed = dropFromHand(t, dw) || packGun(t, dw); putGround(packed, { x: t.pos.x, y: groundAt(t.pos.x, t.pos.z, t.pos.y + 0.4) + 0.14, z: t.pos.z }, 0); setWeapon(t, t.weapon); }
+  }
   if (a) t.lastAttacker = a;
   if (t.isPlayer) t.killerName = a && a !== t && a.name ? a.name : (label || '');
   if (a && a !== t && !friends(a, t)) a.kills++;
@@ -3597,7 +3736,7 @@ function updateHud(dt) {
   hpBar.classList.toggle('regen', !!(p.alive && p.regenOn)); // brilho verde + "+" pulsando enquanto regenera
   const ammoEl = $('ammo'); if (ammoEl) ammoEl.classList.toggle('dual', !!w.akimbo);
   $('mag').textContent = p.down ? (p.downMag | 0) : w.shield ? Math.ceil(p.shieldHp || 0) : w.melee ? '∞' : w.akimbo ? `${rounds(p, p.weapon, 0)}·${rounds(p, p.weapon, 1)}` : p.mag[p.weapon]; $('reserve').textContent = p.down ? ' / chão' : w.shield ? ' TAMPA' : w.melee ? '' : ' / ' + p.reserve[p.weapon];
-  { const title = weaponTitleParts(p), name = $('wtitle'), meta = $('wmeta'), mode = $('wmode'); if (name) name.textContent = title.name; if (meta) meta.textContent = title.meta ? '| ' + title.meta : ''; if (mode) mode.textContent = fireModeLabel(w); }
+  { const title = weaponTitleParts(p), name = $('wtitle'), meta = $('wmeta'), mode = $('wmode'); if (compOn() && p.utilSel) { if (name) name.textContent = UTIL_NAME[p.utilSel] || 'Granada'; if (meta) meta.textContent = ''; if (mode) mode.textContent = 'clique joga'; } else { if (name) name.textContent = title.name; if (meta) meta.textContent = title.meta ? '| ' + title.meta : ''; if (mode) mode.textContent = fireModeLabel(w); } }
   for (let i = 0; i < NADE.max; i++) $('nade' + i).classList.toggle('on', i < p.nades);
   const pm = $('powermeter');
   const pulling = !!(p.alive && ((p.weapon === BOW && p.bowDraw) || (p.weapon === EGG_W && p.eggDraw)) && !p.charging && !gunner && !predator && !radioCall);
@@ -3608,13 +3747,17 @@ function updateHud(dt) {
   $('slot2').classList.toggle('hidden', armsMode() || !!(survOn() && p.slotOn && p.slotOn[1] === 0));
   $('slot3').classList.toggle('hidden', armsMode() && p.primary === GOLD_KNIFE);
   paintMiniHud(p);
-  $('slot1').classList.toggle('active', p.weapon === p.slots[0]); $('slot2').classList.toggle('active', p.weapon === p.slots[1]); $('slot3').classList.toggle('active', p.weapon === p.slots[2]);
+  $('slot1').classList.toggle('active', !p.utilSel && p.weapon === p.slots[0]); $('slot2').classList.toggle('active', !p.utilSel && p.weapon === p.slots[1]); $('slot3').classList.toggle('active', !p.utilSel && p.weapon === p.slots[2]);
   const smokeN = $('smokeN'), stunN = $('stunN');
-  if (smokeN) { smokeN.textContent = p.smokeNades || 0; smokeN.parentElement.classList.toggle('out', !(p.smokeNades > 0)); }
+  const nlab = document.querySelector('#nades .nlabel');
+  if (nlab) { nlab.textContent = compOn() ? '4' : 'Q'; nlab.parentElement.classList.toggle('on-sel', !!(compOn() && p.utilSel === 'nade')); }
+  if (smokeN) { smokeN.textContent = p.smokeNades || 0; smokeN.parentElement.classList.toggle('out', !(p.smokeNades > 0)); if (smokeN.parentElement.firstChild) smokeN.parentElement.firstChild.textContent = compOn() ? '5' : '4'; smokeN.parentElement.classList.toggle('on-sel', !!(compOn() && p.utilSel === 'smoke')); }
   if (stunN) {
     const n = compOn() ? (p.flashNades || 0) : (p.stunNades || 0);
     stunN.textContent = n; stunN.parentElement.classList.toggle('out', !n);
-    stunN.parentElement.title = compOn() ? 'Flashbang · 5' : 'Pau de choque';
+    if (stunN.parentElement.firstChild) stunN.parentElement.firstChild.textContent = compOn() ? '6' : '5';
+    stunN.parentElement.classList.toggle('on-sel', !!(compOn() && p.utilSel === 'flash'));
+    stunN.parentElement.title = compOn() ? 'Flashbang · 6' : 'Pau de choque';
   }
   {
     // A ficha de armas é tela cheia. Na kill cam ela fica fechada até o B (a mesma tecla do arsenal).
@@ -4352,7 +4495,7 @@ function updateFP(dt) {
   if (fp.lmgBarrel) { const h = fp.lmgHeat || 0; fp.lmgBarrel.material.emissive.setRGB(h, h * 0.22, 0.02); }
   if (fp.pigAt && gameTime >= fp.pigAt) { fp.pigAt = 0; spawnPigSmoke(); }
   fp.breakT = Math.max(0, (fp.breakT || 0) - dt);
-  fp.guns.forEach((g, i) => { g.visible = i === p.weapon; if (g.userData.twin) g.userData.twin.visible = g.visible; if (g.userData.extra) g.userData.extra.visible = g.visible; });
+  fp.guns.forEach((g, i) => { g.visible = i === p.weapon && !(compOn() && p.utilSel); if (g.userData.twin) g.userData.twin.visible = g.visible; if (g.userData.extra) g.userData.extra.visible = g.visible; });
   const shatter = fp.breakT > 0.4 && fp.guns[TAMPA]; // cacos primeiro; depois a pistola fica na mão
   if (shatter) { fp.guns.forEach((g, i) => { if (i !== TAMPA) g.visible = false; }); fp.guns[TAMPA].visible = true; if (fp.guns[TAMPA].userData.setStage) fp.guns[TAMPA].userData.setStage(3); if (fp.guns[TAMPA].userData.tickBreak) fp.guns[TAMPA].userData.tickBreak(fp.breakT / 1.1); }
   const w = gunOf(p, p.weapon);
@@ -5325,6 +5468,11 @@ function updatePlayer(dt) {
       arcLine.visible = arcMark.visible = false;
       return;
     }
+  }
+  if (compOn() && p.utilSel) {
+    const utilLatch = !mouseDown && clickLatch && performance.now() - clickLatch < 250;
+    if ((mouseDown || utilLatch) && !firedThisPress && p.stunUntil <= gameTime && p.switchEnd <= gameTime) { firedThisPress = true; clickLatch = 0; throwSelected(); }
+    return;
   }
   // tiro
   finishReload(p);
@@ -6858,6 +7006,7 @@ function startGame(mapId) {
   for (const e of entities) { e.alive = false; if (survivalMode() && !e.bot) { e.points = SURVIVAL.START_POINTS; e.pts = e.points; e._purse = e.points; e.purseN = 0; } }
   if (survivalMode()) beginSurvival();
   if (x1Mode()) { x1Gun = rollX1Weapon(-1, x1WeaponOk); entities.forEach((e, i) => { e.x1Side = i % 2; }); }
+  if (compOn() && player) { const g = { ...((getAccount() && getAccount().guns) || {}) }; player.guns = { ...g }; player.ownGuns = { ...g }; }
   if (compOn() && bombS) for (const e of entities) compEnterRound(e, bombS.round);
   for (const e of entities) respawn(e);
   pickups.forEach((p) => { const on = compOn() ? false : clientPower(p.type); p.active = on; p.mesh.visible = on; if (!on) p.respawnAt = Infinity; });
@@ -7132,6 +7281,8 @@ document.addEventListener('wheel', (e) => { // rodinha: primária → pistola �
   }
   if (ac130) { const i = AC130_ORDER.indexOf(ac130.mode); setAc130Mode(AC130_ORDER[(i + (e.deltaY > 0 ? 1 : AC130_ORDER.length - 1)) % AC130_ORDER.length]); e.preventDefault(); return; }
   if (bombPick || invPick) { armClass((classIndex + (e.deltaY < 0 ? classes.length - 1 : 1)) % classes.length); return; } // painel de classe: rodinha troca a classe
+  if (compBuy) return;
+  if (compOn()) { cycleComp(e.deltaY < 0 ? -1 : 1); return; }
   const S = player.slots, i = Math.max(0, S.indexOf(player.weapon)), n = S.length; switchWeapon(player, S[(i + (e.deltaY < 0 ? n - 1 : 1)) % n]);
 }, { passive: false });
 function tryOpenChat(e) {
@@ -7191,16 +7342,19 @@ document.addEventListener('keydown', (e) => {
     if (!emote.on && e.code === 'KeyR' && !(player && player.down)) startReload(player);
     if (!player.alive && (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat && requestRespawn()) keys[e.code] = false; // Espaço não vira pulo ao renascer
     else {
-      if (!emote.on && e.code === 'Digit1') switchWeapon(player, player.slots[0]);
-      if (!emote.on && e.code === 'Digit2') { if (!(survOn() && player.slotOn && player.slotOn[1] === 0)) switchWeapon(player, player.slots[1]); }
-      if (!emote.on && e.code === 'Digit3') switchWeapon(player, player.slots[2]);
+      if (!emote.on && e.code === 'Digit1') selectGun(player.slots[0]);
+      if (!emote.on && e.code === 'Digit2') { if (!(survOn() && player.slotOn && player.slotOn[1] === 0)) selectGun(player.slots[1]); }
+      if (!emote.on && e.code === 'Digit3') selectGun(player.slots[2]);
       if (!emote.on && e.code === 'KeyV' && !e.repeat) quickKnife(player);
       if (exploreMode() && !online && e.code === 'KeyN' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && player.alive) { e.preventDefault(); toggleNoclip(); }
       if (!emote.on && e.code === 'KeyC' && player.alive && !e.repeat && !noclipOn) saberDash(player);
       if (!emote.on && e.code === 'KeyZ' && player.alive && !e.repeat) saberSpecial(player);
       if (!emote.on && e.code === 'KeyI' && player.alive && !e.repeat) startInspect(player);
-      if (!emote.on && e.code === 'Digit4' && player.alive && !e.repeat) throwTactical();
-      if (!emote.on && e.code === 'Digit5' && player.alive && !e.repeat) { if (compOn()) throwFlash(); else throwShock(); }
+      if (!emote.on && e.code === 'Digit4' && player.alive && !e.repeat) { if (compOn()) selectUtil('nade'); else throwTactical(); }
+      if (!emote.on && e.code === 'Digit5' && player.alive && !e.repeat) { if (compOn()) selectUtil('smoke'); else throwShock(); }
+      if (!emote.on && e.code === 'Digit6' && player.alive && !e.repeat && compOn()) selectUtil('flash');
+      if (!emote.on && e.code === 'KeyG' && player.alive && !e.repeat && compOn() && !compBuy && !bombPick) requestDropGun();
+      if (!emote.on && e.code === 'KeyX' && player.alive && !e.repeat && compOn()) requestDropBomb();
       if (!emote.on && e.code === 'KeyF' && player.alive && !e.repeat && !invMode()) useStreak();
       if (training() && player.alive && !emote.on && !e.repeat && (e.code === 'KeyB' || e.code === 'KeyN' || e.code === 'KeyM')) trainSwap(e.code);
       else if (e.code === 'KeyB' && !e.repeat && player.alive && !invMode() && !invPick) startEmote(); // Invasão: B é só o painel de armas (invKey), nunca dança
@@ -7240,7 +7394,7 @@ function loop() {
     if (gasSim && !online) stepGasLocal();
     if (gasView) gasView.update(dt, gameTime, player ? player.pos : null);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateDeathSkinFx(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode() && !compOn()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
-    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud();
+    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); stepGroundGuns(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud();
     try { flushSleigh(); } catch (e) { /* trenó espera o contexto */ }
     if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; queueSleigh(); });
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
@@ -7454,7 +7608,7 @@ const MENU_RULES = {
   dom: 'Times · capture a zona · o primeiro a completar as capturas vence',
   treino: 'Estande do Docão: alvos que não atacam e voltam em 2 s. B/N/M trocam a arma, munição infinita, sem tempo.',
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
-  comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho e ray gun. Q joga a granada, 4 a fumaça, 5 a flashbang. Rodada de pistola no começo e sempre que troca quem planta.\nPrimeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada. Quem morre espera a rodada seguinte e perde as granadas que não jogou.`,
+  comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho e ray gun. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). O clique joga a que está na mão. Q ainda carrega o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
   survival: 'Survival, dentro da Invasão: o mapa trava na HOTMILK à Noite. Nasce de pistola e faca. F usa a loja (parede, Barraca da Sorte e Papada). E compra a porta. A Ray Gun só sai na barraca.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. N liga o noclip: voa na direção da mira, atravessa parede, Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Munição não acaba e a partida não termina.',
@@ -8390,6 +8544,7 @@ function startOnlineMatch(m) {
     const meNow = m.ents.find((x) => x.id === o.myId);
     if (meNow && meNow.pts != null && survOn()) { player.pts = meNow.pts | 0; player.points = player.pts; player._purse = player.pts; player.purseN = meNow.pn | 0; paintSurvPurse(); }
     if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); }
+    if (Array.isArray(m.gg)) syncGround(m.gg);
     return;
   }
   clearMatchEnding(); resetAds(); loadMap(m.map, isInvasion(m.mode) || isSurvivalMode(m.mode, m)); if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); } clearBots(); gameTime = m.T; o.mapId = m.map; o.inMatch = true; o.ents.clear(); o.tmap = [];
@@ -8402,12 +8557,13 @@ function startOnlineMatch(m) {
   player.primary = player.nextPrimary = selectedPrimary; player.nextSecondary = selectedSecondary; player.nextMelee = selectedMelee; player.slots = [selectedPrimary, selectedSecondary, selectedMelee]; setWeapon(player, selectedPrimary); // até o servidor mandar o renascimento
   if (survOn()) { player.pts = me.pts | 0; player.points = player.pts; player._purse = player.pts; player.purseN = me.pn | 0; player.pap = me.pap || {}; player.slotOn = me.slotOn || [1, 0, 1]; if (me.slots) player.slots = me.slots.slice(); }
   if (armsMode()) { [player.armsStage, player.armsKills] = me.arms || [0, 0]; equipArmsLocal(player); }
-  entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.caps = me.caps || 0; if (me.gr) applyGr(player, me.gr[0], me.gr[1], me.gr[2], me.gr[3], me.gr[4], me.gr[5], me.gr[6], me.gr[7], me.gr[8], me.gr[9]); applyTeam(player, me.team ?? -1);
+  entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.guns = { ...(me.gn || {}) }; player.ownGuns = { ...player.guns }; player.caps = me.caps || 0; if (me.gr) applyGr(player, me.gr[0], me.gr[1], me.gr[2], me.gr[3], me.gr[4], me.gr[5], me.gr[6], me.gr[7], me.gr[8], me.gr[9]); applyTeam(player, me.team ?? -1);
   for (const info of m.ents) remoteEnt(info);
   if (survivalMode()) beginSurvival(m.doors);
   invApplyLook(invMode()); if (invMode()) for (const [id, ki, pos] of m.drops || []) invAddDrop(id, DROP_KEYS[ki], pos);
   if (survOn() && m.stations) survBuild(m.stations);
   if (mode === 'bomb' || mode === COMP.mode) { if (m.bomb) { setupBomb({ sites: m.bomb.sites.map(([x, y, z], i) => ({ x, y, z, name: SITE_NAMES[i] })), atk: m.bomb.atk, def: m.bomb.def, pts: m.bomb.pts ? m.bomb.pts.map(([x, y, z]) => ({ x, y, z })) : undefined }, unpackBomb(m.bomb.s)); if (compOn()) armComp(bombS); } else mode = 'dm'; }
+  if (Array.isArray(m.gg)) syncGround(m.gg);
   refreshModeHud(); $('teamPick').classList.add('hidden');
   if (teamMode() && me.pend) showTeamPick(m.ents);
   pickups.forEach((p, i) => { p.active = !!(m.pk ? m.pk[i] : 1); p.mesh.visible = p.active; });
@@ -8637,6 +8793,11 @@ function netEvent(ev) {
     if (e && hp != null) e.hp = hp; baconEaten(d && d.bacon && d.bacon.on ? d.bacon : null, e);
   }
   else if (k === 'mgs') { const e = entOf(ev[1]); if (e && e !== player) { const was = e.mgSpinOn; e.mgSpinOn = !!ev[2]; if (e.mgSpinOn && !was) sfx.mgStart(distVol(e.pos) * 0.6); else if (!e.mgSpinOn && was) sfx.mgStop(distVol(e.pos) * 0.5); } } // minigun de outro jogador embalando/parando
+  else if (k === 'wd') showGroundGun(ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[7], ev[8]);
+  else if (k === 'wx') removeGroundGun(ev[1]);
+  else if (k === 'wc') clearGroundGuns();
+  else if (k === 'ww') applyWield(entOf(ev[1]), ev[2], ev[3], ev[4], ev[5], ev[6], ev[7]);
+  else if (k === 'gns') applyGunSkins(entOf(ev[1]), ev[2], ev[3], ev[4], ev[5]);
   else if (k === 'bb') { if (bombS) onBombEvent(ev.slice(1)); } // Modo Bomba (servidor novo)
   else if (k === 'swg') {
     const e = entOf(ev[1]); if (!e || e === player) return;
@@ -9112,7 +9273,7 @@ function bombRoundStreaks() {
   if (netNukeAt) { netNukeAt = 0; hideNuke(); }
   removeHeli(); clearStrikes();
 }
-function endBomb() { closeBombPick(); closeCompBuy(); clearBombGfx(); bombS = null; bombL = null; }
+function endBomb() { closeBombPick(); closeCompBuy(); clearBombGfx(); clearGroundGuns(); bombS = null; bombL = null; }
 function startBombOffline() {
   setupBomb(bombLayout(nav, SPAWNS, currentMap, groundAt), newBombState());
   if (compOn()) armComp(bombS);
@@ -9127,7 +9288,7 @@ function applyBombEvOffline(ev) {
   if (k === 'plant' || k === 'defuse') { const e = byBid(ev[1]); if (e) { e.caps = (e.caps || 0) + 1; if (compOn()) payObj(e, k); } }
   if (k === 'boom') { const pl = byBid(ev[4]); for (const v of blastVictims(bombS, entities, { x: ev[1], y: ev[2], z: ev[3] })) kill(v, pl && pl !== v && !friends(pl, v) ? pl : null, W_BOMB, false, false, true); }
   if (k === 'win' && compOn()) payRound(entities, ev[1]);
-  if (k === 'round') { clearTacticals(); for (const n of grenades) scene.remove(n.mesh); grenades.length = 0; for (const r of rockets) scene.remove(r.mesh); rockets.length = 0; for (const e of entities) { if (compOn()) compEnterRound(e, ev[1]); respawn(e); } }
+  if (k === 'round') { clearTacticals(); clearGroundGuns(); for (const n of grenades) scene.remove(n.mesh); grenades.length = 0; for (const r of rockets) scene.remove(r.mesh); rockets.length = 0; for (const e of entities) { if (compOn()) compEnterRound(e, ev[1]); respawn(e); if (compOn()) paintGunLook(e); } }
   onBombEvent(ev);
   if (k === 'over') endGame();
 }
