@@ -5,6 +5,7 @@
 import { execSync } from 'node:child_process';
 import { SKINS } from './skins.js';
 import { EARN, START_COINS } from './shared/closet.js';
+import { promoActive, PROMO_COINS } from './shared/promo.js';
 import { CHAL_BY_ID, dailyIds, spDay } from './shared/challenges.js';
 const H = process.argv[2] || 'http://127.0.0.1:8787', WS = H.replace(/^http/, 'ws');
 const fails = []; const ok = (c, m) => { console.log((c ? 'OK    ' : 'FALHA ') + m); if (!c) fails.push(m); };
@@ -30,6 +31,7 @@ async function play(token, kills, mode = 'dm', map = 'arena', end = true) {
   if (end) { P.send({ t: 'testEnd' }); await wait(2500); }
   P.ws.close(); await wait(1500);
 }
+const BANKROLL = START_COINS + (promoActive() ? PROMO_COINS : 0); // /api/me já aplica a promo, se estiver no prazo
 // acha uma conta cujo desafio fácil de hoje é "abates" (D02: 10 no dia, ou D29: 5 no Mata-mata): os dois andam com abates em bots
 let tok = '', m = null, n = 0;
 for (; n < 80; n++) {
@@ -46,19 +48,19 @@ ok(sql(`SELECT chal FROM accounts WHERE id = ${id}`)[0].chal === null, 'só ler 
 const F = CHAL_BY_ID[m.chal.list[0].id];
 // Treino não conta
 await play(tok, 6, 'treino', 'estande', false); m = await me(tok);
-ok(m.chal.list[0].prog === 0 && m.account.coins === START_COINS, 'Treino: abates não andam o desafio nem rendem');
+ok(m.chal.list[0].prog === 0 && m.account.coins === BANKROLL, 'Treino: abates não andam o desafio nem rendem');
 // partida online: 3 abates por partida (o teste mata os bots vivos da sala); o saldo da partida = nº de abates (1 por bot), fora os 500 iniciais
-await play(tok, 3); m = await me(tok); let kills = (m.account.coins - START_COINS) / EARN.killBot;
+await play(tok, 3); m = await me(tok); let kills = (m.account.coins - BANKROLL) / EARN.killBot;
 ok(kills >= 1 && m.chal.list[0].prog === kills && !m.chal.list[0].done, `partida online: progresso ${m.chal.list[0].prog}/${F.goal} gravado no fim (= ${kills} abates)`);
 const chal1 = sql(`SELECT chal FROM accounts WHERE id = ${id}`)[0].chal;
 ok(chal1 && JSON.parse(chal1).d === spDay() && chal1.length < 60, `accounts.chal é um JSON curtinho (${chal1})`);
 let paid = false, guard = 0;
 while (!paid && guard++ < 8) {
   await play(tok, 3); m = await me(tok); paid = m.chal.list[0].done;
-  if (!paid) { kills = (m.account.coins - START_COINS) / EARN.killBot; ok(m.chal.list[0].prog === kills, `andando: ${kills}/${F.goal}`); }
+  if (!paid) { kills = (m.account.coins - BANKROLL) / EARN.killBot; ok(m.chal.list[0].prog === kills, `andando: ${kills}/${F.goal}`); }
 }
 ok(paid && m.chal.list[0].prog === F.goal, 'completou o desafio fácil');
-const k2 = (m.account.coins - START_COINS - F.reward) / EARN.killBot;
+const k2 = (m.account.coins - BANKROLL - F.reward) / EARN.killBot;
 ok(Number.isInteger(k2) && k2 >= F.goal && k2 <= F.goal + 3, `pagou o prêmio ${F.reward} uma vez (saldo ${m.account.coins} = ${k2} abates + ${F.reward})`);
 await play(tok, 3); const m2 = await me(tok);
 ok(m2.account.coins > m.account.coins && m2.account.coins - m.account.coins <= 3 * EARN.killBot, 'mais abates depois de completo: só o valor dos abates, o prêmio não paga de novo');

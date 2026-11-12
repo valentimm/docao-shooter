@@ -10,7 +10,7 @@ const fails = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + '
 ok(BOX_PRICE === 400, 'o caixote comprado custa 400 Docoins');
 
 const db = new DatabaseSync(':memory:');
-for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql', '0005_faca.sql', '0006_sniper.sql', '0007_caixote.sql', '0008_caixa_compra.sql']) db.exec(readFileSync(new URL('./server/migrations/' + f, import.meta.url), 'utf8'));
+for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql', '0005_faca.sql', '0006_sniper.sql', '0007_caixote.sql', '0008_caixa_compra.sql', '0009_promo_claims.sql']) db.exec(readFileSync(new URL('./server/migrations/' + f, import.meta.url), 'utf8'));
 const bound = (sql, args) => { if (!args.length) return []; if (/\?\d/.test(sql)) { const o = {}; args.forEach((v, i) => { o[i + 1] = v; }); return [o]; } return args; };
 const wrap = (sql, args = []) => ({ sql, args, bind(...a) { return wrap(sql, a); },
   async all() { return { results: db.prepare(sql).all(...bound(sql, args)) }; }, async first() { return db.prepare(sql).get(...bound(sql, args)) || null; },

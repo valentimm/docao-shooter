@@ -41,6 +41,8 @@ export const getEarn = () => earn;
 let chal = null, chalAt = 0; // desafios do dia (vêm no /api/me; o relógio do reset anda no cliente)
 export const getChal = () => (chal ? { ...chal, resetIn: Math.max(0, Math.round(chal.resetIn - (Date.now() - chalAt) / 1000)) } : null);
 export const onAccount = (f) => { subs.add(f); return () => subs.delete(f); };
+const promoSubs = new Set();
+export const onPromoGrant = (f) => { promoSubs.add(f); return () => promoSubs.delete(f); };
 function setToken(t) { token = t || ''; try { if (token) localStorage.setItem(KEY, token); else localStorage.removeItem(KEY); } catch (e) { /* sem storage */ } }
 
 async function api(path, { method = 'GET', body, auth = false } = {}) {
@@ -62,7 +64,7 @@ export async function refreshStats() {
   if (DEV_LOCAL) { emit(); return { account, items: getItems() }; }
   if (!token) return null; const r = await api('/api/me', { auth: true });
   if (r.status === 401) { dropSession(); return null; }
-  if (r.ok) { account = r.data.account; stats = r.data.stats; items = r.data.items || []; earn = r.data.earn || earn; chal = r.data.chal || null; chalAt = Date.now(); emit(); } return r.ok ? r.data : null;
+  if (r.ok) { account = r.data.account; stats = r.data.stats; items = r.data.items || []; earn = r.data.earn || earn; chal = r.data.chal || null; chalAt = Date.now(); emit(); if (r.data.promoGrant && r.data.promoGrant.granted) promoSubs.forEach((f) => { try { f(r.data.promoGrant); } catch (e) { console.error(e); } }); } return r.ok ? r.data : null;
 }
 export const loadMe = refreshStats; // no começo: confere o token guardado (se vencer, volta a convidado)
 let skinTimer = 0, skinWant = '';

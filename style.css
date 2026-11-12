@@ -1821,6 +1821,15 @@ body.deadgray #game{filter:grayscale(.68) brightness(.72) contrast(1.06);transit
 .ticket-btn:hover{filter:brightness(1.08)}.ticket-btn:disabled{opacity:.6;cursor:wait}
 .ticket-btn.alt{background:var(--ink);border-color:#162c25;box-shadow:0 4px #0d1b16}
 .ticket-btn.ghost{background:transparent;color:var(--ink);border:2px solid var(--ink);box-shadow:none;font-size:14px;padding:8px}
+#promoModal{z-index:40;background:rgba(10,20,40,.55)}
+.promo-panel{width:min(420px,92vw);text-align:center}
+.promo-kicker{margin:0 0 4px;font:900 11px/1 var(--font);letter-spacing:1.4px;text-transform:uppercase;color:#5b4a2c}
+.promo-panel h2{margin-bottom:8px}
+.promo-coins{margin:6px 0 12px;font:900 40px/1 var(--font);color:var(--red,#a52e26)}
+.promo-coins b{font:inherit}
+.promo-coins small{display:block;margin-top:4px;font:900 13px/1 var(--font);letter-spacing:1px;text-transform:uppercase;color:var(--ink,#203e35)}
+.promo-panel #promoBody{margin:0 0 4px;font:700 16px/1.4 var(--font);color:var(--ink,#203e35);text-align:center}
+.promo-panel #promoBody b{font-weight:900;color:var(--red,#a52e26)}
 .acct-help,.acct-note{margin:8px 0 0;font:700 12px/1.35 var(--font);color:#5b4a2c}
 .acct-err{min-height:18px;margin-top:6px;font:900 13px var(--font);color:var(--red)}
 .acct-hello{margin:6px 0 10px;text-align:center;font:900 22px var(--font)}

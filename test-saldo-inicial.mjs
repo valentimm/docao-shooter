@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { START_COINS } from './shared/closet.js';
+import { promoActive, PROMO_COINS } from './shared/promo.js';
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
@@ -33,7 +34,7 @@ ok(coins('Nova') === START_COINS && coins('Rica') === 620, `conta criada depois 
 
 // cadastro de verdade (PBKDF2 + D1 falso): o INSERT do Worker grava 500, e a migração já aplicada não soma de novo
 const live = new DatabaseSync(':memory:');
-for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql', '0005_faca.sql']) live.exec(read('./server/migrations/' + f));
+for (const f of ['0001_contas.sql', '0002_loja.sql', '0003_desafios.sql', '0004_saldo_inicial.sql', '0005_faca.sql', '0006_sniper.sql', '0007_caixote.sql', '0008_caixa_compra.sql', '0009_promo_claims.sql']) live.exec(read('./server/migrations/' + f));
 const wrap = (sql, args = []) => ({ sql, args, bind(...a) { return wrap(sql, a); },
   async all() { return { results: live.prepare(sql).all(...args) }; },
   async first() { return live.prepare(sql).get(...args) || null; },
@@ -59,7 +60,8 @@ const row = live.prepare('SELECT coins FROM accounts WHERE nick = ?').get('Leit�
 ok(reg.status === 201 && regBody.account.coins === START_COINS && row.coins === START_COINS, `cadastro devolve e grava ${row && row.coins} Docoins`);
 const me = await handleAccountRoute(req('GET', '/api/me', null, regBody.token), env, new URL('https://docao.test/api/me'), json);
 const meBody = await me.json();
-ok(me.status === 200 && meBody.account.coins === START_COINS, `/api/me da conta nova traz ${meBody.account && meBody.account.coins} Docoins`);
+const afterMe = START_COINS + (promoActive() ? PROMO_COINS : 0);
+ok(me.status === 200 && meBody.account.coins === afterMe, `/api/me da conta nova traz ${meBody.account && meBody.account.coins} Docoins (promo ${promoActive() ? 'ativa +' + PROMO_COINS : 'fora do prazo'})`);
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK');
 process.exit(fails.length ? 1 : 0);
