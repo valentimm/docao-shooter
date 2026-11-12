@@ -15,6 +15,7 @@
 //  Vida, dano e quantidade de zumbis continuam no waveSpec — a dificuldade não multiplica isso.
 // ============================================================
 import { zombieTune } from './bot-difficulty.js';
+import { fellOff } from './physics.js';
 export const INV = {
   mode: 'inv', WAVES: 20, PREP: 12, BREAK: 15, LIVES: 2, INV_MAX: 3,
   DROP_LIFE: 35, PICK_R: 1.5, BOSS_EVERY: 5, RES_PER_BLOCK: 4, BLOCK: 5,
@@ -382,13 +383,16 @@ export class InvasionCore {
     if (mx || mz) { const yawM = Math.atan2(mx, mz); if (!t || stunned) { let dd = yawM - z.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); z.yaw += dd * Math.min(1, dt * (6 * tune.turn / 8)); } }
     const acc = z.onGround ? 9 : 2.5; z.vel.x += (mx - z.vel.x) * Math.min(1, acc * dt); z.vel.z += (mz - z.vel.z) * Math.min(1, acc * dt);
     const blocked = P.moveEntity(z, dt);
+    if (this.fellOffMap(z)) { this.killFallen(z); return; }
     if (this.A.survival) this.afterMoveSurvival(z, blocked, dt, T, t);
     else {
       if (blocked && ml > 0) { z.stuck += dt; if (z.onGround && z.stuck > 0.25) z.vel.y = 8.5; if (z.stuck > 6) this.unstick(z); }
       else z.stuck = Math.max(0, z.stuck - dt * 0.5);
-      if (z.pos.y < -5) this.unstick(z);
     }
   }
+  fallCfg() { const f = this.A.fall; return typeof f === 'function' ? f() : f; }
+  fellOffMap(z) { return !!(z && z.alive && fellOff(this.fallCfg(), z.pos.y)); }
+  killFallen(z) { if (!z || !z.alive) return; this.A.hurtZombie(z, (z.hp || 0) + 999, null, 'fall'); }
   unstick(z) { const p = this.spawnPos(); if (p) { z.pos.x = p.x; z.pos.y = p.y; z.pos.z = p.z; z.vel.x = z.vel.y = z.vel.z = 0; } z.stuck = 0; z.node = null; }
   flowDir(z, T, careful = false) {
     const nav = this.A.nav, F = this.flow; if (!nav || !F) return null;
@@ -545,7 +549,7 @@ export class InvasionCore {
     z.stuck = z.stall || 0;
     const stepUp = z.node && z.node.y > z.pos.y + 0.48 && z.node.y < z.pos.y + 1.35;
     if (blocked && z.onGround && stepUp && T > (z.hopAt || 0)) { z.vel.y = 8.5; z.hopAt = T + 0.85; }
-    if (z.pos.y < -5) this.recoverZombie(z);
+    if (this.fellOffMap(z)) this.killFallen(z);
     else if (this.A.P.overlapping && this.A.P.overlapping(z.pos.x, z.pos.y, z.pos.z)) this.A.P.depenetrate(z);
   }
   // Correção curta se o corpo caiu do mapa. Não teleporta até o jogador.

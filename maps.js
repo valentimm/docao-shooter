@@ -1529,7 +1529,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     desc: 'Três rotas simétricas: passarela oeste, Sala Fria por dentro, passarela leste. Natal no cume.',
     size: [24, 40], wallH: 0.9, wallColor: [ROCK, ROCK], openMax: 11, laneMin: 36,
     navAvoid: [],
-    fall: { y: -46, abyss: -70, haze: false, rects: voids, slopes: [], openWest: true, openEast: true, openNorth: true, openSouth: true, pit: '#1c2830', floor: -80, slopeColor: '#9AA6B0' },
+    fall: { y: -8, abyss: -70, haze: false, rects: voids, slopes: [], openWest: true, openEast: true, openNorth: true, openSouth: true, pit: '#1c2830', floor: -80, slopeColor: '#9AA6B0' },
     thumb: { x: 34, y: 40, z: 40, tx: 0, ty: 5, tz: 0 },
     palette: { sky: '#8eafc9', fog: ['#c5d4e2', 70, 360], hemi: ['#ffe6c8', '#6a7a88', 1.45], sun: ['#ffe0b0', 0.85], ground: SNOW, tiles: null, clouds: false, mountains: false,
       lights: [['#fff6e4', 0, 4.2, 0, 18, 14], ['#fff6e4', 0, 2.4, 26, 14, 10], ['#fff6e4', 0, 2.4, -26, 14, 10], ['#ffd9a0', -17.6, 4.6, 0, 16, 8], ['#ffd9a0', 17.6, 4.6, 0, 16, 8]] },

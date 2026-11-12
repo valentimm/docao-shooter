@@ -22,13 +22,13 @@ Uma porta real de 2,1 m bateria na cabeça. Por isso as portas daqui são mais a
 
 O chão padrão é y = 0. O limite do mapa continua sendo uma parede com colisão de 40 m (`WALL_COLLIDE_H`).
 
-Queda fatal é opt-in, em `map.fall`:
+Queda fatal vale em todo mapa. O plano de morte é `killFloorY` em `shared/physics.js`: `map.fall.y` se existir, senão o piso jogável mais baixo (bacias) menos 8 m, senão y = −8.
 
-- `y`: se o corpo fica abaixo disso, morre (sem atacante; o feed diz que despencou).
+- `map.fall.y`: se o corpo fica abaixo disso, morre (sem atacante; o feed diz que despencou).
 - `margin`: faixa interna da borda, em metros, sem chão.
 - `rects`: retângulos extras `[x0, z0, x1, z1]` sem chão.
-- Onde não há chão, a física usa um piso fantasma em y = −40. A morte acontece em `fall.y` (nos mapas atuais, −8), antes de encostar nesse piso.
-- O servidor valida: aceita a queda (não devolve o jogador pra cima) e mata. O mesmo vale para bot. Offline o cliente mata na hora; online espera o evento do servidor pra não contar duas vezes.
+- Onde não há chão, a física usa um piso fantasma em `fall.abyss` (ou y = −40). A morte acontece no plano de morte, antes de encostar nesse piso.
+- O servidor aceita a posição até `acceptFloorY` (sempre abaixo do plano de morte) e mata. Se o plano ficasse abaixo do piso aceito, o anti-cheat devolvia o corpo e a queda não contava. O mesmo vale para bot e zumbi (zumbi despenca e some). Offline o cliente mata na hora; online espera o evento do servidor pra não contar duas vezes.
 
 ## Posto Nevasca (rodada 1) — referência Summit (BO1)
 

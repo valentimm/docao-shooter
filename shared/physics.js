@@ -8,8 +8,9 @@ import { GRAV, STEP, RADIUS, HEIGHT, NADE, POKE } from './rules.js';
 import { stanceHeight, stanceScale } from './stance.js';
 
 export const WALL_COLLIDE_H = 40;
-export const FALL_FLOOR = -40; // chão fantasma do abismo; a morte acontece bem antes (map.fall.y)
-// map.fall = { y, margin?, rects?: [[x0,z0,x1,z1]], basins?: [[x0,z0,x1,z1,piso]] }
+export const FALL_FLOOR = -40; // chão fantasma do abismo; a morte acontece bem antes (killFloorY)
+export const DEFAULT_KILL_Y = -8; // queda fatal padrão, 8 m abaixo do chão y = 0
+// map.fall = { y, margin?, rects?: [[x0,z0,x1,z1]], basins?: [[x0,z0,x1,z1,piso]], abyss? }
 export function baselineY(fall, x, z, hx, hz) {
   if (!fall) return 0;
   if (fall.basins) for (const r of fall.basins) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return r[4];
@@ -18,7 +19,31 @@ export function baselineY(fall, x, z, hx, hz) {
   if (fall.rects) for (const r of fall.rects) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return abyss;
   return 0;
 }
-export function fellOff(fall, y) { return !!(fall && y < fall.y); }
+// Plano de morte: fall.y explícito, ou o piso jogável mais baixo (bacias) menos 8 m, ou −8.
+export function mapKillFloorY(map) {
+  if (map && map.fall && Number.isFinite(map.fall.y)) return map.fall.y;
+  let minFloor = 0;
+  if (map && map.fall && map.fall.basins) {
+    for (const r of map.fall.basins) if (Number.isFinite(r[4]) && r[4] < minFloor) minFloor = r[4];
+  }
+  return minFloor - Math.abs(DEFAULT_KILL_Y);
+}
+export function killFloorY(fall, map) {
+  if (fall && Number.isFinite(fall.y)) return fall.y;
+  return map ? mapKillFloorY(map) : DEFAULT_KILL_Y;
+}
+export function fellOff(fall, y, map) { return y < killFloorY(fall, map); }
+// O servidor precisa aceitar a posição um pouco abaixo do plano de morte, senão devolve o corpo e a queda nunca conta.
+export function acceptFloorY(fall, map) {
+  const killY = killFloorY(fall, map);
+  const abyss = (fall && Number.isFinite(fall.abyss)) ? fall.abyss : FALL_FLOOR;
+  return Math.min(abyss, FALL_FLOOR, killY - 8);
+}
+export function resolveFall(map) {
+  const fall = (map && map.fall) || null;
+  const y = killFloorY(fall, map);
+  return fall ? { ...fall, y } : { y };
+}
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const box = (x0, y0, z0, x1, y1, z1, ramp = null) => ({ min: { x: x0, y: y0, z: z0 }, max: { x: x1, y: y1, z: z1 }, ramp });
 
