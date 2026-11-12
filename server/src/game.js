@@ -26,7 +26,7 @@ import { normWeapons, normPowers, clampLoadout, botPool, weaponOn, powerOn } fro
 import { clampKitMap, defaultKit, resolveWeapon } from '../../shared/attachments.js';
 import { DANCE_TIME, danceId } from '../../shared/emote.js';
 import { meleeHit, MELEE_KINDS } from '../../shared/melee.js';
-import { mapSolids, createPhysics, raySphere, HITBOXES, rayHitboxes, fellOff, FALL_FLOOR } from '../../shared/physics.js';
+import { mapSolids, createPhysics, raySphere, HITBOXES, rayHitboxes, fellOff, resolveFall, acceptFloorY } from '../../shared/physics.js';
 import { stanceScale, stanceHeight, stepCrouch } from '../../shared/stance.js';
 import { traceShot } from '../../shared/penetration.js';
 import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from '../../shared/gas.js';
@@ -251,8 +251,8 @@ export class Game {
     if (this.invasion) for (const b of [...this.ents.values()]) if (b.bot) { this.ents.delete(b.id); } // começa sem zumbi velho/bot
     const map = getMap(id); this.mapId = id; this.map = map;
     this.surv = this.survival ? createMatchSurvival(map) : null;
-    this.fall = map.fall || null;
-    const solids = mapSolids(map).concat(this.surv ? closedDoorSolids(map, this.surv.open) : []); this.P = createPhysics(solids, map.size, map.fall || null);
+    this.fall = resolveFall(map);
+    const solids = mapSolids(map).concat(this.surv ? closedDoorSolids(map, this.surv.open) : []); this.P = createPhysics(solids, map.size, this.fall);
     const spawnSrc = this.survival && map.survival ? map.survival.playerSpawns : map.spawns;
     this.spawns = spawnSrc.map(([x, z, y = 0]) => ({ x, y: this.P.groundAt(x, z, y + 0.3), z }));
     const navSeeds = map.spawns.map(([x, z, y = 0]) => [x, this.P.groundAt(x, z, y + 0.3), z]);
@@ -511,11 +511,16 @@ startMsg() {
         const maxH = (moveCap * 1.35 * (e.ghostUntil > this.T ? 1.4 : 1) + (knocked ? 22 : 0)) * dt + (e.down ? 0.35 : 0.6) + dashExtra;
         const hopped = e.down && !knocked && p.y - e.pos.y > 0.45;
         const [hx, hz] = this.map.size;
-        const inside = Math.abs(p.x) <= hx && Math.abs(p.z) <= hz && p.y >= (this.fall ? FALL_FLOOR : -0.5) && p.y < 45;
+        const inXZ = Math.abs(p.x) <= hx && Math.abs(p.z) <= hz;
+        const inside = inXZ && p.y >= acceptFloorY(this.fall, this.map) && p.y < 45;
+        const falling = e.alive && inXZ && fellOff(this.fall, p.y, this.map);
         if (this.test && m.tp) { e.pos = p; e.lastKnock = this.T; }
-        else if (hopped || horiz > maxH || !inside || this.P.overlapping(p.x, p.y, p.z, 0.03, stanceHeight(e)) || (p.y - e.pos.y > (knocked ? 12 : 3.2) * Math.max(dt, 0.25) + 1)) {
+        else if (falling) {
+          e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) };
+          this.kill(e, null, W_FALL, false); // queda do mapa mata, mesmo no Survival (não cai caído no abismo)
+        } else if (hopped || horiz > maxH || !inside || this.P.overlapping(p.x, p.y, p.z, 0.03, stanceHeight(e)) || (p.y - e.pos.y > (knocked ? 12 : 3.2) * Math.max(dt, 0.25) + 1)) {
           e.badMoves = (e.badMoves || 0) + 1; this.toMe(e, ['pos', arr3(e.pos)]); // anti-cheat: devolve pra última posição válida
-        } else { e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) }; if (e.alive && !e.down && fellOff(this.fall, e.pos.y)) { if (this.wantDown(e)) this.enterDown(e); else this.kill(e, null, W_FALL, false); } }
+        } else { e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) }; }
         e.lastUpd = t;
       }
       if (Number.isFinite(m.y)) e.yaw = m.y + Math.PI; // câmera → modelo
@@ -1803,7 +1808,7 @@ startMsg() {
   makeInvasion() {
     const g = this;
     return new InvasionCore({
-      T: () => g.T, P: g.P, nav: g.nav, size: g.map.size, botDiff: () => g.cfg.botDiff,
+      T: () => g.T, P: g.P, nav: g.nav, size: g.map.size, fall: () => g.fall, botDiff: () => g.cfg.botDiff,
       survival: !!g.survival,
       specFor: g.survival ? (w, n) => getSurvivalWaveTuning(w, n) : null,
       players: () => g.humans(),
@@ -1817,7 +1822,7 @@ startMsg() {
       spawned(z) { g.events.push(['j', g.entInfo(z)]); }, // depois do core preencher vida/tipo
       removeZombie(z) { if (g.ents.delete(z.id)) g.events.push(['l', z.id]); },
       hurtPlayer(p, dmg, src) { g.damage(p, dmg, src || { fog: true, id: 0, zt: 'fog' }, src ? KNIFE : W_NADE, false, false, src ? null : 'fog'); },
-      hurtZombie(z, dmg, by, kind) { g.damage(z, dmg, by, W_NADE, false, false, 'i' + POWER_KEYS.indexOf(kind)); },
+      hurtZombie(z, dmg, by, kind) { g.damage(z, dmg, by, kind === 'fall' ? W_FALL : W_NADE, false, false, kind === 'fall' ? null : 'i' + POWER_KEYS.indexOf(kind)); },
       knock(e, v) { e.lastKnock = g.T; if (e.bot) { e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; } else g.toMe(e, ['kn', arr3(v)]); },
       heal(p, hp) { p.hp = Math.min(100, p.hp + hp); g.toMe(p, ['heal', Math.round(p.hp)]); },
       revive(p, at) { p.needRs = false; p.rsReq = false; p.respawnAt = g.T + 0.4; p.reviveAt = at; },
@@ -1841,7 +1846,7 @@ startMsg() {
   rebuildDoors() {
     if (!this.map || !this.surv) return;
     const solids = mapSolids(this.map).concat(closedDoorSolids(this.map, this.surv.open));
-    this.P = createPhysics(solids, this.map.size, this.map.fall || null);
+    this.P = createPhysics(solids, this.map.size, this.fall || resolveFall(this.map));
     const seeds = this.map.spawns.map(([x, z, y = 0]) => [x, this.P.groundAt(x, z, y + 0.3), z]);
     this.nav = buildNav({ hx: this.map.size[0], hz: this.map.size[1], spacing: this.map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds, extra: this.map.waypoints || [], avoid: this.map.navAvoid || [] });
     if (this.inv) { this.inv.A.P = this.P; this.inv.A.nav = this.nav; this.inv.rev = null; for (const z of this.inv.zombies) z.node = null; }
@@ -2030,7 +2035,7 @@ startMsg() {
         if (ride.floor) { b.vel.y = 0; b.onGround = true; }
       }
     }
-    if (b.alive && fellOff(this.fall, b.pos.y)) { this.kill(b, null, W_FALL, false); return; }
+    if (b.alive && fellOff(this.fall, b.pos.y, this.map)) { this.kill(b, null, W_FALL, false); return; }
     if (blocked) { b.stuck += dt; if (b.onGround) b.vel.y = JUMP; if (b.stuck > 1.2) { b.wp = this.randomWaypoint(); b.path = null; b.lastSeenAt = -99; b.strafeDir *= -1; b.stuck = 0; b.stuckCount = (b.stuckCount || 0) + 1; } }
     else b.stuck = Math.max(0, b.stuck - dt);
     let d = desiredYaw - b.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); b.yaw += d * Math.min(1, dt * mind.turn);

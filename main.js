@@ -52,7 +52,7 @@ import { meleeHit, MELEE_KINDS } from './shared/melee.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, commitSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc, aimForward } from './shared/saber.js';
 import { DOM, TEAM_NAMES, TEAM_COLORS, TEAM_HEX, TEAM_DARK, pickZone, newZoneState, zoneCounts, stepZone, inZone, smallerTeam } from './shared/domination.js';
 import { BACON_ITEM, noteHurt, resetRegen, regenStep, W_FALL } from './shared/rules.js';
-import { fellOff } from './shared/physics.js';
+import { fellOff, resolveFall } from './shared/physics.js';
 import { rideShift, nevascaSolids } from './shared/nevasca.js';
 import { mountNevasca, updateNevasca } from './nevasca-show.js';
 import { BOMB, W_BOMB, SIDE_NAMES, SITE_NAMES, attackTeam, sideOf, bombLayout, newBombState, startRound, stepBomb, blastVictims, unpackBomb, spawnList, botObjective, bombFrozen, bombCanUse, plantNow, siteAt, releaseBomb } from './shared/bomb.js';
@@ -212,7 +212,7 @@ function placeNameTags() {
 let solids = [], worldMeshes = [], SPAWNS = [], nav = null, currentMap = null, worldGroup = null, mapBounds = [36, 36], nevascaShow = null;
 // Física/colisão: a MESMA implementação do servidor (shared/physics.js) — a predição online bate com o servidor.
 let PHYS = createPhysics([], mapBounds);
-function indexSolids(map = currentMap) { PHYS = createPhysics(solids, mapBounds, map && map.fall); } // broadphase em grade 4 m + movimento compartilhado
+function indexSolids(map = currentMap) { PHYS = createPhysics(solids, mapBounds, map && resolveFall(map)); } // broadphase em grade 4 m + movimento compartilhado
 const solidsAt = (x, z) => PHYS.solidsAt(x, z);
 const topAt = (s, x, z) => PHYS.topAt(s, x, z);
 // AABB completo: só bloqueia se o corpo (pés..cabeça) cruza a caixa; dá pra andar debaixo de lajes e 2º andar
@@ -236,7 +236,7 @@ const moveEntity = (e, dt) => {
 };
 function checkFall(e) {
   if (noclipOn && e === player) return; // exploração: voando, penhasco e queda não matam
-  if (!e.alive || e.down || !currentMap || !fellOff(currentMap.fall, e.pos.y)) return;
+  if (!e.alive || !currentMap || !fellOff(currentMap.fall, e.pos.y, currentMap)) return;
   if (online && e.isPlayer) return; // online quem mata é o servidor, pra não contar duas vezes
   kill(e, null, W_FALL, false);
 }
@@ -2295,7 +2295,7 @@ function whoHtml(p) {
 function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx = 0) { // fx: 1 pela parede, 2 collateral
   if (state === 'over' || !t.alive) return; // resultado fechado ou morte já processada
   if (t.zt) { killZombieLocal(t, a, wIdx, head, back); return; } // Invasão: zumbi
-  if (!online && survOn() && goesDown(t)) { enterDownLocal(t); return; } // Survival offline: corações esgotados viram down, sem killcam
+  if (!online && survOn() && goesDown(t) && wIdx !== W_FALL) { enterDownLocal(t); return; } // Survival offline: corações esgotados viram down, sem killcam. Queda do mapa mata na hora.
   if (!online && survOn() && !t.downFinal) t.loadSnap = snapshotLoadout(t);
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = compOn() ? Infinity : gameTime + (t.dummy ? TRAIN.respawn : exploreMode() && t.isPlayer ? 1 : respawnDelay()); t.killW = wIdx; t.killBack = !!back;
   if (compOn() && !online) {
@@ -3722,7 +3722,7 @@ const KILL_PHRASES = [
 ];
 const SELF_PHRASES = [(t) => `${t} se pururucou`, (t) => `${t} virou bacon sozinho`, (t) => `${t} se jogou na frigideira`, (t) => `${t} fritou no próprio óleo`];
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
-function showStamp(wIdx) { const s = $('stamp'); s.textContent = isKnife(wIdx) ? 'MOGGADO!' : wIdx === TAMPA ? 'AMASSADO!' : (wIdx === W_BOMB || wIdx === W_GAS) ? 'EXPLODIDO!' : wIdx === EGG_W ? 'OMELETADO!' : 'PURURUCADO!'; s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
+function showStamp(wIdx) { const s = $('stamp'); s.textContent = isKnife(wIdx) ? 'MOGGADO!' : wIdx === TAMPA ? 'AMASSADO!' : (wIdx === W_BOMB || wIdx === W_GAS) ? 'EXPLODIDO!' : wIdx === EGG_W ? 'OMELETADO!' : wIdx === W_FALL ? 'DESPENCOU!' : 'PURURUCADO!'; s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
 function addKillFeed(a, t, wIdx, head, back = false, label = null, fx = 0) {
   if (wIdx === W_FALL) { addFeedLine(`${escapeHtml(t.name)} despencou do penhasco`, `${t.name} despencou`); return; }
   if (wIdx === W_BOMB) { const n = nameBits(t); addFeedLine(pick(BOOM_PHRASES)(n), `${t.name} explodiu com o botijão`); return; }
@@ -9141,7 +9141,7 @@ function killZombieLocal(t, a, wIdx, head, back) {
 function startInvasionOffline() {
   const fogSrc = { fog: true, name: 'Névoa Assombrada', zt: 'fog', isPlayer: false, pos: new V3(), kills: 0 }; // "atacante" da névoa (câmera de morte olha pro centro)
   inv = new InvasionCore({
-    T: () => gameTime, P: PHYS, nav, size: currentMap.size, botDiff: () => botDiff,
+    T: () => gameTime, P: PHYS, nav, size: currentMap.size, fall: () => currentMap && currentMap.fall, botDiff: () => botDiff,
     survival: survOn(),
     specFor: survOn() ? (w, n) => getSurvivalWaveTuning(w, n) : null,
     players: () => entities.filter((e) => e.isPlayer),
@@ -9157,7 +9157,7 @@ function startInvasionOffline() {
     targetable: (p) => !!(p && !p.down),
     removeZombie(z) { scene.remove(z.model.group); entities = entities.filter((x) => x !== z); },
     hurtPlayer(p, dmg, src) { if (!src) fogSrc.pos.set(inv.fog.cx, p.pos.y, inv.fog.cz); damage(p, dmg, src || fogSrc, src ? KNIFE : W_NADE, false); },
-    hurtZombie(z, dmg, by, kind) { damage(z, dmg, by, W_NADE, false); },
+    hurtZombie(z, dmg, by, kind) { damage(z, dmg, by, kind === 'fall' ? W_FALL : W_NADE, false); },
     knock(e, v) { e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; if (e.isPlayer) lastKnock = gameTime; },
     heal(p, hp) { p.hp = Math.min(100, p.hp + hp); },
     revive(p, at) { p.reviveAt = at; p.respawnAt = gameTime; if (p.isPlayer && !p.alive) { respawn(p); if (state === 'playing') lockPointer(); } },

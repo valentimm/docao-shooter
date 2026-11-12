@@ -175,7 +175,7 @@ export const REV2 = 24; // Dois Capatazes (akimbo)
 export const TAMPA = 25; // Tampa do Tacho (escudo). 23 e 24 são os revólveres.
 export const isSaber = (i) => !!(WEAPONS[i] && WEAPONS[i].saber); // Sabre (8) ou Sabre Duplo (17)
 export const isAssault = (i) => !!(WEAPONS[i] && WEAPONS[i].cat === 'ar');
-export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1, W_FALL = -3;
+export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1, W_FALL = -5; // -2 troca de time, -3 botijão, -4 gás; -5 = caiu do mapa
 export const SECONDARIES = [PISTOL, NAIL, CROSS, BOW, EGG_W, REV, REV2];
 export const MELEES = [KNIFE, SABER, SABER2];
 export const BOT_PRIMARIES = [0, COMMANDO, LMG, UZI, P90, FAMAS, 1, SEMI, 2, 5, 6, 3, CORN_W];
