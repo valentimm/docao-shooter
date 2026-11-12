@@ -9,7 +9,7 @@ import { unlockDevSkins } from './dev-skins.js';
 import { cleanNick, nickKey, nickError, passError } from '../../shared/nick.js';
 import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
-import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, buyBox, openBox, spinWheel } from './shop.js';
+import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, grantPromo, buyBox, openBox, spinWheel } from './shop.js';
 
 const ITERS = 100000; // teto do WebCrypto do Workers
 const SESSION_TTL = 30 * 24 * 3600; // s
@@ -172,8 +172,9 @@ export async function handleAccountRoute(req, env, url, json) {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);
       await unlockDevSkins(env, a.id, url);
       const boxGrant = await grantLoginBox(env, a.id);
+      const promoGrant = await grantPromo(env, a.id);
       const w = await wallet(env, a.id);
-      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant });
+      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant, promoGrant });
     }
     if (p === '/api/me/skin' && m === 'PUT') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);

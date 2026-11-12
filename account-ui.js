@@ -2,11 +2,12 @@
 //  Telas de conta e ranking (menu): faixa "Convidado / Logado", janela de entrar/criar conta e ranking.
 //  Textos em pt-BR, estilo comanda. Não mexe no jogo: só avisa quem mudou via onAccount.
 // ============================================================
-import { getAccount, getStats, getChal, onAccount, register, login, logout, loadRank, refreshStats } from './account.js';
+import { DEV_LOCAL, getAccount, getToken, getStats, getChal, onAccount, onPromoGrant, register, login, logout, loadRank, refreshStats } from './account.js';
 import { nickError, passError, cleanNick } from './shared/nick.js';
 import { COIN_ICON, CURRENCY } from './shared/closet.js';
 import { BOX_PRICE } from './shared/lootbox.js';
 import { TIERS } from './shared/challenges.js';
+import { promoActive, PROMO_ID, PROMO_COINS, PROMO_TITLE, PROMO_KICKER, PROMO_CREDIT_OK, PROMO_GUEST_OK, PROMO_GUEST_SKIP, promoCreditHtml, promoGuestHtml } from './shared/promo.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -51,6 +52,36 @@ function setMode(isReg) {
   $('acctPass').autocomplete = reg ? 'new-password' : 'current-password';
   $('acctHelp').textContent = reg ? 'Apelido de 3 a 16 letras/números (pode ter espaço . - _). Ele fica fixo e é só seu. Senha de pelo menos 8 caracteres.' : 'Entre com o apelido e a senha da sua comanda.';
 }
+const guestPromoKey = () => `docao.promo.${PROMO_ID}.guest`;
+function guestPromoSeen() { try { return localStorage.getItem(guestPromoKey()) === '1'; } catch (e) { return true; } }
+function markGuestPromoSeen() { try { localStorage.setItem(guestPromoKey(), '1'); } catch (e) { /* sem storage */ } }
+function closePromo() { const m = $('promoModal'); if (m) m.classList.add('hidden'); }
+function openPromo({ guest }) {
+  const modal = $('promoModal'); if (!modal) return;
+  $('promoKicker').textContent = PROMO_KICKER;
+  $('promoTitle').textContent = PROMO_TITLE;
+  const coins = $('promoCoins');
+  if (guest) coins.classList.add('hidden');
+  else { coins.classList.remove('hidden'); coins.innerHTML = `${COIN_ICON} <b>${PROMO_COINS}</b> <small>${CURRENCY}</small>`; }
+  $('promoBody').innerHTML = guest ? promoGuestHtml() : promoCreditHtml();
+  $('promoOk').textContent = guest ? PROMO_GUEST_OK : PROMO_CREDIT_OK;
+  $('promoSkip').textContent = PROMO_GUEST_SKIP;
+  $('promoSkip').classList.toggle('hidden', !guest);
+  modal.dataset.kind = guest ? 'guest' : 'credit';
+  modal.classList.remove('hidden');
+  $('promoOk').focus();
+}
+function showPromoGuestOnce() {
+  if (DEV_LOCAL || !promoActive() || getAccount() || guestPromoSeen()) return;
+  markGuestPromoSeen();
+  openPromo({ guest: true });
+}
+function onPromoOk() {
+  const guest = $('promoModal')?.dataset.kind === 'guest';
+  closePromo();
+  if (guest && !getAccount()) openAcct();
+}
+
 function openAcct() { $('acctErr').textContent = ''; $('acctPass').value = ''; $('acctPass2').value = ''; renderUser(); $('acctModal').classList.remove('hidden'); if (getAccount()) refreshStats(); else $('acctNick').focus(); }
 const closeAcct = () => $('acctModal').classList.add('hidden');
 
@@ -86,9 +117,13 @@ export function initAccountUI() {
   $('acctTabLogin').onclick = () => setMode(false); $('acctTabReg').onclick = () => setMode(true);
   $('acctForm').addEventListener('submit', submit);
   $('acctLogout').onclick = async () => { await logout(); renderUser(); $('acctNick').focus(); };
-  for (const id of ['acctModal', 'rankModal']) { $(id).addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') $(id).classList.add('hidden'); }); $(id).addEventListener('mousedown', (e) => e.stopPropagation()); }
+  for (const id of ['acctModal', 'rankModal', 'promoModal']) { $(id).addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') $(id).classList.add('hidden'); }); $(id).addEventListener('mousedown', (e) => e.stopPropagation()); }
+  $('promoOk').onclick = onPromoOk;
+  $('promoSkip').onclick = closePromo;
+  onPromoGrant(() => openPromo({ guest: false }));
   onAccount((a) => { renderStrip(a); renderUser(); renderDaily(); });
   renderStrip(getAccount()); renderDaily(); setMode(false);
   $('dailyPanel').addEventListener('click', (e) => { if (e.target.closest('[data-daily-enter]')) openAcct(); });
+  if (!DEV_LOCAL && !getToken()) showPromoGuestOnce();
   clearInterval(dailyTimer); dailyTimer = setInterval(() => { if (getAccount() && !document.getElementById('menu').classList.contains('hidden')) renderDaily(); }, 30000); // só o relógio anda (sem rede)
 }

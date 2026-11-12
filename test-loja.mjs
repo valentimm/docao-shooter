@@ -4,6 +4,7 @@
 import { execSync } from 'node:child_process';
 import { SKINS } from './skins.js';
 import { ITEMS, encodeLook, parseLook, EARN, START_COINS } from './shared/closet.js';
+import { promoActive, PROMO_COINS } from './shared/promo.js';
 const H = process.argv[2] || 'http://127.0.0.1:8787', WS = H.replace(/^http/, 'ws');
 const fails = []; const ok = (c, m) => { console.log((c ? 'OK    ' : 'FALHA ') + m); if (!c) fails.push(m); };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -16,10 +17,11 @@ const sql = (q) => JSON.parse(execSync(`cd server && npx wrangler d1 execute doc
 const reg = async (n) => (await call('POST', '/api/auth/register', { nick: n + tag, password: 'senha-forte-123' })).data.token;
 const me = (t) => call('GET', '/api/me', null, t).then((r) => r.data);
 const today = Math.floor(Date.now() / 86400000);
+const BANKROLL = START_COINS + (promoActive() ? PROMO_COINS : 0); // /api/me já aplica a promo, se estiver no prazo
 
 // ---- carteira e segurança básica ----
 const tA = await reg('Loja'); let m = await me(tA);
-ok(m.account.coins === START_COINS && Array.isArray(m.items) && m.items.length === 0 && m.earn.cap === EARN.dayCap, `conta nova: ${START_COINS} Docoins, mochila vazia, teto diário informado`);
+ok(m.account.coins === BANKROLL && Array.isArray(m.items) && m.items.length === 0 && m.earn.cap === EARN.dayCap, `conta nova: ${BANKROLL} Docoins (saldo inicial + promo se ativa), mochila vazia, teto diário informado`);
 let r = await call('POST', '/api/shop/buy', { item: 'h1' }); ok(r.status === 401, 'comprar sem login: 401');
 const id = sql(`SELECT id FROM accounts WHERE nick = '${'Loja' + tag}'`)[0].id;
 sql(`UPDATE accounts SET coins = 0 WHERE id = ${id}`);
@@ -68,7 +70,7 @@ async function playMatch(token, kills, mode = 'dm') {
 }
 const tB = await reg('Ganha'); const idB = sql(`SELECT id FROM accounts WHERE nick = '${'Ganha' + tag}'`)[0].id;
 await playMatch(tB, 3); m = await me(tB);
-ok(m.account.coins === START_COINS + 3 * EARN.killBot, `3 abates em bots rendem ${3 * EARN.killBot} Docoins e partida curta não leva bônus de fim (saldo ${m.account.coins})`);
+ok(m.account.coins === BANKROLL + 3 * EARN.killBot, `3 abates em bots rendem ${3 * EARN.killBot} Docoins e partida curta não leva bônus de fim (saldo ${m.account.coins})`);
 sql(`UPDATE accounts SET earn_day = ${today}, earn_today = ${EARN.dayCap - 1}, coins = 0 WHERE id = ${idB}`);
 await playMatch(tB, 4); m = await me(tB);
 ok(m.account.coins === 1 && m.earn.today === EARN.dayCap, `teto diário: faltava 1 pra ${EARN.dayCap}, só entrou 1 (saldo ${m.account.coins}, hoje ${m.earn.today})`);

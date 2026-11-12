@@ -8,6 +8,7 @@ import { SKINS, skinOk } from '../../skins.js';
 import { ITEMS, itemById, parseLook, lookItemIds, isFreeItem, knifeKind, sniperKind, gunKey, parseGuns, GUN_EQUIP_KEYS, EARN } from '../../shared/closet.js';
 import { spDay, parseChal, applyChal, chalView } from '../../shared/challenges.js';
 import { rollBox, dupeCoins, BOX_NAME, BOX_PRICE, wheelInputs, rollWheel } from '../../shared/lootbox.js';
+import { PROMO_ID, PROMO_NAME, PROMO_COINS, promoActive } from '../../shared/promo.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 export const dayNow = () => Math.floor(now() / 86400);
@@ -144,6 +145,27 @@ export async function buyBox(env, id) {
   }
   const done = await env.DB.prepare('SELECT coins, boxes FROM accounts WHERE id = ?').bind(id).first();
   return { status: 200, coins: (done && done.coins) | 0, boxes: (done && done.boxes) | 0, boxBought: true };
+}
+
+
+// Churrasco Relâmpago: +N Docoins uma vez por conta, enquanto a promoção estiver no prazo.
+// INSERT + crédito no mesmo lote atômico. Segunda chamada (reload, outro aparelho) não soma de novo.
+export async function grantPromo(env, id, now = Date.now()) {
+  if (!promoActive(now)) return { granted: false, expired: true };
+  const t = Math.floor(now / 1000);
+  try {
+    const out = await env.DB.batch([
+      env.DB.prepare('INSERT INTO promo_claims (account_id, promo_id, coins, claimed_at) VALUES (?1, ?2, ?3, ?4)').bind(id, PROMO_ID, PROMO_COINS, t),
+      env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1').bind(id, PROMO_COINS),
+    ]);
+    if (!out[0].meta || !out[0].meta.changes) return { granted: false };
+    return { granted: true, coins: PROMO_COINS, id: PROMO_ID, name: PROMO_NAME };
+  } catch (e) {
+    const msg = String(e && e.message || e);
+    if (/unique|constraint/i.test(msg)) return { granted: false };
+    console.error('promo', msg);
+    return { granted: false, error: true };
+  }
 }
 
 // Um caixote por dia de Brasília, na primeira leitura da conta nesse dia (login ou sessão que continua aberta).
