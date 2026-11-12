@@ -6,6 +6,7 @@
 //  Sem arma explosiva (bazuca, lança-milho, ray gun). Copo Bomba, fumaça e flashbang se compram.
 // ============================================================
 import { WEAPONS, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE, CORN_W, NADE } from './rules.js';
+import { GUN_EQUIP_KEYS } from './closet.js';
 
 export const COMP = {
   mode: 'comp',
@@ -279,6 +280,9 @@ export function botShop(e) {
 export function compEnterRound(e, round) {
   const pistol = isPistolRound(round);
   e.pistolLock = pistol;
+  if (!e.ownGuns) e.ownGuns = { ...(e.guns || {}) };
+  const keepGun = !pistol && !!e.keepKit;
+  if (!keepGun) e.guns = { ...e.ownGuns };
   if (pistol) {
     e.cash = COMP.START;
     stripToPistol(e);
@@ -294,6 +298,101 @@ export function compEnterRound(e, round) {
   if (!e.slots.includes(e.weapon)) e.weapon = e.slots[0];
   e.keepKit = false;
   return e;
+}
+
+const firearm = (id) => {
+  const w = WEAPONS[id];
+  return !!(w && !w.melee && !w.shield);
+};
+export function skinKeyOf(id) {
+  const w = WEAPONS[id];
+  return w && GUN_EQUIP_KEYS.includes(w.key) ? w.key : '';
+}
+export function deathGun(e) {
+  if (!e) return -1;
+  if (firearm(e.weapon)) return e.weapon;
+  const p = e.slots && e.slots[0];
+  return firearm(p) ? p : -1;
+}
+export function primaryGun(e) {
+  const id = e && e.slots && e.slots[0];
+  return slotOf(id) === 0 ? id : -1;
+}
+export function packGun(e, id) {
+  const key = skinKeyOf(id);
+  const w = WEAPONS[id] || {};
+  return {
+    w: id,
+    skin: key && e.guns ? (e.guns[key] || '') : '',
+    mag: e.mag ? (e.mag[id] | 0) : (w.mag | 0),
+    reserve: e.reserve ? (e.reserve[id] | 0) : (w.reserve | 0),
+  };
+}
+export function tossSpot(pos, yaw, pitch, groundAt) {
+  const cy = Math.cos(pitch || 0);
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  let x = pos.x + fx * 0.55, y = (pos.y || 0) + 1.15, z = pos.z + fz * 0.55;
+  let vx = fx * cy * 7.4, vy = 3.1 + Math.sin(pitch || 0) * 2.2, vz = fz * cy * 7.4;
+  const gfn = groundAt || (() => 0);
+  for (let i = 0; i < 28; i++) {
+    vy -= 24 * 0.045;
+    x += vx * 0.045; y += vy * 0.045; z += vz * 0.045;
+    const g = gfn(x, z, y + 1);
+    if (y <= g + 0.16) return { x: +x.toFixed(2), y: +(g + 0.14).toFixed(2), z: +z.toFixed(2) };
+  }
+  const g = gfn(x, z, y + 1);
+  return { x: +x.toFixed(2), y: +(g + 0.14).toFixed(2), z: +z.toFixed(2) };
+}
+export function dropFromHand(e, id) {
+  const slot = slotOf(id);
+  if (!e || slot < 0 || slot > 1) return null;
+  const packed = packGun(e, id);
+  if (slot === 0) { e.slots[0] = PISTOL; e.primary = e.nextPrimary = PISTOL; fillGun(e, PISTOL); }
+  else { e.slots[1] = PISTOL; e.secondary = e.nextSecondary = PISTOL; fillGun(e, PISTOL); }
+  if (e.weapon === id) e.weapon = e.slots[0];
+  return packed;
+}
+export function takeGun(e, drop) {
+  const id = drop.w | 0;
+  const slot = slotOf(id);
+  if (!e || !e.alive || slot < 0 || slot > 1) return { ok: false };
+  if (!e.slots) e.slots = [PISTOL, PISTOL, KNIFE];
+  if (!e.guns) e.guns = {};
+  if (!e.mag) e.mag = [];
+  if (!e.reserve) e.reserve = [];
+  const held = e.weapon;
+  const out = firearm(held) ? held : (firearm(e.slots[slot]) ? e.slots[slot] : -1);
+  const dumped = out >= 0 ? packGun(e, out) : null;
+  const inKey = skinKeyOf(id);
+  const outKey = out >= 0 ? skinKeyOf(out) : '';
+  if (inKey) e.guns[inKey] = drop.skin || '';
+  e.slots[slot] = id;
+  if (slot === 0) e.primary = e.nextPrimary = id;
+  if (slot === 1) e.secondary = e.nextSecondary = id;
+  if (dumped && slotOf(dumped.w) !== slot) {
+    const os = slotOf(dumped.w);
+    if (os === 0) { e.slots[0] = PISTOL; e.primary = e.nextPrimary = PISTOL; fillGun(e, PISTOL); }
+    else if (os === 1) { e.slots[1] = PISTOL; e.secondary = e.nextSecondary = PISTOL; fillGun(e, PISTOL); }
+  }
+  if (outKey && outKey !== inKey && !(e.slots || []).some((s) => skinKeyOf(s) === outKey)) delete e.guns[outKey];
+  e.mag[id] = drop.mag | 0;
+  e.reserve[id] = drop.reserve | 0;
+  e.weapon = id;
+  return { ok: true, dumped, inKey, outKey: outKey !== inKey ? outKey : '' };
+}
+export function utilCount(e, k) {
+  if (!e) return 0;
+  if (k === 'nade') return e.nades | 0;
+  if (k === 'smoke') return e.smokeNades | 0;
+  if (k === 'flash') return e.flashNades | 0;
+  return 0;
+}
+export function compWheel(e) {
+  const list = [{ t: 'gun', i: 0 }, { t: 'gun', i: 1 }, { t: 'gun', i: 2 }];
+  if (utilCount(e, 'nade') > 0) list.push({ t: 'util', k: 'nade' });
+  if (utilCount(e, 'smoke') > 0) list.push({ t: 'util', k: 'smoke' });
+  if (utilCount(e, 'flash') > 0) list.push({ t: 'util', k: 'flash' });
+  return list;
 }
 
 export function armorLabel(e) {
