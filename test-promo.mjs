@@ -12,10 +12,10 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
 ok(PROMO_ID === 'churrasco-relampago-2026-11' && PROMO_NAME === 'Churrasco Relâmpago', `promo ${PROMO_ID} / ${PROMO_NAME}`);
 ok(PROMO_COINS === 1000, `crédito é 1000 Docoins (${PROMO_COINS})`);
-ok(PROMO_EXPIRES_AT === Date.parse('2026-11-20T02:59:59.999Z'), 'validade é 19/11/2026 23:59:59.999 BRT');
+ok(PROMO_EXPIRES_AT === Date.parse('2026-11-13T02:59:59.999Z'), 'validade é 12/11/2026 23:59:59.999 BRT');
 ok(promoActive(PROMO_EXPIRES_AT) && !promoActive(PROMO_EXPIRES_AT + 1), 'ainda vale no último milissegundo e expira logo depois');
-ok(promoCreditText().includes('1000 Docoins') && promoCreditText().includes('Porca Véia'), 'texto do crédito cita 1000 Docoins e a Porca Véia');
-ok(promoGuestText().includes('comanda') && promoGuestText().includes('19/11'), 'texto do convidado pede login e cita o prazo');
+ok(promoCreditText().includes('1000 Docoins') && promoCreditText().includes('Porca Véia') && promoCreditText().includes('só hoje, até meia-noite'), 'texto do crédito cita 1000 Docoins, a Porca Véia e que é só hoje');
+ok(promoGuestText().includes('comanda') && promoGuestText().includes('só hoje, até meia-noite'), 'texto do convidado pede login e cita que é só hoje');
 
 const migs = readdirSync(new URL('./server/migrations/', import.meta.url)).filter((f) => f.endsWith('.sql')).sort();
 ok(migs.includes('0009_promo_claims.sql') && migs[migs.length - 1] === '0009_promo_claims.sql', `migração 0009 é a última (${migs[migs.length - 1]})`);
