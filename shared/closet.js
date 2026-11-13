@@ -223,6 +223,37 @@ ITEMS.push(
       { type: 'shoes', color: '#f4f4f4', sole: '#0f8a3c', strap: '#f7d417' },
     ] } },
 );
+// Homem-Porco-Aranha: traje vermelho e azul com teia, aranha no peito e olhões de máscara. Orelhas e focinho de porco ficam à mostra.
+ITEMS.push(
+  { id: 'c22', name: 'Homem-Porco-Aranha', emoji: '🕷️', price: 1200, line: 'Com grandes poderes vêm grandes linguiças', costume: {
+    shirt: { color: '#d8261c', trim: '#111114', sleeves: 'long', sleeveColor: '#1a3a9c',
+      details: [{ type: 'spiderSides', color: '#1a3a9c' }, { type: 'webs', color: '#111114' }, { type: 'spider', color: '#111114' }] },
+    pants: '#1a3a9c',
+    face: { paint: 'spider' },
+    parts: [
+      { type: 'spiderEyes' },
+      { type: 'webLimbs' },
+      { type: 'longPants', color: '#1a3a9c' },
+      { type: 'glove', hand: 'both', color: '#b31b14', sparkle: false, warm: '#b31b14' },
+      { type: 'shoes', color: '#d8261c', sole: '#111114', strap: '#111114' },
+    ] } },
+);
+// Papai Noel: terno vermelho com pelinho branco, cinto e fivela, gorro, barba e saco de presente nas costas.
+ITEMS.push(
+  { id: 'c23', name: 'Papai Noel', emoji: '🎅', price: 1200, line: 'Ho-ho-ho, entregador oficial de linguiça na chaminé', costume: {
+    shirt: { color: '#c41e3a', trim: '#f4f4f4', sleeves: 'long', sleeveColor: '#c41e3a' },
+    pants: '#c41e3a',
+    parts: [
+      { type: 'santaHat' },
+      { type: 'santaBeard' },
+      { type: 'furTrim' },
+      { type: 'santaBelt' },
+      { type: 'giftSack' },
+      { type: 'longPants', color: '#c41e3a' },
+      { type: 'glove', hand: 'both', color: '#f4f4f4' },
+      { type: 'shoes', color: '#15151a', sole: '#2a2a2e', strap: '#d4a82a' },
+    ] } },
+);
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
   { id: 'd1', name: 'Escovinha', emoji: '🪥', price: 400, dance: 'floss', line: 'Braços varrendo o quadril' },
