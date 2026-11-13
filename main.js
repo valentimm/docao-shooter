@@ -1332,13 +1332,37 @@ function heldUtilMesh() {
   if (player && player.utilSel === 'flash' && fp.flashCan) return fp.flashCan;
   return fp.cup;
 }
-function poseHeldUtil() {
+function poseThrowArm(k = 0, flick = 0) {
+  const hand = fp.cupHand;
+  if (!hand || !hand.userData.arm) return null;
+  const from = flick > 0 ? (fp.cupThrowFrom || 0) * (1 - flick) : k;
+  const whip = flick > 0 ? Math.sin(Math.min(1, flick) * Math.PI) : 0;
+  const idle = from === 0 && flick === 0 && !reducedAnims() ? Math.sin(gameTime * 2.4) : 0;
+  const fist = new V3(
+    0.16 + from * 0.03 - whip * 0.07,
+    -0.04 + from * 0.07 + idle * 0.01 + whip * 0.02,
+    -0.52 + from * 0.08 - whip * 0.2
+  );
+  if (from > 0 && !reducedAnims()) {
+    const sh = cupHandShake(from, gameTime);
+    fist.x += sh.z * 0.03; fist.y += sh.x * 0.03;
+  }
+  const s = 0.62;
+  hand.scale.setScalar(s);
+  hand.position.copy(fist);
+  hand.rotation.set(0, 0, 0);
+  const shoulder = new V3(0.34, -0.1, -0.28);
+  poseFPForearm(hand, fist.clone().lerp(shoulder, 1 / s));
+  return fist;
+}
+function poseHeldUtil(k = 0) {
+  const fist = poseThrowArm(k, 0) || new V3(0.2, -0.18, -0.5);
   const item = heldUtilMesh();
-  item.position.set(0.22, -0.2, -0.62);
-  item.rotation.set(player && player.utilSel === 'nade' ? 0.35 : 0.15, -0.45, -0.2);
+  if (!item.userData.holdScale) item.userData.holdScale = item.scale.x;
+  item.scale.setScalar(item.userData.holdScale * 0.7);
+  item.position.copy(fist).add(new V3(-0.02, 0.04, -0.03));
+  item.rotation.set((player && player.utilSel === 'nade' ? 0.5 : 0.25) - k * 0.4, -0.3, -0.45);
   item.updateMatrixWorld(true);
-  fp.cupHand.position.copy(item.position).add(new V3(0.02, -0.05, 0.08));
-  fp.cupHand.quaternion.copy(item.quaternion);
   return item;
 }
 function utilToss(speed, lift) {
@@ -1346,8 +1370,12 @@ function utilToss(speed, lift) {
   dir.y += lift; dir.normalize();
   return dir.multiplyScalar(speed).add(new V3(player.vel.x * 0.4, 0, player.vel.z * 0.4));
 }
+function utilChargeVel(power) { // mesma curva do Copo Bomba: toque ~9, carga cheia 22
+  const k = clamp((power - 0.15) / 0.85, 0, 1);
+  return utilToss(7 + 15 * power, 0.42 - 0.28 * k);
+}
 function throwOrigin() {
-  if (player && player.utilSel && !player.charging) poseHeldUtil();
+  if (player && player.utilSel) poseHeldUtil(player.charging ? chargePower() : 0);
   else poseChargeCup(player.charging ? chargePower() : 0);
   const local = heldUtilMesh().localToWorld(new V3(0, 0.1, 0));
   const fovRatio = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(fpCam.fov / 2));
@@ -1431,13 +1459,13 @@ function explode(n) { playGrenadeVoice('banana', nadeEarVol(n.pos), 0.25); blast
 
 const tacticals = [], smokes = [];
 function smoked(a, b) { for (const s of smokes) if (s.blocks(a, b)) return true; return false; }
-function throwTactical(strong = false) { // fumaça: esquerdo curto, direito longe
+function throwTactical(power = 0.15) {
   if (!player || !player.alive) return;
   if (!compOn() && !clientPower('smoke')) { flashMsg('Fumaça desligada nesta sala'); return; }
   if (online && !compOn()) { flashMsg('Fumaça só na partida com bots'); return; }
   if (player.smokeNades <= 0) { flashMsg('Sem fumaça'); return; }
   const origin = throwOrigin();
-  const vel = utilToss(strong ? 16 : 8.5, strong ? 0.14 : 0.42);
+  const vel = utilChargeVel(power);
   if (compOn() && online) { netEv(['tn', 'smoke', v3a(origin), v3a(vel)]); return; }
   player.smokeNades--;
   const mesh = makeTacticalMesh();
@@ -1445,11 +1473,11 @@ function throwTactical(strong = false) { // fumaça: esquerdo curto, direito lon
   tacticals.push({ kind: 'smoke', pos: origin.clone(), vel, mesh, explodeAt: gameTime + COMP.SMOKE_FUSE, spin: new V3(rand(-6, 6), rand(-3, 3), rand(-6, 6)), lastBounce: 0 });
   sfx.toss(1);
 }
-function throwFlash(strong = false) {
+function throwFlash(power = 0.15) {
   if (!player || !player.alive || !compOn()) return;
   if (!(player.flashNades > 0)) { flashMsg('Sem flashbang'); return; }
   const origin = throwOrigin();
-  const vel = utilToss(strong ? 18 : 9, strong ? 0.1 : 0.4);
+  const vel = utilChargeVel(power);
   if (online) { netEv(['tn', 'flash', v3a(origin), v3a(vel)]); return; }
   player.flashNades--;
   const mesh = makeFlashMesh();
@@ -1566,6 +1594,7 @@ function requestDropBomb() {
 }
 const UTIL_NAME = { nade: 'Copo Bomba', smoke: 'Fumaça', flash: 'Flashbang' };
 function cancelUtilPress() {
+  if (player && utilArm) player.charging = false;
   if (!utilArm) return;
   utilArm = null; firedThisPress = true; clickLatch = 0; rightLatch = 0;
 }
@@ -1589,26 +1618,31 @@ function selectUtil(k) {
 }
 function armUtil(button) {
   if (!player || !player.alive || !player.utilSel || emote.on) return;
-  if (button === 'right' && player.utilSel === 'nade') return;
+  if (player.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; }
   utilArm = button;
+  if (button === 'left') { player.charging = true; player.chargeStart = gameTime; }
+  else player.charging = false;
 }
 function releaseUtil(button) {
   if (utilArm !== button) return;
   utilArm = null;
   const p = player;
-  if (!p || !p.alive || !p.utilSel || emote.on || p.switchEnd > gameTime) return;
-  if (p.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; }
+  if (!p || !p.alive || !p.utilSel || emote.on || p.switchEnd > gameTime) { if (p) p.charging = false; return; }
+  if (p.stunUntil > gameTime) { p.charging = false; flashMsg('Levou choque · espere passar'); return; }
   const k = p.utilSel;
-  if (k === 'nade' && button !== 'left') return;
-  if (utilCount(p, k) <= 0) { p.utilSel = ''; return; }
-  const item = poseHeldUtil();
+  if (utilCount(p, k) <= 0) { p.charging = false; p.utilSel = ''; return; }
+  const power = button === 'right' ? 0.15 : throwPower();
+  fp.cupThrowFrom = button === 'left' && p.charging ? chargePower() : 0;
+  if (button === 'right') p.charging = false;
+  const item = poseHeldUtil(p.charging ? chargePower() : 0);
   fp.cupReleasePos = item.position.clone();
   fp.cupReleaseRot = item.quaternion.clone();
   fp.cupThrowT = 0.25;
   firedThisPress = true; clickLatch = 0; rightLatch = 0; rightFired = true;
-  if (k === 'nade') throwGrenade(p, throwOrigin(), utilToss(16, 0.22));
-  else if (k === 'smoke') throwTactical(button === 'right');
-  else if (k === 'flash') throwFlash(button === 'right');
+  if (k === 'nade') throwGrenade(p, throwOrigin(), utilChargeVel(power));
+  else if (k === 'smoke') throwTactical(power);
+  else if (k === 'flash') throwFlash(power);
+  p.charging = false; arcLine.visible = arcMark.visible = false;
   if (utilCount(p, k) <= 0) p.utilSel = '';
 }
 function cycleComp(dir) {
@@ -3781,12 +3815,12 @@ function updateHud(dt) {
   hpBar.classList.toggle('regen', !!(p.alive && p.regenOn)); // brilho verde + "+" pulsando enquanto regenera
   const ammoEl = $('ammo'); if (ammoEl) ammoEl.classList.toggle('dual', !!w.akimbo);
   $('mag').textContent = p.down ? (p.downMag | 0) : w.shield ? Math.ceil(p.shieldHp || 0) : w.melee ? '∞' : w.akimbo ? `${rounds(p, p.weapon, 0)}·${rounds(p, p.weapon, 1)}` : p.mag[p.weapon]; $('reserve').textContent = p.down ? ' / chão' : w.shield ? ' TAMPA' : w.melee ? '' : ' / ' + p.reserve[p.weapon];
-  { const title = weaponTitleParts(p), name = $('wtitle'), meta = $('wmeta'), mode = $('wmode'); if (p.utilSel) { if (name) name.textContent = UTIL_NAME[p.utilSel] || 'Granada'; if (meta) meta.textContent = ''; if (mode) mode.textContent = p.utilSel === 'nade' ? 'solte o clique' : 'esquerdo curto · direito longe'; } else { if (name) name.textContent = title.name; if (meta) meta.textContent = title.meta ? '| ' + title.meta : ''; if (mode) mode.textContent = fireModeLabel(w); } }
+  { const title = weaponTitleParts(p), name = $('wtitle'), meta = $('wmeta'), mode = $('wmode'); if (p.utilSel) { if (name) name.textContent = UTIL_NAME[p.utilSel] || 'Granada'; if (meta) meta.textContent = ''; if (mode) mode.textContent = 'esquerdo carrega · direito mínimo'; } else { if (name) name.textContent = title.name; if (meta) meta.textContent = title.meta ? '| ' + title.meta : ''; if (mode) mode.textContent = fireModeLabel(w); } }
   for (let i = 0; i < NADE.max; i++) $('nade' + i).classList.toggle('on', i < p.nades);
   const pm = $('powermeter');
   const pulling = !!(p.alive && ((p.weapon === BOW && p.bowDraw) || (p.weapon === EGG_W && p.eggDraw)) && !p.charging && !gunner && !predator && !radioCall);
   pm.classList.toggle('hidden', !p.charging && !pulling);
-  if (p.charging) { const k = chargePower(); $('powerfill').style.width = (k * 100).toFixed(0) + '%'; $('powertext').textContent = k >= 1 ? 'FORÇA MÁXIMA! solte Q' : 'Força do arremesso · solte Q'; }
+  if (p.charging) { const k = chargePower(), solta = p.utilSel ? 'solte o clique' : 'solte Q'; $('powerfill').style.width = (k * 100).toFixed(0) + '%'; $('powertext').textContent = k >= 1 ? `FORÇA MÁXIMA! ${solta}` : `Força do arremesso · ${solta}`; }
   else if (pulling) { const egg = p.weapon === EGG_W, k = clamp((gameTime - (egg ? p.eggDraw : p.bowDraw)) / (WEAPONS[p.weapon].draw || 0.7), 0, 1); $('powerfill').style.width = (k * 100).toFixed(0) + '%'; $('powertext').textContent = egg ? (k >= 1 ? 'ELÁSTICO NO TALO! solte o clique' : 'Segura o clique · o ovo vai mais longe') : k >= 1 ? 'CORDA NO TALO! solte o clique' : 'Segura o clique · a flecha fica mais forte'; }
   paintSlot($('slot1'), 1, survOn() ? gunOf(p, p.slots[0]) : WEAPONS[p.slots[0]]); paintSlot($('slot2'), 2, p.slotOn && p.slotOn[1] === 0 ? null : (survOn() ? gunOf(p, p.slots[1]) : WEAPONS[p.slots[1]])); paintSlot($('slot3'), 3, WEAPONS[p.slots[2]]);
   $('slot2').classList.toggle('hidden', armsMode() || !!(survOn() && p.slotOn && p.slotOn[1] === 0));
@@ -4171,6 +4205,9 @@ const fp = (() => {
 })();
 fp.smokeCan = makeTacticalMesh(); fp.smokeCan.scale.setScalar(1.15); fp.smokeCan.visible = false; fpScene.add(fp.smokeCan);
 fp.flashCan = makeFlashMesh(); fp.flashCan.scale.setScalar(1.15); fp.flashCan.visible = false; fpScene.add(fp.flashCan);
+fpScene.remove(fp.cupHand);
+fp.cupHand = makeFPForearm(getSkin()); fp.cupHand.visible = false; fpScene.add(fp.cupHand);
+{ const wearSkin = fp.setSkin; fp.setSkin = (id) => { wearSkin(id); fpScene.remove(fp.cupHand); fp.cupHand = makeFPForearm(getSkin(id)); fp.cupHand.visible = false; fpScene.add(fp.cupHand); }; }
 function knifeLook(id) {
   const kind = knifeKind(id);
   return { kind: kind || 'chef', finish: kind ? (knifeFinish(id) || 'factory') : 'factory' };
@@ -4700,24 +4737,27 @@ function updateFP(dt) {
   if (radioCall) { const talk = clamp((gameTime - radioCall.at + RADIO_CALL - 0.25) / 0.6, 0, 1) * (1 - clamp((gameTime - radioCall.at + 0.15) / 0.15, 0, 1)); fp.radio.rotation.z += Math.sin(gameTime * 26) * 0.04 * talk; fp.radio.position.y += Math.sin(gameTime * 13) * 0.006 * talk; } // falando: o rádio treme de leve perto da boca
   if (tabletK > 0.2 || radioK > 0.2 || laptopK > 0.2 || p.utilSel) fp.root.visible = false; // guarda a arma para o tablet, o rádio ou a granada na mão
   fp.cupThrowT = Math.max(0, fp.cupThrowT - dt);
-  const held = !!(p.alive && p.utilSel && !p.charging);
+  const held = !!(p.alive && p.utilSel);
   const flick = fp.cupThrowT > 0;
   fp.cup.visible = p.alive && !flick && (p.utilSel === 'nade' || (p.charging && !p.utilSel));
   if (fp.smokeCan) fp.smokeCan.visible = p.alive && !flick && p.utilSel === 'smoke';
   if (fp.flashCan) fp.flashCan.visible = p.alive && !flick && p.utilSel === 'flash';
   fp.cupHand.visible = p.alive && (held || p.charging || flick);
-  if (held && !flick) poseHeldUtil();
+  if (held && !flick) poseHeldUtil(p.charging ? chargePower() : 0);
+  else if (flick && fp.cupHand.userData.arm) poseThrowArm(0, 1 - fp.cupThrowT / 0.25);
   else if (p.charging && p.alive) {
+    if (fp.cup.userData.holdScale) fp.cup.scale.setScalar(fp.cup.userData.holdScale);
     poseChargeCup(chargePower());
-    fp.cupHand.position.copy(fp.cup.position); fp.cupHand.quaternion.copy(fp.cup.quaternion);
-    if (!reducedAnims()) { // o copo que mira a trajetória não mexe; quem chacoalha é a mão
+    if (fp.cupHand.userData.arm) { fp.cupHand.scale.setScalar(1); fp.cupHand.position.copy(fp.cup.position); fp.cupHand.rotation.set(0, 0, 0); poseFPForearm(fp.cupHand, new V3(-0.32, 0.05, 0.1)); }
+    else { fp.cupHand.position.copy(fp.cup.position); fp.cupHand.quaternion.copy(fp.cup.quaternion); }
+    if (!reducedAnims() && !fp.cupHand.userData.arm) { // o copo que mira a trajetória não mexe; quem chacoalha é a mão
       const sh = cupHandShake(chargePower(), gameTime);
       fp.cupHand.rotation.z += sh.z; fp.cupHand.rotation.x += sh.x;
       if (sh.rattle && gameTime > (fp.cupRattle || 0)) { fp.cupRattle = gameTime + 0.22; flairCue('rattle', 0, 0.35 + chargePower() * 0.5); }
       if (chargePower() > 0.98 && !fp.cupToast) { fp.cupToast = true; flairCue('boop', 0, 0.6); }
     }
   } else { fp.cupToast = false; }
-  if (!p.charging && fp.cupThrowT > 0 && fp.cupReleasePos) {
+  if (!p.charging && fp.cupThrowT > 0 && fp.cupReleasePos && !fp.cupHand.userData.arm) {
     const k = 1 - fp.cupThrowT / 0.25, reach = Math.sin(k * Math.PI);
     fp.cupHand.position.copy(fp.cupReleasePos).add(new V3(0.12 * reach, 0.08 * reach - 0.3 * k * k, -0.24 * reach));
     fp.cupHand.quaternion.copy(fp.cupReleaseRot); fp.cupHand.rotation.x -= reach * 0.5;
@@ -5478,7 +5518,7 @@ function updatePlayer(dt) {
   const guiding = !!predator || !!gunner || !!ac130;
   stepCrouch(p, p.down ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
   const bolting = fp.actionT > 0 && WEAPONS[p.weapon].bolt;
-  updateAds(dt, !p.utilSel && !p.down && !guiding && !bolting && !emote.on && !isKnife(p.weapon) && !isSaber(p.weapon) && !WEAPONS[p.weapon].noAds && rightDown && p.reloadEnd <= gameTime && p.switchEnd <= gameTime); // minigun sem zoom: o botão direito só embala. Caído não mira. Granada na mão: o direito é o arremesso longo.
+  updateAds(dt, !p.utilSel && !p.down && !guiding && !bolting && !emote.on && !isKnife(p.weapon) && !isSaber(p.weapon) && !WEAPONS[p.weapon].noAds && rightDown && p.reloadEnd <= gameTime && p.switchEnd <= gameTime); // minigun sem zoom: o botão direito só embala. Caído não mira. Granada na mão: o direito joga na força mínima.
   if (p.weapon !== MINIGUN && p.mgHeat) { p.mgHeat = Math.max(0, p.mgHeat - WEAPONS[MINIGUN].spin.cool * dt); if (p.mgHeat <= 0) p.mgHot = false; } // guardada também esfria
   saberSfx.hum(isSaber(p.weapon) && !guiding);
   if (isSaber(p.weapon) && !guiding) saberSfx.humDrive(Math.min(1, Math.hypot(p.vel.x, p.vel.z) / SPEED + (fp.actionT > 0 ? 0.65 : 0) + (p.saber && p.saber.blocking ? 0.3 : 0)));
@@ -5845,6 +5885,20 @@ function animateBot(b, dt) { // visual: andar, flutuar, piscar ao levar dano, bo
     const kk = 1 - clamp((b.switchEnd - gameTime) / (b.switchDur || 0.25), 0, 1);
     m.arms[0].rotation.x += (1 - kk) * 0.7; // saque do corpo a corpo: o braço sobe
   }
+  if (b.isPlayer && b.utilSel) {
+    b.throwPose = true;
+    const wind = b.charging ? chargePower() : 0;
+    const flick = fp.cupThrowT > 0 ? 1 - fp.cupThrowT / 0.25 : 0;
+    const arm = m.arms[0];
+    if (flick > 0) {
+      const s = Math.sin(Math.min(1, flick) * Math.PI);
+      arm.rotation.set(-0.3 - 1.05 * s, 0.7 - 1.15 * s, -0.4 + 0.5 * s);
+    } else {
+      const sway = reducedAnims() ? 0 : Math.sin(gameTime * 2.4) * 0.05;
+      arm.rotation.set(-0.4 - 0.55 * wind, 0.85 + 0.35 * wind, -0.55 - 0.25 * wind + sway);
+    }
+    m.guns.forEach((g) => { g.visible = false; if (g.userData.twin) g.userData.twin.visible = false; if (g.userData.extra) g.userData.extra.visible = false; });
+  } else if (b.throwPose) { b.throwPose = false; b.wasPose = ''; setWeapon(b, b.weapon); }
 }
 
 const magGeo = new THREE.BoxGeometry(0.1, 0.24, 0.13);
@@ -7655,7 +7709,7 @@ const MENU_RULES = {
   dom: 'Times · capture a zona · o primeiro a completar as capturas vence',
   treino: 'Estande do Docão: alvos que não atacam e voltam em 2 s. B/N/M trocam a arma, munição infinita, sem tempo.',
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
-  comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho e ray gun. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. Fumaça e flashbang: esquerdo curto, direito longe. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
+  comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho e ray gun. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. O esquerdo carrega a força. O direito joga na força mínima. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
   survival: 'Survival, dentro da Invasão: o mapa trava na HOTMILK à Noite. Nasce de pistola e faca. F usa a loja (parede, Barraca da Sorte e Papada). E compra a porta. A Ray Gun só sai na barraca.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. N liga o noclip: voa na direção da mira, atravessa parede, Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Munição não acaba e a partida não termina.',

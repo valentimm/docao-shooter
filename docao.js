@@ -687,6 +687,7 @@ export function setPose(model, pose) {
     else if (pose === 'revolver') { if (i === 0) a.rotation.set(-1.25, 0.28, -0.2); else a.rotation.set(-0.35, -0.15, 0.25); } // direita no cabo, esquerda solta
     else if (pose === 'saber') { if (i === 0) a.rotation.set(-1.15, 0.42, -0.08); else a.rotation.set(-1.05, -0.55, 0.28); } // as duas mãos juntas no cabo
     else if (pose === 'shield') { if (i === 0) a.rotation.set(-0.9, 0.35, -0.2); else a.rotation.set(-1.45, -0.25, 0.15); } // esquerda segura a tampa na frente
+    else if (pose === 'throw') { if (i === 0) a.rotation.set(-0.4, 0.85, -0.55); else a.rotation.set(-0.15, -0.1, 0.18); } // direita armada atrás da cabeça, granada no casco
     else if (pose === 'wave') a.rotation.set(s > 0 ? 0 : 0.1, 0, s > 0 ? 2.5 : -0.25);
     else a.rotation.set(0.05, 0, s * 0.22); // idle
   });
