@@ -1,6 +1,6 @@
 // SITE=http://127.0.0.1:8124 CHROMIUM_EXECUTABLE=/usr/bin/chromium node test-grenade-browser.mjs
-// Copo Bomba, fumaça e flashbang ficam na mão direita e só saem ao soltar o clique.
-// A Pokébola continua no Q, com a prévia da trajetória.
+// Copo Bomba, fumaça e flashbang ficam na mão direita. O esquerdo carrega a força e solta no arremesso.
+// O direito joga na força mínima. A Pokébola continua no Q, com a prévia da trajetória.
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 const browser = await chromium.launch({
@@ -52,6 +52,7 @@ try {
     assert.equal(result.thrown, result.before + 1, `${scenario.name}: soltar joga`);
     assert.equal(result.blocked, false, `${scenario.name}: origem fora da parede`);
     assert.ok(result.speed > 8, `${scenario.name}: saiu com força`);
+    if (!scenario.moving) assert.ok(result.speed < 13, `${scenario.name}: toque sai perto da força mínima`);
     assert.equal(result.cupAfter, false, `${scenario.name}: o copo da mão não fica voando`);
     assert.equal(result.arc, false);
     if (scenario.crouch) await page.keyboard.up('ShiftLeft');
@@ -60,31 +61,51 @@ try {
   }
   const powers = await page.evaluate(async () => {
     const g = window.__docao, p = g.player;
-    p.pos.set(-25, 0, -22); p.vel.set(0, 0, 0); p.yaw = 0; p.pitch = 0; p.smokeNades = 2; p.utilSel = '';
-    const toss = async (button) => {
+    p.pos.set(-25, 0, -22); p.vel.set(0, 0, 0); p.yaw = 0; p.pitch = 0; p.smokeNades = 3; p.utilSel = ''; p.nades = 2;
+    const toss = async (button, full) => {
       document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit4' }));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const before = g.tacticals.length, aim = g.grenadeAim;
       g.holdFire(button, true);
+      if (full) p.chargeStart = g.time - 2;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const held = g.tacticals.length;
+      const held = g.tacticals.length, meter = !document.querySelector('#powermeter').classList.contains('hidden');
       g.holdFire(button, false);
       const n = g.tacticals.at(-1);
-      return { sel: p.utilSel, before, held, after: g.tacticals.length, speed: n ? n.vel.length() : 0, right: aim.cupX > 0.12, smoke: aim.smokeVisible, arc: aim.visible };
+      return { sel: p.utilSel, before, held, after: g.tacticals.length, speed: n ? n.vel.length() : 0, right: aim.cupX > 0.12, smoke: aim.smokeVisible, arc: aim.visible, meter };
     };
-    const left = await toss(0);
+    const tap = await toss(0, false);
     p.smokeNades = Math.max(1, p.smokeNades); p.utilSel = 'smoke';
-    const right = await toss(2);
-    return { left, right };
+    const charged = await toss(0, true);
+    p.smokeNades = Math.max(1, p.smokeNades); p.utilSel = 'smoke';
+    const right = await toss(2, false);
+    p.nades = 2; p.utilSel = '';
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyQ' }));
+    const nadeBefore = g.grenades.length;
+    g.holdFire(0, true);
+    p.chargeStart = g.time - 2;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const nadeHeld = g.grenades.length - nadeBefore, nadeArc = g.grenadeAim.visible;
+    g.holdFire(0, false);
+    const nade = g.grenades.at(-1);
+    return { tap, charged, right, nade: { held: nadeHeld, arc: nadeArc, speed: nade ? nade.vel.length() : 0 } };
   });
-  assert.equal(powers.left.sel, 'smoke', '4 deixa a fumaça na mão');
-  assert.equal(powers.left.smoke, true);
-  assert.equal(powers.left.right, true, 'fumaça na mão direita');
-  assert.equal(powers.left.arc, false);
-  assert.equal(powers.left.held, powers.left.before, 'segurar não joga a fumaça');
-  assert.equal(powers.left.after, powers.left.before + 1);
-  assert.ok(powers.right.speed > powers.left.speed + 4, `direito mais forte (${powers.right.speed}) que o esquerdo (${powers.left.speed})`);
-  console.log(`OK fumaça: esquerdo ${powers.left.speed.toFixed(1)} · direito ${powers.right.speed.toFixed(1)}`);
+  assert.equal(powers.tap.sel, 'smoke', '4 deixa a fumaça na mão');
+  assert.equal(powers.tap.smoke, true);
+  assert.equal(powers.tap.right, true, 'fumaça na mão direita');
+  assert.equal(powers.tap.arc, false);
+  assert.equal(powers.tap.held, powers.tap.before, 'segurar não joga a fumaça');
+  assert.equal(powers.tap.after, powers.tap.before + 1);
+  assert.ok(powers.tap.speed < 13, `toque da fumaça é mínimo (${powers.tap.speed})`);
+  assert.equal(powers.tap.meter, true, 'o esquerdo mostra a carga');
+  assert.ok(powers.charged.speed > powers.tap.speed + 8, `carga cheia (${powers.charged.speed}) passa do toque (${powers.tap.speed})`);
+  assert.equal(powers.charged.arc, false, 'carregar não mostra a trajetória');
+  assert.ok(powers.right.speed < 13, `direito é a força mínima (${powers.right.speed})`);
+  assert.equal(powers.right.meter, false, 'o direito não carrega');
+  assert.equal(powers.nade.held, 0, 'segurar o copo não joga');
+  assert.equal(powers.nade.arc, false);
+  assert.ok(powers.nade.speed > 18, `copo carregado sai forte (${powers.nade.speed})`);
+  console.log(`OK fumaça: toque ${powers.tap.speed.toFixed(1)} · carga ${powers.charged.speed.toFixed(1)} · direito ${powers.right.speed.toFixed(1)} · copo ${powers.nade.speed.toFixed(1)}`);
 
   await page.evaluate(() => {
     const g = window.__docao, p = g.player;
