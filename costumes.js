@@ -914,3 +914,167 @@ Object.assign(PARTS, {
     return g;
   },
 });
+
+// ---------- Homem-Porco-Aranha + Papai Noel ----------
+Object.assign(SHIRT_DETAILS, {
+  spiderSides(x, d, PT, W, H) { // painéis azuis nas laterais do traje (peito e costas ficam vermelhos)
+    const c = d.color || '#1a3a9c';
+    const xOf = (th) => (0.5 + th / Math.PI / 2) * W;
+    x.fillStyle = c;
+    for (const mid of [-Math.PI / 2, Math.PI / 2]) {
+      const x0 = xOf(mid - 0.55), x1 = xOf(mid + 0.55);
+      x.fillRect(Math.min(x0, x1), 0, Math.abs(x1 - x0), H);
+    }
+  },
+  webs(x, d, PT, W, H) { // teia preta no peito e nas costas
+    const c = d.color || '#111114';
+    x.strokeStyle = c; x.lineWidth = 5; x.lineCap = 'round'; x.lineJoin = 'round';
+    const webAt = (originTh, originY) => {
+      const o = PT(originTh, originY);
+      for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI * 2 / 12;
+        x.beginPath(); x.moveTo(...o); x.lineTo(...PT(originTh + Math.cos(a) * 1.15, originY + Math.sin(a) * 0.42)); x.stroke();
+      }
+      for (const r of [0.12, 0.22, 0.34]) {
+        x.beginPath();
+        for (let i = 0; i <= 12; i++) {
+          const a = i * Math.PI * 2 / 12;
+          const p = PT(originTh + Math.cos(a) * r * 2.2, originY + Math.sin(a) * r);
+          i ? x.lineTo(...p) : x.moveTo(...p);
+        }
+        x.stroke();
+      }
+    };
+    webAt(0, 0.82); webAt(Math.PI, 0.82);
+    x.lineWidth = 4;
+    for (const y of [1.08, 0.96, 0.7, 0.56, 0.44]) { x.beginPath(); x.moveTo(0, PT(0, y)[1]); x.lineTo(W, PT(0, y)[1]); x.stroke(); }
+  },
+  spider(x, d, PT) { // emblema de aranha no peito e um menor nas costas
+    const c = d.color || '#111114';
+    const draw = (th, y, sc) => {
+      const [cx, cy] = PT(th, y);
+      x.fillStyle = c; x.strokeStyle = c; x.lineCap = 'round'; x.lineJoin = 'round';
+      x.beginPath(); x.ellipse(cx, cy + 4 * sc, 9 * sc, 14 * sc, 0, 0, Math.PI * 2); x.fill(); // abdômen
+      x.beginPath(); x.ellipse(cx, cy - 14 * sc, 8 * sc, 8 * sc, 0, 0, Math.PI * 2); x.fill(); // cabeça
+      x.lineWidth = 4.5 * sc;
+      for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
+        const y0 = cy - 10 * sc + i * 8 * sc, out = 26 * sc + (i % 2) * 4 * sc, lift = (1.5 - i) * 12 * sc;
+        x.beginPath(); x.moveTo(cx + s * 6 * sc, y0);
+        x.bezierCurveTo(cx + s * 16 * sc, y0 - lift, cx + s * (out - 4 * sc), y0 + 6 * sc, cx + s * out, y0 + 14 * sc);
+        x.stroke();
+      }
+    };
+    draw(0, d.y || 0.84, d.size || 1.15);
+    if (d.back !== false) { // emenda das costas (θ = ±π) exige desenhar nos dois lados, como o número da camisa
+      const by = d.backY || 0.84, bs = d.backSize || 0.85;
+      draw(Math.PI, by, bs); draw(-Math.PI, by, bs);
+    }
+  },
+});
+Object.assign(PARTS, {
+  spiderEyes(o, rig) { // olhões brancos de máscara do Homem-Aranha; orelhas e focinho ficam visíveis
+    hideTuft(rig); if (rig.brows) rig.brows.forEach((b) => (b.visible = false));
+    const g = new THREE.Group(); const white = toon(o.color || '#f6f8fc'), rim = toon(o.rim || '#111114');
+    for (const [i, e] of rig.eyes.entries()) {
+      const s = i === 0 ? -1 : 1;
+      const lens = new THREE.Group();
+      const shape = M(new THREE.SphereGeometry(0.2, 24, 16), white, lens, 0); shape.scale.set(1.2, 1.55, 0.28);
+      const ring = M(new THREE.TorusGeometry(0.2, 0.022, 8, 28), rim, lens, 0); ring.scale.set(1.2, 1.55, 0.45);
+      lens.position.copy(e.position).addScaledVector(e.userData.n, 0.07);
+      lens.lookAt(lens.position.clone().add(e.userData.n));
+      lens.rotateZ(s * -0.22); lens.rotateX(-0.08);
+      g.add(lens);
+    }
+    return onHead(g);
+  },
+  webLimbs(o, rig) { // teia preta nas mangas e nas pernas
+    const m = basic(o.color || '#111114');
+    const ring = (parent, y, r) => { const t = M(new THREE.TorusGeometry(r, 0.008, 6, 20), m, parent, 0); t.rotation.x = Math.PI / 2; t.position.y = y; };
+    for (const piv of rig.arms) {
+      for (const y of [-0.08, -0.2, -0.32]) ring(piv, y, 0.16);
+      for (const a of [0.4, 1.9]) {
+        const curve = new THREE.CatmullRomCurve3([new V3(Math.cos(a) * 0.155, -0.02, Math.sin(a) * 0.155), new V3(Math.cos(a + 0.4) * 0.155, -0.22, Math.sin(a + 0.4) * 0.155), new V3(Math.cos(a + 0.8) * 0.14, -0.42, Math.sin(a + 0.8) * 0.14)]);
+        M(new THREE.TubeGeometry(curve, 10, 0.007, 5, false), m, piv, 0);
+      }
+    }
+    for (const leg of rig.legs) {
+      for (const y of [-0.04, -0.14, -0.24]) ring(leg, y, 0.155);
+      for (const a of [0.3, 2.0]) {
+        const curve = new THREE.CatmullRomCurve3([new V3(Math.cos(a) * 0.15, -0.02, Math.sin(a) * 0.15), new V3(Math.cos(a + 0.5) * 0.15, -0.16, Math.sin(a + 0.5) * 0.15), new V3(Math.cos(a + 1.0) * 0.15, -0.3, Math.sin(a + 1.0) * 0.15)]);
+        M(new THREE.TubeGeometry(curve, 8, 0.007, 5, false), m, leg, 0);
+      }
+    }
+    return null;
+  },
+  santaHat(o, rig) { // gorro de Noel: aba de pelinho, cone vermelho caído de lado e pompom
+    hideTuft(rig); const g = new THREE.Group();
+    const red = toonWarm(o.color || '#c41e3a', 0.12), fur = toonWarm(o.fur || '#f4f4f4', 0.2), pom = toon(o.pompom || '#f7f7f2');
+    const brim = M(new THREE.TorusGeometry(0.36, 0.09, 12, 28), fur, g, 0.01); brim.rotation.x = Math.PI / 2; brim.position.y = 0.02; brim.scale.set(1.08, 0.95, 1);
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI * 2 / 12; const b = M(new THREE.SphereGeometry(0.075, 10, 8), fur, g, 0);
+      b.position.set(Math.cos(a) * 0.36, 0.02 + ((i % 2) * 0.02), Math.sin(a) * 0.33);
+    }
+    const curve = new THREE.CatmullRomCurve3([new V3(0, 0.06, 0), new V3(0.04, 0.28, -0.02), new V3(0.22, 0.42, -0.08), new V3(0.42, 0.26, -0.05)]);
+    M(taperTube(curve, 0.30, 0.055, 22, 16), red, g, 0.012);
+    M(new THREE.SphereGeometry(0.095, 14, 10), pom, g, 0.008).position.copy(curve.getPointAt(1));
+    g.position.set(0, 1.90, -0.04); g.rotation.x = -0.1; return onHead(g);
+  },
+  santaBeard(o, rig) { // barba branca farta em volta do queixo, focinho continua à mostra
+    const g = new THREE.Group(); const m = toonWarm(o.color || '#f4f4f4', 0.15);
+    for (const s of [-1, 1]) { // bigode ao redor do focinho
+      const p = headPoint(s * 0.38, 1.38, 0.05);
+      const stache = M(new THREE.SphereGeometry(0.13, 14, 10), m, g, 0.006);
+      stache.position.copy(p).add(new V3(s * 0.03, -0.05, 0.07)); stache.scale.set(1.15, 0.7, 0.85);
+    }
+    for (let row = 0; row < 4; row++) {
+      const y = 1.26 - row * 0.11, n = 5 - row;
+      for (let i = 0; i < n; i++) {
+        const th = n === 1 ? 0 : (i / (n - 1) - 0.5) * (0.95 - row * 0.08);
+        const p = headPoint(th, y, 0.07);
+        const fluff = M(new THREE.SphereGeometry(0.115 - row * 0.012, 12, 10), m, g, 0.005);
+        fluff.position.copy(p).add(new V3(0, -0.05 - row * 0.02, 0.03));
+      }
+    }
+    return onHead(g);
+  },
+  furTrim(o, rig) { // pelinho branco na gola, na barra do terno e nos punhos
+    const g = new THREE.Group(); const fur = toonWarm(o.color || '#f4f4f4', 0.2);
+    const r = torsoR(1.08) + 0.04;
+    const col = M(new THREE.TorusGeometry(r, 0.07, 10, 28), fur, g, 0.008); col.rotation.x = Math.PI / 2; col.position.y = 1.1; col.scale.y = 0.88;
+    for (let i = 0; i < 10; i++) {
+      const a = i * Math.PI * 2 / 10; const b = M(new THREE.SphereGeometry(0.055, 10, 8), fur, g, 0);
+      b.position.set(Math.cos(a) * r, 1.1, Math.sin(a) * r * 0.88);
+    }
+    const r2 = torsoR(0.44) + 0.05;
+    const hem = M(new THREE.TorusGeometry(r2, 0.06, 10, 28), fur, g, 0.008); hem.rotation.x = Math.PI / 2; hem.position.y = 0.42; hem.scale.y = 0.88;
+    for (const piv of rig.arms) {
+      const c = M(new THREE.TorusGeometry(0.145, 0.05, 8, 16), fur, piv, 0.006); c.rotation.x = Math.PI / 2; c.position.y = -0.44;
+    }
+    return g;
+  },
+  santaBelt(o, rig) { // cinto preto largo com fivela dourada retangular
+    const g = new THREE.Group();
+    const r = torsoR(0.58) * 1.02 + 0.02;
+    const belt = M(new THREE.CylinderGeometry(r, r, 0.12, 40, 1, true), toon(o.color || '#15151a', { side: THREE.DoubleSide }), g, 0.008);
+    belt.position.y = 0.56; belt.scale.z = 0.88;
+    const buckle = M(new THREE.BoxGeometry(0.18, 0.15, 0.045), toon(o.buckle || '#d4a82a'), g, 0.006);
+    buckle.position.set(0, 0.56, r * 0.88 + 0.025);
+    const hole = M(new THREE.BoxGeometry(0.08, 0.07, 0.05), toon(o.color || '#15151a'), g, 0);
+    hole.position.set(0, 0.56, r * 0.88 + 0.035);
+    return g;
+  },
+  giftSack(o, rig) { // saco de presentes nas costas, amarrado no topo, com caixas espiando
+    if (rig.tail) rig.tail.visible = false;
+    const g = new THREE.Group();
+    const sack = toonWarm(o.color || '#8a2a1a', 0.15), cord = toon(o.cord || '#d4a82a'), giftM = toon(o.gift || '#2b8fd8'), ribM = toon(o.ribbon || '#f2c94c');
+    M(lathe([[0.01, -0.3], [0.22, -0.28], [0.31, -0.12], [0.29, 0.06], [0.22, 0.22], [0.11, 0.32], [0.08, 0.36]]), sack, g, 0.012);
+    const neck = M(new THREE.CylinderGeometry(0.07, 0.11, 0.1, 12), sack, g, 0.008); neck.position.y = 0.4;
+    const tie = M(new THREE.TorusGeometry(0.085, 0.02, 6, 14), cord, g, 0.004); tie.rotation.x = Math.PI / 2; tie.position.y = 0.44;
+    const drop = M(new THREE.CapsuleGeometry(0.014, 0.1, 4, 8), cord, g, 0); drop.position.set(0.09, 0.36, 0.03); drop.rotation.z = 0.45;
+    const gift = M(new THREE.BoxGeometry(0.16, 0.14, 0.16), giftM, g, 0.005); gift.position.set(-0.06, 0.55, 0.04); gift.rotation.set(0.15, 0.35, 0.1);
+    const rib = M(new THREE.BoxGeometry(0.17, 0.028, 0.17), ribM, g, 0); rib.position.copy(gift.position).add(new V3(0, 0.025, 0)); rib.rotation.copy(gift.rotation);
+    const gift2 = M(new THREE.BoxGeometry(0.13, 0.12, 0.13), toon(o.gift2 || '#2a9a3a'), g, 0.005); gift2.position.set(0.08, 0.53, -0.03); gift2.rotation.set(-0.2, -0.4, 0.15);
+    const rib2 = M(new THREE.BoxGeometry(0.14, 0.024, 0.14), toon('#d8261c'), g, 0); rib2.position.copy(gift2.position).add(new V3(0, 0.02, 0)); rib2.rotation.copy(gift2.rotation);
+    g.position.set(0, 0.7, -0.58); g.rotation.x = -0.2; return g;
+  },
+});
