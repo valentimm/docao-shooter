@@ -20,7 +20,7 @@
 //  doors não é simulado aqui: fica no layout pra quem implementa a porta.
 // ============================================================
 import { INV_AMMO, waveSpec } from './invasion.js';
-import { WEAPONS, PISTOL, KNIFE, UZI, P90, NAIL, SEMI, BOW, CORN_W, TAMPA, RAY, PRIMARIES, SECONDARIES } from './rules.js';
+import { WEAPONS, PISTOL, KNIFE, UZI, P90, NAIL, SEMI, BOW, CORN_W, TAMPA, RAY, GIFT_W, PRIMARIES, SECONDARIES } from './rules.js';
 
 export const PAPADA_NAME = 'Papada';
 export const BOX_NAME = 'Barraca da Sorte';
@@ -77,7 +77,7 @@ const PROFILE = {
 };
 const SNIPER_KEYS = new Set(['sniper', 'canhao', 'carabina']);
 const SHOT_KEYS = new Set(['shotgun', 'semi']);
-const BOOM_KEYS = new Set(['bazooka', 'milho']);
+const BOOM_KEYS = new Set(['bazooka', 'milho', 'saco']);
 
 const KILL = { walker: 120, runner: 90, tank: 240, spitter: 140, boss: 700 };
 
@@ -103,7 +103,7 @@ export function isSurvival(v) { return normSurv(v) === SURV_ID; }
 
 export function papOk(w) {
   if (!w || w.melee || w.shield || w.saber || w.key === 'minigun' || w.key === 'faca-dourada') return false;
-  return w.dmg > 0 || !!w.rocket || !!w.corn || !!w.disc || !!w.egg;
+  return w.dmg > 0 || !!w.rocket || !!w.corn || !!w.disc || !!w.egg || !!w.gift;
 }
 export function papRefuse(w) {
   if (!w) return 'arma';
@@ -119,7 +119,7 @@ function profileOf(w) {
   if (w.ray) return PROFILE.ray;
   if (SNIPER_KEYS.has(w.key)) return PROFILE.sniper;
   if (SHOT_KEYS.has(w.key)) return PROFILE.shotgun;
-  if (BOOM_KEYS.has(w.key) || w.rocket || w.corn) return PROFILE.boom;
+  if (BOOM_KEYS.has(w.key) || w.rocket || w.corn || w.gift) return PROFILE.boom;
   return PROFILE.bullet;
 }
 export function tierMul(w, tier) {
@@ -167,6 +167,7 @@ export function bodyDmg(w) {
   if (!w) return 0;
   if (w.rocket) return w.rocket.maxDmg;
   if (w.corn) return Math.round(18 * (w.pap ? tierMul(WEAPONS.find((x) => x.key === 'milho') || w, w.pap).dmg : 1));
+  if (w.gift) return Math.round(100 * (w.pap ? tierMul(WEAPONS.find((x) => x.key === 'saco') || w, w.pap).dmg : 1));
   if ((w.pellets | 0) > 1) return Math.round(w.dmg * w.pellets);
   return r1(w.dmg);
 }
@@ -745,6 +746,10 @@ export function nearPoint(pos, point, reach = SURV.reach) {
 export function cornPopDmg(tier) {
   const m = tier ? tierMul(WEAPONS[CORN_W], tier) : null;
   return Math.round(CORN_POP * (m ? m.dmg : 1));
+}
+export function giftBoomDmg(tier) {
+  const m = tier ? tierMul(WEAPONS[GIFT_W], tier) : null;
+  return Math.round(100 * (m ? m.dmg : 1));
 }
 
 // ---------- HOTMILK à Noite: o único mapa do Survival, com portas ----------

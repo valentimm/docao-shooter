@@ -595,8 +595,18 @@ export function makeDocao(skinOrId, opts = {}) {
     const ryd = mesh(new THREE.TorusGeometry(0.04, 0.008, 6, 12), new THREE.MeshBasicMaterial({ color: 0x7dff6a }), ry, 0); ryd.position.set(0, 0.01, 0.3);
     mesh(new THREE.BoxGeometry(0.04, 0.1, 0.04), toon('#141a16'), ry, 0.004).position.set(0, -0.08, -0.04);
     ry.visible = false; guns.push(ry); // 27 = Ray Gun
+    const sk = new THREE.Group(); sk.name = 'saco'; sk.position.copy(r.position); sk.position.y -= 0.04; g.add(sk);
+    // saco vermelho com corda dourada (mesmo desenho do Papai Noel, em menor escala na mão)
+    const sackM = toon('#8a2a1a'), cordM = toon('#d4a82a');
+    const sackPts = [[0.01, -0.22], [0.16, -0.2], [0.22, -0.08], [0.2, 0.05], [0.15, 0.16], [0.08, 0.24], [0.06, 0.27]].map(([r, y]) => new THREE.Vector2(r, y));
+    mesh(new THREE.LatheGeometry(sackPts, 16), sackM, sk, 0.008);
+    mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.07, 10), sackM, sk, 0.005).position.y = 0.3;
+    const tie = mesh(new THREE.TorusGeometry(0.062, 0.014, 6, 12), cordM, sk, 0.003); tie.rotation.x = Math.PI / 2; tie.position.y = 0.33;
+    const box = mesh(new THREE.BoxGeometry(0.1, 0.08, 0.1), toon('#2b8fd8'), sk, 0.004); box.position.set(-0.03, 0.4, 0.02); box.rotation.set(0.15, 0.3, 0.1);
+    mesh(new THREE.BoxGeometry(0.11, 0.02, 0.11), toon('#f2c94c'), sk, 0).position.copy(box.position).add(new THREE.Vector3(0, 0.015, 0));
+    sk.rotation.x = 0.35; sk.visible = false; guns.push(sk); // 28 = Saco de Presentes
     backLid = makeWorldShield(); backLid.name = 'tampa-costas'; backLid.position.set(0, 1.15, -0.32); backLid.rotation.y = Math.PI; backLid.visible = false; g.add(backLid);
-    for (const o of [sg, sn, bz, ps, cn, cb, kn, hold, uz, p9, nl, sm, xb, bw, fm, dk, d2r, d2l, mh, es, mg, lm, cd, rv, rv2, rvR, rvL, tp]) o.visible = false;
+    for (const o of [sg, sn, bz, ps, cn, cb, kn, hold, uz, p9, nl, sm, xb, bw, fm, dk, d2r, d2l, mh, es, mg, lm, cd, rv, rv2, rvR, rvL, tp, sk]) o.visible = false;
   }
   setPose({ arms }, pose);
 

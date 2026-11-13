@@ -29,6 +29,7 @@ const P = {
   tampa: 'M18 2c7.2 0 13 2.4 13 6s-5.8 6-13 6-13-2.4-13-6 5.8-6 13-6zM14 6.2h8v1.8h-8zM2 6.5h6v3H2z', // tampa oval, fresta e alça
   capataz: 'M8 5h6v7H10l1-3H8zM14 6h16v3H14zM28 5h3v5h-3zM16 4h2v2h-2zM20 9h4a3 3 0 0 1 0 5h-4z', // cabo, cano, cão e tambor
   capataz2: 'M4 3h4v4H5l1-2H4zM8 3h12v2H8zM18 2h2v4h-2zM4 10h4v4H5l1-2H4zM8 10h12v2H8zM18 9h2v4h-2z', // dois revólveres, um em cima do outro
+  saco: 'M16 5c6-1 10 1 12 6H8c1-4 4-6 8-6zM22 5c0-3 2-5 5-4 2 1 2 4 0 5zM26 3h6v5h-4zM28 2h3v2h-3z', // saco com um presentinho saindo
   // granada e killstreaks
   nade: 'M18 3h12l-2 12h-8zM17 2h14v2H17z',
   gas: 'M2 3h8v2H8v1h6v8H2V6h6V5H2zM4 8h4v2H4zM18 8l4-6 2 4 5-1-3 5 4 2-5 1 1 4-4-3-3 4 1-5-5-1 4-2z',
