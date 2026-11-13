@@ -15,12 +15,13 @@ export const INSPECT_PROFILES = {
   lmg: { a: P(-1.25, 0.14, 0.06, -0.02, -0.04, 0.02), b: P(0.7, -0.18, 0.05, 0.03, -0.035, 0.02) }, // giro largo pro lado da caixa de fita e do cano; baixada leve
   shield: { a: P(0.55, 0.4, 0.08, -0.04, 0.02, 0.06), b: P(-0.7, -0.25, 0.12, 0.02, 0.04, 0.04) }, // tampa: mostra a fresta e o aro de latão
   revolver: { a: P(0.42, 0.16, 0.05, -0.03, 0.02, 0.015), b: P(-0.28, -0.2, 0.06, -0.02, 0.03, 0.012) }, // o giro no dedo mora no viewmodel; aqui só um inclinar curto
+  gift: { a: P(0.55, 0.35, -0.12, -0.05, 0.04, 0.04), b: P(-0.4, -0.45, 0.18, -0.03, 0.06, 0.03) }, // inclina o saco e mostra a boca e a corda dourada
 };
 // perfil pelas flags que já existem (arma nova funciona sem mexer aqui); w.inspect força um perfil
 export function inspectKind(w) {
   if (!w) return 'rifle';
   if (w.inspect && INSPECT_PROFILES[w.inspect]) return w.inspect;
-  if (w.saber) return 'saber'; if (w.melee) return 'knife'; if (w.rocket) return 'rocket'; if (w.scope) return 'sniper'; if (w.ray) return 'ray'; if (w.disc) return 'disc';
+  if (w.saber) return 'saber'; if (w.melee) return 'knife'; if (w.rocket) return 'rocket'; if (w.scope) return 'sniper'; if (w.ray) return 'ray'; if (w.disc) return 'disc'; if (w.gift) return 'gift';
   if (w.heavy || w.spin) return 'heavy';
   if (w.key === 'arco' || w.key === 'besta' || w.egg) return 'bow'; // estilingue usa as mesmas mãos do arco
   if (w.key === 'pistol' || w.key === 'prego') return 'pistol';

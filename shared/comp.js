@@ -3,7 +3,7 @@
 //  Times de 3 a 5. Primeiro a 13. 12 a 12 vai a dois.
 //  Rodada de pistola no começo do mapa e sempre que troca quem planta e quem defende.
 //  Colete e capacete só diminuem dano — não entram na skin.
-//  Sem arma explosiva (bazuca, lança-milho, ray gun). Copo Bomba, fumaça e flashbang se compram.
+//  Sem arma explosiva (bazuca, lança-milho, ray gun, saco de presentes). Copo Bomba, fumaça e flashbang se compram.
 // ============================================================
 import { WEAPONS, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE, CORN_W, NADE } from './rules.js';
 import { GUN_EQUIP_KEYS } from './closet.js';
@@ -64,7 +64,7 @@ const PRICE = {
   17: 0, // sabre duplo
 };
 
-const BOOM = new Set(['bazooka', 'milho', 'ray']);
+const BOOM = new Set(['bazooka', 'milho', 'ray', 'saco']);
 export const isComp = (m) => m === COMP.mode;
 export const isExplosiveWeapon = (id) => {
   const w = WEAPONS[id];

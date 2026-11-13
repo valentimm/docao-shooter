@@ -329,8 +329,11 @@ O foguete voa a 24 m/s e explode ao bater em parede, chão ou Docão (acerto dir
 | Arma | Pente / reserva | Dano | Cabeça | Cadência | Recarga | Zoom |
 |---|---|---|---|---|---|---|
 | **Disco Voador** | 4 / 16 | 60 | ×1,5 | 0,6 s | 1,7 s | 55° |
+| **Saco de Presentes** | 4 / 8 | até 100 em área (raio 4,5 m, 40% em você) | — | 0,9 s | 2,0 s | 62° |
 
 O disco voa a 22 m/s, **quica 3 vezes** nas paredes e se desfaz no 4º contato.
+
+O **Saco de Presentes** é o saco vermelho com corda dourada (o mesmo desenho das costas do Papai Noel). Cada clique taca uma caixa embrulhada em arco (18 m/s). Ela **estoura no impacto** ou depois de **1,2 s**, com confete, fitas e um ho-ho-ho. Fora do Competitivo (junto da bazuca e do lança-milho). Entra na Barraca da Sorte e no X1.
 
 ### 🔪 Corpo a corpo
 

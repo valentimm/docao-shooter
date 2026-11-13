@@ -61,7 +61,7 @@ export function decayFlinch(f, dt) {
 // visual = tremor do modelo, sem deslocar o ponto. No quadril o recoil da arma continua o de sempre.
 export const RED_DOT = { adsFov: 63, adsSpread: 0.02, recoil: 0.35, visual: 0.12, ads: 0.85 };
 
-// Armas. Primárias (menu): 0 Fuzil, 22 Commando, 21 Metralhadora do Chiqueiro, 1 Calibre 12 (pump), 12 Semi, 2 Sniper Torresmo, 5 Canhão, 6 Carabina, 3 Bazuca. Faca 7, sabre 8. Secundária: 4 pistola, 11 furadeira, 13 besta, 14 arco, 19 estilingue. 18 lança-milho, 20 minigun (só código). A besta e o arco são fracas de propósito: um tiro no corpo não mata.
+// Armas. Primárias (menu): 0 Fuzil, 22 Commando, 21 Metralhadora do Chiqueiro, 1 Calibre 12 (pump), 12 Semi, 2 Sniper Torresmo, 5 Canhão, 6 Carabina, 3 Bazuca. Faca 7, sabre 8. Secundária: 4 pistola, 11 furadeira, 13 besta, 14 arco, 19 estilingue. 18 lança-milho, 20 minigun (só código), 28 Saco de Presentes. A besta e o arco são fracas de propósito: um tiro no corpo não mata.
 // cat 'ar' = fuzil de assalto (Fuzil, FAMAS, Commando). O menu 'rajada' também tem SMG e LMG; isso não é AR.
 export const WEAPONS = [
   { key: 'rifle', name: 'Fuzil Pururuca', short: 'Fuzil Pururuca', chip: 'Fuzil', cat: 'ar', mag: 30, reserve: 120, dmg: 20, headMul: 2, rate: 0.1, auto: true, pellets: 1, spread: 0.01, reload: 1.6, range: 140, recoil: 0.018, adsFov: 40, adsSpread: 0.12, flashZ: -0.76,
@@ -156,6 +156,12 @@ WEAPONS.push({
   key: 'ray', name: 'Ray Gun', short: 'Ray Gun', chip: 'Ray', mag: 20, reserve: 160, dmg: 260, headMul: 1, rate: 0.22, auto: true, pellets: 0, spread: 0.006, reload: 1.7, range: 0, recoil: 0.028, adsFov: 58, adsSpread: 0.35, flashZ: -0.55,
   ray: true, inspect: 'ray', desc: 'Survival · Barraca da Sorte · pulso que quica 3 vezes · estouro curto · 20/160',
 });
+// 28 · Saco de Presentes: primária da categoria Especial. Taca caixas em arco que estouram no impacto (ou em 1,2 s).
+export const GIFT_W = WEAPONS.length;
+WEAPONS.push({
+  key: 'saco', name: 'Saco de Presentes', short: 'Saco de Presentes', chip: 'Saco', mag: 4, reserve: 8, dmg: 0, headMul: 1, rate: 0.9, auto: false, pellets: 0, spread: 0.008, reload: 2.0, range: 0, recoil: 0.05, adsFov: 62, adsSpread: 0.5, flashZ: -0.4,
+  gift: true, inspect: 'gift', desc: 'Taca presentes · estouram no impacto ou em 1,2 s · 4/8 · ho-ho-ho',
+});
 export const isKnife = (i) => i === 7 || i === GOLD_KNIFE;
 
 // Penetração e collateral (regra em shared/penetration.js). pen = metros de parede fina por bala (caixote conta 45%);
@@ -175,17 +181,17 @@ export const REV2 = 24; // Dois Capatazes (akimbo)
 export const TAMPA = 25; // Tampa do Tacho (escudo). 23 e 24 são os revólveres.
 export const isSaber = (i) => !!(WEAPONS[i] && WEAPONS[i].saber); // Sabre (8) ou Sabre Duplo (17)
 export const isAssault = (i) => !!(WEAPONS[i] && WEAPONS[i].cat === 'ar');
-export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1, W_FALL = -5; // -2 troca de time, -3 botijão, -4 gás; -5 = caiu do mapa
+export const PRIMARIES = [0, COMMANDO, UZI, P90, FAMAS, 1, 2, 5, 6, 3, SEMI, DISC_W, CORN_W, LMG, TAMPA, GIFT_W], PISTOL = 4, KNIFE = 7, SABER = 8, W_NADE = -1, W_FALL = -5; // -2 troca de time, -3 botijão, -4 gás; -5 = caiu do mapa
 export const SECONDARIES = [PISTOL, NAIL, CROSS, BOW, EGG_W, REV, REV2];
 export const MELEES = [KNIFE, SABER, SABER2];
-export const BOT_PRIMARIES = [0, COMMANDO, LMG, UZI, P90, FAMAS, 1, SEMI, 2, 5, 6, 3, CORN_W];
+export const BOT_PRIMARIES = [0, COMMANDO, LMG, UZI, P90, FAMAS, 1, SEMI, 2, 5, 6, 3, CORN_W, GIFT_W];
 // Menu: cada grupo é uma escolha. primary = uma primária. melee = faca ou sabre. secondary = pistola, furadeira, besta, arco ou estilingue.
 export const CATEGORIES = [
   { id: 'rajada', title: 'Rajada', pick: 'primary', weapons: [0, COMMANDO, LMG, UZI, P90, FAMAS] },
   { id: 'escopeta', title: 'Escopeta', pick: 'primary', weapons: [1, SEMI] },
   { id: 'precisao', title: 'Precisão', pick: 'primary', weapons: [2, 5, 6] },
   { id: 'explosivo', title: 'Explosivo', pick: 'primary', weapons: [3, CORN_W] },
-  { id: 'especial', title: 'Especial', pick: 'primary', weapons: [DISC_W] },
+  { id: 'especial', title: 'Especial', pick: 'primary', weapons: [DISC_W, GIFT_W] },
   { id: 'escudo', title: 'Escudo', pick: 'primary', weapons: [TAMPA] },
   { id: 'faca', title: 'Faca', pick: 'melee', weapons: [KNIFE, SABER, SABER2] },
   { id: 'secundaria', title: 'Secundária', pick: 'secondary', weapons: [PISTOL, NAIL, CROSS, BOW, EGG_W, REV, REV2] },
@@ -218,5 +224,5 @@ export const BOT_DEFS = [
   { name: 'Farofa' }, { name: 'Pipoca' }, { name: 'Trufa' }, { name: 'Bolota' }, { name: 'Torresmo' }, { name: 'Paçoca' }, { name: 'Linguiça' }, { name: 'Quindim' }, { name: 'Coxinha' }, { name: 'Pururuca' },
 ];
 
-export const BOT_RANGE = [14, 4.5, 26, 14, 10, 34, 18, 1.2, 2.2, 8, 12, 6, 6, 16, 14, 20, 12, 2.2, 9, 14, 16, 16, 18, 10, 6, 4, 1.2, 14]; // 23 revólver (como a pistola), 24 akimbo (cola), 25 tampa (chega perto pra porrada), 26 faca dourada (cola, igual a faca), 27 Ray Gun (não entra no sorteio dos bots)
+export const BOT_RANGE = [14, 4.5, 26, 14, 10, 34, 18, 1.2, 2.2, 8, 12, 6, 6, 16, 14, 20, 12, 2.2, 9, 14, 16, 16, 18, 10, 6, 4, 1.2, 14, 11]; // 23 revólver (como a pistola), 24 akimbo (cola), 25 tampa (chega perto pra porrada), 26 faca dourada (cola, igual a faca), 27 Ray Gun (não entra no sorteio dos bots), 28 Saco de Presentes (arco médio)
 export const TAG_COLORS = ['#7DF9FF', '#ffd27a', '#ff9fb6', '#9be37a', '#c9a4ff', '#ffb36b', '#9fd0ff', '#ffa3d8', '#b8f2e6', '#ffe9a8'];
