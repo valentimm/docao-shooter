@@ -229,7 +229,12 @@ export class Room extends DurableObject {
       const guns = await equipGun(this.env, a.acct.id, key, want).catch(() => false);
       if (guns) {
         const ent = this.game.ents.get(a.id);
-        if (ent) { ent.guns = guns; this.game.events.push(['jgn', ent.id, key, guns[key] || '']); }
+        if (ent) {
+          ent.ownGuns = { ...guns };
+          ent.guns = { ...(ent.guns || {}) };
+          if (guns[key]) ent.guns[key] = guns[key]; else delete ent.guns[key];
+          this.game.events.push(['jgn', ent.id, key, guns[key] || '']);
+        }
         a.guns = Object.keys(guns).length ? JSON.stringify(guns) : '';
         ws.serializeAttachment(a);
       }
