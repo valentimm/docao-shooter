@@ -5720,7 +5720,7 @@ function updateBot(b, dt) {
     if (!b.remote && gameTime >= b.respawnAt) respawn(b);
     return;
   }
-  if (b.remote) { interpRemote(b); animateBot(b, dt); return; } // online: posição vem do servidor
+  if (b.remote) { interpRemote(b); animateBot(b, dt); docaoLod(b); return; } // online: posição vem do servidor
   if (b.dummy) { placeDummy(b); const sp = b.travelV / Math.max(dt, 1e-3); b.vel.x = sp; animateBot(b, dt); b.vel.x = 0; return; } // Treino: não pensa nem atira
   if (hideS && (b.hider || hideFrozen(hideS, b))) { b.vel.set(0, 0, 0); b.target = null; m.group.position.copy(b.pos); m.group.rotation.y = b.yaw; if (!b.hider) animateBot(b, dt); return; } // Docão Escondido: objeto não pensa; Caçador espera a preparação
   if (!online && bombFrozen(bombS)) { b.vel.set(0, 0, 0); b.useHold = false; animateBot(b, dt); return; } // Bomba: preparação
@@ -5842,6 +5842,21 @@ function spinWorldRevolver(m, dt, gi, reloading, el, reloadT) {
       if (span > 0.14 && span < 0.88) open = 1.15 * (piece.userData.side || 1);
     }
     hinge.rotation.y += (open - hinge.rotation.y) * Math.min(1, dt * 10);
+  });
+}
+// LOD de sala cheia (30 Docões): longe da câmera o contorno vira sub-pixel e a sombra quase não aparece. Desligar os dois
+// lá longe corta boa parte das draw calls sem mudar o que se vê de perto. A distância considera o zoom da mira (sniper).
+const LOD_OUTLINE = 16, LOD_SHADOW = 24, LOD_HYST = 1.5, TAN_FOV0 = Math.tan((75 * Math.PI / 180) / 2);
+function docaoLod(e) {
+  const m = e.model; if (!m) return;
+  const d = camera.position.distanceTo(e.pos) * Math.tan((camera.fov * Math.PI / 180) / 2) / TAN_FOV0;
+  const cur = m._lod | 0, h = (lim, was) => (was ? d > lim - LOD_HYST : d > lim + LOD_HYST);
+  const next = (h(LOD_OUTLINE, cur >= 1) ? 1 : 0) + (h(LOD_SHADOW, cur >= 2) ? 1 : 0);
+  if (next === cur) return; m._lod = next;
+  m.group.traverse((o) => {
+    if (!o.isMesh) return;
+    if (o.userData.isOutline) { if (o.userData.lodVis == null) o.userData.lodVis = o.visible; o.visible = next >= 1 ? false : o.userData.lodVis; return; }
+    if (o.userData.lodCast == null) o.userData.lodCast = o.castShadow; o.castShadow = next >= 2 ? false : o.userData.lodCast;
   });
 }
 function animateBot(b, dt) { // visual: andar, flutuar, piscar ao levar dano, bolha de proteção, pose de recarga
