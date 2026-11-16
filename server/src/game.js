@@ -48,6 +48,7 @@ const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m
 
 export const MAX_PLAYERS = 30;
 const RS_SAFETY = 60; // s: cliente antigo que nunca manda 'rs' renasce sozinho depois disso
+const SPAWN_SHIELD_BLOCK = new Set(['f', 'r', 'dk', 'ry', 'cn', 'gp', 'eg', 'n', 'm', 'sw', 'sd', 'ss', 'tb', 'sk', 'tn']); // ataques recusados durante o escudo de nascimento (INVULN)
 const PX_COOLDOWN = 10; // s: mínimo entre duas trocas de arma na pausa que derrubam o jogador (fora Treino e Invasão)
 const PENDING_WAIT = 60; // s de relógio de parede pra escolher o time ao entrar no meio; depois vai no Automático
 const TICK = 0.05, HIST = 1.0, DC_GRACE = 30;
@@ -573,6 +574,7 @@ startMsg() {
     if (e.down && k !== 'f') return; // caído: só a pistolinha. Loja, porta, poder, granada e troca ficam de fora.
     if (this.emoting(e) && (k === 'f' || k === 'mgs' || k === 'r' || k === 'dk' || k === 'ry' || k === 'cn' || k === 'gp' || k === 'eg' || k === 'n' || k === 'm' || k === 'sw' || k === 'sd' || k === 'ss' || k === 'sbg' || k === 'tb' || k === 'gf' || k === 'af' || k === 'rl' || k === 'sk')) return;
     if ((e.stunUntil > this.T || e.flashUntil > this.T) && this.T - (e.stunAt ?? -9) > 0.3 && (k === 'f' || k === 'r' || k === 'dk' || k === 'ry' || k === 'cn' || k === 'gp' || k === 'eg' || k === 'n' || k === 'm' || k === 'sw' || k === 'sd' || k === 'ss' || k === 'tb' || k === 'sk' || k === 'tn')) { if (k === 'sk') this.toMe(e, ['skn', e.shocks | 0]); else if (k === 'n') this.toMe(e, ev[3] === 'p' ? ['pkb', e.pokeballs | 0] : ['ndn', e.nades | 0]); else if (k === 'tn') this.pushGr(e); return; } // levou choque ou flash: não atira (0,3 s de folga pra rede)
+    if (this.spawnShielded(e) && SPAWN_SHIELD_BLOCK.has(k)) { if (k === 'sk') this.toMe(e, ['skn', e.shocks | 0]); else if (k === 'n') this.toMe(e, ev[3] === 'p' ? ['pkb', e.pokeballs | 0] : ['ndn', e.nades | 0]); else if (k === 'tn') this.pushGr(e); e.rejectedShots = (e.rejectedShots || 0) + 1; return; } // escudo de nascimento: não leva dano e não ataca
     if (k === 'rl') { const w = ev[1], W = e.slots.includes(w) ? this.resolvedW(e, w) : null; const full = W && (W.revolver ? drumsFull(e, w) : e.mag[w] >= W.mag); if (W && !full && !W.melee && !W.shield && e.reserve[w] > 0) e.reload = { w, start: this.T, done: 0 }; return; }
     if (k === 'f') { const Wf = WEAPONS[ev[3]]; const hand = Wf && Wf.akimbo ? ev[6] : 0; if (Wf && Wf.akimbo && hand !== 0 && hand !== 1) { e.rejectedShots = (e.rejectedShots || 0) + 1; return; } return this.clockOk(e, ev[4], ev[3], hand) && this.mgOk(e, ev[3], ev[4]) && this.humanFire(e, ev[1], ev[2], ev[3], ev[5], ev[6]); }
     if (k === 'mgs') return this.mgSpin(e, ev[1], ev[2]);
@@ -1211,6 +1213,7 @@ startMsg() {
     for (const [c, dmg] of gasAcc) this.hurtGas(c, dmg, shooter);
     return hits;
   }
+  spawnShielded(e) { return !!(e && e.alive && this.T < Math.min(e.invulnUntil || 0, e.spawnLock || 0)); } // escudo de nascimento: não leva dano e não ataca (testGod não trava)
   friends(a, b) { if (this.invasion) return !!(a && b && a !== b && !a.zt === !b.zt); return this.teamMode && a && b && a !== b && a.team === b.team && a.team >= 0; }
   damage(t, amount, a, w, head, back = false, ks = null, fx = 0, origin = a && a !== t && !a.fog ? a.pos : null) {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb)) return false; // sem fogo amigo; Bomba: ninguém leva dano na preparação
@@ -1572,7 +1575,7 @@ startMsg() {
     return best;
   }
   spawn(e, silent = false) {
-    const s = this.pickSpawn(e); e.pos = { ...s }; e.vel = { x: 0, y: 0, z: 0 }; e.crouch = 0; e.hp = 100; e.alive = true; resetRegen(e); e.needRs = false; e.rsReq = false; e.invulnUntil = this.T + INVULN; e.sq++;
+    const s = this.pickSpawn(e); e.pos = { ...s }; e.vel = { x: 0, y: 0, z: 0 }; e.crouch = 0; e.hp = 100; e.alive = true; resetRegen(e); e.needRs = false; e.rsReq = false; e.invulnUntil = e.spawnLock = this.T + INVULN; e.sq++;
     if (this.armsMode) this.equipArms(e);
     else if (this.x1Mode) this.equipX1(e);
     else if (this.compMode) {
@@ -2061,7 +2064,7 @@ startMsg() {
     if (!this.x1Mode) for (const i of b.slots) if (b.reserve[i] < WEAPONS[i].mag && !(WEAPONS[i].rocket && b.reserve[i] > 0)) b.reserve[i] = WEAPONS[i].reserve;
   }
   botSaberThink(b, t, d) {
-    const prof = saberProfile(WEAPONS[b.weapon]); if (!prof || b.stunUntil > this.T || b.flashUntil > this.T) return;
+    const prof = saberProfile(WEAPONS[b.weapon]); if (!prof || b.stunUntil > this.T || b.flashUntil > this.T || this.spawnShielded(b)) return;
     const st = ensureSaber(b);
     const skill = botSkill(b.reaction, b.accuracy);
     if (this.T >= (b.saberPlanUntil || 0)) {
@@ -2091,7 +2094,7 @@ startMsg() {
   }
   botShoot(b, t, d) {
     const w = WEAPONS[b.weapon];
-    if (b.stunUntil > this.T || b.flashUntil > this.T) return; // atordoado ou cego não atira
+    if (b.stunUntil > this.T || b.flashUntil > this.T || this.spawnShielded(b)) return; // atordoado, cego ou no escudo de nascimento não atira
     if (isSaber(b.weapon)) return; // o sabre age em botSaberThink (combo, bloqueio, investida, especial)
     if (w.shield) { // porrada; de vez em quando investe pra fechar (não rola o dado todo quadro)
       if (this.T < b.nextFire || b.shieldBroken) return;
@@ -2166,6 +2169,7 @@ startMsg() {
     this.hitscan(b, o, dirs, b.weapon);
   }
   botThrow(b, t) {
+    if (this.spawnShielded(b)) return; // escudo de nascimento: não arremessa
     const p = profileOf(b), from = center(b, 1.6), tp = t.pos, tv = t.vel || { x: 0, y: 0, z: 0 };
     const to = { x: tp.x + (tv.x || 0) * p.nadeLead + rand(-p.nadeErr, p.nadeErr), y: tp.y + 0.2, z: tp.z + (tv.z || 0) * p.nadeLead + rand(-p.nadeErr, p.nadeErr) };
     const dx = to.x - from.x, dz = to.z - from.z, T = 0.55 + Math.hypot(dx, dz) / 16, g = -NADE.grav;
