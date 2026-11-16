@@ -600,6 +600,7 @@ export function updateWeather(group, dt) {
 }
 
 export function disposeWorld(group) {
+  if (group.userData.reuseResources) return;
   group.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) for (const m of [].concat(o.material)) { if (m === edgeMat || m === proxyMat) continue; if (m.map) m.map.dispose(); m.dispose(); }

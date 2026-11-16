@@ -36,6 +36,7 @@ import { createInvMusic } from './invasion-music.js';
 import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook } from './invasion-gfx.js';
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
 import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
+import { breezeMap, buildBreezeWorld, breezeMapReady, prepareBreezeMap } from './breeze-map.js';
 import { buildNav } from './nav.js';
 import { initBacon, spawnBacon, updateBacon, clearBacon, popModel, baconStats, activeBacons, edibleBacons, eatBacon, BACON } from './bacon.js';
 import { Net, createRoom, roomInfo } from './net.js';
@@ -332,6 +333,15 @@ function wallDistance(o, d, far) {
   const h = raycaster.intersectObjects(worldMeshes, false);
   return h.length ? h[0] : null;
 }
+const importedShotWorld = {
+  rayWorldS(origin, dir, far) {
+    const hit = wallDistance(origin, dir, far);
+    if (!hit) return null;
+    const normal = hit.face.normal.clone().applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld));
+    if (normal.dot(dir) > 0) normal.negate();
+    return { t: hit.distance, s: null, normal };
+  },
+};
 function losClear(a, b) {
   const d = b.clone().sub(a); const len = d.length(); d.divideScalar(len);
   return !wallDistance(a, d, len - 0.3);
@@ -2236,7 +2246,7 @@ function rocketSmoke(r, R) {
 }
 
 // ---------------- Combate ----------------
-// bala: traceShot (shared/penetration.js) nas caixas de PHYS, a mesma regra do servidor: atravessa parede leve e corpos (collateral)
+// Mapas de caixas usam a penetração do servidor. O Breeze usa a malha visual para parar a bala.
 function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   if (!online && shooter) hearGunshot(entities, origin, shooter, gameTime); // bots surdos (Leitão/Ceva) ignoram; os outros vão investigar, sem atirar no som
   const w = shooter && shooter.isPlayer ? gunOf(shooter, wIdx) : WEAPONS[wIdx]; const res = { hit: false, kill: false, kills: 0, wall: false };
@@ -2246,13 +2256,15 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   const targets = entities.filter((e) => e !== shooter && e.alive && !friends(e, shooter)).map((e) => ({ e, p: e.pos, crouch: e.crouch || 0, size: e.zt ? e.size : 1, prone: !!e.down, yaw: e.yaw || 0 })); // zumbi grande: hitbox escalada; caído fica deitado; // time: bala atravessa o companheiro; agachado achata o corpo
   const helis = skies.map((sh) => ({ h: sh, c: sh.pos, r: heliR(sh) }));
   const shotW = invMode() ? { ...w, pierce: 8, pierceMul: 0.82 } : w; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
+  const shotWorld = currentMap === breezeMap ? importedShotWorld : PHYS;
   for (let p = 0; p < w.pellets; p++) {
     const d = dir.clone(); d.x += (Math.random() - 0.5) * 2 * spread; d.y += (Math.random() - 0.5) * 2 * spread; d.z += (Math.random() - 0.5) * 2 * spread; d.normalize(); dirs.push(d);
-    const tr = traceShot(PHYS, origin, d, shotW, targets, helis, scale);
+    const tr = traceShot(shotWorld, origin, d, shotW, targets, helis, scale);
     const gHit = gasSim ? gasSim.ray(origin, d, tr.end) : null;
     if (gHit) { clipTrace(tr, origin, d, gHit); gasAcc.set(gHit.c, (gasAcc.get(gHit.c) || 0) + pelletOnGas(w, gHit.t, scale)); }
     const end = origin.clone().addScaledVector(d, tr.end), vis = p < 4 || shooter.isPlayer;
     if (vis) tracer(muzzle, end, !!w.beam);
+    if (vis && tr.stop === 'wall' && tr.wallNormal) bulletHole({ p: end, n: tr.wallNormal });
     for (const h of tr.holes) bulletHole(h, vis);
     if (tr.holes.length && vis) sfx.wallPen(shooter.isPlayer ? 0.8 : distVol(end) * 0.6);
     let stopped = false;
@@ -6928,11 +6940,12 @@ function splashGasClient(pos, owner, o) {
   });
 }
 function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de munição (map.invPickups)
-  const map = getMap(id);
+  const local = id === breezeMap.id && breezeMapReady();
+  const map = local ? breezeMap : getMap(id);
   if (currentMap === map && worldGroup) { bindGas(map.id); return map; }
   if (worldGroup) { scene.remove(worldGroup); disposeWorld(worldGroup); }
   for (const p of pickups) scene.remove(p.mesh); pickups.length = 0;
-  const w = buildWorld(map); worldGroup = w.group; scene.add(worldGroup);
+  const w = local ? buildBreezeWorld() : buildWorld(map); worldGroup = w.group; scene.add(worldGroup);
   nevascaShow = map.id === 'posto-nevasca' ? mountNevasca(worldGroup, map) : null;
   doorGroups = new Map(); for (const g of w.doors || []) doorGroups.set(g.userData.doorId, g);
   nightLights = w.nightLights || []; nightAmb.stop();
@@ -6942,7 +6955,7 @@ function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de muniçã
   for (const [t, x, z, y] of inv && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups) makePickup(t, x, z, y || 0);
   pickups.forEach((p) => (p.mesh.visible = state !== 'menu'));
   const t0 = performance.now();
-  nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides, groundAt, solids, topAt, seeds: SPAWNS.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [], avoid: map.navAvoid || [] });
+  nav = local ? null : buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides, groundAt, solids, topAt, seeds: SPAWNS.map((s) => [s.x, s.y, s.z]), extra: map.waypoints || [], avoid: map.navAvoid || [] });
   navMs = performance.now() - t0;
   showcase.position.set(...map.showcase); showBaseY = map.showcase[1]; pickShowcaseCam();
   currentMap = map; bindGas(map.id); return map;
@@ -7032,9 +7045,12 @@ const bombMenu = () => $('modeSel').value === 'bomb';
 const compMenu = () => $('modeSel').value === COMP.mode;
 const menuSurvival = () => invMenu() && isSurvival($('survSel') && $('survSel').value); // Survival é variante da Invasão, não um modo solto
 const menuPool = (md, surv = false) => ((surv || isSurvivalMode(md)) ? SURVIVAL_MAPS : isX1(md) ? X1_MAPS : (md === 'bomb' || md === COMP.mode) ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : PLAY_MAPS); // Survival: só a HOTMILK à Noite. Bomba e Competitivo: sites feitos à mão. X1: currais.
-const mapKey = () => (bombMenu() || compMenu() ? 'docao.bombMap' : invMenu() ? 'docao.invMap' : x1Menu() ? 'docao.x1Map' : 'docao.map');
+const breezeMenu = () => $('modeSel').value === 'explore';
+const mapKey = () => (breezeMenu() ? 'docao.breezeExploreMap' : bombMenu() || compMenu() ? 'docao.bombMap' : invMenu() ? 'docao.invMap' : x1Menu() ? 'docao.x1Map' : 'docao.map');
 const x1Menu = () => $('modeSel').value === X1.mode;
-const mapPool = () => menuPool($('modeSel').value, menuSurvival());
+const mapPool = () => breezeMenu() ? [breezeMap, ...PLAY_MAPS] : menuPool($('modeSel').value, menuSurvival());
+const menuMap = (id) => breezeMenu() && id === breezeMap.id ? breezeMap : getMap(id);
+let breezeStatus = '';
 function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } return v === 'random' || mapPool().some((m) => m.id === v) ? v : (bombMenu() || compMenu()) ? BOMB_MAP : isSurvivalMode($('modeSel').value) ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : MAPS[0].id; }
 let selectedMap = storedMap();
 function syncMapForMode() {
@@ -7048,12 +7064,12 @@ function syncMapForMode() {
     return;
   }
   if (x1Menu()) { selectedMap = 'random'; if (!currentMap || !currentMap.x1) loadMap(X1_MAPS[0].id); buildMapGrid(); return; }
-  const v = storedMap(); if (v !== selectedMap) { selectedMap = v; if (v !== 'random') loadMap(v); } buildMapGrid();
+  const v = storedMap(); if (v !== selectedMap) { selectedMap = v; previewSelectedMap(); } buildMapGrid();
 }
-const thumbs = {};
+const thumbs = { [breezeMap.id]: breezeMap.thumbUrl };
 function mapCard(id) {
   const b = document.createElement('button'); b.className = 'mapcard' + (id === 'random' ? ' random' : ''); b.dataset.map = id;
-  const m = id === 'random' ? null : getMap(id);
+  const m = id === 'random' ? null : menuMap(id);
   b.innerHTML = `<span class="thumb">${m ? '' : '?'}</span><span class="mtxt"><b>${m ? escapeHtml(m.name) : 'Aleatório'}</b><small>${m ? escapeHtml(m.desc) : 'Um mapa diferente sorteado a cada partida.'}</small></span>`;
   if (m && thumbs[id]) b.querySelector('.thumb').style.backgroundImage = `url(${thumbs[id]})`;
   b.onclick = () => { selectMap(id); $('mapModal').classList.add('hidden'); };
@@ -7078,17 +7094,37 @@ function refreshMapUI() {
     document.querySelectorAll('#mapGrid .mapcard').forEach((c) => c.classList.toggle('active', c.dataset.map === 'random'));
     return;
   }
-  const m = selectedMap === 'random' ? null : getMap(selectedMap);
-  $('mapName').textContent = m ? m.name : 'Aleatório'; $('mapDesc').textContent = m ? m.desc : 'Um mapa diferente sorteado a cada partida.';
+  const m = selectedMap === 'random' ? null : menuMap(selectedMap);
+  $('mapName').textContent = m ? m.name : 'Aleatório';
+  $('mapDesc').textContent = m && m === breezeMap && breezeStatus ? breezeStatus : m ? m.desc : 'Um mapa diferente sorteado a cada partida.';
   const th = $('mapBtn').querySelector('.thumb'); th.textContent = m ? '' : '?'; th.style.backgroundImage = m && thumbs[m.id] ? `url(${thumbs[m.id]})` : '';
   th.classList.toggle('rnd', !m);
   document.querySelectorAll('#mapGrid .mapcard').forEach((c) => c.classList.toggle('active', c.dataset.map === selectedMap));
+}
+function previewSelectedMap() {
+  const map = menuMap(selectedMap);
+  if (selectedMap === 'random') return;
+  if (map !== breezeMap || breezeMapReady()) {
+    loadMap(selectedMap);
+    return;
+  }
+  if (breezeStatus === 'Carregando o Breeze…') return;
+  breezeStatus = 'Carregando o Breeze…';
+  prepareBreezeMap().then(() => {
+    breezeStatus = '';
+    if (breezeMenu() && selectedMap === map.id && state === 'menu') loadMap(map.id);
+    refreshMapUI();
+  }).catch((error) => {
+    breezeStatus = 'Falha ao carregar. Selecione o Breeze novamente para tentar.';
+    console.warn('Breeze Standoff', error);
+    refreshMapUI();
+  });
 }
 function selectMap(id) {
   if (menuSurvival()) { refreshMapUI(); return; }
   if (x1Menu()) { if (id !== 'random') loadMap(id); refreshMapUI(); return; } // no X1 o mapa da partida é sorteado; o clique só mostra o curral
   selectedMap = id; try { localStorage.setItem(mapKey(), id); } catch (e) { /* sem storage */ }
-  if (id !== 'random') loadMap(id);
+  previewSelectedMap();
   refreshMapUI();
 }
 let invThumbsBusy = false;
@@ -7118,7 +7154,7 @@ function resolveX1Map(mapId) {
 function pickMapForMatch() {
   if (selectedMap !== 'random' && mapPool().some((m) => m.id === selectedMap)) return selectedMap;
   if (selectedMap !== 'random') return (bombMenu() || compMenu()) ? BOMB_MAP : menuSurvival() ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : PLAY_MAPS[0].id; // Bomba e Competitivo: mapa sem sites → Rodízio. Survival: HOTMILK à Noite.
-  const pool = mapPool().filter((m) => !currentMap || m.id !== currentMap.id); return pool[Math.floor(Math.random() * pool.length)].id;
+  const pool = mapPool().filter((m) => m !== breezeMap && (!currentMap || m.id !== currentMap.id)); return pool[Math.floor(Math.random() * pool.length)].id;
 }
 $('mapBtn').onclick = () => { if (menuSurvival()) return; buildMapGrid(); $('mapModal').classList.remove('hidden'); };
 $('mapClose').onclick = () => $('mapModal').classList.add('hidden');
@@ -7152,19 +7188,28 @@ function commitMenuSkin() {
   document.dispatchEvent(new CustomEvent('docao-skin-catalog'));
 }
 function startGame(mapId) {
+  const picked = $('modeSel').value;
+  const wantSurv = menuSurvival();
+  const id = picked === TRAIN.mode ? TRAIN.map : picked === HIDE.mode ? HIDE.MAP : picked === X1.mode ? resolveX1Map(mapId) : wantSurv ? SURVIVAL.DEFAULT_MAP : (typeof mapId === 'string' ? mapId : pickMapForMatch());
+  if (id === breezeMap.id) {
+    if (!breezeMenu()) return;
+    if (!breezeMapReady()) {
+      previewSelectedMap();
+      refreshMapUI();
+      return;
+    }
+  }
   commitMenuSkin();
   clearMatchEnding(); closeBench(); // bancada do Arsenal aberta no menu comia W/S/setas/1-5 dentro da partida
   endVictory(); stopEmote();
   resetAds(); stopInspect(true); // inspeção velha não sobrevive ao 'Jogar de novo'
   initAudio();
-  const wantSurv = menuSurvival();
-  loadMap($('modeSel').value === TRAIN.mode ? TRAIN.map : $('modeSel').value === HIDE.mode ? HIDE.MAP : $('modeSel').value === X1.mode ? resolveX1Map(mapId) : wantSurv ? SURVIVAL.DEFAULT_MAP : (typeof mapId === 'string' ? mapId : pickMapForMatch()), wantSurv || $('modeSel').value === INV.mode);
+  loadMap(id, wantSurv || picked === INV.mode);
   const name = myName(); saveName(name);
   sens = parseFloat($('sens').value) || 1.4; sensAds = parseFloat($('sensAds').value) || 1;
   try { localStorage.setItem('docao.sens', String(sens)); localStorage.setItem('docao.sensAds', String(sensAds)); } catch (e) { /* sem storage */ }
   revengeName = null; resetNemesis(); resetFeedback(); resetRewards(); resetMatchCamos();
   clearBots(); gameTime = 0; inv = null; invNet = null; survClear();
-  const picked = $('modeSel').value;
   saveBotDiff($('botDiff').value);
   mode = MODE_OK(picked); matchVariant = wantSurv ? 'survival' : ''; survLive = wantSurv; armsWinner = null; teamScore = [0, 0]; zone = null; window.__capLog = []; offlineMinutes = normTime($('timeSel').value);
   noclipOn = false; noclipSpeed = 22; paintNoclip();
@@ -8446,7 +8491,7 @@ $('roomDiff').onchange = () => saveBotDiff($('roomDiff').value);
 try { const d = localStorage.getItem('docao.botDiff'); if (d) saveBotDiff(d); } catch (e) { /* */ }
 $('modeSel').onchange = () => { try { localStorage.setItem('docao.mode', $('modeSel').value); } catch (e) { /* */ } refreshMenuMode(); syncMapForMode(); };
 try { const m = localStorage.getItem('docao.mode'); if (m === 'survival') { $('modeSel').value = INV.mode; $('survSel').value = 'survival'; } else if (m !== COMP.mode && (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'dm' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'bomb' || m === X1.mode)) $('modeSel').value = m; } catch (e) { /* */ }
-if (invMenu() || bombMenu() || compMenu() || x1Menu()) syncMapForMode();
+if (invMenu() || bombMenu() || compMenu() || x1Menu() || breezeMenu()) syncMapForMode();
 $('timeSel').onchange = () => { try { localStorage.setItem('docao.time', $('timeSel').value); } catch (e) { /* */ } };
 try { $('timeSel').value = String(normTime(localStorage.getItem('docao.time'))); } catch (e) { /* */ }
 let modeBeforeComp = 'dm';
