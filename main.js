@@ -882,7 +882,7 @@ function gunOf(e, idx) {
   return kit;
 }
 function respawn(e) {
-  e.pos.copy(pickSpawn(e)); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = 100; e.alive = true; e.invulnUntil = gameTime + INVULN; resetRegen(e);
+  e.pos.copy(pickSpawn(e)); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = 100; e.alive = true; e.invulnUntil = e.spawnLock = gameTime + INVULN; resetRegen(e);
   if (e.isPlayer) keys.Space = false;
   if (!compOn()) {
   if (!e.isPlayer && !e.dummy && botWantsShield(e.id) && weaponAllowed(TAMPA)) e.nextPrimary = TAMPA; // o mesmo bot nasce com a Tampa do Tacho
@@ -1624,6 +1624,7 @@ function selectUtil(k) {
 function armUtil(button) {
   if (!player || !player.alive || !player.utilSel || emote.on) return;
   if (player.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; }
+  if (spawnShielded(player)) { shieldNoFire(); return; }
   utilArm = button;
   if (button === 'left') { player.charging = true; player.chargeStart = gameTime; }
   else player.charging = false;
@@ -1634,6 +1635,7 @@ function releaseUtil(button) {
   const p = player;
   if (!p || !p.alive || !p.utilSel || emote.on || p.switchEnd > gameTime) { if (p) p.charging = false; return; }
   if (p.stunUntil > gameTime) { p.charging = false; flashMsg('Levou choque · espere passar'); return; }
+  if (spawnShielded(p)) { p.charging = false; shieldNoFire(); return; }
   const k = p.utilSel;
   if (utilCount(p, k) <= 0) { p.charging = false; p.utilSel = ''; return; }
   const power = button === 'right' ? 0.15 : throwPower();
@@ -1725,8 +1727,12 @@ function clearTacticals() {
 }
 // ---------------- Pau de choque (tecla 5; regras em shared/shock.js; online o servidor manda sk/sx/sz/se) ----------------
 const shocks = [];
+// escudo de nascimento: não leva dano e também não ataca (tiro, faca, sabre, tampa, granadas, choque)
+function spawnShielded(e) { return !!(e && e.alive && gameTime < Math.min(e.invulnUntil || 0, e.spawnLock || 0)); } // só o escudo do nascimento (spawnLock); modo deus dos testes não trava
+function shieldNoFire() { const t = performance.now(); if (t - (shieldNoFire.t || 0) < 900) return; shieldNoFire.t = t; flashMsg('Protegido · sem ataque até o escudo acabar'); }
 function throwShock() {
   if (!player || !player.alive) return;
+  if (spawnShielded(player)) { shieldNoFire(); return; }
   if (!clientPower('stun')) { flashMsg('Pau de choque desligado nesta sala'); return; }
   if (!(player.stunNades > 0)) { flashMsg('Sem pau de choque · pegue a caixa de Copo Bomba'); return; }
   if (player.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; } // atordoado não arremessa (o servidor também recusa)
@@ -1854,7 +1860,8 @@ function updateArc() {
   pts.needsUpdate = true; arcLine.computeLineDistances(); arcGeo.computeBoundingSphere();
   arcMark.position.set(pos.x, pos.y - NADE.r + 0.04, pos.z); arcMark.visible = true; arcLine.visible = true;
 }
-function startCharge() { const p = player; if (p && p.alive && !emote.on && p.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; } // atordoado não arremessa (o servidor também recusa)
+function startCharge() { const p = player; if (p && p.alive && !emote.on && p.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; }
+  if (p && !emote.on && spawnShielded(p)) { shieldNoFire(); return; } // atordoado não arremessa (o servidor também recusa)
   if (emote.on || !p || !p.alive || (p.nades <= 0 && !(p.pokeballs > 0)) || p.charging) { if (!emote.on && p && p.alive && p.nades <= 0 && !p.charging) flashMsg('Sem Copo Bomba! Pegue um copo vermelho'); return; } p.charging = true; p.chargeStart = gameTime; }
 function chargePower() { return clamp((gameTime - player.chargeStart) / NADE.charge, 0, 1); }
 const throwPower = () => 0.15 + 0.85 * chargePower();
@@ -1865,11 +1872,13 @@ function releaseCharge() {
   fp.cup.visible = false;
   if (!p.alive || emote.on) return;
   if (p.stunUntil > gameTime) { flashMsg('Levou choque · espere passar'); return; } // levou choque segurando o copo: não joga nem gasta
+  if (spawnShielded(p)) { shieldNoFire(); return; }
   fp.cupReleasePos = fp.cup.position.clone(); fp.cupReleaseRot = fp.cup.quaternion.clone();
   if (p.pokeballs > 0) throwPokeball(p, origin, vel); else throwGrenade(p, origin, vel);
   fp.cupThrowT = 0.25;
 }
 function botThrow(b, t) {
+  if (spawnShielded(b)) return;
   const p = profileOf(b), from = center(b, 1.6), tp = t.pos, tv = t.vel || { x: 0, y: 0, z: 0 };
   const to = new V3(tp.x + (tv.x || 0) * p.nadeLead + rand(-p.nadeErr, p.nadeErr), tp.y + 0.2, tp.z + (tv.z || 0) * p.nadeLead + rand(-p.nadeErr, p.nadeErr));
   const dx = to.x - from.x, dz = to.z - from.z, dist = Math.hypot(dx, dz); const T = 0.55 + dist / 16; const g = -NADE.grav;
@@ -3945,7 +3954,7 @@ function updateHud(dt) {
   else if (cm.textContent || cm.dataset.line) { cm.textContent = ''; delete cm.dataset.line; }
   const prot = $('protmsg');
   const shielded = !!(p.alive && gameTime < p.invulnUntil && msgTimer <= 0);
-  if (prot) { prot.textContent = shielded ? 'PROTEGIDO' : ''; prot.classList.toggle('hidden', !shielded); }
+  if (prot) { prot.textContent = shielded ? (spawnShielded(p) ? 'PROTEGIDO · SEM TIRO' : 'PROTEGIDO') : ''; prot.classList.toggle('hidden', !shielded); }
   if (!$('tabboard').classList.contains('hidden')) $('tabboard').innerHTML = boardHtml();
 }
 
@@ -5255,7 +5264,7 @@ function saberRadiusLocal(p, dmg, radius) {
   return n;
 }
 function saberDash(p) {
-  const prof = saberProfile(WEAPONS[p.weapon]); if (!prof || !p.alive || p.stunUntil > gameTime) return false;
+  const prof = saberProfile(WEAPONS[p.weapon]); if (!prof || !p.alive || p.stunUntil > gameTime || spawnShielded(p)) return false;
   const st = ensureSaber(p);
   const res = tryDash(st, gameTime, prof, saberForward(p)); if (!res) return false;
   p.nextFire = Math.max(p.nextFire, st.nextSwing);
@@ -5266,7 +5275,7 @@ function saberDash(p) {
   return true;
 }
 function saberSpecial(p) {
-  const prof = saberProfile(WEAPONS[p.weapon]); if (!prof || !p.alive || p.stunUntil > gameTime) return false;
+  const prof = saberProfile(WEAPONS[p.weapon]); if (!prof || !p.alive || p.stunUntil > gameTime || spawnShielded(p)) return false;
   const st = ensureSaber(p);
   const res = trySpecial(st, gameTime, prof); if (!res) return false;
   const forward = saberForward(p);
@@ -5383,7 +5392,7 @@ function stepOneSaber(e, dt, netPlayer) {
   }
 }
 function botSaberThink(b, t, dist) {
-  const prof = saberProfile(WEAPONS[b.weapon]); if (!prof || b.stunUntil > gameTime) return;
+  const prof = saberProfile(WEAPONS[b.weapon]); if (!prof || b.stunUntil > gameTime || spawnShielded(b)) return;
   const st = ensureSaber(b);
   const skill = botSkill(b.reaction, b.accuracy);
   if (gameTime >= (b.saberPlanUntil || 0)) {
@@ -5629,6 +5638,7 @@ function updatePlayer(dt) {
     }
   }
   if (p.utilSel) { arcLine.visible = arcMark.visible = false; return; } // na mão até soltar o clique: o mouseup é quem joga
+  if (spawnShielded(p)) { p.burstLeft = 0; p.bowDraw = p.eggDraw = 0; clickLatch = 0; rightLatch = 0; if (mouseDown || rightDown) shieldNoFire(); return; } // escudo de nascimento: sem tiro nem golpe
   // tiro
   finishReload(p);
   const w = gunOf(p, p.weapon);
@@ -6043,7 +6053,7 @@ function botWeaponFor(b, dist) {
 }
 const BOT_RATE = [() => rand(2.2, 3.4), () => 1.4, () => 1.6, () => 1, () => rand(1.8, 2.6), () => 1.15, () => 1.05, () => 1.5];
 function botShoot(b, t, dist = 10) {
-  if (b.stunUntil > gameTime || b.flashUntil > gameTime) return;
+  if (b.stunUntil > gameTime || b.flashUntil > gameTime || spawnShielded(b)) return; // escudo de nascimento: bot também não ataca
   const w = WEAPONS[b.weapon];
   if (isSaber(b.weapon)) return; // combo, bloqueio, investida e especial ficam em botSaberThink
   if (w.shield) {
@@ -8970,7 +8980,7 @@ function netEvent(ev) {
     flashMsg(`Nova arma: ${WEAPONS[w].short}`);
   } else if (k === 'sp') {
     const [, id, pos, yaw, prim, sq] = ev; const e = entOf(id); if (!e) return;
-    e.pos.set(pos[0], pos[1], pos[2]); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = 100; e.alive = true; e.invulnUntil = gameTime + INVULN; resetRegen(e);
+    e.pos.set(pos[0], pos[1], pos[2]); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = 100; e.alive = true; e.invulnUntil = e.spawnLock = gameTime + INVULN; resetRegen(e);
     if (armsMode()) equipArmsLocal(e);
     else if (x1Mode()) { e.x1Side = pos[0] < 0 ? 0 : 1; equipX1Local(e, prim); }
     else if (survOn()) { e.down = false; e.downBlend = 0; e.primary = prim; e.reloadEnd = 0; e.switchEnd = 0; e.nades = NADE.spawnWith; e.stunUntil = 0; resetShield(e); }
