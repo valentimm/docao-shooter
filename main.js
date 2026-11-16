@@ -4367,9 +4367,19 @@ function paintSniper(model, id) {
   if (kind === 'lore') applySniperSkin(g, 'lore');
   else if (kind) applyGunPaint(g, kind);
 }
+function rememberGunSkin(e, key, id) {
+  if (!e || !key) return;
+  e.guns = { ...(e.guns || {}) };
+  if (id) e.guns[key] = id; else delete e.guns[key];
+  if (e.ownGuns) {
+    e.ownGuns = { ...e.ownGuns };
+    if (id) e.ownGuns[key] = id; else delete e.ownGuns[key];
+  }
+}
 function applyHeldGun(key, id) {
   const idx = GUN_MESH[key];
   if (idx == null || idx < 0) return;
+  rememberGunSkin(player, key, id);
   const gun = fp.guns[idx];
   paintGunMesh(gun, id);
   if (player && player.model) paintGunMesh(player.model.guns[idx], id);
@@ -4384,8 +4394,10 @@ function applyHeldGuns(guns) {
   for (const key of GUN_EQUIP_KEYS) applyHeldGun(key, g[key] || '');
 }
 function applyWorldGun(e, key, id) {
+  if (!e) return;
+  rememberGunSkin(e, key, id);
   const idx = GUN_MESH[key];
-  if (!e || !e.model || idx == null || idx < 0) return;
+  if (!e.model || idx == null || idx < 0) return;
   paintGunMesh(e.model.guns[idx], id);
 }
 function applyWorldGuns(e, guns) {
@@ -6409,8 +6421,8 @@ function renderWardrobePreview() {
 let selectedSkin = getSkin(localStorage.getItem('docao.skin') || DEFAULT_SKIN).id, preview = null;
 // Cinco classes no navegador. A última usada é a que nasce. docao.primary continua espelhando a classe armada.
 let arsenalUi = null;
-let classes = [], classIndex = 0, spawnedClass = 0, benchOn = false, benchWeapon = 0, benchSlot = 'optic', benchLook = '', arsenalFocus = -1, pauseArmTab = 'rajada', deathArmTab = 'rajada';
-const DEATH_HINT = '1–5 escolhe a classe. O arsenal grava a arma nela. U volta na última · Espaço nasce.';
+let classes = [], classIndex = 0, spawnedClass = 0, benchOn = false, benchWeapon = 0, benchSlot = 'optic', benchLook = '', arsenalFocus = -1, pauseArmTab = 'rajada', deathArmTab = 'rajada', deathSkinBusy = false;
+const DEATH_HINT = '1–5 escolhe a classe. O arsenal grava a arma nela. A skin entra nesta partida. U volta na última · Espaço nasce.';
 const LIVE_HINT = '1–5 escolhe a classe. O arsenal troca a arma agora e o pente não enche sozinho. U volta pra última. O tracinho branco é a arma de fábrica.';
 let selectedPrimary = 0, selectedSecondary = PISTOL, selectedMelee = KNIFE;
 function bootClasses() {
@@ -6688,17 +6700,7 @@ arsenalUi = createArsenal($('arsenalApp'), {
   prepareSkin: (i, id, clone) => {
     if (i !== KNIFE && skinChannel(i)) paintThumbGun(clone, itemById(id) || { gun: WEAPONS[i].key });
   },
-  equipSkin: async (i, id) => {
-    if (id === equippedWeaponSkin(i, getAccount())) return { ok: true };
-    const channel = skinChannel(i);
-    if (!channel || (id && !ownedWeaponSkins(i, getItems()).some(item => item.id === id))) return { error: 'Essa skin não está na sua mochila.' };
-    const result = await (channel === 'knife' ? equipKnife(id) : channel === 'sniper' ? equipSniper(id) : equipGun(channel, id));
-    if (!result.error) {
-      const event = channel === 'knife' ? 'docao-knife-pick' : channel === 'sniper' ? 'docao-sniper-pick' : 'docao-gun-pick';
-      document.dispatchEvent(new CustomEvent(event, { detail: channel === 'knife' || channel === 'sniper' ? id : { key: channel, id } }));
-    }
-    return result;
-  },
+  equipSkin: (i, id) => equipWeaponSkin(i, id),
   saber: i => isSaber(i) ? { colors: SABER_COLORS, selected: saberColor } : null,
   colorSaber: hex => {
     if (!SABER_COLORS.some(c => c.hex === hex)) return;
@@ -6796,18 +6798,21 @@ document.addEventListener('docao-dance-pick', (e) => setDance(e.detail));
 document.addEventListener('docao-knife-pick', (e) => {
   applyHeldKnife(e.detail);
   arsenalUi?.render();
+  paintDeathSkins();
   if (player && player.weapon === KNIFE) startButterfly();
   if (online && online.net) online.net.send({ t: 'prof', knife: e.detail || '' });
 });
 document.addEventListener('docao-sniper-pick', (e) => {
   applyHeldSniper(e.detail);
   arsenalUi?.render();
+  paintDeathSkins();
   if (online && online.net) online.net.send({ t: 'prof', sniper: e.detail || '' });
 });
 document.addEventListener('docao-gun-pick', (e) => {
   const d = e.detail || {};
   applyHeldGun(d.key, d.id || '');
   arsenalUi?.render();
+  paintDeathSkins();
   if (online && online.net) online.net.send({ t: 'prof', gun: { k: d.key, id: d.id || '' } });
 });
 document.addEventListener('docao-look-preview', (e) => paintPreview(e.detail, false));
@@ -7943,11 +7948,92 @@ function barCaption(b) {
 function sheetSpec(hint) {
   return { rows: classRows(), thumbs: weaponThumbs, gun: gunView(classes[classIndex]), hint, onPick: (i) => armClass(i) };
 }
+async function equipWeaponSkin(i, id) {
+  if (id === equippedWeaponSkin(i, getAccount())) return { ok: true };
+  const channel = skinChannel(i);
+  if (!channel || (id && !ownedWeaponSkins(i, getItems()).some((item) => item.id === id))) return { error: 'Essa skin não está na sua mochila.' };
+  const result = await (channel === 'knife' ? equipKnife(id) : channel === 'sniper' ? equipSniper(id) : equipGun(channel, id));
+  if (!result.error) {
+    const event = channel === 'knife' ? 'docao-knife-pick' : channel === 'sniper' ? 'docao-sniper-pick' : 'docao-gun-pick';
+    document.dispatchEvent(new CustomEvent(event, { detail: channel === 'knife' || channel === 'sniper' ? id : { key: channel, id } }));
+  }
+  return result;
+}
+function paintDeathSkins() {
+  const gun = $('classGun');
+  if (!gun) return;
+  const old = gun.querySelector('.gs-skins');
+  if (old) old.remove();
+  const pack = classes[classIndex] ? classLoad(classes[classIndex], activeWeapons()) : null;
+  if (!pack) return;
+  const rows = [
+    ['Primária', pack.primary],
+    ['Secundária', pack.secondary],
+    ['Corpo a corpo', pack.melee],
+  ].map(([label, weapon]) => (skinChannel(weapon) ? { label, weapon, items: ownedWeaponSkins(weapon, getItems()), equipped: equippedWeaponSkin(weapon, getAccount()) } : null)).filter(Boolean);
+  if (!rows.length) return;
+  const box = document.createElement('div');
+  box.className = 'gs-skins';
+  const title = document.createElement('h3');
+  title.textContent = 'Skins';
+  box.appendChild(title);
+  const signed = !!getAccount();
+  const note = document.createElement('p');
+  note.className = 'gs-skin-note';
+  note.textContent = signed ? 'Entra agora. Quem está na sala vê a pintura.' : 'Entre na conta para trocar a skin nesta partida.';
+  box.appendChild(note);
+  const place = () => {
+    const anchor = gun.querySelector('.gs-head');
+    if (anchor) anchor.insertAdjacentElement('afterend', box);
+    else gun.appendChild(box);
+  };
+  if (!signed) { place(); return; }
+  for (const row of rows) {
+    const wrap = document.createElement('div');
+    wrap.className = 'gs-skin-row';
+    const title = document.createElement('p');
+    const w = WEAPONS[row.weapon];
+    title.textContent = `${row.label} · ${w.short || w.name}`;
+    wrap.appendChild(title);
+    const chips = document.createElement('div');
+    chips.className = 'gs-skin-chips';
+    const add = (id, name) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'gs-skin' + (id === row.equipped ? ' on' : '');
+      b.textContent = name;
+      b.disabled = deathSkinBusy;
+      b.setAttribute('aria-pressed', id === row.equipped ? 'true' : 'false');
+      b.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); pickDeathSkin(row.weapon, id); };
+      chips.appendChild(b);
+    };
+    add('', 'De fábrica');
+    for (const item of row.items) add(item.id, `${item.emoji ? item.emoji + ' ' : ''}${item.name}`);
+    wrap.appendChild(chips);
+    if (!row.items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'gs-skin-note';
+      empty.textContent = 'Nenhuma pintura na mochila.';
+      wrap.appendChild(empty);
+    }
+    box.appendChild(wrap);
+  }
+  place();
+}
+async function pickDeathSkin(weapon, id) {
+  if (deathSkinBusy || id === equippedWeaponSkin(weapon, getAccount())) return;
+  deathSkinBusy = true;
+  paintDeathSkins();
+  const result = await equipWeaponSkin(weapon, id);
+  deathSkinBusy = false;
+  if (result && result.error) flashMsg(result.error);
+  paintDeathSkins();
+}
 function paintPair(listId, gunId, hint) {
   const list = $(listId), gun = $(gunId);
   if (list && gun) {
     fillSheet(list, gun, sheetSpec(hint));
-    if (listId === 'deathList') { gun.classList.remove('is-fresh'); void gun.offsetWidth; gun.classList.add('is-fresh'); }
+    if (listId === 'deathList') { paintDeathSkins(); gun.classList.remove('is-fresh'); void gun.offsetWidth; gun.classList.add('is-fresh'); }
   }
 }
 function armChip(i, kind, on, onPick) {
@@ -8500,7 +8586,7 @@ function applyAccount(a) {
   else { if (selectedSkin.startsWith('x1.')) setPreview(DEFAULT_SKIN); /* visual personalizado é só de conta */ applyHeldKnife(''); let n = ''; try { n = localStorage.getItem('docao.name') || ''; } catch (e) { /* sem storage */ } for (const id of NAME_FIELDS) $(id).value = cleanName(n || 'Docão'); }
 }
 setLootThumbSource(lootItemThumb);
-onAccount(a => { applyAccount(a); arsenalUi?.render(); }); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
+onAccount(a => { applyAccount(a); arsenalUi?.render(); paintDeathSkins(); }); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
 const roomLink = (code) => { const u = new URL(location.href); u.search = ''; const sv = new URLSearchParams(location.search).get('server'); if (sv) u.searchParams.set('server', sv); u.searchParams.set('sala', code); return u.toString(); };
 function socialTeam() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && (cfg.mode === 'dom' || isArmsRace(cfg.mode) || cfg.mode === 'bomb' || isComp(cfg.mode))); }
 function inviteBlurb(code) { return `Bora jogar Docão Shooter! Sala ${code}\n${roomLink(code)}`; }

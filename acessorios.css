@@ -466,6 +466,19 @@ body.dead #game{filter:blur(7px) grayscale(.35) brightness(.58) saturate(.9)}
 #hud #deathpick .death-gunpanel .gbar{grid-template-columns:108px minmax(0,1fr) auto;color:#34402e}
 #hud #deathpick .death-gunpanel .gbar>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #hud #deathpick .death-gunpanel .gs-hint{color:#34402e;max-width:62ch}
+#hud #deathpick .gs-skins{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+#hud #deathpick .gs-skins h3{margin:0;color:#203e35;font:900 18px/1.1 var(--font)}
+#hud #deathpick .gs-skin-row p{margin:0 0 6px;color:#8a5a32;font:800 13px/1.2 var(--font)}
+#hud #deathpick .gs-skin-chips{display:flex;flex-wrap:wrap;gap:6px}
+#hud #deathpick .gs-skin{
+  width:auto;margin:0;padding:6px 10px;background:#fff6e4;color:#203e35;border:2px solid #c9b48a;border-radius:3px;
+  box-shadow:none;font:800 13px/1.2 var(--font);cursor:pointer;text-align:left
+}
+#hud #deathpick .gs-skin:hover{background:#fffaf0}
+#hud #deathpick .gs-skin.on,#hud #deathpick .gs-skin.on:hover{background:#a52e26;color:#fff0cc;border-color:#2a1410}
+#hud #deathpick .gs-skin:disabled{cursor:wait;opacity:.6}
+#hud #deathpick .gs-skin-note{margin:0;color:#674029;font:700 12px/1.35 var(--font)}
+#hud #deathpick .gs-skin:focus-visible{outline:3px solid #e7b15a;outline-offset:2px}
 #hud #deathpick .death-gunpanel .gbar b,
 #hud #deathpick .death-gunpanel .gs-side-card small{color:#8a5a32}
 #hud #deathpick .death-gunpanel .gs-side-card{background:#fff6e4;border-color:#c9b48a;color:#203e35}
