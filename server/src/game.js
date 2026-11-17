@@ -6,6 +6,9 @@
 //  O cliente é dono só do próprio movimento (com checagem de velocidade/paredes) e manda eventos de tiro com origem+direção.
 // ============================================================
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap } from '../../maps.js';
+import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
+import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
+setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim } from '../../shared/invasion.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
@@ -68,6 +71,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const copyKit = (k) => { const o = {}; for (const [key, v] of Object.entries(k || {})) o[key] = { ...v }; return o; };
 const center = (e, y = 1.0, p = e.pos) => ({ x: p.x, y: p.y + y * stanceScale(e.crouch), z: p.z });
 
+const HEAVY_CACHE = new Map(); // id do mapa pesado → { solids, P, nav } (geometria parada, igual em toda partida)
 export class Game {
   constructor(cfg, io) {
     this.test = !!cfg.test; // só no `wrangler dev` com ALLOW_TEST=1: aceita teleporte (testes automatizados)
@@ -102,7 +106,7 @@ export class Game {
     }
     return this.x1Mode ? X1_MAPS : this.bombMode ? BOMB_MAPS : this.survival ? SURVIVAL_MAPS : this.invasion ? INV_MAPS : PLAY_MAPS;
   } // Survival: só a HOTMILK à Noite. Bomba: sites feitos à mão. X1: currais. Gunfight: pool do formato.
-  nextMapId() { const L = this.mapList; return L[(L.findIndex((m) => m.id === this.mapId) + 1) % L.length].id; }
+  nextMapId() { const L = this.mapList.filter((m) => !m.heavy || m.id === this.mapId); if (!L.length) return this.mapId; return L[(L.findIndex((m) => m.id === this.mapId) + 1) % L.length].id; } // mapa pesado (GLB) só entra quando alguém escolhe
   get training() { return isTraining(this.cfg.mode); } // Estande do Docão: bots = alvos parados/andando
   live() { return [...this.ents.values()].filter((e) => e.bot || e.connected); }
   teamCounts(exclude, humansOnly = true) { const c = [0, 0]; for (const e of this.live()) if (e !== exclude && (!humansOnly || !e.bot) && (e.team === 0 || e.team === 1)) c[e.team]++; return c; }
@@ -296,16 +300,18 @@ export class Game {
     const LIST = this.mapList;
     const x1Pool = X1_MAPS.filter((m) => m.id !== this.mapId);
     const x1Asked = this.mapId && X1_MAPS.some((m) => m.id === mapId) && mapId !== this.mapId; // "próximo mapa" respeita o curral seguinte; a primeira e o "de novo" sorteiam
-    let id = this.survival ? (SURVIVAL_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId)).id) : mapId;
+    let id = this.survival ? (SURVIVAL_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId && !m.heavy)).id) : mapId;
     if (this.invasion) for (const b of [...this.ents.values()]) if (b.bot) { this.ents.delete(b.id); } // começa sem zumbi velho/bot
     const map = getMap(id); this.mapId = id; this.map = map;
     this.surv = this.survival ? createMatchSurvival(map) : null;
     this.fall = resolveFall(map);
-    const solids = mapSolids(map).concat(this.surv ? closedDoorSolids(map, this.surv.open) : []); this.P = createPhysics(solids, map.size, this.fall);
+    const hc = map.heavy && !this.surv ? HEAVY_CACHE.get(map.id) : null; // mapa GLB (Breeze, 14 mil caixas): física e nav montadas uma vez por isolate
+    const solids = hc ? hc.solids : mapSolids(map).concat(this.surv ? closedDoorSolids(map, this.surv.open) : []); this.P = hc ? hc.P : createPhysics(solids, map.size, this.fall);
     const spawnSrc = this.survival && map.survival ? map.survival.playerSpawns : map.spawns;
     this.spawns = spawnSrc.map(([x, z, y = 0]) => ({ x, y: this.P.groundAt(x, z, y + 0.3), z }));
     const navSeeds = map.spawns.map(([x, z, y = 0]) => [x, this.P.groundAt(x, z, y + 0.3), z]);
-    this.nav = buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds: navSeeds, extra: map.waypoints || [], avoid: map.navAvoid || [] });
+    this.nav = hc ? hc.nav : buildNav({ hx: map.size[0], hz: map.size[1], spacing: map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds: navSeeds, extra: map.waypoints || [], avoid: map.navAvoid || [], solidsAt: this.P.solidsAt, snap: !!map.navSnap });
+    if (map.heavy && !this.surv && !hc) HEAVY_CACHE.set(map.id, { solids, P: this.P, nav: this.nav });
     const rawPicks = this.invasion && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups;
     this.pickups = (this.x1Mode ? rawPicks.filter((p) => p[0] === 'ammo') : rawPicks).map(([type, x, z, y]) => { const on = !this.gfMode && !this.compMode && (!this.armsMode || type === 'ammo' || type === 'health') && powerOn(type, this.cfg.powers); return { type, pos: { x, y: this.P.groundAt(x, z, (y || 0) + 0.3), z }, active: on, respawnAt: on ? 0 : 1e9 }; });
     this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.gifts = []; this.bacons = []; this.helis = []; this.gunships = []; this.nukes = []; this.gas = createGasSim(id); this.events = []; this.personal.clear(); this.ground = [];
@@ -1945,7 +1951,7 @@ startMsg() {
     const solids = mapSolids(this.map).concat(closedDoorSolids(this.map, this.surv.open));
     this.P = createPhysics(solids, this.map.size, this.fall || resolveFall(this.map));
     const seeds = this.map.spawns.map(([x, z, y = 0]) => [x, this.P.groundAt(x, z, y + 0.3), z]);
-    this.nav = buildNav({ hx: this.map.size[0], hz: this.map.size[1], spacing: this.map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds, extra: this.map.waypoints || [], avoid: this.map.navAvoid || [] });
+    this.nav = buildNav({ hx: this.map.size[0], hz: this.map.size[1], spacing: this.map.navSpacing || 2, collides: this.P.collides, groundAt: this.P.groundAt, solids, topAt: this.P.topAt, seeds, extra: this.map.waypoints || [], avoid: this.map.navAvoid || [], solidsAt: this.P.solidsAt, snap: !!this.map.navSnap });
     if (this.inv) { this.inv.A.P = this.P; this.inv.A.nav = this.nav; this.inv.rev = null; for (const z of this.inv.zombies) z.node = null; }
   }
   buyDoor(e, doorId) {

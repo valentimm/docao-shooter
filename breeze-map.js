@@ -1,21 +1,12 @@
 import * as THREE from 'three';
+import { getMap } from './maps.js';
+import { BREEZE_ID, setBreezeBoxes } from './breeze-data.js';
+import { mapSolids } from './shared/physics.js';
 
 const asset = new URL('./assets/maps/breeze/', import.meta.url);
-export const breezeMap = {
-  id: 'breeze-standoff',
-  name: 'Breeze Standoff',
-  desc: 'Exploração · modelo enviado por frostychaos144 no Sketchfab.',
-  thumbUrl: new URL('breeze-thumb.jpg', asset).href,
-  size: [110, 95],
-  palette: {
-    sky: '#a6c8de', fog: ['#a6c8de', 135, 295], hemi: ['#ffffff', '#c8bdb3', 1.7],
-    sun: ['#fff5e5', 0.8], shadow: false,
-  },
-  fall: { y: -18, rects: [[-111, -96, 111, 96]] },
-  spawns: [[-29, 12, -0.6]],
-  showcase: [-29, -0.6, 12],
-  pickups: [],
-};
+// mesmo objeto de maps.js (servidor e cliente usam os mesmos spawns/sites); aqui só entra o que é do navegador
+export const breezeMap = getMap(BREEZE_ID);
+breezeMap.thumbUrl = new URL('breeze-thumb.jpg', asset).href;
 
 let pending;
 let resources;
@@ -40,6 +31,7 @@ export function prepareBreezeMap() {
         material.transparent = false;
         material.depthWrite = true;
       });
+      setBreezeBoxes(breezeMap, boxes);
       resources = { scene, boxes };
     }).finally(() => { pending = null; });
   }
@@ -62,10 +54,7 @@ export function buildBreezeWorld() {
   model.traverse((o) => {
     if (o.isMesh && !/Decals|Mask_2sided|Water/.test(o.material.name)) meshes.push(o);
   });
-  const solids = resources.boxes.map(([x0, y0, z0, x1, y1, z1]) => ({
-    min: new THREE.Vector3(x0, y0, z0),
-    max: new THREE.Vector3(x1, y1, z1),
-    ramp: null,
-  }));
+  // a mesma colisão do servidor (caixas do JSON + muros da borda), igual a mapSolids nos outros mapas
+  const solids = mapSolids(breezeMap).map((o) => ({ min: new THREE.Vector3(o.min.x, o.min.y, o.min.z), max: new THREE.Vector3(o.max.x, o.max.y, o.max.z), ramp: null }));
   return { group, meshes, solids };
 }

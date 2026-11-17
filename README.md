@@ -271,7 +271,7 @@ São **9 mapas** pro Mata-mata, a Dominação e a Exploração, mais o **Rodízi
 
 No fim da partida, **PRÓXIMO MAPA ▸** segue a ordem da lista.
 
-**Breeze Standoff** também está disponível na Exploração solo. O modelo [Breeze standoff 2](https://sketchfab.com/3d-models/breeze-standoff-2-57def7a762a04f72af794829664e0b6a) foi publicado no Sketchfab por [frostychaos144](https://sketchfab.com/frostychaos144), com [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) declarada no arquivo. A integração ajusta a escala e um material, e adiciona colisão e uma miniatura.
+**Breeze Standoff** entra no Mata-mata, Dominação, Corrida Armada, Exploração, Bomba, Competitivo, Invasão e Gunfight 3v3/4v4 (offline e online). Como o arquivo é grande (32 MB), só entra quando alguém escolhe: fica fora do Aleatório e do rodízio de próximo mapa, e baixa ao escolher (online, a sala avisa e todo mundo já vai baixando). O modelo [Breeze standoff 2](https://sketchfab.com/3d-models/breeze-standoff-2-57def7a762a04f72af794829664e0b6a) foi publicado no Sketchfab por [frostychaos144](https://sketchfab.com/frostychaos144), com [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) declarada no arquivo. A integração ajusta a escala e um material, e adiciona colisão e uma miniatura.
 
 ---
 

@@ -226,7 +226,7 @@ export function createPhysics(solids, size, fall = null) {
   // igual ao rayWorld, mas devolve a caixa atingida (penetração de parede). { t, s } ou null; s = null é o chão
   function rayWorldS(o, d, far) {
     let best = far, hs = null, hit = false;
-    if (d.y < -1e-6) { const t = -o.y / d.y; if (t > 0 && t < best) { best = t; hit = true; hs = null; } }
+    if (d.y < -1e-6) { const t = -o.y / d.y; if (t > 0 && t < best && baselineY(fall, o.x + d.x * t, o.z + d.z * t, hx, hz) === 0) { best = t; hit = true; hs = null; } } // chão y=0 só onde ele existe (abismo/mapa GLB: o chão são as caixas)
     const seen = new Set(); const steps = Math.ceil(far / (GRID * 0.5)) + 1;
     for (let i = 0; i <= steps; i++) {
       const t = Math.min(far, i * GRID * 0.5); if (t > best + GRID) break;
@@ -238,7 +238,7 @@ export function createPhysics(solids, size, fall = null) {
   // igual ao rayWorld, mas devolve também a normal da superfície atingida (disco quica nela). { t, n } ou null
   function rayWorldN(o, d, far) {
     let best = far, n = null;
-    if (d.y < -1e-6) { const t = -o.y / d.y; if (t > 0 && t < best) { best = t; n = { x: 0, y: 1, z: 0 }; } }
+    if (d.y < -1e-6) { const t = -o.y / d.y; if (t > 0 && t < best && baselineY(fall, o.x + d.x * t, o.z + d.z * t, hx, hz) === 0) { best = t; n = { x: 0, y: 1, z: 0 }; } }
     const seen = new Set(); const steps = Math.ceil(far / (GRID * 0.5)) + 1;
     for (let i = 0; i <= steps; i++) {
       const t = Math.min(far, i * GRID * 0.5); if (t > best + GRID) break;

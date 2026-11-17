@@ -14,8 +14,8 @@
 export const GF_MAP_POOL = {
   1: ['x1-chiqueiro', 'x1-curral', 'x1-pinguela'],
   2: ['galpao-assalto', 'bar-cheers', 'patio-ferrugem', 'x1-chiqueiro', 'x1-curral', 'x1-pinguela'],
-  3: ['vizinhanca-cheers', 'arena', 'posto-nevasca'],
-  4: ['vizinhanca-cheers', 'arena', 'posto-nevasca'],
+  3: ['vizinhanca-cheers', 'arena', 'posto-nevasca', 'breeze-standoff'],
+  4: ['vizinhanca-cheers', 'arena', 'posto-nevasca', 'breeze-standoff'], // Breeze: trecho do meio (map.gf); fica fora do sorteio por ser pesado
 };
 export const GF_MAPS = GF_MAP_POOL;
 

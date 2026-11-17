@@ -5,7 +5,7 @@
 //  Caminho: A* com heap binário; nó mais próximo com teste de caminhada.
 // ============================================================
 export function buildNav(o) {
-  const { hx, hz, spacing = 2, collides, groundAt, solids, topAt, seeds = [], extra = [], avoid = [] } = o;
+  const { hx, hz, spacing = 2, collides, groundAt, solids, topAt, seeds = [], extra = [], avoid = [], solidsAt = null, snap = false } = o; // solidsAt (grade da física): mapa com muitas caixas não varre a lista inteira em cada ponto
   const inAvoid = (x, z) => { for (const r of avoid) if (x >= r[0] && z >= r[1] && x <= r[2] && z <= r[3]) return true; return false; };
   const nodes = []; const CELL = spacing;
   const hash = new Map(); const key = (ix, iz) => ix * 73856 + iz;
@@ -21,14 +21,14 @@ export function buildNav(o) {
   }
   const tryNode = (x, z, h) => {
     if (inAvoid(x, z)) return null;
-    const y = groundAt(x, z, h + 0.01); if (Math.abs(y - h) > 0.05) return null;
+    const y = groundAt(x, z, h + 0.01); if (Math.abs(y - h) > 0.05 && !(snap && y > h && y - h < 0.45)) return null; // snap: chão em degrauzinhos (malha voxelizada) assenta o nó no degrau ao lado
     if (collides(x, y, z)) return null; return addNode(x, y, z);
   };
   // grade
   for (let x = -hx + 0.9; x <= hx - 0.9; x += spacing) for (let z = -hz + 0.9; z <= hz - 0.9; z += spacing) {
     const hs = new Set([0]);
     const low = groundAt(x, z, -3); if (low < -0.05 && low > -8) hs.add(+low.toFixed(3));
-    for (const s of solids) if (x >= s.min.x && x <= s.max.x && z >= s.min.z && z <= s.max.z && s.max.y < 30) hs.add(+topAt(s, x, z).toFixed(3));
+    for (const s of solidsAt ? solidsAt(x, z) : solids) if (x >= s.min.x && x <= s.max.x && z >= s.min.z && z <= s.max.z && s.max.y < 30) hs.add(+topAt(s, x, z).toFixed(3));
     for (const h of hs) tryNode(x, z, h);
   }
   // linha central das rampas (garante que rampas estreitas tenham nós)

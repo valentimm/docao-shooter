@@ -3,12 +3,15 @@ import { MAPS } from './maps.js';
 import { GF_MAP_POOL, GF_MAPS, gfSpawns } from './shared/gunfight-maps.js';
 import { mapSolids, createPhysics, resolveFall, killFloorY } from './shared/physics.js';
 import { EYE, RADIUS } from './shared/rules.js';
+import { BREEZE_ID, setBreezeBoxes } from './breeze-data.js';
+import BREEZE_BOXES from './assets/maps/breeze/breeze-collision.json' with { type: 'json' };
+setBreezeBoxes(MAPS.find((m) => m.id === BREEZE_ID), BREEZE_BOXES); // Breeze: colisão vem do JSON (igual ao servidor)
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 const byId = new Map(MAPS.map((m) => [m.id, m]));
 const ang = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
-const OUT = new Set(['hotmilk', 'hotmilk-noite', 'rodizio', 'fazenda-assombrada', 'estande', 'breeze-standoff', 'torres-do-barril', 'morro-leitao', 'duas-pocilgas', 'celeiro-industrial', 'mercadao']);
+const OUT = new Set(['hotmilk', 'hotmilk-noite', 'rodizio', 'fazenda-assombrada', 'estande', 'torres-do-barril', 'morro-leitao', 'duas-pocilgas', 'celeiro-industrial', 'mercadao']);
 
 ok(GF_MAPS === GF_MAP_POOL, 'GF_MAPS e GF_MAP_POOL são o mesmo pool');
 for (const fmt of [1, 2, 3, 4]) ok(Array.isArray(GF_MAP_POOL[fmt]) && GF_MAP_POOL[fmt].length >= 3, `formato ${fmt}v${fmt} tem pelo menos 3 mapas`);
