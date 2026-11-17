@@ -8,6 +8,8 @@ import { DECK, ELEVATOR } from './shared/nevasca.js';
 //  spawns [[x, z, y]], pickups [[tipo, x, z, y]] (health | ammo | grenade), waypoints extras [[x, y, z]],
 //  showcase [x, y, z] (onde o Docão fica no menu), view [x, y, z, yaw, pitch] (câmera de screenshot),
 //  test (pontos usados pelo teste automático de escadas/andares).
+//  gf (Gunfight): { a, b: [[x, z, y, yaw]], zone: { x, z, r } } — spawns fixos por lado e a zona do overtime.
+//  yaw olha o centro (frente do Docão = sin/cos). O helper puro está em shared/gunfight-maps.js.
 //  O grafo de navegação dos bots é gerado automaticamente a partir da geometria (nav.js) + waypoints extras.
 // ============================================================
 
@@ -192,6 +194,11 @@ export const MAPS = [];
       { t: 'hay', x: -19, z: -26.5 }, { t: 'hay', x: 19, z: 26.5 }, { t: 'hay', x: -3, z: 25 }, { t: 'hay', x: 3, z: -25.5 }, { t: 'truck', x: -16, z: 21, c: '#e63946' }, { t: 'truck', x: 16, z: -21, c: '#2f80ed' },
       { t: 'tree', x: -24.5, z: -21.5 }, { t: 'tree', x: 24.5, z: 21.5 }, { t: 'tree', x: -9, z: -26 }, { t: 'tree', x: 9, z: 26 }],
     bomb: { sites: [[21, 0, -17], [22.5, 0, 16.5]], atk: [[-28, 0], [-26.5, -10], [-26.5, 10], [-28, -3, 3.5], [-30, 20], [-30, -20]], def: [[28, 0], [26.5, 10], [26.5, -10], [28, 3, 3.5], [30, -4], [30, 5]] }, // Bomba: Ataque na base oeste, Defesa na leste; A nordeste, B sudeste
+    gf: { // Gunfight 3v3/4v4: bases oeste (a) e leste (b), dentro da casa, sem linha de visão no olho
+      a: [[-29.2, -1.6, 0, 1.516], [-26.2, -1.2, 0, 1.525], [-29, 4.2, 0, 1.715], [-25.6, 4.6, 0, 1.749], [-24.2, -3.4, 0, 1.431]],
+      b: [[29.2, 1.6, 0, -1.626], [26.2, 1.2, 0, -1.617], [29, -4.2, 0, -1.427], [25.6, -4.6, 0, -1.393], [24.2, 3.4, 0, -1.71]],
+      zone: { x: 0, z: 0, r: 4 },
+    },
     spawns: [[-28, 0], [28, 0], [-26.5, -10], [26.5, 10], [-26.5, 10], [26.5, -10], [-17, -25], [17, 25], [-21, 25], [21, -25], [-28, -3, 3.5], [28, 3, 3.5]],
     pickups: [['health', 0, 0], ['health', -26, 3], ['health', 26, -3], ['health', 0, -20], ['health', 2.4, 19, 4.4],
       ['ammo', 2, -4.5, 3.5], ['ammo', -2, 4.5, 3.5], ['ammo', -14.5, -11], ['ammo', 14.5, 11], ['ammo', -27, 3, 7], ['ammo', 27, -3, 7],
@@ -479,6 +486,11 @@ export const MAPS = [];
       { t: 'tree', x: -27, z: -23 }, { t: 'tree', x: 27, z: 23 }, { t: 'tree', x: 27, z: -23 }, { t: 'tree', x: -27, z: 23 }, { t: 'tree', x: -9, z: -24 }, { t: 'tree', x: 9, z: 24 },
       { t: 'sign', x: -9.1, y: 6.0, z: -7.9, w: 3, h: 0.9, rot: 0, text: 'C! 1', bg: '#e63946', fg: '#fff' }, { t: 'sign', x: 9.1, y: 6.0, z: 7.9, w: 3, h: 0.9, rot: Math.PI, text: 'C! 2', bg: '#12233a', fg: '#7DF9FF' }],
     bomb: { sites: [[19, 0, -11], [22, 0, 20]], atk: [[-27.5, -8], [-27, 19], [-20, -23.5], [-12, -11.5], [-27, -19], [-10, 23.5]], def: [[27.5, 8], [27, -19], [12, 11.5], [27.5, -3], [27, 13], [27, -24]] }, // Bomba: Ataque a oeste, Defesa a leste; A no quintal nordeste, B no quintal sudeste
+    gf: { // Gunfight 3v3/4v4: quintal sul (a) contra quintal norte (b). A zona fica ao lado do ônibus, no eixo da rua.
+      a: [[-24, -23, 0, 0.767], [-18.2, -24.4, 0, 0.605], [-11, -22.6, 0, 0.422], [-5.2, -24.2, 0, 0.197], [8.6, -23.2, 0, -0.33]],
+      b: [[24, 24.6, 0, -2.328], [18.2, 25.2, 0, -2.478], [11, 24.2, 0, -2.683], [5.2, 25, 0, -2.92], [-8.6, 24.4, 0, 2.777]],
+      zone: { x: 0, z: 1.9, r: 2.6 },
+    },
     spawns: [[-20, -23.5], [-6, -23.5], [10, -23.5], [20, 23.5], [6, 23.5], [-10, 23.5], [-27.5, -8], [27.5, 8], [-12, -11.5], [12, 11.5], [27, -19], [-27, 19]],
     pickups: [['health', -12.5, -16], ['health', 12.5, 16], ['ammo', -12, -16.5, 3.5], ['ammo', 12, 16.5, 3.5], ['ammo', -27, 0], ['ammo', 27, 0],
       ['grenade', -9, -13, 7], ['grenade', 9, 13, 7], ['grenade', 10, -15.5], ['grenade', -10, 15.5], ['health', 0, -23], ['health', 0, 23]],
@@ -539,6 +551,11 @@ export const MAPS = [];
       lights: [[neon, 0, 4.5, -2, 40, 22], [pink, -16, 3, 12, 30, 18], [neon, 16, 3, 0, 30, 18], ['#ffd27a', 0, 3, 16, 25, 14], ['#ffd27a', 0, 3, -15, 25, 14]] },
     ...fin(boxes), props,
     bomb: { sites: [[17, 0, -3.5], [13.5, 0, 14]], atk: [[-22.5, -18], [-22.5, 18], [-16, -12], [-18.5, 0], [-14.5, 12], [-12, -15, H]], def: [[22.5, -18], [22.5, 18], [22.5, 1.5], [22.5, -9], [22.5, 9], [16, -15]] }, // Bomba: Ataque a oeste, Defesa a leste; A no escritório, B na sinuca
+    gf: { // Gunfight 2v2: beco oeste (a) contra beco leste (b). O salão não é simétrico — um ponto do lado A entra no camarote.
+      a: [[-22.2, -16.2, 0, 0.898], [-22.2, -5.5, 0, 1.265], [-22.2, 5.5, 0, 1.749], [-16.8, 13.2, 0, 2.179], [-16.2, -15.2, 0, 0.77]],
+      b: [[22.2, -16.2, 0, -0.898], [22.2, -8.2, 0, -1.159], [22.2, 5.5, 0, -1.749], [22.2, 15.5, 0, -2.133], [16.2, -15.2, 0, -0.77]],
+      zone: { x: 0, z: 1.5, r: 3.2 },
+    },
     spawns: [[-22.5, -18], [22.5, 18], [-22.5, 18], [22.5, -18], [-16, -12], [16, -15], [-18.5, 0], [16, 3], [16, 17], [-14.5, 12], [0, 10], [-12, -15, H], [12, -14, H]],
     pickups: [['health', 0, -7], ['health', -18.5, -4.5], ['health', 16, -2], ['ammo', 2, -12, H], ['ammo', 15, -16, 2 * H], ['ammo', 16, 11], ['ammo', -22.6, 6],
       ['grenade', 8, 2], ['grenade', -8, 2], ['grenade', 0, 15, 1], ['grenade', -2, -16, 2 * H]],
@@ -1088,6 +1105,11 @@ function flipHotmilkZ(part, cz) {
     size: [24, 24], wallH: 3, wallColor: ['#d7c49a', '#c9b48a'], navSpacing: 1.5, expMax: 0.36,
     palette: { ...DAY({ ground: '#e4cc90', tiles: ['#edd7a6', '#d8c08a', 56, 16] }), sky: '#8ec8ea', fog: ['#e7d7b0', 34, 88], hemi: ['#fff4e0', '#c4a36a', 1.55], sun: ['#fff6e4', 2.25] },
     ...fin(boxes), props,
+    gf: { // Gunfight 2v2: sul (a) contra norte (b), zona debaixo da torre. O pátio não é simétrico (bomba, salinha, caminhões).
+      a: [[-14.4, -12.4, 0, 0.86], [-7.2, -14.8, 0, 0.453], [0.6, -19, 0, -0.032], [7.8, -17.2, 0, -0.426], [15, -14.2, 0, -0.813]],
+      b: [[-16.2, 17.6, 0, 2.398], [-9.6, 17.4, 0, 2.637], [-1.2, 17.8, 0, 3.074], [8.6, 15.2, 0, -2.627], [17.2, 14.2, 0, -2.261]],
+      zone: { x: 0, z: 0, r: 2.6 },
+    },
     spawns: [[-18, -5], [2, -19], [12, -18.5], [19, -12], [19.2, 9], [-2, 19.2], [8, 14.5], [-15, 18.2], [-19.2, 2], [-6, 12.4], [18.4, 14.5], [-10, -9]],
     pickups: [['health', 0, 1.2, 6], ['health', 1.2, 0.4, 13], ['health', -14, -6], ['health', -2, 16.2],
       ['ammo', -12.2, -17.4, 5], ['ammo', 0, -12.6, 3.37], ['ammo', -6, 12.6], ['ammo', 15.6, 3.6, 2.55],
@@ -1147,6 +1169,11 @@ function flipHotmilkZ(part, cz) {
     size: [22, 20], wallH: 4, wallColor: ['#8a5a3a', '#7a4e32'],
     palette: DAY({ ground: '#c6a56a', tiles: ['#d4b67e', '#b89558', 48, 12] }),
     ...fin(boxes), props,
+    gf: { // Gunfight 2v2: pátio da frente (a, −z) contra o fundo (b). O galpão é mais fundo de um lado que do outro.
+      a: [[-14, -12.5, 0, 0.768], [-6.2, -16.1, 0, 0.33], [1, -16.7, 0, -0.053], [8.2, -14.9, 0, -0.452], [11.2, -11.3, 0, -0.7]],
+      b: [[-12.4, 16.3, 0, 2.427], [-5.8, 18.1, 0, 2.796], [1.4, 18.1, 0, -3.055], [8.6, 16.3, 0, -2.6], [11.6, 16.3, 0, -2.46]],
+      zone: { x: 0, z: 2, r: 3.2 },
+    },
     spawns: [[-4, -16], [6, -16.2], [-16.6, -12.8], [14, -15], [1, -12], [17, -2], [16.6, 8], [10, 16.8], [5, -1], [-10, 0], [-8, 8.2], [-13.2, 8], [-6, 12.7], [-12, 0, 3.5]],
     pickups: [['health', -7, 8.4], ['health', 0, -15.2], ['health', 16.4, 2],
       ['ammo', 6, 1.2], ['ammo', -12, 3.2, 3.5], ['ammo', 16.2, 12.5], ['ammo', -14, -8],
@@ -1250,6 +1277,11 @@ function flipHotmilkZ(part, cz) {
       size: [12, 9], ...fin(boxes),
       props: [sign(0, -8.55, 'CURRAL X1'), { t: 'keg', x: -6.2, z: 5.2 }, { t: 'keg', x: 6.2, z: -5.2 }, { t: 'hay', x: -7, z: -5.4 }, { t: 'hay', x: 7, z: 5.4 }],
       spawns: [[-9.2, -2.2], [-9.2, 2.4], [9.2, 2.2], [9.2, -2.4]],
+      gf: { // Gunfight 1v1/2v2. Cobertura do curral é mais baixa que o olho: os lados se veem ao nascer.
+        a: [[-9.4, -3.2, 0, 1.034], [-9.4, 3.2, 0, 1.656]],
+        b: [[9.4, -3.2, 0, -1.034], [9.4, 3.2, 0, -1.656]],
+        zone: { x: 0, z: 2.4, r: 1.6 },
+      },
       pickups: [['ammo', -4.4, 0], ['ammo', 4.4, 0], ['ammo', 0, 4.5], ['ammo', 0, -4.5]],
     });
   }
@@ -1260,6 +1292,11 @@ function flipHotmilkZ(part, cz) {
       size: [16, 7], ...fin(boxes),
       props: [sign(0, -6.55, 'PINGUELA'), { t: 'keg', x: -10, z: 3.6 }, { t: 'keg', x: 10, z: -3.6 }],
       spawns: [[-13.1, -1.6], [-13.1, 1.8], [13.1, 1.6], [13.1, -1.8]],
+      gf: { // Gunfight 1v1/2v2. As coberturas do meio (1,25 m) não fecham a linha do olho.
+        a: [[-13.4, -2.4, 0, 1.394], [-13.4, 2.4, 0, 1.748]],
+        b: [[13.4, -2.4, 0, -1.394], [13.4, 2.4, 0, -1.748]],
+        zone: { x: 0, z: 0, r: 1.4 },
+      },
       pickups: [['ammo', -8, 0.2], ['ammo', 8, -0.2], ['ammo', 0, 3.6], ['ammo', 0, -3.4]],
     });
   }
@@ -1272,6 +1309,11 @@ function flipHotmilkZ(part, cz) {
       size: [10, 10], ...fin(boxes),
       props: [sign(0, -9.55, 'X1'), { t: 'hay', x: -6.4, z: 6.2 }, { t: 'hay', x: 6.4, z: -6.2 }, { t: 'keg', x: 6.2, z: 6 }, { t: 'keg', x: -6.2, z: -6 }],
       spawns: [[-7.3, -1.8], [-7.3, 2], [7.3, 1.8], [7.3, -2]],
+      gf: { // Gunfight 1v1/2v2. Os postes (2,3 m) tapam a faixa de quem nasce alinhado; a diagonal ainda se vê.
+        a: [[-7.6, -3.4, 0, 0.936], [-7.6, 3.4, 0, 1.727]],
+        b: [[7.6, -3.4, 0, -0.936], [7.6, 3.4, 0, -1.727]],
+        zone: { x: 0, z: 2.2, r: 1.4 },
+      },
       pickups: [['ammo', 0, 5.6], ['ammo', 0, -5.6], ['ammo', -5.2, 0], ['ammo', 5.2, 0]],
     });
   }
@@ -1535,6 +1577,11 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
       lights: [['#fff6e4', 0, 4.2, 0, 18, 14], ['#fff6e4', 0, 2.4, 26, 14, 10], ['#fff6e4', 0, 2.4, -26, 14, 10], ['#ffd9a0', -17.6, 4.6, 0, 16, 8], ['#ffd9a0', 17.6, 4.6, 0, 16, 8]] },
     weather: { kind: 'snow', n: 900, fall: 6, wind: [1.2, 0, 0.4], top: 28, color: 0xF7FBFF, size: 0.14, roofs },
     ...fin([...boxes, ...wps.map((p) => ({ wp: p }))]), props,
+    gf: { // Gunfight 3v3/4v4: platô norte (a) contra platô sul (b). A zona é na Sala Fria, ao lado da árvore do centro.
+      a: [[-8.2, 30.2, 0, 2.807], [-3.6, 26.8, 0, 2.925], [0.4, 32.4, 0, 3.083], [4.2, 26.6, 0, -3.07], [8.4, 30.4, 0, -2.944]],
+      b: [[-8.2, -30.2, 0, 0.335], [-3.6, -26.8, 0, 0.217], [0.4, -32.4, 0, 0.059], [4.2, -26.6, 0, -0.071], [8.4, -30.4, 0, -0.198]],
+      zone: { x: 2.3, z: 0, r: 3.2 },
+    },
     spawns: [[-6, 25.4], [6, 25.4], [-8, 31.4], [8, 31.4], [0, 14.8], [5.8, 27.2], [-5.8, 27.2], [-6, -25.4], [6, -25.4], [-8, -31.4], [8, -31.4], [0, -14.8], [5.8, -27.2], [-5.8, -27.2]],
     pickups: [
       ['health', 5, 22], ['health', -5, 22], ['health', 5, -22], ['health', -5, -22],
