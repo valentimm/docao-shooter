@@ -90,6 +90,7 @@ export function traceShot(P, o, d, W, targets, helis = [], scale = 1) {
     }
     if (!wh) { out.end = far; out.stop = 'far'; return out; }
     out.end = wallT; out.stop = 'wall';
+    if (wh.normal) out.wallNormal = wh.normal;
     const kind = wh.s && solidKind(wh.s); if (!kind || walls >= PEN.maxWalls || !(left > 0)) return out;
     const sp = boxSpan(o, d, wh.s); if (!sp) return out;
     const a0 = Math.max(sp.t0, t0), cost = (sp.t1 - a0) * (kind === 'wood' ? PEN.wood : 1); if (cost > left + 1e-9) return out; // caixas sobrepostas: conta só o trecho novo
