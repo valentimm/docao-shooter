@@ -1,10 +1,10 @@
 // HUD do Gunfight, sem navegador: adaptador do gunfightHud e os banners dos eventos.
-import { adaptGunfightHud, gunfightBannersFromEvents, normalizeGunfight, normFormat, rosterFromEnts, spectatePool, cycleSpectate, spectateCaption, formatGunfightClock, GF_LIVE, GF_MODE, GF_WHY } from './gunfight-hud.js';
+import { adaptGunfightHud, gunfightBannersFromEvents, gunfightEvents, normalizeGunfight, normFormat, rosterFromEnts, spectatePool, cycleSpectate, spectateCaption, formatGunfightClock, GF_LIVE, GF_MODE, GF_WHY } from './gunfight-hud.js';
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 
-ok(GF_MODE === 'gf' && GF_LIVE === false, 'modo gf existe e a partida continua stub (GF_LIVE false)');
+ok(GF_MODE === 'gf' && GF_LIVE === true, 'modo gf existe e a partida está ligada (GF_LIVE true)');
 ok(normFormat('2v2') === 2 && normFormat(4) === 4 && normFormat('9v9') === 2 && normFormat('1v1') === 1, 'formato aceita 2 e "2v2"');
 
 const ents = [
@@ -25,6 +25,17 @@ ok(view.format === 2 && view.className === 'Bazuca' && view.nextClassName === 'C
 ok(view.teamHp[0] === 64 && view.teamHp[1] === 80, 'vida somada vem de hp:[hp0,hp1]');
 ok(view.roster.red.length === 2 && view.roster.red[1].name === 'Bacon' && view.roster.red[0].alive === false, 'roster com nome/hp/vivo sai das entidades');
 ok(formatGunfightClock(view) === '1:14', 'timer live 74 s = 1:14');
+const prep4 = normalizeGunfight(adaptGunfightHud({ round: 3, phase: 'prep', timeLeft: 4, score: [1, 0], side: 1, alive: [2, 2], hp: [200, 200], className: 'Bazuca' }, { format: '2v2' }));
+ok(formatGunfightClock(prep4) === 'PREP 4', 'prep de 4 s escreve PREP 4');
+const live40 = normalizeGunfight(adaptGunfightHud({ round: 1, phase: 'live', timeLeft: 40, score: [0, 0], side: 0, alive: [2, 2], hp: [200, 200], className: 'Faca' }, { format: '2v2' }));
+ok(formatGunfightClock(live40) === '0:40', '2v2 ao vivo com 40 s escreve 0:40');
+const r2 = normalizeGunfight(adaptGunfightHud({ round: 2, phase: 'prep', timeLeft: 4, score: [1, 0], side: 0, alive: [2, 2], hp: [200, 200], className: 'Faca' }, { format: 2 }));
+const r3 = normalizeGunfight(adaptGunfightHud({ round: 3, phase: 'prep', timeLeft: 4, score: [1, 0], side: 1, alive: [2, 2], hp: [200, 200], className: 'Bazuca' }, { format: 2 }));
+ok(gunfightEvents(r2, r3).some((e) => e.kind === 'swap' && e.title === 'Troca de lado!'), 'round 3 abre com Troca de lado');
+const r4 = normalizeGunfight(adaptGunfightHud({ round: 4, phase: 'prep', timeLeft: 4, score: [1, 1], side: 1, alive: [2, 2], hp: [200, 200], className: 'Bazuca' }, { format: 2 }));
+ok(!gunfightEvents(r3, r4).some((e) => e.kind === 'swap'), 'round 4 não repete a troca de lado');
+const r5 = normalizeGunfight(adaptGunfightHud({ round: 5, phase: 'prep', timeLeft: 4, score: [2, 1], side: 0, alive: [2, 2], hp: [200, 200], className: 'Faca' }, { format: 2 }));
+ok(gunfightEvents(r4, r5).some((e) => e.kind === 'swap'), 'round 5 troca de lado de novo');
 
 const ot = normalizeGunfight(adaptGunfightHud({
   round: 6, score: [5, 5], phase: 'ot', timeLeft: 10,

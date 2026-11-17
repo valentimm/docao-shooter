@@ -11,12 +11,18 @@
   display:flex;gap:12px;justify-content:center;align-items:flex-start;
   -webkit-text-stroke:1px #2a1410;color:#fff;
 }
-#gfScore .gfvs{color:#fff;font-size:26px;padding-top:2px}
+#gfScore .gfvs{color:#fff;font-size:26px;padding-top:18px}
 #gfScore .gfside{display:flex;flex-direction:column;align-items:center;min-width:108px;gap:4px}
-#gfScore .gfside.red{color:#ff6b6b}
-#gfScore .gfside.blue{color:#7eb6ff}
-#gfScore .gfname{font-size:15px;letter-spacing:.4px}
-#gfScore .gfside b{font-size:28px;color:#fff;-webkit-text-stroke:1px #2a1410}
+#gfScore .gfside.red{color:#ffd0cc}
+#gfScore .gfside.blue{color:#d6e8ff}
+#gfScore .gfname{
+  font-size:15px;letter-spacing:.4px;line-height:1;
+  color:#fff6e4;-webkit-text-stroke:0;text-shadow:0 1px 0 #000;
+  background:rgba(20,10,8,.72);border-radius:8px;padding:2px 8px;
+}
+#gfScore .gfside.red .gfname{box-shadow:inset 0 -3px 0 #ff6b6b}
+#gfScore .gfside.blue .gfname{box-shadow:inset 0 -3px 0 #7eb6ff}
+#gfScore .gfside b{font-size:28px;color:#fff;-webkit-text-stroke:1px #2a1410;line-height:1}
 .gfpips{display:flex;gap:6px;justify-content:center;min-height:18px}
 .gfpip{
   width:16px;height:16px;border-radius:50%;box-sizing:border-box;
@@ -56,7 +62,8 @@
   position:relative;display:block;text-align:center;font-size:13px;font-weight:bold;
   line-height:22px;color:#fff;text-shadow:0 1px 0 #000;
 }
-#gfHpRow{display:flex;gap:14px;justify-content:center;margin-top:10px}
+#gfHpRow{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:0;pointer-events:none}
+#gfHpRow.hidden{display:none !important}
 .gfhp{
   min-width:168px;padding:6px 12px 8px;border-radius:14px;
   background:rgba(20,10,8,.78);border:3px solid #2a1410;box-shadow:0 4px 0 #2a1410;
@@ -91,8 +98,14 @@
   white-space:nowrap;
 }
 #gfWatch.hidden{display:none !important}
-#bombBanner[data-gf="1"]{top:46%;max-width:92vw}
-#bombBanner[data-gf="1"] .b1{font-size:40px;max-width:92vw}
+#bombBanner[data-gf="1"]{top:196px;max-width:70vw}
+#bombBanner[data-gf="1"] .b1{font-size:32px;max-width:70vw}
+body.gfmode #hud #deathpick.cls-screen,
+body.gfmode #deathpick,
+body.gfmode #nades,
+body.gfmode #tac,
+body.gfmode #slot2,
+body.gfmode #slot3{display:none !important}
 #hud #deathpick.gf #respawnBtn,
 #hud #deathpick.gf #deathList,
 #hud #deathpick.gf #deathArms,

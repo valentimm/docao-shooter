@@ -26,7 +26,7 @@
 // Ligue GF_LIVE quando shared/gunfight.js passar a ser a autoridade.
 
 export const GF_MODE = 'gf';
-export const GF_LIVE = false;
+export const GF_LIVE = true;
 export const GF_TO_WIN = 6;
 export const GF_FORMATS = [1, 2, 3, 4];
 export const GF_DEFAULT_FORMAT = 2;
@@ -234,15 +234,14 @@ export function gunfightEvents(prev, next) {
   const roundChanged = !p || p.round !== n.round;
   const phaseChanged = !p || p.phase !== n.phase;
   const playing = n.phase === 'prep' || n.phase === 'live' || n.phase === 'ot';
-  const swap = !!n.sideSwapped && (!p || !p.sideSwapped || roundChanged);
+  // Lado inverte no começo dos rounds 3, 5, 7, 9 e 11 (blocos de 2). O 4 continua invertido, sem faixa nova.
+  const swap = roundChanged && n.round > 1 && (n.round % 2) === 1;
   if (roundChanged && playing) {
     if (swap) {
       out.push({ kind: 'swap', title: 'Troca de lado!', sub: `Nova classe: ${className(n.classId, n)}`, color: '#ffd27a', dur: 4, round: n.round });
     } else {
       out.push({ kind: 'round', title: `Round ${n.round} — Classe: ${className(n.classId, n)}`, sub: `Primeiro a ${n.toWin}`, color: '#fff6e4', dur: 3.5, round: n.round });
     }
-  } else if (swap && playing) {
-    out.push({ kind: 'swap', title: 'Troca de lado!', sub: `Nova classe: ${className(n.classId, n)}`, color: '#ffd27a', dur: 4, round: n.round });
   }
   if (phaseChanged && n.phase === 'end') out.push(roundEndBanner(n));
   if (phaseChanged && (n.phase === 'over' || (sOver(next) && n.phase !== 'end'))) out.push(matchEndBanner(n));
@@ -368,8 +367,17 @@ export function mountGunfightHud(doc = document) {
   }
   if (!hud.dataset.built) {
     hud.setAttribute('aria-label', 'Gunfight');
-    hud.innerHTML = '<div id="gfScore"><span class="gfside red"><span class="gfname">Vermelho</span> <b id="gfRed">0</b><span class="gfpips" id="gfPipsRed"></span></span><span class="gfvs">×</span><span class="gfside blue"><b id="gfBlue">0</b> <span class="gfname">Azul</span><span class="gfpips" id="gfPipsBlue"></span></span></div><div id="gfMeta"></div><div id="gfTime" class="hidden"></div><div id="gfZone" class="hidden"><div id="gfZoneFill"></div><span id="gfZoneText"></span></div><div id="gfHpRow"><div class="gfhp red" id="gfHpRed"><span class="lab">VIDA VERMELHO</span><b>0</b><span class="bar"><i></i></span><em></em></div><div class="gfhp blue" id="gfHpBlue"><span class="lab">VIDA AZUL</span><b>0</b><span class="bar"><i></i></span><em></em></div></div><div id="gfClass"><span id="gfClassNow"></span><span id="gfNext"></span></div>';
+    hud.innerHTML = '<div id="gfScore"><span class="gfside red"><span class="gfname">Vermelho</span><b id="gfRed">0</b><span class="gfpips" id="gfPipsRed"></span></span><span class="gfvs">×</span><span class="gfside blue"><span class="gfname">Azul</span><b id="gfBlue">0</b><span class="gfpips" id="gfPipsBlue"></span></span></div><div id="gfMeta"></div><div id="gfTime" class="hidden"></div><div id="gfZone" class="hidden"><div id="gfZoneFill"></div><span id="gfZoneText"></span></div><div id="gfClass"><span id="gfClassNow"></span><span id="gfNext"></span></div>';
     hud.dataset.built = '1';
+  }
+  let row = doc.getElementById('gfHpRow');
+  if (!row) {
+    row = doc.createElement('div');
+    row.id = 'gfHpRow';
+    row.className = 'hidden';
+    row.innerHTML = '<div class="gfhp red" id="gfHpRed"><span class="lab">VIDA VERMELHO</span><b>0</b><span class="bar"><i></i></span><em></em></div><div class="gfhp blue" id="gfHpBlue"><span class="lab">VIDA AZUL</span><b>0</b><span class="bar"><i></i></span><em></em></div>';
+    const tl = doc.getElementById('tl');
+    (tl || parent).appendChild(row);
   }
   let watch = doc.getElementById('gfWatch');
   if (!watch) {
@@ -403,6 +411,7 @@ function paintPips(el, slots) {
 }
 
 function paintHp(card, hp, other) {
+  if (!card) return;
   const lead = hp > other;
   const tie = hp === other;
   card.classList.toggle('lead', lead);
@@ -422,6 +431,8 @@ export function renderGunfightHud(state, opts = {}) {
   const s = normalizeGunfight(state);
   const { hud } = mountGunfightHud(doc);
   hud.classList.remove('hidden');
+  const hpRow = doc.getElementById('gfHpRow');
+  if (hpRow) hpRow.classList.remove('hidden');
   hud.dataset.phase = s.phase;
   hud.dataset.format = String(s.format);
   const red = hud.querySelector('#gfRed');
@@ -471,8 +482,8 @@ export function renderGunfightHud(state, opts = {}) {
       else text.textContent = `${s.phase === 'ot' ? 'OVERTIME · ' : ''}${who} ${pct}%`;
     }
   }
-  paintHp(hud.querySelector('#gfHpRed'), s.teamHp[0], s.teamHp[1]);
-  paintHp(hud.querySelector('#gfHpBlue'), s.teamHp[1], s.teamHp[0]);
+  paintHp(doc.getElementById('gfHpRed'), s.teamHp[0], s.teamHp[1]);
+  paintHp(doc.getElementById('gfHpBlue'), s.teamHp[1], s.teamHp[0]);
   const now = hud.querySelector('#gfClassNow');
   const next = hud.querySelector('#gfNext');
   if (now) now.textContent = `Classe: ${className(s.classId, s)}`;
@@ -518,6 +529,8 @@ export function hideGunfightHud(doc = typeof document !== 'undefined' ? document
   if (!doc) return;
   const hud = doc.getElementById('gfhud');
   if (hud) hud.classList.add('hidden');
+  const row = doc.getElementById('gfHpRow');
+  if (row) row.classList.add('hidden');
   const w = doc.getElementById('gfWatch');
   if (w) w.classList.add('hidden');
 }
@@ -568,7 +581,7 @@ function hudView(partial) {
 
 export const GF_PREVIEWS = {
   live: hudView({
-    format: '2v2', round: 3, phase: 'live', timeLeft: 74, score: [2, 1],
+    format: '2v2', round: 3, phase: 'live', timeLeft: 40, score: [2, 1],
     classKey: 'bazooka', className: 'Bazuca', nextClassId: 1, nextClassKey: 'shotgun',
     alive: [2, 1], hp: [180, 95],
     roster: { red: [pig(1, 'Docão', 90, true), pig(2, 'Bacon', 90, true)], blue: [pig(3, 'Torresmo', 95, true), pig(4, 'Linguiça', 0, false)] },
@@ -590,11 +603,11 @@ export const GF_PREVIEWS = {
     watch: 'Bacon',
   }),
   swap: hudView({
-    format: '2v2', round: 4, phase: 'prep', timeLeft: 8, score: [2, 2], side: 1,
+    format: '2v2', round: 3, phase: 'prep', timeLeft: 4, score: [2, 2], side: 1,
     classKey: 'sabre', className: 'Sabre de Luz', nextClassId: 1, nextClassKey: 'shotgun',
     alive: [2, 2], hp: [200, 200],
     roster: { red: [pig(1, 'Docão', 100, true), pig(2, 'Bacon', 100, true)], blue: [pig(3, 'Torresmo', 100, true), pig(4, 'Linguiça', 100, true)] },
-    events: [['round', 4], ['swap'], ['class', 8]],
+    events: [['round', 3], ['swap'], ['class', 8]],
   }),
   duel: hudView({
     format: '1v1', round: 5, phase: 'live', timeLeft: 36, score: [4, 2],
