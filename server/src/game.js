@@ -13,6 +13,7 @@ import { TRAIN, isTraining, dummyX } from '../../shared/training.js';
 import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, resetArmsRace, equipArmsRace, armsRaceKill } from '../../shared/arms-race.js';
 import { isKnife } from '../../shared/rules.js';
 import { X1, isX1, rollX1Weapon, x1SpawnSide } from '../../shared/x1.js';
+import { GF_MODE, GF_LIVE, normFormat } from '../../gunfight-hud.js';
 import { buildNav } from '../../nav.js';
 import { SKINS, skinOk } from '../../skins.js';
 import { EARN, knifeKind, sniperKind, parseGuns } from '../../shared/closet.js';
@@ -44,7 +45,7 @@ import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, c
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, pickBotSecondary, akimboReady, ammoLow } from '../../shared/revolver.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc } from '../../shared/saber.js';
 const CHAL_WEAPONS = { shotgun: 'w_shot', semi: 'w_shot', sniper: 'w_snip', canhao: 'w_snip', carabina: 'w_snip', besta: 'w_bow', arco: 'w_bow', estilingue: 'w_bow', sabre: 'w_saber', sabre2: 'w_saber', bazooka: 'w_boom', milho: 'w_boom', saco: 'w_boom' }; // grupos de armas dos desafios
-const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || isTraining(m) || isInvasion(m) || m === 'survival' || isX1(m) ? m : 'dm');
+const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || isTraining(m) || isInvasion(m) || m === 'survival' || isX1(m) || m === GF_MODE ? m : 'dm');
 
 export const MAX_PLAYERS = 30;
 const RS_SAFETY = 60; // s: cliente antigo que nunca manda 'rs' renasce sozinho depois disso
@@ -72,6 +73,7 @@ export class Game {
     this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), side: normSide(cfg.side), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers) };
     if (this.cfg.mode === COMP.mode) { this.cfg.side = normSide(cfg.side); this.cfg.max = this.cfg.side * 2; this.cfg.fillBots = false; if (!BOMB_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = 'rodizio'; }
     if (isX1(this.cfg.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; }
+    if (this.cfg.mode === GF_MODE) { this.cfg.gfFormat = normFormat(cfg.format ?? cfg.gfFormat); this.cfg.gfStub = !GF_LIVE; }
     this.chatLog = Array.isArray(cfg.chatLog) ? cfg.chatLog.filter((x) => x && typeof x.text === 'string').slice(-30) : [];
     this.io = io; // { send(id, obj), broadcast(obj), startLoop(), stopLoop() }
     this.ents = new Map(); this.nextId = 1; this.hostId = 0;
@@ -246,6 +248,7 @@ export class Game {
   removeOneBot() { const b = [...this.ents.values()].reverse().find((e) => e.bot); if (b) { this.ents.delete(b.id); this.events.push(['l', b.id]); } }
   // ---------- partida ----------
   startMatch(mapId) {
+    if (this.cfg.mode === GF_MODE && !GF_LIVE) { this.cfg.gfFormat = normFormat(this.cfg.gfFormat); this.cfg.gfStub = true; this.cfg.mode = 'dm'; } // regras ainda não rodam nesta sala: a partida cai no Mata-mata
     const LIST = this.mapList;
     const x1Pool = X1_MAPS.filter((m) => m.id !== this.mapId);
     const x1Asked = this.mapId && X1_MAPS.some((m) => m.id === mapId) && mapId !== this.mapId; // "próximo mapa" respeita o curral seguinte; a primeira e o "de novo" sorteiam
@@ -384,7 +387,7 @@ startMsg() {
          if (SKINS.some((s) => s.id === m.skin)) e.skin = m.skin; this.applyLoadout(e, m.primary, m.secondary, m.melee, this.state === 'lobby', m.kit); this.sendLobby(); break;
       case 'cfg': if (!isHost) return;
         {
-          const modeOk = (m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode)) && this.state !== 'playing';
+          const modeOk = (m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode) || m.mode === GF_MODE) && this.state !== 'playing';
           if (modeOk && isX1(m.mode) && !this.x1Mode && this.humans().length > X1.MAX) { this.io.send(id, { t: 'hostMsg', msg: `X1 é duelo: só cabem ${X1.MAX} jogadores. Tem ${this.humans().length} na sala.` }); this.sendLobby(); break; } // não chuta ninguém: a troca nem entra
           if (modeOk && isX1(m.mode) && !this.x1Mode) this.x1Hold = this.cfg.max;
         }
@@ -395,7 +398,7 @@ startMsg() {
         if (typeof m.botDiff === 'string') { const next = normBotDiff(m.botDiff); if (next !== this.cfg.botDiff) { this.cfg.botDiff = next; for (const b of this.ents.values()) if (b.bot && !b.zt && !b.dummy) applyBotDiff(b, next); } else this.cfg.botDiff = next; }
         if (m.surv !== undefined && this.state !== 'playing') this.cfg.surv = normSurv(m.surv);
         if (m.time !== undefined) this.cfg.time = normTime(m.time);
-          if ((m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode)) && this.state !== 'playing') { const leaving = this.x1Mode && !isX1(m.mode); this.cfg.mode = m.mode; if (isX1(m.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; } if (leaving) { const back = this.x1Hold >= 2 ? this.x1Hold : 6; this.x1Hold = 0; this.cfg.max = clamp(back, Math.max(2, this.humans().length), MAX_PLAYERS); } for (const h of this.humans()) { if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode)) this.chooseTeam(h, h.teamPref); else { h.team = -1; if (h.voice === 'team') h.voice = 'all'; } } }
+          if ((m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode) || m.mode === GF_MODE) && this.state !== 'playing') { const leaving = this.x1Mode && !isX1(m.mode); const wasGf = this.cfg.mode === GF_MODE; this.cfg.mode = m.mode; if (m.mode === GF_MODE) { this.cfg.gfFormat = normFormat(m.format ?? m.gfFormat ?? this.cfg.gfFormat); this.cfg.gfStub = !GF_LIVE; if (!GF_LIVE && !wasGf) this.io.send(id, { t: 'hostMsg', msg: 'Gunfight em breve — quando a partida começar, esta sala cai no Mata-mata.' }); } else this.cfg.gfStub = false; if (isX1(m.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; } if (leaving) { const back = this.x1Hold >= 2 ? this.x1Hold : 6; this.x1Hold = 0; this.cfg.max = clamp(back, Math.max(2, this.humans().length), MAX_PLAYERS); } for (const h of this.humans()) { if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode)) this.chooseTeam(h, h.teamPref); else { h.team = -1; if (h.voice === 'team') h.voice = 'all'; } } }
         if (this.cfg.mode === COMP.mode && this.state !== 'playing') {
           const side = normSide(m.side != null ? m.side : this.cfg.side);
           const need = side * 2;

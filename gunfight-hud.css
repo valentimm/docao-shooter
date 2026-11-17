@@ -1,0 +1,111 @@
+/* Gunfight — mesma língua do placar da Bomba (#bombhud / #bScore / #bombBanner / #timer). */
+#gfhud{
+  position:fixed;top:78px;left:50%;transform:translateX(-50%);
+  width:max-content;max-width:min(640px,94vw);
+  text-align:center;pointer-events:none;z-index:6;
+  text-shadow:0 1px 0 #000;
+}
+#gfhud.hidden{display:none !important}
+#gfScore{
+  font-family:var(--font);font-size:22px;line-height:1.05;
+  display:flex;gap:12px;justify-content:center;align-items:flex-start;
+  -webkit-text-stroke:1px #2a1410;color:#fff;
+}
+#gfScore .gfvs{color:#fff;font-size:26px;padding-top:2px}
+#gfScore .gfside{display:flex;flex-direction:column;align-items:center;min-width:108px;gap:4px}
+#gfScore .gfside.red{color:#ff6b6b}
+#gfScore .gfside.blue{color:#7eb6ff}
+#gfScore .gfname{font-size:15px;letter-spacing:.4px}
+#gfScore .gfside b{font-size:28px;color:#fff;-webkit-text-stroke:1px #2a1410}
+.gfpips{display:flex;gap:6px;justify-content:center;min-height:18px}
+.gfpip{
+  width:16px;height:16px;border-radius:50%;box-sizing:border-box;
+  border:2px solid #2a1410;box-shadow:0 2px 0 #000;background:#2a1410;
+}
+.gfside.red .gfpip.on{background:#ff4d4d}
+.gfside.blue .gfpip.on{background:#4da6ff}
+.gfpip.off{background:transparent;position:relative}
+.gfpip.off::after{
+  content:'';position:absolute;left:2px;right:2px;top:5px;height:2px;background:#ffd27a;transform:rotate(-40deg);
+}
+.gfpip.empty{background:transparent;opacity:.35;box-shadow:none}
+#gfMeta{margin-top:3px;font-size:13px;font-weight:bold;color:#ffd27a;text-shadow:0 2px 0 #000}
+#gfTime{
+  font-family:var(--font);font-size:26px;margin-top:2px;-webkit-text-stroke:1px #2a1410;color:#fff;
+}
+#gfTime.hidden{display:none !important}
+#gfTime.ot{color:#ff4d4d}
+#gfTime.prep{color:#ffd27a}
+#timer.gf-ot{color:#ff4d4d}
+#timer.gf-prep{color:#ffd27a}
+#hud #timer.gf-ot{color:#a52e26}
+#hud #timer.gf-prep{color:#8a5a12}
+#gfZone{
+  position:relative;width:min(360px,86vw);height:22px;margin:8px auto 0;
+  background:rgba(0,0,0,.55);border:2px solid #2a1410;border-radius:11px;overflow:hidden;
+}
+#gfZone.hidden{display:none !important}
+#gfZoneFill{position:absolute;left:0;top:0;bottom:0;width:0;background:#ffd27a}
+#gfZoneFill[data-team="0"]{background:#ff4d4d}
+#gfZoneFill[data-team="1"]{background:#4da6ff}
+#gfZone.contested{border-color:#ffd27a}
+#gfZone.contested #gfZoneFill{
+  background:repeating-linear-gradient(90deg,#ffd27a 0 8px,#c9842a 8px 16px);
+}
+#gfZoneText{
+  position:relative;display:block;text-align:center;font-size:13px;font-weight:bold;
+  line-height:22px;color:#fff;text-shadow:0 1px 0 #000;
+}
+#gfHpRow{display:flex;gap:14px;justify-content:center;margin-top:10px}
+.gfhp{
+  min-width:168px;padding:6px 12px 8px;border-radius:14px;
+  background:rgba(20,10,8,.78);border:3px solid #2a1410;box-shadow:0 4px 0 #2a1410;
+}
+.gfhp .lab{display:block;font-size:12px;font-weight:bold;letter-spacing:1px;color:#ffd27a}
+.gfhp b{
+  display:block;font-family:var(--font);font-size:46px;line-height:.95;margin-top:1px;
+  -webkit-text-stroke:2px #2a1410;
+}
+.gfhp.red b{color:#ff4d4d}
+.gfhp.blue b{color:#4da6ff}
+.gfhp .bar{display:block;height:8px;margin-top:4px;background:rgba(0,0,0,.45);border-radius:4px;overflow:hidden}
+.gfhp .bar i{display:block;height:100%;width:0}
+.gfhp.red .bar i{background:#ff4d4d}
+.gfhp.blue .bar i{background:#4da6ff}
+.gfhp em{
+  display:block;min-height:16px;margin-top:3px;font-style:normal;font-size:13px;font-weight:bold;
+  letter-spacing:1px;color:#ffd27a;-webkit-text-stroke:0;text-shadow:0 1px 0 #000;
+}
+.gfhp.lead{border-color:#ffd27a;box-shadow:0 4px 0 #2a1410,0 0 0 2px rgba(255,210,122,.85)}
+#gfClass{margin-top:8px;font-size:16px;font-weight:bold;color:#fff;text-shadow:0 2px 0 #000}
+#gfClassNow{display:inline}
+#gfNext{display:inline;margin-left:8px;color:#ffd27a}
+#gfNext.hidden{display:none !important}
+#gfWatch{
+  position:fixed;left:50%;top:64%;transform:translateX(-50%);
+  z-index:7;pointer-events:none;max-width:92vw;
+  padding:8px 16px;border-radius:12px;
+  background:rgba(20,10,8,.78);border:3px solid #ffd27a;box-shadow:0 4px 0 #2a1410;
+  font-family:var(--font);font-size:22px;color:#fff6e4;
+  -webkit-text-stroke:1px #2a1410;text-shadow:0 2px 0 #2a1410;
+  white-space:nowrap;
+}
+#gfWatch.hidden{display:none !important}
+#bombBanner[data-gf="1"]{top:46%;max-width:92vw}
+#bombBanner[data-gf="1"] .b1{font-size:40px;max-width:92vw}
+#hud #deathpick.gf #respawnBtn,
+#hud #deathpick.gf #deathList,
+#hud #deathpick.gf #deathArms,
+#hud #deathpick.gf #classGun,
+#hud #deathpick.gf #deathArmsBtn,
+#hud #deathpick.gf .death-panels,
+#hud #deathpick.gf .death-side{display:none !important}
+body.gfmode:has(#socialHud:not(.hidden)) #gfhud,
+body.gfmode:has(#socialHud:not(.hidden)) #topbar{
+  left:calc((210px + 100vw - 24px - min(300px,32vw)) / 2);
+  max-width:calc(100vw - 234px - min(300px,32vw) - 10px);
+  width:max-content;
+}
+@media (prefers-reduced-motion: reduce){
+  #gfZone.contested{animation:none}
+}

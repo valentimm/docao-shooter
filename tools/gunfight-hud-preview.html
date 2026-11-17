@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gunfight HUD</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../gunfight-hud.css">
+<style>
+  body{background:radial-gradient(circle at 50% 42%, #4a6741 0%, #24180f 62%, #120c08 100%)}
+  #gfLab{position:fixed;left:12px;bottom:12px;z-index:30;display:flex;gap:6px;flex-wrap:wrap;max-width:70vw}
+  #gfLab button{margin:0;padding:6px 10px;font-size:14px}
+  #gfLab button.on{outline:3px solid #ffd27a}
+</style>
+</head>
+<body class="gfmode">
+<div id="hud">
+  <div id="topbar"><div id="timer">1:14</div><div id="leader"></div></div>
+  <div id="bombBanner" class="hidden"><div class="b1"></div><div class="b2"></div></div>
+</div>
+<div id="gfLab"></div>
+<script type="module">
+import { mountGunfightHud, renderGunfightHud, showGunfightBanner, setGunfightWatch, gunfightBannersFromEvents, GF_PREVIEWS } from '../gunfight-hud.js';
+const order = ['live', 'ot', 'spec', 'swap', 'duel'];
+const labels = { live: '2v2 live', ot: '4v4 overtime', spec: 'espectador', swap: 'troca de lado', duel: '1v1' };
+mountGunfightHud(document);
+const lab = document.getElementById('gfLab');
+function show(id) {
+  const raw = GF_PREVIEWS[id];
+  if (!raw) return;
+  renderGunfightHud(raw);
+  const banners = raw.events ? gunfightBannersFromEvents(raw.events, raw) : [];
+  const banner = document.getElementById('bombBanner');
+  if (banners.length) showGunfightBanner(banners[0]);
+  else if (banner) banner.classList.add('hidden');
+  setGunfightWatch(raw.watch || '');
+  document.body.dataset.cena = id;
+  for (const b of lab.querySelectorAll('button')) b.classList.toggle('on', b.dataset.cena === id);
+}
+for (const id of order) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.cena = id; b.textContent = labels[id];
+  b.onclick = () => show(id);
+  lab.appendChild(b);
+}
+const q = new URLSearchParams(location.search).get('cena') || 'live';
+show(order.includes(q) ? q : 'live');
+</script>
+</body>
+</html>
