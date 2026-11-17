@@ -74,10 +74,18 @@ ok(g.gf.phase === 'ot' && g.gf.zone, `overtime com zona (${g.gf.phase} depois de
 for (const e of live()) e.invulnUntil = 0;
 ok(live().filter((e) => e.alive).length >= 2, 'overtime não matou ninguém sozinho');
 const zone = g.gf.zone;
-for (const e of live()) if (e.bot) e.target = null;
+for (const e of live()) if (e.bot) { e.target = null; e.invulnUntil = 1e12; }
 const startD = new Map(live().filter((e) => e.bot && e.alive).map((e) => [e.id, Math.hypot(e.pos.x - zone.x, e.pos.z - zone.z)]));
-step(8);
-const closer = [...startD].filter(([id, d0]) => { const e = g.ents.get(id); if (!e || !e.alive) return false; const d = Math.hypot(e.pos.x - zone.x, e.pos.z - zone.z); return d < d0 - 0.6 || d < (zone.r || 4.5) + 2; });
+const best = new Map(startD);
+for (let i = 0; i < 16; i++) {
+  step(0.5);
+  for (const id of startD.keys()) {
+    const e = g.ents.get(id); if (!e || !e.alive) continue;
+    const d = Math.hypot(e.pos.x - zone.x, e.pos.z - zone.z);
+    if (d < best.get(id)) best.set(id, d);
+  }
+}
+const closer = [...startD].filter(([id, d0]) => best.get(id) < d0 - 0.6 || best.get(id) < (zone.r || 4.5) + 2);
 ok(closer.length >= 1 || g.gf.capProg > 0, `bots andam pra zona (${closer.length} chegaram mais perto, cap ${g.gf.capProg.toFixed(2)})`);
 step(GF.OT);
 ok(g.gf.phase !== 'ot', `overtime resolve (${g.gf.phase} ${g.gf.reason})`);

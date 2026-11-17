@@ -102,6 +102,18 @@
   white-space:nowrap;
 }
 #gfWatch.hidden{display:none !important}
+body.gfmode #streakBar,
+body.gfmode #streakCount,
+body.gfmode #nukeReady,
+body.gfmode #strikeMap,
+body.gfmode #nukeBanner,
+body.gfmode #predatorHud,
+body.gfmode #heliHud,
+body.gfmode #gunnerHud,
+body.gfmode #ac130Hud,
+body.gfmode #ac130Vig,
+body.gfmode #ac130Alert,
+body.gfmode #invPowers{display:none !important}
 body.gfmode #hud #deathpick.cls-screen,
 body.gfmode #deathpick,
 body.gfmode #nades,
@@ -119,12 +131,16 @@ body.gfspec #centermsg{display:none !important}
 #hud #deathpick.gf #deathArmsBtn,
 #hud #deathpick.gf .death-panels,
 #hud #deathpick.gf .death-side{display:none !important}
-body.gfmode:has(#socialHud:not(.hidden)) #gfhud,
-body.gfmode:has(#socialHud:not(.hidden)) #topbar{
-  left:calc((210px + 100vw - 24px - min(300px,32vw)) / 2);
-  max-width:calc(100vw - 234px - min(300px,32vw) - 10px);
-  width:max-content;
+/* O chat à direita não empurra este bloco: timer e placar ficam no centro da mira. */
+body.gfmode #hud #topbar,
+body.gfmode #hud #gfhud{
+  left:50%;
+  right:auto;
+  transform:translateX(-50%);
 }
+body.gfmode.dead #topbar,
+body.gfmode.cls-on #topbar,
+body.gfmode.deadgray #topbar{display:block !important}
 @media (prefers-reduced-motion: reduce){
   #gfZone.contested{animation:none}
 }
