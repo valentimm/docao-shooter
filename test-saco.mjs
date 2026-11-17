@@ -75,6 +75,9 @@ ok(giftOpts(GIFT_W).kind === 's' && giftOpts(GIFT_W).fx === 'gift', 'blast tipo 
   ok(a.mag[GIFT_W] === 4 && !all.some((e) => e[0] === 'sh'), `'f' com a arma 28 é recusado (pente ${a.mag[GIFT_W]})`);
 
   const bot = bots[0]; reset(); all = []; run(20);
+  // O spawn do mata-mata é aleatório. Este ponto da Arena é chão aberto: o presente acerta o corpo e mata.
+  a.pos.x = 26.5; a.pos.y = 0; a.pos.z = -10; a.vel = { x: 0, y: 0, z: 0 };
+  free = { x: 0, y: 0, z: 1 };
   const DIST = 4.2;
   const place = () => { const e = eye(); bot.alive = true; bot.respawnAt = 1e9; bot.invulnUntil = 0; bot.pos.x = a.pos.x + free.x * DIST; bot.pos.z = a.pos.z + free.z * DIST; bot.pos.y = a.pos.y; bot.vel = { x: 0, y: 0, z: 0 }; bot.frozen = true; return e; };
   place(); bot.hp = 100; a.kills = 0;
