@@ -238,9 +238,9 @@ export function gunfightEvents(prev, next) {
   const swap = roundChanged && n.round > 1 && (n.round % 2) === 1;
   if (roundChanged && playing) {
     if (swap) {
-      out.push({ kind: 'swap', title: 'Troca de lado!', sub: `Nova classe: ${className(n.classId, n)}`, color: '#ffd27a', dur: 4, round: n.round });
+      out.push({ kind: 'swap', title: 'Troca de lado!', sub: '', color: '#ffd27a', dur: 2.4, round: n.round });
     } else {
-      out.push({ kind: 'round', title: `Round ${n.round} — Classe: ${className(n.classId, n)}`, sub: `Primeiro a ${n.toWin}`, color: '#fff6e4', dur: 3.5, round: n.round });
+      out.push({ kind: 'round', title: `Round ${n.round}`, sub: '', color: '#fff6e4', dur: 2.2, round: n.round });
     }
   }
   if (phaseChanged && n.phase === 'end') out.push(roundEndBanner(n));
@@ -304,10 +304,10 @@ export function gunfightBannersFromEvents(events, view) {
   }
   const out = [];
   const shown = classShown(classId != null ? classId : s.classId, s);
-  if (swap) out.push({ kind: 'swap', title: 'Troca de lado!', sub: `Nova classe: ${shown}`, color: '#ffd27a', dur: 4, round: roundN || s.round });
-  else if (roundN != null) out.push({ kind: 'round', title: `Round ${roundN} — Classe: ${shown}`, sub: `Primeiro a ${s.toWin}`, color: '#fff6e4', dur: 3.5, round: roundN });
-  if (go) out.push({ kind: 'go', title: 'VALENDO!', sub: shown === '—' ? '' : `Classe: ${shown}`, color: '#fff6e4', dur: 2.2 });
-  if (ot) out.push({ kind: 'ot', title: 'OVERTIME', sub: '10 s · a zona decide', color: '#ff4d4d', dur: 2.6 });
+  if (swap) out.push({ kind: 'swap', title: 'Troca de lado!', sub: '', color: '#ffd27a', dur: 2.4, round: roundN || s.round });
+  else if (roundN != null) out.push({ kind: 'round', title: `Round ${roundN}`, sub: '', color: '#fff6e4', dur: 2.2, round: roundN });
+  if (go) out.push({ kind: 'go', title: 'VALENDO!', sub: '', color: '#fff6e4', dur: 1.6 });
+  if (ot) out.push({ kind: 'ot', title: 'OVERTIME', sub: '', color: '#ff4d4d', dur: 1.8 });
   if (win) out.push(winFromEvent(s, win.team, win.why));
   if (over != null) out.push(matchEndBanner(s, over));
   return out;
@@ -367,8 +367,17 @@ export function mountGunfightHud(doc = document) {
   }
   if (!hud.dataset.built) {
     hud.setAttribute('aria-label', 'Gunfight');
-    hud.innerHTML = '<div id="gfScore"><span class="gfside red"><span class="gfname">Vermelho</span><b id="gfRed">0</b><span class="gfpips" id="gfPipsRed"></span></span><span class="gfvs">×</span><span class="gfside blue"><span class="gfname">Azul</span><b id="gfBlue">0</b><span class="gfpips" id="gfPipsBlue"></span></span></div><div id="gfMeta"></div><div id="gfTime" class="hidden"></div><div id="gfZone" class="hidden"><div id="gfZoneFill"></div><span id="gfZoneText"></span></div><div id="gfClass"><span id="gfClassNow"></span><span id="gfNext"></span></div>';
+    hud.innerHTML = '<div id="gfScore"><span class="gfside red"><span class="gfname">Vermelho</span><b id="gfRed">0</b><span class="gfpips" id="gfPipsRed"></span></span><span class="gfvs">×</span><span class="gfside blue"><span class="gfname">Azul</span><b id="gfBlue">0</b><span class="gfpips" id="gfPipsBlue"></span></span></div><div id="gfMeta"></div><div id="gfBanner" class="hidden"><div class="b1"></div><div class="b2"></div></div><div id="gfClass"><span id="gfClassNow"></span><span id="gfNext"></span></div><div id="gfTime" class="hidden"></div><div id="gfZone" class="hidden"><div id="gfZoneFill"></div><span id="gfZoneText"></span></div>';
     hud.dataset.built = '1';
+  }
+  if (hud.dataset.built && !hud.querySelector('#gfBanner')) {
+    const meta = hud.querySelector('#gfMeta');
+    const banner = doc.createElement('div');
+    banner.id = 'gfBanner';
+    banner.className = 'hidden';
+    banner.innerHTML = '<div class="b1"></div><div class="b2"></div>';
+    if (meta && meta.nextSibling) hud.insertBefore(banner, meta.nextSibling);
+    else hud.appendChild(banner);
   }
   let row = doc.getElementById('gfHpRow');
   if (!row) {
@@ -496,20 +505,22 @@ export function renderGunfightHud(state, opts = {}) {
   return s;
 }
 
+function gfBannerEl(doc) {
+  mountGunfightHud(doc);
+  return doc.getElementById('gfBanner') || doc.getElementById('bombBanner');
+}
 export function showGunfightBanner(ev, doc = document) {
   if (!doc || !ev) return;
-  mountGunfightHud(doc);
-  const b = doc.getElementById('bombBanner');
+  const b = gfBannerEl(doc);
   if (!b) return;
+  const old = doc.getElementById('bombBanner');
+  if (old && old !== b) { old.classList.add('hidden'); delete old.dataset.gf; }
   const t1 = b.querySelector('.b1');
   const t2 = b.querySelector('.b2');
   if (t1) { t1.textContent = ev.title || ''; t1.style.color = ev.color || '#fff'; }
-  if (t2) t2.textContent = ev.sub || '';
+  if (t2) { t2.textContent = ev.sub || ''; t2.style.display = ev.sub ? '' : 'none'; }
   b.dataset.gf = '1';
   b.classList.remove('hidden');
-  b.style.animation = 'none';
-  void b.offsetWidth;
-  b.style.animation = '';
   bannerUntil = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + (Number(ev.dur) || 3) * 1000;
   const log = (globalThis.__gfBanners ||= []);
   log.push(ev.title || '');
@@ -521,8 +532,10 @@ export function tickGunfightBanner(now, doc = typeof document !== 'undefined' ? 
   const t = now == null ? (typeof performance !== 'undefined' ? performance.now() : Date.now()) : now;
   if (t < bannerUntil || !doc) return;
   bannerUntil = 0;
-  const b = doc.getElementById('bombBanner');
-  if (b && b.dataset.gf === '1') b.classList.add('hidden');
+  for (const id of ['gfBanner', 'bombBanner']) {
+    const b = doc.getElementById(id);
+    if (b && b.dataset.gf === '1') b.classList.add('hidden');
+  }
 }
 
 export function hideGunfightHud(doc = typeof document !== 'undefined' ? document : null) {
@@ -542,8 +555,10 @@ export function resetGunfightHud(doc = typeof document !== 'undefined' ? documen
   hideGunfightHud(doc);
   const timer = doc.getElementById('timer');
   if (timer) timer.classList.remove('gf-ot', 'gf-prep');
-  const b = doc.getElementById('bombBanner');
-  if (b && b.dataset.gf === '1') { b.classList.add('hidden'); delete b.dataset.gf; }
+  for (const id of ['gfBanner', 'bombBanner']) {
+    const b = doc.getElementById(id);
+    if (b && b.dataset.gf === '1') { b.classList.add('hidden'); delete b.dataset.gf; }
+  }
 }
 
 function sOver(state) { return !!(state && state.over); }

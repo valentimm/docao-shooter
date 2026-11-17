@@ -3981,6 +3981,7 @@ function updateHud(dt) {
   const cm = $('centermsg');
   const veil = document.body.classList.contains('dead') || bombPick || invPick || pauseClassOpen();
   document.body.classList.toggle('cls-on', veil);
+  if (gfLive() && p.alive) gfClearRoundChrome();
   if (gfLive() && gfWatching) { if (cm.textContent) { cm.textContent = ''; delete cm.dataset.line; } }
   else if (!p.alive) {
     const line = deathLine(p);
@@ -9727,8 +9728,15 @@ function applyGfOffline(ev) {
   if (ev[0] === 'round' && gfS && gfS.round > 1) { gfSweep(); for (const e of entities) if (!e.zt) respawn(e); }
   onGfEvent(ev);
 }
+function gfClearRoundChrome() {
+  const stamp = $('stamp'); if (stamp) stamp.classList.remove('show');
+  const cm = $('centermsg');
+  if (cm && (/^Você (foi |se |explodiu|se amassou)/.test(cm.textContent) || cm.dataset.line)) { cm.textContent = ''; delete cm.dataset.line; msgTimer = 0; }
+  const who = $('deathWho'); if (who) { who.textContent = ''; delete who.dataset.line; }
+}
 function onGfEvent(ev) {
   if (!gfLive() || !gfS || !ev) return;
+  if (ev[0] === 'round' || ev[0] === 'go' || ev[0] === 'swap') gfClearRoundChrome();
   pushGunfight(gunfightHud(gfS, entities), [ev]);
   if (ev[0] === 'go' || ev[0] === 'ot' || ev[0] === 'swap') { try { sfx.pickup(); } catch (err) { /* sem saída de áudio */ } }
   if (ev[0] === 'win') { try { (player && player.team === ev[1] ? sfx.kill : sfx.die)(0.7); } catch (err) { /* sem saída de áudio */ } }
@@ -9747,6 +9755,7 @@ function pushGunfight(next, events) {
 function gfNudge(dir) { gfSpec.step += dir < 0 ? -1 : 1; }
 function gfSpectate(dt) {
   gfWatching = false;
+  document.body.classList.remove('gfspec');
   const watch = $('gfWatch');
   if (!gfLive() || !player || player.alive) { gfSpec.id = null; if (watch) watch.classList.add('hidden'); return false; }
   if (gameTime - player.deathAt < KILLERCAM_AFTER) { if (watch) watch.classList.add('hidden'); return false; }
@@ -9766,6 +9775,10 @@ function gfSpectate(dt) {
   const line = spectateCaption(ent.name || cur.name);
   if (watch) { if (watch.textContent !== line) watch.textContent = line; watch.classList.remove('hidden'); }
   gfWatching = true; killcamGuns = false;
+  document.body.classList.add('gfspec');
+  const stamp = $('stamp'); if (stamp) stamp.classList.remove('show');
+  const cm = $('centermsg'); if (cm) { cm.textContent = ''; delete cm.dataset.line; }
+  const who = $('deathWho'); if (who) { who.textContent = ''; delete who.dataset.line; }
   return true;
 }
 // espectador (sem vidas): câmera atrás de um aliado vivo

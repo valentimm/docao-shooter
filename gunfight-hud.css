@@ -84,7 +84,11 @@
   letter-spacing:1px;color:#ffd27a;-webkit-text-stroke:0;text-shadow:0 1px 0 #000;
 }
 .gfhp.lead{border-color:#ffd27a;box-shadow:0 4px 0 #2a1410,0 0 0 2px rgba(255,210,122,.85)}
-#gfClass{margin-top:8px;font-size:16px;font-weight:bold;color:#fff;text-shadow:0 2px 0 #000}
+#gfBanner{margin:6px auto 0;max-width:min(520px,86vw);line-height:1.05}
+#gfBanner.hidden{display:none !important}
+#gfBanner .b1{font-family:var(--font);font-size:26px;-webkit-text-stroke:1px #2a1410;text-shadow:0 2px 0 #000}
+#gfBanner .b2{margin-top:2px;font-size:14px;font-weight:bold;color:#fff6e4;text-shadow:0 1px 0 #000}
+#gfClass{margin-top:4px;font-size:16px;font-weight:bold;color:#fff;text-shadow:0 2px 0 #000}
 #gfClassNow{display:inline}
 #gfNext{display:inline;margin-left:8px;color:#ffd27a}
 #gfNext.hidden{display:none !important}
@@ -98,14 +102,16 @@
   white-space:nowrap;
 }
 #gfWatch.hidden{display:none !important}
-#bombBanner[data-gf="1"]{top:196px;max-width:70vw}
-#bombBanner[data-gf="1"] .b1{font-size:32px;max-width:70vw}
 body.gfmode #hud #deathpick.cls-screen,
 body.gfmode #deathpick,
 body.gfmode #nades,
 body.gfmode #tac,
 body.gfmode #slot2,
 body.gfmode #slot3{display:none !important}
+body.gfspec #stamp,
+body.gfspec #hud #bottomright,
+body.gfspec #bottomright,
+body.gfspec #centermsg{display:none !important}
 #hud #deathpick.gf #respawnBtn,
 #hud #deathpick.gf #deathList,
 #hud #deathpick.gf #deathArms,

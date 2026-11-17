@@ -45,13 +45,17 @@ const ot = normalizeGunfight(adaptGunfightHud({
   over: false, winner: -1, reason: '',
 }, { format: '4v4' }));
 ok(formatGunfightClock(ot) === 'OVERTIME 10', 'overtime escreve OVERTIME 10');
+ok(formatGunfightClock({ phase: 'ot', timeLeft: 9.2, format: 2 }) === 'OVERTIME 10', '9,2 s ainda mostra OVERTIME 10 (teto)');
+ok(formatGunfightClock({ phase: 'ot', timeLeft: 0.2, format: 2 }) === 'OVERTIME 1', 'último segundo é OVERTIME 1');
+ok(formatGunfightClock({ phase: 'ot', timeLeft: 0, format: 2 }) === 'OVERTIME 0', 'zero escreve OVERTIME 0');
+ok(formatGunfightClock({ phase: 'end', timeLeft: 2, format: 2 }) === 'FIM', 'acabou o overtime: o relógio sai de OVERTIME');
 ok(ot.zone && ot.zone.contested && Math.abs(ot.zone.progress - 1.86 / 3) < 1e-9, 'barra de captura = capProg/capNeed, contestada');
 
 const swap = gunfightBannersFromEvents([['round', 4], ['swap'], ['class', 8]], { className: 'Sabre de Luz', classId: -1, score: [2, 2], round: 4 });
-ok(swap.length === 1 && swap[0].kind === 'swap' && swap[0].title === 'Troca de lado!' && swap[0].sub === 'Nova classe: Sabre de Luz', 'swap + class = Troca de lado! Nova classe');
+ok(swap.length === 1 && swap[0].kind === 'swap' && swap[0].title === 'Troca de lado!' && !/classe/i.test(swap[0].sub || ''), 'Troca de lado! não repete a classe');
 
 const round = gunfightBannersFromEvents([['round', 3], ['class', 3]], { classId: 3, className: 'Bazuca', score: [0, 0], round: 3 });
-ok(round[0].title === 'Round 3 — Classe: Bazuca', 'início de round com a classe');
+ok(round[0].title === 'Round 3' && !/classe/i.test(round[0].title + (round[0].sub || '')), 'início de round não repete a classe');
 
 const win = gunfightBannersFromEvents([['win', 0, 'elim']], { score: [3, 1], round: 3, className: 'Bazuca' });
 ok(win[0].title === 'Vermelho venceu a rodada!' && win[0].sub.startsWith('Eliminação'), 'vitória por eliminação');
@@ -64,7 +68,7 @@ ok(hp[0].sub.startsWith('Vida'), 'desempate por vida');
 const over = gunfightBannersFromEvents([['over', -1]], { score: [5, 5], round: 11 });
 ok(over[0].kind === 'over' && over[0].title === 'Empate!', 'fim de partida empatada');
 const go = gunfightBannersFromEvents([['go']], { className: 'Faca', classId: 7, score: [0, 0], round: 1 });
-ok(go[0].kind === 'go' && go[0].title === 'VALENDO!', 'go avisa que o round valeu');
+ok(go[0].kind === 'go' && go[0].title === 'VALENDO!' && !/classe/i.test(go[0].sub || ''), 'go avisa VALENDO sem repetir a classe');
 
 const roster = rosterFromEnts(ents);
 const spec = spectatePool({ format: 2, phase: 'live', roster }, 'red', 1);
