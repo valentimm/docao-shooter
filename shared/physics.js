@@ -119,8 +119,8 @@ export function createPhysics(solids, size, fall = null) {
   // overlapping(): o corpo cruza alguma caixa que não dá pra subir (topo acima de pés + STEP)?
   const over = (s, x, z, r = RADIUS) => x + r > s.min.x && x - r < s.max.x && z + r > s.min.z && z - r < s.max.z;
   // tol: folga (m) no raio, nos pés e na cabeça — o servidor usa uma folguinha pra validar a posição que o cliente manda
-  function overlapping(x, y, z, tol = 0, height = HEIGHT) {
-    for (const s of solidsAt(x, z)) if (over(s, x, z, RADIUS - tol)) {
+  function overlapping(x, y, z, tol = 0, height = HEIGHT, radius = RADIUS) {
+    for (const s of solidsAt(x, z)) if (over(s, x, z, radius - tol)) {
       const top = topAt(s, clamp(x, s.min.x, s.max.x), clamp(z, s.min.z, s.max.z)); if (y + tol < top - STEP && y + height - tol > s.min.y) return s;
     }
     return null;
@@ -134,9 +134,9 @@ export function createPhysics(solids, size, fall = null) {
     return g;
   }
   // bloqueia se o corpo cruza uma caixa OU se o degrau/rampa levaria a cabeça pra dentro de uma viga, verga de porta ou laje
-  function collides(x, y, z, height = HEIGHT) {
-    if (overlapping(x, y, z, 0, height)) return true;
-    const g = groundAt(x, z, y, RADIUS); return g > y + 1e-4 && !!overlapping(x, g, z, 0, height);
+  function collides(x, y, z, height = HEIGHT, radius = RADIUS) {
+    if (overlapping(x, y, z, 0, height, radius)) return true;
+    const g = groundAt(x, z, y, radius); return g > y + 1e-4 && !!overlapping(x, g, z, 0, height, radius);
   }
   function ceilingAt(x, z, headY, r = RADIUS * 0.9) {
     let c = Infinity;
@@ -147,48 +147,50 @@ export function createPhysics(solids, size, fall = null) {
   // horizontal (ou pra baixo, se a cabeça entrou numa viga e há espaço) que deixa o corpo livre. Até 3 caixas por vez.
   const EPS = 1e-3;
   function depenetrate(e) {
-    const height = stanceHeight(e);
+    const height = e.bodyH > 0 ? e.bodyH : stanceHeight(e);
+    const radius = e.bodyR > 0 ? e.bodyR : RADIUS;
     for (let it = 0; it < 3; it++) {
-      const s = overlapping(e.pos.x, e.pos.y, e.pos.z, 0, height); if (!s) return true;
+      const s = overlapping(e.pos.x, e.pos.y, e.pos.z, 0, height, radius); if (!s) return true;
       const { x, y, z } = e.pos, top = topAt(s, clamp(x, s.min.x, s.max.x), clamp(z, s.min.z, s.max.z)), c = [
-        [s.min.x - RADIUS - EPS - x, 0, 0], [s.max.x + RADIUS + EPS - x, 0, 0],
-        [0, 0, s.min.z - RADIUS - EPS - z], [0, 0, s.max.z + RADIUS + EPS - z],
-      ].filter((d) => Math.abs(d[0]) + Math.abs(d[2]) <= RADIUS + 0.06); // só empurrão curto: nunca atravessa parede
+        [s.min.x - radius - EPS - x, 0, 0], [s.max.x + radius + EPS - x, 0, 0],
+        [0, 0, s.min.z - radius - EPS - z], [0, 0, s.max.z + radius + EPS - z],
+      ].filter((d) => Math.abs(d[0]) + Math.abs(d[2]) <= radius + 0.06); // só empurrão curto: nunca atravessa parede
       if (top - y <= 1) c.push([0, top - y + EPS, 0]); // afundou pouco num degrau/rampa/caixa: sobe nela
       if (s.min.y > y + STEP && y - (s.min.y - height - EPS) <= 0.5) c.push([0, s.min.y - height - EPS - y, 0]); // cabeça na viga: desce
       c.sort((a, b) => Math.abs(a[0]) + Math.abs(a[1]) + Math.abs(a[2]) - Math.abs(b[0]) - Math.abs(b[1]) - Math.abs(b[2]));
       let ok = false;
       for (const [dx, dy, dz] of c) {
         const nx = x + dx, nz = z + dz; let ny = y + dy;
-        if (Math.abs(nx) > hx - RADIUS || Math.abs(nz) > hz - RADIUS) continue;
-        const g = groundAt(nx, nz, ny, RADIUS); if (g > ny) ny = g; // degrau/rampa no lugar novo: sobe nele (groundAt só acha até STEP acima)
-        if (ny < groundAt(nx, nz, ny, RADIUS) - 1e-4) continue;
-        const o = overlapping(nx, ny, nz, 0, height); if (o === s) continue;
+        if (Math.abs(nx) > hx - radius || Math.abs(nz) > hz - radius) continue;
+        const g = groundAt(nx, nz, ny, radius); if (g > ny) ny = g; // degrau/rampa no lugar novo: sobe nele (groundAt só acha até STEP acima)
+        if (ny < groundAt(nx, nz, ny, radius) - 1e-4) continue;
+        const o = overlapping(nx, ny, nz, 0, height, radius); if (o === s) continue;
         e.pos.x = nx; e.pos.y = ny; e.pos.z = nz; ok = true; if (!o) return true; break; // saiu desta caixa; se caiu em outra, tenta de novo
       }
       if (!ok) return false;
     }
-    return !overlapping(e.pos.x, e.pos.y, e.pos.z, 0, height);
+    return !overlapping(e.pos.x, e.pos.y, e.pos.z, 0, height, radius);
   }
   // Movimento (mesmo código no cliente e no servidor): eixo a eixo (x, depois z) = desliza em paredes e quinas;
   // sub-passos ≤ 0,25 m (empurrões fortes não atravessam parede fina); se já estiver dentro de algo, sai primeiro.
   function moveEntity(e, dt) {
-    const height = stanceHeight(e);
+    const height = e.bodyH > 0 ? e.bodyH : stanceHeight(e);
+    const radius = e.bodyR > 0 ? e.bodyR : RADIUS;
     let blocked = false;
     const free = depenetrate(e);
     const dx = e.vel.x * dt, dz = e.vel.z * dt, n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / 0.25));
     for (let i = 0; i < n; i++) {
-      const nx = e.pos.x + dx / n; if (!free || !collides(nx, e.pos.y, e.pos.z, height)) e.pos.x = nx; else { blocked = true; e.vel.x = 0; }
-      const nz = e.pos.z + dz / n; if (!free || !collides(e.pos.x, e.pos.y, nz, height)) e.pos.z = nz; else { blocked = true; e.vel.z = 0; }
+      const nx = e.pos.x + dx / n; if (!free || !collides(nx, e.pos.y, e.pos.z, height, radius)) e.pos.x = nx; else { blocked = true; e.vel.x = 0; }
+      const nz = e.pos.z + dz / n; if (!free || !collides(e.pos.x, e.pos.y, nz, height, radius)) e.pos.z = nz; else { blocked = true; e.vel.z = 0; }
       if (blocked) break;
     }
-    e.vel.y += GRAV * dt; let ny = e.pos.y + e.vel.y * dt;
-    if (e.vel.y > 0) { const c = ceilingAt(e.pos.x, e.pos.z, e.pos.y + height, RADIUS); if (ny + height > c) { ny = Math.max(e.pos.y, c - height); e.vel.y = 0; e.bonk = true; } }
-    const g = groundAt(e.pos.x, e.pos.z, e.pos.y, RADIUS);
+    if (!e.fly) e.vel.y += GRAV * dt; let ny = e.pos.y + e.vel.y * dt;
+    if (e.vel.y > 0) { const c = ceilingAt(e.pos.x, e.pos.z, e.pos.y + height, radius); if (ny + height > c) { ny = Math.max(e.pos.y, c - height); e.vel.y = 0; e.bonk = true; } }
+    const g = groundAt(e.pos.x, e.pos.z, e.pos.y, radius);
     if (ny <= g) { e.pos.y = g; e.vel.y = 0; e.onGround = true; }
     else if (e.onGround && e.vel.y <= 0 && ny - g < STEP) { e.pos.y = g; e.vel.y = 0; }
     else { e.pos.y = ny; e.onGround = false; }
-    e.pos.x = clamp(e.pos.x, -hx + RADIUS, hx - RADIUS); e.pos.z = clamp(e.pos.z, -hz + RADIUS, hz - RADIUS);
+    e.pos.x = clamp(e.pos.x, -hx + radius, hx - radius); e.pos.z = clamp(e.pos.z, -hz + radius, hz - radius);
     return blocked;
   }
   // raio contra o mundo: chão (y=0) + caixas; rampas são cunhas (resolve a interseção com o plano inclinado)

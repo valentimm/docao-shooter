@@ -15,8 +15,9 @@ export const REGEN_DELAY = 5, REGEN_RATE = 10;
 export function noteHurt(e, attacker, now) { e.lastHurt = now; e.regenOk = !!attacker && attacker !== e; }
 export function resetRegen(e) { e.lastHurt = -1e9; e.regenOk = false; e.regenOn = false; }
 export function regenStep(e, now, dt) {
-  e.regenOn = !!(e.alive && e.regenOk && e.hp > 0 && e.hp < 100 && now - e.lastHurt >= REGEN_DELAY);
-  if (e.regenOn) e.hp = Math.min(100, e.hp + REGEN_RATE * dt);
+  const cap = e && e.hpCap > 0 ? e.hpCap : 100; // tanque (CJ05) regenera até 1000; o resto continua em 100
+  e.regenOn = !!(e.alive && e.regenOk && e.hp > 0 && e.hp < cap && now - e.lastHurt >= REGEN_DELAY);
+  if (e.regenOn) e.hp = Math.min(cap, e.hp + REGEN_RATE * dt);
   return e.regenOn;
 }
 // Bacon que cura: quem pisa no bacon de um Docão morto (menos o próprio morto) ganha +10 de vida e o bacon some.
@@ -219,7 +220,7 @@ export const POKE = { fuse: 1.4, radius: 5.5, max: 3 };
 export const isPokeCode = (text) => /pok[eé]\s*bola/i.test(String(text || ''));
 // Minigun (código "minigun" no chat): troca a primária pela minigun até morrer
 export const isMiniCode = (text) => /\bmini\s*-?\s*gun\b/i.test(String(text || ''));
-export const WEAPON_SHORT = (i) => (i === W_NADE ? 'Copo Bomba' : i === W_FALL ? 'Penhasco' : WEAPONS[i] ? WEAPONS[i].short : '?');
+export const WEAPON_SHORT = (i) => (i === W_NADE ? 'Copo Bomba' : i === W_FALL ? 'Penhasco' : i === -6 ? 'Canhão' : WEAPONS[i] ? WEAPONS[i].short : '?');
 export const BOT_DEFS = [
   { name: 'Farofa' }, { name: 'Pipoca' }, { name: 'Trufa' }, { name: 'Bolota' }, { name: 'Torresmo' }, { name: 'Paçoca' }, { name: 'Linguiça' }, { name: 'Quindim' }, { name: 'Coxinha' }, { name: 'Pururuca' },
 ];

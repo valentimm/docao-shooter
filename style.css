@@ -1273,6 +1273,11 @@ body.invout #deathpick,body.invout #stamp,body.invout #centermsg{display:none!im
   background:var(--ink);color:var(--cream);font:700 11px/1.3 var(--font);letter-spacing:.14em
 }
 #hud #noclipHud.hidden{display:none}
+#hud #gtaHud{
+  margin-top:4px;display:inline-block;padding:3px 10px;border-radius:2px;
+  background:#1d1410;color:#ffe14a;font:700 16px/1.3 var(--font);letter-spacing:.06em
+}
+#hud #gtaHud.hidden{display:none}
 #hud #trainInfo{
   display:block;margin-top:3px;padding:0;background:transparent;border-radius:0;
   color:var(--wood);font-size:11px;white-space:normal

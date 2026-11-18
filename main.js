@@ -73,6 +73,8 @@ import { makeFPGiftSack, makeGiftBox, makeGiftSack } from './gift-view.js';
 import { EGG, eggSpeed, eggDmg, stepEgg } from './shared/egg.js';
 import { killIcon, weaponSvg } from './killfeed-icons.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, GRAV, JUMP, SPEED, BOT_SPEED, STEP, RADIUS, HEIGHT, EYE, WEAPONS, PRIMARIES, BOT_PRIMARIES, SECONDARIES, MELEES, CATEGORIES, PISTOL, KNIFE, SABER, UZI, P90, NAIL, SEMI, CROSS, BOW, FAMAS, DISC_W, SABER2, CORN_W, EGG_W, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, LMG, COMMANDO, REV, REV2, TAMPA, MELEE, SABER_COLORS, W_NADE, NADE, WEAPON_SHORT, BOT_DEFS, BOT_RANGE, TAG_COLORS, RED_DOT, applyFlinch, decayFlinch, GOLD_KNIFE, isKnife, RAY, GIFT_W } from './shared/rules.js';
+import { W_TANK, TANK, JET, applyCheatText, clearCheats, stepCheats, unpackCheats, jetVertical, cheatEye } from './shared/gta-cheats.js';
+import { poseRemote, poseLocal, hideGta } from './gta-view.js';
 import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, resetArmsRace, equipArmsRace, armsRaceKill } from './shared/arms-race.js';
 import { HIDE, isHide, HIDE_PROPS, PROP_NAMES, ROLE_NAMES, hiderTeam, newHideState, startHideRound, stepHide, hideFrozen, hidersAlive, nextProp, propsForMap } from './shared/hide.js';
 import { X1, isX1, rollX1Weapon, x1SpawnSide } from './shared/x1.js';
@@ -359,6 +361,24 @@ const center = (e, y = 1.0) => new V3(e.pos.x, e.pos.y + y * stanceScale(e.crouc
 // ---------------- Áudio sintetizado ----------------
 let actx = null, master = null, noiseBuf = null, menuMuted = false;
 let sleighQueued = false, sleighTries = 0;
+let jetNode = null;
+function jetHum(on) {
+  if (!actx || !master) return; // o contexto é o único do jogo (audio.js); sem gesto, fica mudo
+  if (on) {
+    if (jetNode) return;
+    try {
+      const o = actx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 78;
+      const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 240;
+      const g = actx.createGain(); g.gain.value = 0.03;
+      o.connect(f); f.connect(g); g.connect(master); o.start();
+      jetNode = { o, g }; noteAudio('jet', 'osc');
+    } catch (e) { jetNode = null; }
+    return;
+  }
+  if (!jetNode) return;
+  try { jetNode.o.stop(); jetNode.g.disconnect(); } catch (e) { /* já parou */ }
+  jetNode = null;
+}
 function initAudio() {
   const c = unlockAudio();
   if (!c) return;
@@ -912,6 +932,7 @@ function gunOf(e, idx) {
   return kit;
 }
 function respawn(e) {
+  clearCheats(e);
   e.pos.copy(pickSpawn(e)); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = 100; e.alive = true; e.invulnUntil = e.spawnLock = gameTime + INVULN; resetRegen(e);
   if (e.isPlayer) keys.Space = false;
   if (!compOn()) {
@@ -1017,7 +1038,8 @@ function updatePickups(dt) {
       if (!e.alive || e.zt || !clientPower(p.type)) continue;
       const dx = e.pos.x - p.pos.x, dz = e.pos.z - p.pos.z;
       if (dx * dx + dz * dz > 1.5 || Math.abs(e.pos.y - p.pos.y) > 1.5) continue;
-      if (p.type === 'health') { if (e.hp >= 100) continue; e.hp = Math.min(100, e.hp + 50); }
+      const hpCap = e.hpCap > 0 ? e.hpCap : 100;
+      if (p.type === 'health') { if (e.hp >= hpCap) continue; e.hp = Math.min(hpCap, e.hp + 50); }
       else if (p.type === 'grenade') { const sk = clientPower('stun') && (e.stunNades || 0) < SHOCK.max; if (e.nades >= NADE.max && !sk) continue; if (e.nades < NADE.max) e.nades++; if (sk) e.stunNades = (e.stunNades || 0) + 1; } // Copo Bomba também dá +1 pau de choque
       else if (!refillAmmo(e)) continue;
       p.active = false; p.mesh.visible = false; p.respawnAt = gameTime + (p.type === 'grenade' ? NADE.pickupRespawn : invMode() && p.type === 'ammo' ? INV_AMMO.respawn : 15);
@@ -1032,8 +1054,9 @@ function baconNear(e, b) { const dx = e.pos.x - b.pos.x, dz = e.pos.z - b.pos.z;
 function updateBaconPickups() {
   if (online || x1Mode() || compOn() || gfLive()) return; // X1, Competitivo e Gunfight: o bacon da morte não cura
   for (const b of edibleBacons()) for (const e of entities) {
-    if (!e.alive || e.zt || e === b.ent || e.hp >= 100 || !baconNear(e, b)) continue;
-    e.hp = Math.min(100, e.hp + BACON_ITEM.heal); baconEaten(b, e); break;
+    const hpCap = e.hpCap > 0 ? e.hpCap : 100;
+    if (!e.alive || e.zt || e === b.ent || e.hp >= hpCap || !baconNear(e, b)) continue;
+    e.hp = Math.min(hpCap, e.hp + BACON_ITEM.heal); baconEaten(b, e); break;
   }
 }
 function baconEaten(b, e) { // efeito + som (todo mundo vê); aviso só pra quem comeu
@@ -2222,6 +2245,26 @@ function updateGifts(dt) {
   }
 }
 const rockets = []; const smokeGeo = new THREE.SphereGeometry(0.14, 8, 6);
+function fireTank(p) {
+  if (!p.alive || p.stunUntil > gameTime || gameTime < (p.tankNext || 0) || spawnShielded(p)) return;
+  const latched = !mouseDown && clickLatch && performance.now() - clickLatch < 250;
+  if (!(mouseDown || latched) || firedThisPress) return;
+  firedThisPress = true; clickLatch = 0;
+  p.tankNext = gameTime + TANK.cannon.rate;
+  const dir = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const origin = camera.position.clone();
+  sfx.bazooka(0.85); fp.kick = Math.min(0.2, fp.kick + 0.12); shake = Math.max(shake, 0.18);
+  if (online) { netEv(['tc', v3a(origin), v3a(dir)]); return; }
+  launchTankShell(p, origin, dir);
+}
+function launchTankShell(e, origin, dir) {
+  const R = TANK.cannon;
+  const near = wallDistance(origin, dir, 0.7);
+  if (near) { blast(near.point.clone().addScaledVector(dir, -0.12), e, { ...R, wIdx: W_TANK }); return; }
+  const start = origin.clone().addScaledVector(dir, 0.6);
+  const mesh = makeRocket(1.7); scene.add(mesh); mesh.position.copy(start); mesh.lookAt(start.clone().add(dir));
+  rockets.push({ owner: e, pos: start, dir: dir.clone(), mesh, born: gameTime, nextSmoke: 0, spd: R.speed, spec: R, tank: true });
+}
 function launchRocket(e, origin, dir) {
   const R = e && e.isPlayer ? (gunOf(e, 3).rocket || WEAPONS[3].rocket) : WEAPONS[3].rocket;
   if (!online && e) hearGunshot(entities, origin, e, gameTime);
@@ -2238,7 +2281,7 @@ function launchRocket(e, origin, dir) {
 function updateRockets(dt) {
   const R = WEAPONS[3].rocket;
   for (let i = rockets.length - 1; i >= 0; i--) {
-    const r = rockets[i]; const step = R.speed * dt; let hitT = null, hitE = null, hitLid = null;
+    const r = rockets[i]; const step = (r.spd || R.speed) * dt; let hitT = null, hitE = null, hitLid = null;
     if (r.net) { // online: só visual, quem explode é o servidor
       if (gameTime - r.born > 6.5) { scene.remove(r.mesh); rockets.splice(i, 1); continue; }
       r.pos.addScaledVector(r.dir, step); r.mesh.position.copy(r.pos); r.mesh.children[0].rotation.z += dt * 10; rocketSmoke(r, R); continue;
@@ -2248,7 +2291,7 @@ function updateRockets(dt) {
     for (const e of entities) {
       if (!e.alive || (e === r.owner && gameTime - r.born < 0.3)) continue;
       if (friends(e, r.owner)) continue;
-      const t = rayCapsule(r.pos, r.dir, step + 0.1, e.pos, ROCKET_PAD, e.crouch);
+      const t = rayCapsule(r.pos, r.dir, step + 0.1, e.pos, ROCKET_PAD, e.crouch, e.cheatBody || null);
       if (t !== null && (hitT === null || t < hitT)) { const blocked = classifyRay(e, modelYaw(e), r.pos, r.dir, t).block; hitT = t; hitE = blocked ? null : e; hitLid = blocked ? e : null; } // face da tampa para o foguete; pé, borda e fresta levam o direto
     }
     if (wh && (hitE || hitLid) && wh.distance < hitT) { hitE = null; hitLid = null; }
@@ -2256,7 +2299,7 @@ function updateRockets(dt) {
     if (gHit && (hitT === null || gHit.t < hitT)) { hitT = gHit.t; hitE = null; hitLid = null; }
     if (hitT !== null || gameTime - r.born > 6) {
       window.__lastBlast = { c: r.pos.clone().addScaledVector(r.dir, Math.max(0, (hitT ?? 0) - 0.05)).toArray(), hit: hitE ? hitE.name : (hitLid ? hitLid.name : null) };
-      blast(r.pos.clone().addScaledVector(r.dir, Math.max(0, (hitT ?? 0) - 0.05)), r.owner, { ...R, wIdx: 3 }, hitE);
+      blast(r.pos.clone().addScaledVector(r.dir, Math.max(0, (hitT ?? 0) - 0.05)), r.owner, { ...(r.spec || R), wIdx: r.tank ? W_TANK : 3 }, hitE);
       if (hitLid) applyShieldHurt(hitLid, SHIELD.rocketFace, 0);
       scene.remove(r.mesh); rockets.splice(i, 1); continue;
     }
@@ -2285,7 +2328,7 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   if (shooter && shooter.model) setExpression(shooter.model, 'angry', 0.5); // cara de brava ao atirar
   const scale = wIdx === BOW ? clamp(Number(mul) || 1, 0.35, 1.3) : 1;
   const hitsBy = new Map(), lids = new Map(), bags = new Map(), dirs = [], heliDmg = new Map(), gasAcc = new Map(), skies = shooter === player ? [] : [...skyHelis(), ...gunshipList().filter((h) => h.owner !== shooter)];
-  const targets = entities.filter((e) => e !== shooter && e.alive && !friends(e, shooter)).map((e) => ({ e, p: e.pos, crouch: e.crouch || 0, size: e.zt ? e.size : 1, prone: !!e.down, yaw: e.yaw || 0 })); // zumbi grande: hitbox escalada; caído fica deitado; // time: bala atravessa o companheiro; agachado achata o corpo
+  const targets = entities.filter((e) => e !== shooter && e.alive && !friends(e, shooter)).map((e) => ({ e, p: e.pos, crouch: e.crouch || 0, size: e.zt ? e.size : 1, prone: !!e.down, yaw: e.yaw || 0, spheres: e.hitSpheres || null })); // zumbi grande: hitbox escalada; caído fica deitado; BIG e tanque mandam esferas próprias
   const helis = skies.map((sh) => ({ h: sh, c: sh.pos, r: heliR(sh) }));
   const shotW = invMode() ? { ...w, pierce: 8, pierceMul: 0.82 } : w; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
   const shotWorld = currentMap && currentMap.glb ? importedShotWorld : PHYS;
@@ -2414,7 +2457,8 @@ function whoHtml(p) {
 function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx = 0) { // fx: 1 pela parede, 2 collateral
   if (state === 'over' || !t.alive) return; // resultado fechado ou morte já processada
   if (t.zt) { killZombieLocal(t, a, wIdx, head, back); return; } // Invasão: zumbi
-  if (!online && survOn() && goesDown(t) && wIdx !== W_FALL) { enterDownLocal(t); return; } // Survival offline: corações esgotados viram down, sem killcam. Queda do mapa mata na hora.
+  if (!online && survOn() && goesDown(t) && wIdx !== W_FALL) { clearCheats(t); enterDownLocal(t); return; } // Survival offline: corações esgotados viram down, sem killcam. Queda do mapa mata na hora. O tanque/jetpack/BIG saem junto.
+  if (t.tank || t.jet || t.big || t.jetGlide) clearCheats(t);
   if (!online && survOn() && !t.downFinal) t.loadSnap = snapshotLoadout(t);
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = (compOn() || gfLive()) ? Infinity : gameTime + (t.dummy ? TRAIN.respawn : exploreMode() && t.isPlayer ? 1 : respawnDelay()); t.killW = wIdx; t.killBack = !!back;
   if (compOn() && !online) {
@@ -3854,7 +3898,7 @@ function addKillFeed(a, t, wIdx, head, back = false, label = null, fx = 0) {
   const zk = a && a.zt, fogK = (a && a.fog) || label === 'Névoa Assombrada'; // Invasão: zumbi / névoa
   div.innerHTML = zk ? `${nm(a)} pegou ${nm(t)} <i>[🧟 ${zk === 'boss' ? 'Chefão' : 'Zumbi'}]</i>` : fogK ? `${nm(t)} sumiu na <i>[🌫 Névoa Assombrada]</i>` : knife ? `${nm(a)} moggou ${nm(t)} ${killIcon('knife')} <i>Faca${back ? ' · pelas costas!' : ''}</i>`
     : lidKill ? `${nm(a)} amassou ${nm(t)} na tampa ${killIcon('tampa')} <i>Tampa do Tacho</i>`
-    : a && a !== t ? `${pick(KILL_PHRASES)(nm(a), nm(t))} ${killIcon(wIdx === W_GAS ? 'gas' : wIdx === W_NADE ? 'nade' : WEAPONS[wIdx] && WEAPONS[wIdx].key, label, head, fx)} <i>${label || WEAPON_SHORT(wIdx)}${fx & 1 ? ' · pela parede' : ''}${fx & 2 ? ' · collateral' : ''}${head ? ' · no focinho!' : ''}</i>` : pick(SELF_PHRASES)(nm(t));
+    : a && a !== t ? `${pick(KILL_PHRASES)(nm(a), nm(t))} ${killIcon(wIdx === W_GAS ? 'gas' : wIdx === W_NADE ? 'nade' : wIdx === W_TANK ? 'bazooka' : WEAPONS[wIdx] && WEAPONS[wIdx].key, label, head, fx)} <i>${label || WEAPON_SHORT(wIdx)}${fx & 1 ? ' · pela parede' : ''}${fx & 2 ? ' · collateral' : ''}${head ? ' · no focinho!' : ''}</i>` : pick(SELF_PHRASES)(nm(t));
   // log canônico p/ testes (o texto exibido varia; faca é fixo)
   { const L = (window.__feedLog ||= []); L.push(knife ? `${a.name} moggou ${t.name} [Faca${back ? ' · pelas costas!' : ''}]` : lidKill ? `${a.name} amassou ${t.name} na tampa [Tampa do Tacho]` : a && a !== t ? `${a.name} pururucou ${t.name} [${label || WEAPON_SHORT(wIdx)}]${fx & 1 ? ' +parede' : ''}${fx & 2 ? ' +colat' : ''}` : `${t.name} se pururucou`); if (L.length > 20) L.shift(); }
   const kf = $('killfeed'); kf.prepend(div); while (kf.children.length > 6) kf.lastChild.remove();
@@ -3882,6 +3926,16 @@ function paintSaberHud(p, w) {
   if (c) { const left = Math.max(0, st.dashReady - gameTime); c.textContent = left > 0.05 ? `C ${left.toFixed(1)}` : 'C'; c.classList.toggle('ready', left <= 0.05); }
   if (z) { const left = Math.max(0, st.specialReady - gameTime); z.textContent = left > 0.05 ? `Z ${left.toFixed(1)}` : (w.dual ? 'Z giro' : 'Z'); z.classList.toggle('ready', left <= 0.05 && !st.bladeOut); }
 }
+function paintGtaHud(p) {
+  const el = $('gtaHud'); if (!el || !p) return;
+  const parts = [];
+  if (p.alive && p.tank) parts.push('TANQUE');
+  if (p.alive && p.jet) parts.push('JETPACK ' + Math.max(0, Math.ceil(p.jetLeft || 0)) + 's');
+  else if (p.alive && p.jetGlide) parts.push('JETPACK · descendo');
+  if (p.alive && p.big) parts.push('GRANDE ' + Math.max(0, Math.ceil(p.bigLeft || 0)) + 's');
+  el.textContent = parts.join(' · ');
+  el.classList.toggle('hidden', parts.length === 0);
+}
 function updateHud(dt) {
   const p = player, w = gunOf(p, p.weapon);
   const downed = !!(p.down && survOn());
@@ -3891,10 +3945,11 @@ function updateHud(dt) {
     $('hptext').textContent = 'CAÍDO';
     $('hpfill').style.background = '';
   } else {
-    $('hpfill').style.width = Math.max(0, p.hp) + '%';
+    $('hpfill').style.width = (Math.max(0, p.hp) * 100 / (p.hpCap > 0 ? p.hpCap : 100)) + '%';
     $('hptext').textContent = Math.max(0, Math.ceil(p.hp));
-    $('hpfill').style.background = p.hp > 35 ? '' : 'linear-gradient(#ff7b7b,#e63946)';
+    $('hpfill').style.background = p.hp > (p.tank ? 350 : 35) ? '' : 'linear-gradient(#ff7b7b,#e63946)';
   }
+  paintGtaHud(p);
   { const box = $('shieldbox'), has = !!(p.slots && isShieldW(p.slots[0]) && !p.shieldBroken && p.shieldHp > 0);
     if (box) { box.classList.toggle('hidden', !has); if (has) { const k = p.shieldHp / SHIELD.hp; $('shieldfill').style.width = (k * 100).toFixed(1) + '%'; $('shieldtext').textContent = Math.ceil(p.shieldHp); box.classList.toggle('dent', k <= 0.66); box.classList.toggle('crack', k <= 0.33); const cd = Math.max(0, (p.shieldDashAt || 0) - gameTime); $('shieldcd').textContent = shieldRaised(p) ? (cd > 0.05 ? `investida ${cd.toFixed(1)}s` : 'botão direito: investida') : 'tampa nas costas'; } }
     if (crossEl) crossEl.classList.toggle('shield', !!(w.shield || fp.breakT > 0)); }
@@ -5634,7 +5689,7 @@ function updatePlayer(dt) {
   }
   // mira com zoom: segura o botão direito (Shift agacha; com a faca o botão direito é a estocada). No ferrolho da sniper a luneta desce pra mão aparecer.
   const guiding = !!predator || !!gunner || !!ac130;
-  stepCrouch(p, p.down ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
+  stepCrouch(p, (p.down || p.tank || p.big) ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
   const bolting = fp.actionT > 0 && WEAPONS[p.weapon].bolt;
   updateAds(dt, !p.utilSel && !p.down && !guiding && !bolting && !emote.on && !isKnife(p.weapon) && !isSaber(p.weapon) && !WEAPONS[p.weapon].noAds && rightDown && p.reloadEnd <= gameTime && p.switchEnd <= gameTime); // minigun sem zoom: o botão direito só embala. Caído não mira. Granada na mão: o direito joga na força mínima.
   if (p.weapon !== MINIGUN && p.mgHeat) { p.mgHeat = Math.max(0, p.mgHeat - WEAPONS[MINIGUN].spin.cool * dt); if (p.mgHeat <= 0) p.mgHot = false; } // guardada também esfria
@@ -5647,17 +5702,21 @@ function updatePlayer(dt) {
   p.useHold = !!(keys[BOMB.KEY] && p.alive && !emote.on); if (bombLock(p) || gfLock(p)) wish.set(0, 0, 0); // Bomba e Gunfight: parado na preparação
   if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * (p.down ? DOWNED.speed : 1) * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime && !(p.flashUntil > gameTime) ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // caído rasteja. Em pé: faca corre; sabre anda normal; agachado anda mais devagar. Flashbang não deixa lento.
   if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(p.propLock ? 0 : HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
+  if (!online) { const wasJet = !!p.jet, wasBig = !!p.big; stepCheats(p, gameTime, p.onGround); if (wasJet && !p.jet) flashMsg(p.jetGlide ? 'Jetpack acabou · descendo devagar' : 'Jetpack acabou'); if (wasBig && !p.big) flashMsg('Voltou ao tamanho normal'); }
+  if (p.tank && wish.lengthSq()) wish.multiplyScalar(TANK.speed / SPEED);
+  else if (p.jet && wish.lengthSq()) { const len = wish.length(); if (len > 0.01) wish.multiplyScalar(JET.horiz / len); }
   if (p.shieldDashUntil > gameTime && !bombLock(p)) wish.copy(fwd).multiplyScalar(SHIELD.charge.speed); // investida curta, na direção da mira
   const acc = p.onGround ? 14 : 4;
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
-  if (!p.down && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !(hideS && p.propLock)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
+  jetVertical(p, !!(spaceHold && !chatTyping() && !guiding && !bombLock(p) && !gfLock(p)), dt);
+  if (!p.fly && !p.down && !p.tank && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !(hideS && p.propLock)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
   moveEntity(p, dt);
   checkFall(p); if (!p.alive) return;
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
   stepRecoil(p, dt, gameTime);
   stepFlinch(dt);
-  camera.position.set(p.pos.x, p.pos.y + (p.down ? DOWNED.eye : eyeHeight(p)) + (p.down ? 0 : bob), p.pos.z); camera.rotation.set(p.pitch, p.yaw, 0);
+  camera.position.set(p.pos.x, p.pos.y + (p.down ? DOWNED.eye : (p.tank || p.big) ? cheatEye(p) : eyeHeight(p)) + (p.down || p.tank ? 0 : bob), p.pos.z); camera.rotation.set(p.pitch, p.yaw, 0);
   if (gfLock(p)) return;
   if (p.down) { downShoot(p); return; }
   if (hideS && p.hider) hideThirdPerson(p); // Escondido: câmera em 3ª pessoa pra ver o próprio disfarce
@@ -5671,6 +5730,7 @@ function updatePlayer(dt) {
   if (ac130) { updateAc130Mode(dt); return; }
   if (guiding) { updatePredator(dt); if (predator) posePredatorCam(); return; }
   if (radioCall) { if (gameTime >= radioCall.at) finishRadioCall(); else return; } // chamando no rádio: sem tiro até terminar
+  if (p.tank) { fireTank(p); return; }
   if (emote.on) { // dança: anda e olha, mas a arma não dispara até a animação acabar
     if (gameTime >= emote.until) stopEmote();
     else {
@@ -5765,6 +5825,7 @@ function updateBot(b, dt) {
   if (b.zt) { updateZombie(b, dt); return; } // Invasão: zumbi (o core/servidor move)
   const m = b.model;
   if (!b.alive) {
+    hideGta(b);
     deathFx(b);
     if (b.swallowedAt != null && b.swallowedAt === b.deathAt) m.group.visible = false; // engolido
     else if (b.fxDeath === b.deathAt && b.baconOk) popModel(m.group, gameTime - b.deathAt, b.yaw); // pop → puf → bacon
@@ -5772,7 +5833,7 @@ function updateBot(b, dt) {
     if (!b.remote && gameTime >= b.respawnAt) respawn(b);
     return;
   }
-  if (b.remote) { interpRemote(b); animateBot(b, dt); docaoLod(b); return; } // online: posição vem do servidor
+  if (b.remote) { interpRemote(b); animateBot(b, dt); poseRemote(b, scene); docaoLod(b); return; } // online: posição vem do servidor
   if (b.dummy) { placeDummy(b); const sp = b.travelV / Math.max(dt, 1e-3); b.vel.x = sp; animateBot(b, dt); b.vel.x = 0; return; } // Treino: não pensa nem atira
   if (hideS && (b.hider || hideFrozen(hideS, b))) { b.vel.set(0, 0, 0); b.target = null; m.group.position.copy(b.pos); m.group.rotation.y = b.yaw; if (!b.hider) animateBot(b, dt); return; } // Docão Escondido: objeto não pensa; Caçador espera a preparação
   if (!online && (bombFrozen(bombS) || (gfLive() && gunfightFrozen(gfS)))) { b.vel.set(0, 0, 0); b.useHold = false; animateBot(b, dt); return; } // Bomba e Gunfight: preparação
@@ -7769,7 +7830,9 @@ function loop() {
     placeNameTags();
     renderer.render(scene, camera);
   }
-  poseGunnerRig(dt); if (gunner || ac130) fp.root.visible = false;
+  poseGunnerRig(dt); if (fp.root) fp.root.visible = !(gunner || ac130 || (player && player.tank));
+  if (state === 'playing' && player) poseLocal(player, scene);
+  jetHum(!!(state === 'playing' && player && player.alive && player.jet && spaceHold));
   mgWhirr.set(state === 'playing' && player && player.alive && player.weapon === MINIGUN && !gunner ? player.mgSpin || 0 : 0, !!(player && player.mgFiring)); // giro da minigun (zera fora do jogo: nunca fica zumbindo)
   if (state !== 'menu' && (state !== 'over' || (matchEnding && matchEnding.firstPerson && !victory.on)) && !emote.on && player && player.alive && !camO && !(hideS && player.hider)) { renderer.clearDepth(); renderer.render(fpScene, fpCam); } // no fim suave a arma continua na mão
 }
@@ -9012,6 +9075,7 @@ function applySnapshot(s) {
     const [id, x, y, z, yaw, pitch, w, fl, hp, ping, crouch = 0, sh] = row;
     const e = o.ents.get(id); if (!e) continue;
     e.ping = ping; e.hp = hp; e.onGround = !!(fl & 4); e.regenOn = !!(fl & 16); // 16: regenerando (servidor novo)
+    if (row.length > 15) unpackCheats(e, row[15], row[16], row[17]);
     if (typeof sh === 'number') applyShieldSnap(e, sh);
     syncDownRow(e, row);
     if (e === player) continue;
@@ -9159,8 +9223,8 @@ function netEvent(ev) {
   else if (k === 'gl') { const [, pid, oid, pos, vel] = ev; spawnGiftFx({ net: true, pid, owner: entOf(oid), pos: a3v(pos), vel: a3v(vel), t: 0 }); if (oid !== o.myId) sfx.saco(distVol(a3v(pos))); }
   else if (k === 'rk') {
     const [, pid, oid, pos, dir] = ev; const start = a3v(pos), d = a3v(dir);
-    const mesh = makeRocket(1.5); scene.add(mesh); mesh.position.copy(start); mesh.lookAt(start.clone().add(d));
-    rockets.push({ net: true, pid, owner: entOf(oid), pos: start, dir: d, mesh, born: gameTime, nextSmoke: 0 });
+    const mesh = makeRocket(ev[5] ? 1.7 : 1.5); scene.add(mesh); mesh.position.copy(start); mesh.lookAt(start.clone().add(d));
+    rockets.push({ net: true, pid, owner: entOf(oid), pos: start, dir: d, mesh, born: gameTime, nextSmoke: 0, spd: ev[5] || 0, tank: !!ev[5] });
   } else if (k === 'bm' && ev[2] === 'c') { // pipoca do Lança-Milho (o servidor já deu o dano)
     const [, pid, , c] = ev; const i = pid ? corns.findIndex((x) => x.pid === pid) : -1; if (i >= 0) { scene.remove(corns[i].mesh); corns.splice(i, 1); }
     popFx(a3v(c));
@@ -9276,6 +9340,7 @@ function personalEvent(ev) {
   else if (ev[0] === 'inv') invSetInv(ev[1] || []); // Invasão: inventário de poderes
   else if (ev[0] === 'pkb') { const had = p.pokeballs || 0; p.pokeballs = ev[1]; if (ev[1] > had) { flashMsg(`Pokébola na mão (${ev[1]}) · Q joga`); sfx.pickup(); } }
   else if (ev[0] === 'mgn') grantMinigun(p); // servidor deu a minigun (código no chat)
+  else if (ev[0] === 'gtam' && ev[1]) flashMsg(ev[1]); // CJ05, LGPD, BIG
   else if (ev[0] === 'kn') { const [x, y, z] = ev[1]; p.vel.x += x; p.vel.z += z; p.vel.y = Math.max(p.vel.y, y); p.onGround = false; lastKnock = gameTime; }
   else if (ev[0] === 'egg') { if (p.alive) eggSplat(Number(ev[1]) || EGG.splat); } // levou ovada: tela suja (evento pessoal do servidor)
   else if (ev[0] === 'skn') p.stunNades = ev[1] | 0; // servidor confirma as cargas do pau de choque
@@ -9336,7 +9401,7 @@ function paintVoiceMarks() {
   });
 }
 initChat({
-  send: (m) => { if (online && online.net) online.net.send(m); else if (m && m.t === 'say' && state === 'playing' && !invMode() && !x1Mode() && !compOn() && !gfLive()) { if (isPokeCode(m.text)) grantPokeball(); if (isMiniCode(m.text)) grantMinigun(); } }, // offline: o chat só serve pros códigos (pokebola, minigun). X1, Competitivo e Gunfight não aceitam.
+  send: (m) => { if (online && online.net) online.net.send(m); else if (m && m.t === 'say' && state === 'playing') { if (!invMode() && !x1Mode() && !compOn() && !gfLive()) { if (isPokeCode(m.text)) grantPokeball(); if (isMiniCode(m.text)) grantMinigun(); } const msg = player && applyCheatText(player, m.text, gameTime); if (msg) flashMsg(msg); } }, // offline: o chat só serve pros códigos. Pokébola e minigun continuam fora de X1, Competitivo e Gunfight. CJ05, LGPD e BIG valem em qualquer modo.
   teamMode: () => socialTeam(),
   me: () => {
     if (!online) return player ? { id: 0, name: player.name, team: -1, dead: !player.alive } : null;
@@ -10320,7 +10385,7 @@ function invEndText() {
 }
 
 // ganchos para testes automatizados
-window.__docao = { renderer, get state() { return state; }, get mapId() { return currentMap ? currentMap.id : null; }, get navGood() { return nav ? nav.good.length : 0; }, get zombies() { return inv ? inv.zombies : []; }, get invInfo() { return inv ? { wave: inv.wave, phase: inv.phase, left: inv.left, n: (inv.zombies || []).length, t: inv.t } : null; }, get bombInfo() { return bombS ? { phase: bombS.phase, t: bombS.t, carrier: bombS.carrier } : null; }, get mode() { return mode; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
+window.__docao = { renderer, get gta() { const p = player; if (!p) return null; const eye = camera.position.y - p.pos.y; return { tank: !!p.tank, jet: !!p.jet, glide: !!p.jetGlide, big: !!p.big, hp: p.hp, hpCap: p.hpCap || 100, jetLeft: +(p.jetLeft || 0).toFixed(2), bigLeft: +(p.bigLeft || 0).toFixed(2), eye: +eye.toFixed(2), bodyH: p.bodyH || 0, bodyR: p.bodyR || 0, hud: ($('gtaHud') && !$('gtaHud').classList.contains('hidden')) ? $('gtaHud').textContent : '' }; }, get state() { return state; }, get mapId() { return currentMap ? currentMap.id : null; }, get navGood() { return nav ? nav.good.length : 0; }, get zombies() { return inv ? inv.zombies : []; }, get invInfo() { return inv ? { wave: inv.wave, phase: inv.phase, left: inv.left, n: (inv.zombies || []).length, t: inv.t } : null; }, get bombInfo() { return bombS ? { phase: bombS.phase, t: bombS.t, carrier: bombS.carrier } : null; }, get mode() { return mode; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
   set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible, cupX: heldUtilMesh().position.x, smokeVisible: !!(fp.smokeCan && fp.smokeCan.visible), flashVisible: !!(fp.flashCan && fp.flashCan.visible) }; }, get tacticals() { return tacticals; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get noclip() { return noclipLive(); }, get noclipSpeed() { return noclipSpeed; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); },
   MAPS, loadMap, selectMap, get map() { return currentMap; }, get gas() { return gasSim ? gasSim.list.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, r: c.r, h: c.h, hp: +c.hp.toFixed(1), phase: c.phase, explodeAt: +c.explodeAt.toFixed(2), respawnAt: +c.respawnAt.toFixed(2) })) : []; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
   get online() { return online; }, joinRoom, leaveOnline, netEv,

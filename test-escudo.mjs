@@ -219,7 +219,7 @@ function armShield(e, raised = true) {
   const snap = messages.findLast((m) => m.t === 's');
   const rowB = snap.e.find((row) => row[0] === b.id);
   const rowA = snap.e.find((row) => row[0] === a.id);
-  ok(rowB[11] === SHIELD.hp && rowA[11] === -1 && rowB.length === 12, `snapshot: tampa ${rowB[11]}, sem tampa ${rowA[11]}, ${rowB.length} campos`);
+  ok(rowB[11] === SHIELD.hp && rowA[11] === -1 && rowB.length === 18, `snapshot: tampa ${rowB[11]}, sem tampa ${rowA[11]}, ${rowB.length} campos`);
   b.shieldHp = 0; b.shieldBroken = true;
   messages.length = 0;
   g.tick();
