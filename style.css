@@ -2234,3 +2234,14 @@ button.loot-chip.pick{outline:3px solid var(--red);outline-offset:1px;background
 #menu .acct-txt .nw{white-space:nowrap}
 
 #finalboard .overnote{margin:8px 0 0;font-size:12px;font-weight:700;color:#7a3b10}
+
+/* SUBIDO: HUD verde só na vida de quem ativou. A onda fica no canvas. */
+body.subido #hud #hpfill{background:linear-gradient(90deg,#d6ff8a,#3dbe45 70%,#1f7a28)!important}
+body.subido #hud #hptext,body.subido #hud #mag,body.subido #hud #reserve,body.subido #hud #wtitle,body.subido #hud #wmode,body.subido #hud #score,body.subido #hud #gtaHud{color:#b6ff6a}
+body.subido #hud #gtaHud{background:#10240f}
+body.subido #hud #crosshair:before,body.subido #hud #crosshair:after{background:#7dff4a;box-shadow:0 0 0 1.5px #14300c}
+body.subido #hud #killfeed .kf,body.subido #hud #killfeed .kf b,body.subido #hud #killfeed .kf b.me{color:#c8ff9a}
+body.subido #hud::after{content:'';position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle,rgba(40,180,60,0) 42%,rgba(20,90,30,.28));z-index:4}
+@media (prefers-reduced-motion: reduce){
+  body.subido #hud::after{background:rgba(20,90,30,.08)}
+}

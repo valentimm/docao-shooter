@@ -23,7 +23,7 @@ import { EARN, knifeKind, sniperKind, parseGuns } from '../../shared/closet.js';
 import { CHAL_MODES } from '../../shared/challenges.js';
 import { cleanName, uniqueName, NAME_MAX } from '../../shared/names.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, JUMP, SPEED, BOT_SPEED, EYE, WEAPONS, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE, SABER, SABER2, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, UZI, P90, DISC_W, CORN_W, EGG_W, NAIL, SEMI, MELEE, W_NADE, W_FALL, NADE, BACON_ITEM, noteHurt, resetRegen, regenStep, BOT_DEFS, BOT_RANGE, TAG_COLORS, TAMPA, RAY, GIFT_W } from '../../shared/rules.js';
-import { W_TANK, TANK, applyCheatText, clearCheats, stepCheats, packCheats, cheatEye } from '../../shared/gta-cheats.js';
+import { W_TANK, TANK, applyCheatText, clearCheats, stepCheats, packCheats, cheatEye, subidoTaken } from '../../shared/gta-cheats.js';
 import { rideShift, nevascaSolids } from '../../shared/nevasca.js';
 import { normBotDiff, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot as noteGunshot, scopeDelay } from '../../shared/bot-difficulty.js';
 import { SHIELD, isShieldW, shieldRaised, resetShield, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from '../../shared/shield.js';
@@ -1297,6 +1297,7 @@ startMsg() {
     if (this.compMode) amount = mitigate(t, amount, head);
     if (t.down && !t.zt) return false; // já está caído: o sangramento finaliza, dano extra não cria outra morte
     if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
+    amount = subidoTaken(t, amount); // SUBIDO: 25% menos dano, nesta vida
     t.hp -= amount; t.lastAttacker = a ? a.id : 0; noteHurt(t, a, this.T); // regen só com dano de outro
     const falling = t.hp <= 0 && this.wantDown(t);
     if (falling) t.hp = 1;
@@ -1335,7 +1336,7 @@ startMsg() {
   }
   kill(t, a, w, head, back = false, ks = null, fx = 0) {
     if (this.state !== 'playing' || !t.alive || (this.armsMode && this.pendingEnd)) return;
-    if (t.tank || t.jet || t.big || t.jetGlide) clearCheats(t); // morreu: sai do tanque, do jetpack e do tamanho grande
+    if (t.tank || t.jet || t.big || t.jetGlide || t.subido) clearCheats(t); // morreu: sai do tanque, do jetpack, do tamanho e do SUBIDO
     if (this.survival && !t.bot && !t.zt && !t.downFinal) t.loadSnap = snapshotLoadout(t);
     if (this.inv && t.zt) return this.killZombie(t, a, w, head, back, ks);
     t.alive = false; t.hp = 0; t.deaths++; if (t.acct) t.sd++; t.respawnAt = (this.compMode || this.gfMode) ? Infinity : this.T + (t.dummy ? TRAIN.respawn : this.armsMode ? ARMS_RACE.respawnTime : RESPAWN_TIME); if (!t.bot) { t.needRs = !this.compMode && !this.gfMode; t.rsReq = false; } // humano: só renasce clicando em Renascer. Competitivo e Gunfight esperam a próxima rodada.

@@ -6,6 +6,10 @@
 //   CJ05 — mini tanque. Vida 1000 (10× os 100 de um Docão). Sai digitando de novo, ou quando a vida zera (morre / cai no Survival).
 //   LGPD — jetpack no estilo ROCKETMAN. 18 s. Segura Espaço para subir. No fim, desce no máximo a 4 m/s até o chão.
 //   BIG  — 3× o tamanho por 20 s (de novo desliga antes). A hitbox de tiro e de explosão cresce junto. A câmera sobe.
+//   SUBIDO — chapado pelo resto da vida. De novo desliga. Morrer (e o down do Survival) acaba.
+//            Não muda corpo, hitbox nem movimento. Empilha com LGPD e BIG.
+//            CJ05 não apaga o SUBIDO: o tanque continua com 1000 de vida e o dano reduzido vale em cima.
+//            Uma mensagem só aplica o primeiro código (CJ05, depois LGPD, BIG, SUBIDO).
 import { HEIGHT, RADIUS, EYE, GRAV } from './rules.js';
 import { BODY } from './combat.js';
 import { HITBOXES } from './physics.js';
@@ -47,10 +51,21 @@ export const BIG = {
   capsule: { y0: BODY.y0 * 3, y1: BODY.y1 * 3, r: BODY.r * 3 },
 };
 
+// 25% menos dano (multiplicador 0,75). Dura a vida, não o relógio.
+export const SUBIDO = {
+  dmgMul: 0.75,
+  lowHz: 680,
+  sway: 0.018,
+  bob: 0.035,
+  wave: 0.022,
+  chroma: 0.006,
+};
+
 const word = (text, code) => new RegExp('\\b' + code + '\\b', 'i').test(String(text || ''));
 export const isTankCode = (text) => word(text, 'CJ05');
 export const isJetCode = (text) => word(text, 'LGPD');
 export const isBigCode = (text) => word(text, 'BIG');
+export const isSubidoCode = (text) => word(text, 'SUBIDO');
 
 export function cheatEye(e) {
   if (!e) return EYE;
@@ -78,7 +93,7 @@ export function syncCheatBody(e) {
 
 export function clearCheats(e) {
   if (!e) return;
-  e.tank = false; e.jet = false; e.jetGlide = false; e.big = false; e.fly = 0;
+  e.tank = false; e.jet = false; e.jetGlide = false; e.big = false; e.subido = false; e.fly = 0;
   e.jetUntil = 0; e.bigUntil = 0;
   syncCheatBody(e);
 }
@@ -115,12 +130,25 @@ export function toggleBig(e, now) {
   return `BIG · 3× maior por ${BIG.time}s · BIG de novo para voltar`;
 }
 
+export function toggleSubido(e) {
+  if (e.subido) { e.subido = false; return 'A brisa passou'; }
+  e.subido = true;
+  return 'SUBIDO · chapado até morrer · 25% menos dano · SUBIDO de novo desliga';
+}
+
+// Dano que o Docão toma. Sem SUBIDO, devolve o valor. Com SUBIDO, 75%.
+export function subidoTaken(e, amount) {
+  if (!e || !e.subido || !(amount > 0)) return amount;
+  return amount * SUBIDO.dmgMul;
+}
+
 // Devolve a frase para o HUD, ou '' se o texto não era cheat. null se o Docão não pode usar agora.
 export function applyCheatText(e, text, now) {
   if (!e || e.alive === false || e.down) return null;
   if (isTankCode(text)) return toggleTank(e);
   if (isJetCode(text)) return grantJet(e, now);
   if (isBigCode(text)) return toggleBig(e, now);
+  if (isSubidoCode(text)) return toggleSubido(e);
   return '';
 }
 
@@ -138,9 +166,9 @@ export function stepCheats(e, now, onGround) {
   }
 }
 
-// bits: 1 tanque, 2 jetpack com combustível, 4 grande, 8 descida do jetpack
+// bits: 1 tanque, 2 jetpack com combustível, 4 grande, 8 descida do jetpack, 16 subido
 export function packCheats(e, now) {
-  const flags = (e.tank ? 1 : 0) | (e.jet ? 2 : 0) | (e.big ? 4 : 0) | (e.jetGlide ? 8 : 0);
+  const flags = (e.tank ? 1 : 0) | (e.jet ? 2 : 0) | (e.big ? 4 : 0) | (e.jetGlide ? 8 : 0) | (e.subido ? 16 : 0);
   const jetLeft = e.jet ? Math.max(0, (e.jetUntil || now) - now) : 0;
   const bigLeft = e.big ? Math.max(0, (e.bigUntil || now) - now) : 0;
   return [flags, jetLeft, bigLeft];
@@ -149,7 +177,7 @@ export function packCheats(e, now) {
 export function unpackCheats(e, flags, jetLeft, bigLeft) {
   if (!e || flags == null || flags === '') return;
   const f = flags | 0;
-  e.tank = !!(f & 1); e.jet = !!(f & 2); e.big = !!(f & 4); e.jetGlide = !!(f & 8);
+  e.tank = !!(f & 1); e.jet = !!(f & 2); e.big = !!(f & 4); e.jetGlide = !!(f & 8); e.subido = !!(f & 16);
   e.jetLeft = e.jet ? Math.max(0, +jetLeft || 0) : 0;
   e.bigLeft = e.big ? Math.max(0, +bigLeft || 0) : 0;
   if (e.tank || e.big) e.crouch = 0;

@@ -73,8 +73,9 @@ import { makeFPGiftSack, makeGiftBox, makeGiftSack } from './gift-view.js';
 import { EGG, eggSpeed, eggDmg, stepEgg } from './shared/egg.js';
 import { killIcon, weaponSvg } from './killfeed-icons.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, GRAV, JUMP, SPEED, BOT_SPEED, STEP, RADIUS, HEIGHT, EYE, WEAPONS, PRIMARIES, BOT_PRIMARIES, SECONDARIES, MELEES, CATEGORIES, PISTOL, KNIFE, SABER, UZI, P90, NAIL, SEMI, CROSS, BOW, FAMAS, DISC_W, SABER2, CORN_W, EGG_W, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, LMG, COMMANDO, REV, REV2, TAMPA, MELEE, SABER_COLORS, W_NADE, NADE, WEAPON_SHORT, BOT_DEFS, BOT_RANGE, TAG_COLORS, RED_DOT, applyFlinch, decayFlinch, GOLD_KNIFE, isKnife, RAY, GIFT_W } from './shared/rules.js';
-import { W_TANK, TANK, JET, applyCheatText, clearCheats, stepCheats, unpackCheats, jetVertical, cheatEye } from './shared/gta-cheats.js';
+import { W_TANK, TANK, JET, SUBIDO, applyCheatText, clearCheats, stepCheats, unpackCheats, jetVertical, cheatEye, subidoTaken } from './shared/gta-cheats.js';
 import { poseRemote, poseLocal, hideGta } from './gta-view.js';
+import { subidoBind, subidoPresent, subidoMotionOk } from './subido-view.js';
 import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, resetArmsRace, equipArmsRace, armsRaceKill } from './shared/arms-race.js';
 import { HIDE, isHide, HIDE_PROPS, PROP_NAMES, ROLE_NAMES, hiderTeam, newHideState, startHideRound, stepHide, hideFrozen, hidersAlive, nextProp, propsForMap } from './shared/hide.js';
 import { X1, isX1, rollX1Weapon, x1SpawnSide } from './shared/x1.js';
@@ -359,7 +360,7 @@ function raySphere(o, d, c, r) {
 const center = (e, y = 1.0) => new V3(e.pos.x, e.pos.y + y * stanceScale(e.crouch), e.pos.z);
 
 // ---------------- Áudio sintetizado ----------------
-let actx = null, master = null, noiseBuf = null, menuMuted = false;
+let actx = null, master = null, subidoLp = null, noiseBuf = null, menuMuted = false;
 let sleighQueued = false, sleighTries = 0;
 let jetNode = null;
 function jetHum(on) {
@@ -2384,6 +2385,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (state === 'over') return false; // resultado fechado
   if (!t.alive || gameTime < t.invulnUntil || friends(t, attacker) || bombFrozen(bombS) || (gfLive() && gunfightFrozen(gfS))) return false; // sem fogo amigo; Bomba e Gunfight: sem dano na preparação
   if (!online && compOn()) amount = mitigate(t, amount, head);
+  if (!online) amount = subidoTaken(t, amount);
   if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
   t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); // regen só com dano de outro
   if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
@@ -2458,7 +2460,7 @@ function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx
   if (state === 'over' || !t.alive) return; // resultado fechado ou morte já processada
   if (t.zt) { killZombieLocal(t, a, wIdx, head, back); return; } // Invasão: zumbi
   if (!online && survOn() && goesDown(t) && wIdx !== W_FALL) { clearCheats(t); enterDownLocal(t); return; } // Survival offline: corações esgotados viram down, sem killcam. Queda do mapa mata na hora. O tanque/jetpack/BIG saem junto.
-  if (t.tank || t.jet || t.big || t.jetGlide) clearCheats(t);
+  if (t.tank || t.jet || t.big || t.jetGlide || t.subido) clearCheats(t);
   if (!online && survOn() && !t.downFinal) t.loadSnap = snapshotLoadout(t);
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = (compOn() || gfLive()) ? Infinity : gameTime + (t.dummy ? TRAIN.respawn : exploreMode() && t.isPlayer ? 1 : respawnDelay()); t.killW = wIdx; t.killBack = !!back;
   if (compOn() && !online) {
@@ -3928,6 +3930,41 @@ function paintSaberHud(p, w) {
   if (c) { const left = Math.max(0, st.dashReady - gameTime); c.textContent = left > 0.05 ? `C ${left.toFixed(1)}` : 'C'; c.classList.toggle('ready', left <= 0.05); }
   if (z) { const left = Math.max(0, st.specialReady - gameTime); z.textContent = left > 0.05 ? `Z ${left.toFixed(1)}` : (w.dual ? 'Z giro' : 'Z'); z.classList.toggle('ready', left <= 0.05 && !st.bladeOut); }
 }
+let subidoAudioOn = null, subidoFilterTried = false;
+function ensureSubidoFilter() {
+  if (subidoLp) return true;
+  if (subidoFilterTried || !actx || !master) return false;
+  subidoFilterTried = true;
+  try {
+    const f = actx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 20000;
+    f.Q.value = 0.7;
+    try { master.disconnect(actx.destination); } catch (e) { /* já solto */ }
+    master.connect(f);
+    f.connect(actx.destination);
+    subidoLp = f;
+    return true;
+  } catch (e) {
+    try { master.connect(actx.destination); } catch (e2) { /* segue direto */ }
+    return false;
+  }
+}
+function setSubidoMuffle(on) {
+  if (!ensureSubidoFilter()) return false;
+  const hz = on ? SUBIDO.lowHz : 20000;
+  try {
+    subidoLp.frequency.cancelScheduledValues(actx.currentTime);
+    subidoLp.frequency.value = hz;
+  } catch (e) { return false; }
+  return true;
+}
+function syncSubido(p) {
+  const on = !!(p && p.alive && p.subido);
+  document.body.classList.toggle('subido', on);
+  document.body.dataset.subidoWave = on && subidoMotionOk() ? '1' : '';
+  if (subidoLp && subidoAudioOn !== on && setSubidoMuffle(on)) subidoAudioOn = on;
+}
 function paintGtaHud(p) {
   const el = $('gtaHud'); if (!el || !p) return;
   const parts = [];
@@ -3935,11 +3972,13 @@ function paintGtaHud(p) {
   if (p.alive && p.jet) parts.push('JETPACK ' + Math.max(0, Math.ceil(p.jetLeft || 0)) + 's');
   else if (p.alive && p.jetGlide) parts.push('JETPACK · descendo');
   if (p.alive && p.big) parts.push('GRANDE ' + Math.max(0, Math.ceil(p.bigLeft || 0)) + 's');
+  if (p.alive && p.subido) parts.push('SUBIDO');
   el.textContent = parts.join(' · ');
   el.classList.toggle('hidden', parts.length === 0);
 }
 function updateHud(dt) {
   const p = player, w = gunOf(p, p.weapon);
+  syncSubido(p);
   const downed = !!(p.down && survOn());
   hpBar.classList.toggle('downed', downed);
   if (downed) {
@@ -5727,6 +5766,14 @@ function updatePlayer(dt) {
     if (!guiding) { camera.position.add(new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(shake * 0.25)); camera.rotation.z += rand(-1, 1) * shake * 0.05; }
     shake = Math.max(0, shake - dt * 1.8);
   }
+  if (p.subido && subidoMotionOk() && !guiding) {
+    const t = gameTime, a = SUBIDO.sway;
+    camera.rotation.x += Math.sin(t * 0.85) * a;
+    camera.rotation.y += Math.cos(t * 0.55) * a * 0.8;
+    camera.rotation.z += Math.sin(t * 0.7) * a * 1.1;
+    camera.position.x += Math.sin(t * 0.6) * SUBIDO.bob;
+    camera.position.y += Math.cos(t * 0.8) * SUBIDO.bob * 0.6;
+  }
   if (gunner || guiding || radioCall) p.bowDraw = p.eggDraw = 0; // killstreak/rádio no meio da puxada: solta o elástico sem atirar
   if (gunner) { updateGunnerMode(dt); return; }
   if (ac130) { updateAc130Mode(dt); return; }
@@ -5835,7 +5882,7 @@ function updateBot(b, dt) {
     if (!b.remote && gameTime >= b.respawnAt) respawn(b);
     return;
   }
-  if (b.remote) { interpRemote(b); animateBot(b, dt); poseRemote(b, scene); docaoLod(b); return; } // online: posição vem do servidor
+  if (b.remote) { interpRemote(b); animateBot(b, dt); poseRemote(b, scene, gameTime); docaoLod(b); return; } // online: posição vem do servidor
   if (b.dummy) { placeDummy(b); const sp = b.travelV / Math.max(dt, 1e-3); b.vel.x = sp; animateBot(b, dt); b.vel.x = 0; return; } // Treino: não pensa nem atira
   if (hideS && (b.hider || hideFrozen(hideS, b))) { b.vel.set(0, 0, 0); b.target = null; m.group.position.copy(b.pos); m.group.rotation.y = b.yaw; if (!b.hider) animateBot(b, dt); return; } // Docão Escondido: objeto não pensa; Caçador espera a preparação
   if (!online && (bombFrozen(bombS) || (gfLive() && gunfightFrozen(gfS)))) { b.vel.set(0, 0, 0); b.useHold = false; animateBot(b, dt); return; } // Bomba e Gunfight: preparação
@@ -7788,6 +7835,7 @@ function loop() {
   }
   if (worldGroup) updateWeather(worldGroup, dt);
   renderer.clear();
+  const subidoOn = state === 'playing' && !!(player && player.alive && player.subido);
   const camO = window.__cam; // testes/screenshots: câmera livre { p: [x, y, z], t: [x, y, z], fov }
   if (camO) { camera.position.set(...camO.p); camera.lookAt(...camO.t); if (camO.fov && camera.fov !== camO.fov) { camera.fov = camO.fov; camera.updateProjectionMatrix(); } }
   if (state === 'menu' && !camO) {
@@ -7835,13 +7883,15 @@ function loop() {
     if (showcase.parent !== scene) scene.add(showcase);
     if (predator && !camO) renderMissileScreen();
     placeNameTags();
+    if (subidoOn) subidoBind(renderer);
     renderer.render(scene, camera);
   }
   poseGunnerRig(dt); if (fp.root) fp.root.visible = !(gunner || ac130 || (player && player.tank));
   if (state === 'playing' && player) poseLocal(player, scene);
   jetHum(!!(state === 'playing' && player && player.alive && player.jet && spaceHold));
   mgWhirr.set(state === 'playing' && player && player.alive && player.weapon === MINIGUN && !gunner ? player.mgSpin || 0 : 0, !!(player && player.mgFiring)); // giro da minigun (zera fora do jogo: nunca fica zumbindo)
-  if (state !== 'menu' && (state !== 'over' || (matchEnding && matchEnding.firstPerson && !victory.on)) && !emote.on && player && player.alive && !camO && !(hideS && player.hider)) { renderer.clearDepth(); renderer.render(fpScene, fpCam); } // no fim suave a arma continua na mão
+  if (state !== 'menu' && (state !== 'over' || (matchEnding && matchEnding.firstPerson && !victory.on)) && !emote.on && player && player.alive && !camO && !(hideS && player.hider)) { if (subidoOn) subidoBind(renderer); renderer.clearDepth(); renderer.render(fpScene, fpCam); } // no fim suave a arma continua na mão
+  if (subidoOn) subidoPresent(renderer, gameTime, !subidoMotionOk());
 }
 mountUav();
 mountStreakUi();
@@ -10392,7 +10442,7 @@ function invEndText() {
 }
 
 // ganchos para testes automatizados
-window.__docao = { renderer, get gta() { const p = player; if (!p) return null; const eye = camera.position.y - p.pos.y; return { tank: !!p.tank, jet: !!p.jet, glide: !!p.jetGlide, big: !!p.big, hp: p.hp, hpCap: p.hpCap || 100, jetLeft: +(p.jetLeft || 0).toFixed(2), bigLeft: +(p.bigLeft || 0).toFixed(2), eye: +eye.toFixed(2), bodyH: p.bodyH || 0, bodyR: p.bodyR || 0, hud: ($('gtaHud') && !$('gtaHud').classList.contains('hidden')) ? $('gtaHud').textContent : '' }; }, get state() { return state; }, get mapId() { return currentMap ? currentMap.id : null; }, get navGood() { return nav ? nav.good.length : 0; }, get zombies() { return inv ? inv.zombies : []; }, get invInfo() { return inv ? { wave: inv.wave, phase: inv.phase, left: inv.left, n: (inv.zombies || []).length, t: inv.t } : null; }, get bombInfo() { return bombS ? { phase: bombS.phase, t: bombS.t, carrier: bombS.carrier } : null; }, get mode() { return mode; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
+window.__docao = { renderer, get gta() { const p = player; if (!p) return null; const eye = camera.position.y - p.pos.y; return { tank: !!p.tank, jet: !!p.jet, glide: !!p.jetGlide, big: !!p.big, subido: !!p.subido, hp: p.hp, hpCap: p.hpCap || 100, jetLeft: +(p.jetLeft || 0).toFixed(2), bigLeft: +(p.bigLeft || 0).toFixed(2), eye: +eye.toFixed(2), bodyH: p.bodyH || 0, bodyR: p.bodyR || 0, wave: document.body.dataset.subidoWave === '1', green: document.body.classList.contains('subido'), lowHz: subidoLp ? Math.round(subidoLp.frequency.value) : 0, hud: ($('gtaHud') && !$('gtaHud').classList.contains('hidden')) ? $('gtaHud').textContent : '' }; }, get state() { return state; }, get mapId() { return currentMap ? currentMap.id : null; }, get navGood() { return nav ? nav.good.length : 0; }, get zombies() { return inv ? inv.zombies : []; }, get invInfo() { return inv ? { wave: inv.wave, phase: inv.phase, left: inv.left, n: (inv.zombies || []).length, t: inv.t } : null; }, get bombInfo() { return bombS ? { phase: bombS.phase, t: bombS.t, carrier: bombS.carrier } : null; }, get mode() { return mode; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
   set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible, cupX: heldUtilMesh().position.x, smokeVisible: !!(fp.smokeCan && fp.smokeCan.visible), flashVisible: !!(fp.flashCan && fp.flashCan.visible) }; }, get tacticals() { return tacticals; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get noclip() { return noclipLive(); }, get noclipSpeed() { return noclipSpeed; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); },
   MAPS, loadMap, selectMap, get map() { return currentMap; }, get gas() { return gasSim ? gasSim.list.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, r: c.r, h: c.h, hp: +c.hp.toFixed(1), phase: c.phase, explodeAt: +c.explodeAt.toFixed(2), respawnAt: +c.respawnAt.toFixed(2) })) : []; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
   get online() { return online; }, joinRoom, leaveOnline, netEv,
