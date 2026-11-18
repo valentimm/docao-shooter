@@ -1470,7 +1470,11 @@ startMsg() {
   // Disco Voador: o servidor voa e quica (shared/disc.js), avisa cada quique ('db') pra todo mundo ressincronizar e aplica o dano
   humanDisc(e, oA, dA) {
     const o = obj3(oA), d = obj3(dA); if (!this.eyeOk(e, o) || !d || !this.canShoot(e, DISC_W)) return;
-    const n = norm(d), id = this.projId++, disc = { id, owner: e, pos: { x: o.x + n.x * 0.5, y: o.y + n.y * 0.5 - 0.15, z: o.z + n.z * 0.5 }, dir: n, bounces: 0, t: 0 };
+    this.launchDisc(e, o, norm(d));
+  }
+  launchDisc(e, o, d) {
+    const n = norm(d), id = this.projId++;
+    const disc = { id, owner: e, pos: { x: o.x + n.x * 0.5, y: o.y + n.y * 0.5 - 0.15, z: o.z + n.z * 0.5 }, dir: n, bounces: 0, t: 0 };
     this.discs.push(disc); this.events.push(['dl', id, e.id, arr3(disc.pos), arr3(n)]);
   }
   stepDiscs(dt) {
@@ -1507,10 +1511,13 @@ startMsg() {
     const hits = explosionHits(pos, raySplash(W), [owner], () => true, owner, false, null);
     for (const h of hits) if (h.dmg > 0) this.damage(owner, h.dmg, owner, RAY, false, false, null, 0, pos);
   }
-  // Ray Gun: só no Survival. O servidor voa e quica (shared/ray.js) e o estouro passa por blast().
+  // Ray Gun: Survival, e também a classe do Gunfight. Fora desses modos o servidor recusa.
   humanRay(e, oA, dA) {
-    if (!this.survival) { e.rejectedShots = (e.rejectedShots || 0) + 1; return; }
+    if (!this.survival && !this.gfMode) { e.rejectedShots = (e.rejectedShots || 0) + 1; return; }
     const o = obj3(oA), d = obj3(dA); if (!this.eyeOk(e, o) || !d || !this.canShoot(e, RAY)) return;
+    this.launchRay(e, o, norm(d));
+  }
+  launchRay(e, o, d) {
     const n = norm(d), id = this.projId++;
     const ray = { id, owner: e, pos: { x: o.x + n.x * 0.45, y: o.y + n.y * 0.45 - 0.05, z: o.z + n.z * 0.45 }, dir: n, bounces: 0, t: 0, traveled: 0 };
     this.rays.push(ray); this.events.push(['yl', id, e.id, arr3(ray.pos), arr3(n)]);
@@ -1552,7 +1559,11 @@ startMsg() {
   humanEgg(e, oA, dA, pull) {
     const o = obj3(oA), d = obj3(dA), last = e.lastShot[EGG_W] ?? -Infinity; if (!this.eyeOk(e, o) || !d || vlen(d) < 0.5 || !this.canShoot(e, EGG_W)) return;
     // força limitada pelo tempo que o ovo está na mão (puxada medida no servidor, 20% de folga pra rede)
-    const held = this.T - Math.max(e.eggAt ?? -Infinity, last), k = Math.min(clamp(Number(pull) || 0, 0, 1), clamp(held / (WEAPONS[EGG_W].draw * 0.8), 0, 1)), n = norm(d), sp = eggSpeed(k), id = this.projId++;
+    const held = this.T - Math.max(e.eggAt ?? -Infinity, last), k = Math.min(clamp(Number(pull) || 0, 0, 1), clamp(held / (WEAPONS[EGG_W].draw * 0.8), 0, 1));
+    this.launchEgg(e, o, norm(d), k);
+  }
+  launchEgg(e, o, d, k) {
+    const n = norm(d), sp = eggSpeed(k), id = this.projId++;
     const g = { id, owner: e, k, pos: { ...o }, vel: { x: n.x * sp, y: n.y * sp, z: n.z * sp }, t: 0 };
     this.eggs.push(g); this.events.push(['el', id, e.id, arr3(g.pos), arr3(g.vel), r2(k)]);
   }
@@ -2247,6 +2258,16 @@ startMsg() {
     if (w.corn) { const oo = center(b, 1.4); this.launchCorn(b, oo, cornAim(oo, { x: t.pos.x + (t.vel.x || 0) * mind.cornLead + rand(-mind.cornErr, mind.cornErr), y: t.pos.y + 0.7, z: t.pos.z + (t.vel.z || 0) * mind.cornLead + rand(-mind.cornErr, mind.cornErr) })); return; }
     if (w.gift) { const oo = center(b, 1.4); this.launchGift(b, oo, giftAim(oo, { x: t.pos.x + (t.vel.x || 0) * mind.cornLead + rand(-mind.cornErr, mind.cornErr), y: t.pos.y + 0.7, z: t.pos.z + (t.vel.z || 0) * mind.cornLead + rand(-mind.cornErr, mind.cornErr) })); return; }
     if (w.rocket) { const lead = d / w.rocket.speed, at = { x: t.pos.x + (t.vel.x || 0) * lead + rand(-mind.rocketErr, mind.rocketErr), y: t.pos.y + 0.25, z: t.pos.z + (t.vel.z || 0) * lead + rand(-mind.rocketErr, mind.rocketErr) }; const oo = center(b, 1.4); this.launchRocket(b, oo, norm({ x: at.x - oo.x, y: at.y - oo.y, z: at.z - oo.z })); return; }
+    // Disco, Ray e Estilingue têm range 0: o hitscan morre na boca e ninguém vê tiro. O projétil é que anda.
+    if (w.disc || w.ray || w.egg) {
+      const oo = center(b, 1.4);
+      const at = { x: t.pos.x + (t.vel.x || 0) * 0.12 + rand(-0.3, 0.3), y: t.pos.y + (w.egg ? 0.45 + Math.min(2.2, d * 0.18) : 1.05), z: t.pos.z + (t.vel.z || 0) * 0.12 + rand(-0.3, 0.3) };
+      const dir = norm({ x: at.x - oo.x, y: at.y - oo.y, z: at.z - oo.z });
+      if (w.disc) this.launchDisc(b, oo, dir);
+      else if (w.ray) this.launchRay(b, oo, dir);
+      else this.launchEgg(b, oo, dir, 0.9);
+      return;
+    }
     const aimPt = hitscanAim(mind, b, t.pos, t.vel, { aimTime: b.aim, scope: !!w.scope, pellets: w.pellets, pistol: b.weapon === PISTOL || (!!w.revolver && !w.akimbo), targetMoving: tMoving, selfMoving, egged: b.eggUntil > this.T, weaponSpread: w.spread, stance: stanceScale(t.crouch) });
     if (w.akimbo) aimPt.spread *= 1.45; else if (w.revolver) aimPt.spread *= 0.72 / (mind.pistolMul || 0.9);
     const sa = !w.scope && shieldAim(b.pos, t, t.yaw, (b.reaction || 0.5) < 0.48);

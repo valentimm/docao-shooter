@@ -6217,6 +6217,11 @@ function botShoot(b, t, dist = 10) {
     const o = center(b, 1.4), a = cornAim(o, t.pos.clone().add(new V3(t.vel.x * mind.cornLead + rand(-mind.cornErr, mind.cornErr), 0.7, t.vel.z * mind.cornLead + rand(-mind.cornErr, mind.cornErr)))); launchCorn(b, o, new V3(a.x, a.y, a.z));
   } else if (w.gift) {
     const o = center(b, 1.4), a = giftAim(o, t.pos.clone().add(new V3(t.vel.x * mind.cornLead + rand(-mind.cornErr, mind.cornErr), 0.7, t.vel.z * mind.cornLead + rand(-mind.cornErr, mind.cornErr)))); launchGift(b, o, new V3(a.x, a.y, a.z));
+  } else if (w.disc || w.ray || w.egg) { // range 0: hitscan não sai da boca. O disco/raio/ovo é o tiro.
+    const o = center(b, 1.4);
+    const at = t.pos.clone().add(new V3(t.vel.x * 0.12, w.egg ? 0.45 + Math.min(2.2, dist * 0.18) : 1.05, t.vel.z * 0.12));
+    const dir = at.sub(o).normalize();
+    if (w.disc) launchDisc(b, o, dir); else if (w.ray) launchRay(b, o, dir); else launchEgg(b, o, dir, 0.9);
   } else {
     const aim = hitscanAim(mind, b, t.pos, t.vel, { aimTime: b.aim, scope: !!w.scope, pellets: w.pellets, pistol: b.weapon === PISTOL || (!!w.revolver && !w.akimbo), targetMoving: tMoving, selfMoving, egged: b.eggUntil > gameTime, weaponSpread: w.spread, stance: stanceScale(t.crouch) });
     if (w.akimbo) aim.spread *= 1.45; else if (w.revolver) aim.spread *= 0.72 / (mind.pistolMul || 0.9);
