@@ -63,7 +63,7 @@ export function traceShot(P, o, d, W, targets, helis = [], scale = 1) {
   let t0 = 0, mul = 1, left = W.pen || 0, walls = 0, bodies = 0;
   for (let it = 0; it < 8; it++) {
     const wh = P.rayWorldS(at(o, d, t0), d, far - t0), wallT = wh ? t0 + wh.t : far, seg = [];
-    for (const { e, p, crouch, size, prone, yaw } of targets) {
+    for (const { e, p, crouch, size, prone, yaw, spheres } of targets) {
       if (done.has(e)) continue; let b = null; const sz = size || 1; // zumbis da Invasão: hitbox escalada a partir dos pés (igual ao scaleHit)
       if (prone) {
         const sp = proneSpan(o, d, p, yaw);
@@ -73,8 +73,8 @@ export function traceShot(P, o, d, W, targets, helis = [], scale = 1) {
         }
         continue;
       }
-      for (const [y, r, head] of HITBOXES) {
-        const sp = bodySpan(o, d, p, y * sz, r * sz, crouch || 0); if (!sp || sp[1] <= t0) continue;
+      for (const [y, r, head] of (spheres || HITBOXES.map(([yy, rr, hh]) => [yy * sz, rr * sz, hh]))) {
+        const sp = bodySpan(o, d, p, y, r, spheres ? 0 : (crouch || 0)); if (!sp || sp[1] <= t0) continue;
         const t = sp[0] >= t0 ? sp[0] : t0 > 0 ? t0 : sp[1]; // encostado do outro lado da parede: entra no início do trecho; colado no cano: raiz de trás (igual ao raySphere)
         if (t > 0 && t < wallT && (!b || t < b.t)) b = { e, t, head };
       }

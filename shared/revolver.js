@@ -75,24 +75,26 @@ export function spendRound(e, i, hand = 0) {
   return true;
 }
 
-// enche os tambores gastando a reserva. Devolve quantas balas entraram.
-export function refillDrums(e, i) {
+// enche os tambores gastando a reserva. infinite: Gunfight, a reserva não desce (o pente continua finito).
+export function refillDrums(e, i, infinite = false) {
   const W = weapon(i);
   if (!W || !(W.mag > 0)) return 0;
+  const poolOf = () => infinite ? 1e9 : (e.reserve[i] | 0);
   if (!W.akimbo) {
-    const n = Math.min(Math.max(0, W.mag - (e.mag[i] | 0)), e.reserve[i] | 0);
-    if (n > 0) { e.mag[i] += n; e.reserve[i] -= n; }
+    const n = Math.min(Math.max(0, W.mag - (e.mag[i] | 0)), poolOf());
+    if (n > 0) { e.mag[i] += n; if (!infinite) e.reserve[i] -= n; }
     return n;
   }
   ensureDrum(e);
   let right = e.mag[i] | 0;
   let left = e.drum[i] == null ? W.mag : e.drum[i] | 0;
-  let pool = e.reserve[i] | 0;
+  let pool = poolOf();
   const takeR = Math.min(Math.max(0, W.mag - right), pool);
   right += takeR; pool -= takeR;
   const takeL = Math.min(Math.max(0, W.mag - left), pool);
   left += takeL; pool -= takeL;
-  e.mag[i] = right; e.drum[i] = left; e.reserve[i] = pool;
+  e.mag[i] = right; e.drum[i] = left;
+  if (!infinite) e.reserve[i] = pool;
   return takeR + takeL;
 }
 

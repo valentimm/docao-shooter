@@ -57,7 +57,7 @@ export function unlockAudio() {
   const c = sharedAudio();
   if (!c) return null;
   const locked = c.state === 'suspended' || c.state === 'interrupted';
-  try { if (locked) c.resume(); } catch (e) { /* o próximo gesto tenta de novo */ }
+  try { const p = locked ? c.resume() : null; if (p && p.catch) p.catch(() => {}); } catch (e) { /* o próximo gesto tenta de novo */ }
   if (!primed || locked) {
     primed = true;
     try { playSilence(c); } catch (e) { /* o silêncio é só a chave */ }
@@ -69,7 +69,7 @@ export function resumeAudio() {
   if (!ctx) return;
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   try {
-    if (ctx.state === 'suspended' || ctx.state === 'interrupted') ctx.resume();
+    if (ctx.state === 'suspended' || ctx.state === 'interrupted') { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
   } catch (e) { /* o próximo clique retoma */ }
 }
 

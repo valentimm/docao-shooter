@@ -13,9 +13,9 @@ export const BODY = { y0: 0.6, y1: 1.5, r: 0.58 };
 export const ROCKET_PAD = 0.15;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export function bodyClosest(c, pos, crouch = 0) {
-  const scale = stanceScale(crouch), r = BODY.r, ry = r * scale;
-  const ay = clamp(c.y, pos.y + BODY.y0 * scale, pos.y + BODY.y1 * scale);
+export function bodyClosest(c, pos, crouch = 0, body = null) {
+  const B = body || BODY, scale = body ? 1 : stanceScale(crouch), r = B.r, ry = r * scale;
+  const ay = clamp(c.y, pos.y + B.y0 * scale, pos.y + B.y1 * scale);
   const dx = c.x - pos.x, dy = c.y - ay, dz = c.z - pos.z, h = Math.hypot(dx, dz);
   if ((h / r) ** 2 + (dy / ry) ** 2 <= 1) return { d: 0, point: { x: c.x, y: c.y, z: c.z } };
   // Ponto mais próximo na tampa elíptica (ou na lateral cilíndrica).
@@ -35,8 +35,9 @@ export function explosionHits(c, o, ents, losClear, owner, teamMode, direct = nu
   for (const e of ents) {
     if (!e.alive) continue;
     if (teamMode && owner && e !== owner && e.team === owner.team) continue; // sem fogo amigo (dano em si mesmo continua)
-    const scale = stanceScale(e.crouch), bc = bodyClosest(c, e.pos, e.crouch), point = bc.point, d = e === direct ? 0 : bc.d; if (d > o.radius) continue;
-    const pts = [point, ...[0.3, 1.0, 1.7].map((y) => ({ x: e.pos.x, y: e.pos.y + y * scale, z: e.pos.z }))];
+    const scale = e.cheatBody ? 1 : stanceScale(e.crouch), bc = bodyClosest(c, e.pos, e.crouch, e.cheatBody || null), point = bc.point, d = e === direct ? 0 : bc.d; if (d > o.radius) continue;
+    const ys = e.cheatBody ? [e.cheatBody.y0, (e.cheatBody.y0 + e.cheatBody.y1) / 2, e.cheatBody.y1] : [0.3 * scale, 1.0 * scale, 1.7 * scale];
+    const pts = [point, ...ys.map((y) => ({ x: e.pos.x, y: e.pos.y + y, z: e.pos.z }))];
     let seen = d < 0.35; for (const s of srcs) { if (seen) break; for (const p of pts) if (losClear(s, p)) { seen = true; break; } }
     if (!seen) continue;
     const k = 1 - d / o.radius;
@@ -55,9 +56,9 @@ export function shotKnock(W, from, to, dmg, zt) {
   return { x: dx * W.knock.push * k, y: W.knock.lift * k, z: dz * W.knock.push * k };
 }
 // raio × cápsula vertical em pos (com folga pad). Devolve t ≥ 0 do primeiro contato ou null.
-export function rayCapsule(o, d, maxT, pos, pad = 0, crouch = 0) {
-  const scale = stanceScale(crouch), R = BODY.r + pad, ry = BODY.r * scale + pad;
-  const y0 = pos.y + BODY.y0 * scale, y1 = pos.y + BODY.y1 * scale; let best = null;
+export function rayCapsule(o, d, maxT, pos, pad = 0, crouch = 0, body = null) {
+  const cap = body || BODY, scale = body ? 1 : stanceScale(crouch), R = cap.r + pad, ry = cap.r * scale + pad;
+  const y0 = pos.y + cap.y0 * scale, y1 = pos.y + cap.y1 * scale; let best = null;
   const take = (t) => { if (t >= 0 && t <= maxT && (best === null || t < best)) best = t; };
   const ox = o.x - pos.x, oz = o.z - pos.z, A = d.x * d.x + d.z * d.z, B = 2 * (ox * d.x + oz * d.z), C = ox * ox + oz * oz - R * R;
   if (C <= 0 && o.y >= y0 && o.y <= y1) return 0; // começou dentro
