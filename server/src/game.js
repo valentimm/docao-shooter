@@ -642,7 +642,7 @@ startMsg() {
     if (this.emoting(e) && (k === 'f' || k === 'mgs' || k === 'r' || k === 'dk' || k === 'ry' || k === 'cn' || k === 'gp' || k === 'eg' || k === 'n' || k === 'm' || k === 'sw' || k === 'sd' || k === 'ss' || k === 'sbg' || k === 'tb' || k === 'gf' || k === 'af' || k === 'rl' || k === 'sk' || k === 'tc')) return;
     if ((e.stunUntil > this.T || e.flashUntil > this.T) && this.T - (e.stunAt ?? -9) > 0.3 && (k === 'f' || k === 'r' || k === 'dk' || k === 'ry' || k === 'cn' || k === 'gp' || k === 'eg' || k === 'n' || k === 'm' || k === 'sw' || k === 'sd' || k === 'ss' || k === 'tb' || k === 'sk' || k === 'tn' || k === 'tc')) { if (k === 'sk') this.toMe(e, ['skn', e.shocks | 0]); else if (k === 'n') this.toMe(e, ev[3] === 'p' ? ['pkb', e.pokeballs | 0] : ['ndn', e.nades | 0]); else if (k === 'tn') this.pushGr(e); return; } // levou choque ou flash: não atira (0,3 s de folga pra rede)
     if (this.spawnShielded(e) && SPAWN_SHIELD_BLOCK.has(k)) { if (k === 'sk') this.toMe(e, ['skn', e.shocks | 0]); else if (k === 'n') this.toMe(e, ev[3] === 'p' ? ['pkb', e.pokeballs | 0] : ['ndn', e.nades | 0]); else if (k === 'tn') this.pushGr(e); e.rejectedShots = (e.rejectedShots || 0) + 1; return; } // escudo de nascimento: não leva dano e não ataca
-    if (k === 'rl') { const w = ev[1], W = e.slots.includes(w) ? this.resolvedW(e, w) : null; const full = W && (W.revolver ? drumsFull(e, w) : e.mag[w] >= W.mag); if (W && !full && !W.melee && !W.shield && e.reserve[w] > 0) e.reload = { w, start: this.T, done: 0 }; return; }
+    if (k === 'rl') { const w = ev[1], W = e.slots.includes(w) ? this.resolvedW(e, w) : null; const full = W && (W.revolver ? drumsFull(e, w) : e.mag[w] >= W.mag); if (W && !full && !W.melee && !W.shield && (this.gfMode || e.reserve[w] > 0)) e.reload = { w, start: this.T, done: 0 }; return; } // Gunfight: reserva infinita, o pente ainda recarrega
     if (k === 'f') { const Wf = WEAPONS[ev[3]]; const hand = Wf && Wf.akimbo ? ev[6] : 0; if (Wf && Wf.akimbo && hand !== 0 && hand !== 1) { e.rejectedShots = (e.rejectedShots || 0) + 1; return; } return this.clockOk(e, ev[4], ev[3], hand) && this.mgOk(e, ev[3], ev[4]) && this.humanFire(e, ev[1], ev[2], ev[3], ev[5], ev[6]); }
     if (k === 'mgs') return this.mgSpin(e, ev[1], ev[2]);
     if (k === 'r') return this.clockOk(e, ev[3], 3) && this.humanRocket(e, ev[1], ev[2]);
@@ -879,11 +879,12 @@ startMsg() {
   // recarga do lado do servidor (mesma temporização do cliente, com 20% de folga pra rede)
   progressReload(e) {
     const R = e.reload; if (!R) return; const w = this.resolvedW(e, R.w), el = this.T - R.start, i = R.w;
+    const inf = !!this.gfMode; // reserva não acaba; o pente e o tempo de recarga continuam
     if (w.shellReload) {
       const shells = el >= (w.reloadStart + w.reload) * 0.8 ? Math.floor((el - w.reloadStart * 0.8) / (w.reload * 0.8)) : 0;
-      while (R.done < shells && e.mag[i] < w.mag && e.reserve[i] > 0) { e.mag[i]++; e.reserve[i]--; R.done++; }
-      if (e.mag[i] >= w.mag || e.reserve[i] <= 0) e.reload = null;
-    } else if (el >= w.reload * 0.8) { refillDrums(e, i); e.reload = null; if (i === EGG_W) e.eggAt = R.start + w.reload * 0.8; } // ovo na mão: a puxada conta daqui
+      while (R.done < shells && e.mag[i] < w.mag && (inf || e.reserve[i] > 0)) { e.mag[i]++; if (!inf) e.reserve[i]--; R.done++; }
+      if (e.mag[i] >= w.mag || (!inf && e.reserve[i] <= 0)) e.reload = null;
+    } else if (el >= w.reload * 0.8) { refillDrums(e, i, inf); e.reload = null; if (i === EGG_W) e.eggAt = R.start + w.reload * 0.8; } // ovo na mão: a puxada conta daqui
   }
   canShoot(e, w, hand = 0) {
     if (e.down) {

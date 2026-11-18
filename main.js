@@ -2488,11 +2488,12 @@ function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx
   if (!online && gfLive() && gfS) for (const gev of gfOnKill(gfS, t, entities)) applyGfOffline(gev);
 }
 
+function endlessReserve() { return gfLive(); } // Gunfight: a reserva não acaba. O pente recarrega no tempo normal.
 function startReload(e) {
   if (emote.on && e.isPlayer) return;
   const w = e.isPlayer ? gunOf(e, e.weapon) : WEAPONS[e.weapon];
   const full = w.revolver ? drumsFull(e, e.weapon) : e.mag[e.weapon] >= w.mag;
-  if (e.reloadEnd > gameTime || full || w.melee || w.shield || e.reserve[e.weapon] <= 0) return;
+  if (e.reloadEnd > gameTime || full || w.melee || w.shield || (!endlessReserve() && e.reserve[e.weapon] <= 0)) return;
   e.reloadStartT = gameTime;
   if (e.isPlayer) fp.reloadVar = Math.random(); // só escolhe a variação visual; o tempo continua o de rules.js
   if (online && e.isPlayer) netEv(['rl', e.weapon]);
@@ -2502,15 +2503,16 @@ function startReload(e) {
 function finishReload(e) {
   if (!e.reloadEnd || gameTime < e.reloadEnd) return;
   const w = e.isPlayer ? gunOf(e, e.weapon) : WEAPONS[e.weapon];
+  const inf = endlessReserve();
   if (w.shellReload) {
-    if (e.reserve[e.weapon] > 0 && e.mag[e.weapon] < w.mag) { e.mag[e.weapon]++; e.reserve[e.weapon]--; if (e.isPlayer) { sfx.shell(); fp.shellT = 0.18; } }
-    if (e.mag[e.weapon] < w.mag && e.reserve[e.weapon] > 0) e.reloadEnd += w.reload;
+    if ((inf || e.reserve[e.weapon] > 0) && e.mag[e.weapon] < w.mag) { e.mag[e.weapon]++; if (!inf) e.reserve[e.weapon]--; if (e.isPlayer) { sfx.shell(); fp.shellT = 0.18; } }
+    if (e.mag[e.weapon] < w.mag && (inf || e.reserve[e.weapon] > 0)) e.reloadEnd += w.reload;
     else { e.reloadEnd = 0; if (e.isPlayer) { sfx.pump(0.8); fp.actionT = 0.45; fp.actionLen = 0.45; } }
     return;
   }
-  if (w.revolver) { refillDrums(e, e.weapon); e.reloadEnd = 0; return; }
-  const need = w.mag - e.mag[e.weapon]; const take = Math.min(need, e.reserve[e.weapon]);
-  e.mag[e.weapon] += take; e.reserve[e.weapon] -= take; e.reloadEnd = 0;
+  if (w.revolver) { refillDrums(e, e.weapon, inf); e.reloadEnd = 0; return; }
+  const need = w.mag - e.mag[e.weapon]; const take = Math.min(need, inf ? need : e.reserve[e.weapon]);
+  e.mag[e.weapon] += take; if (!inf) e.reserve[e.weapon] -= take; e.reloadEnd = 0;
 }
 function setWeapon(e, idx) { if (e.weapon !== idx) resetRecoil(e); e.weapon = idx; if (e.model) e.model.guns.forEach((g, i) => { g.visible = i === idx; if (g.userData.twin) g.userData.twin.visible = g.visible; if (g.userData.extra) g.userData.extra.visible = g.visible; }); syncShieldWorn(e); } // twin: 2º sabre ou revólver da esquerda. extra: o da direita do par.
 // pinta as lâminas dos dois sabres (e do par do Sabre Duplo)
@@ -3955,7 +3957,7 @@ function updateHud(dt) {
     if (crossEl) crossEl.classList.toggle('shield', !!(w.shield || fp.breakT > 0)); }
   hpBar.classList.toggle('regen', !!(p.alive && p.regenOn)); // brilho verde + "+" pulsando enquanto regenera
   const ammoEl = $('ammo'); if (ammoEl) ammoEl.classList.toggle('dual', !!w.akimbo);
-  $('mag').textContent = p.down ? (p.downMag | 0) : w.shield ? Math.ceil(p.shieldHp || 0) : w.melee ? '∞' : w.akimbo ? `${rounds(p, p.weapon, 0)}·${rounds(p, p.weapon, 1)}` : p.mag[p.weapon]; $('reserve').textContent = p.down ? ' / chão' : w.shield ? ' TAMPA' : w.melee ? '' : ' / ' + p.reserve[p.weapon];
+  $('mag').textContent = p.down ? (p.downMag | 0) : w.shield ? Math.ceil(p.shieldHp || 0) : w.melee ? '∞' : w.akimbo ? `${rounds(p, p.weapon, 0)}·${rounds(p, p.weapon, 1)}` : p.mag[p.weapon]; $('reserve').textContent = p.down ? ' / chão' : w.shield ? ' TAMPA' : w.melee ? '' : endlessReserve() ? ' / ∞' : ' / ' + p.reserve[p.weapon];
   { const title = weaponTitleParts(p), name = $('wtitle'), meta = $('wmeta'), mode = $('wmode'); if (p.utilSel) { if (name) name.textContent = UTIL_NAME[p.utilSel] || 'Granada'; if (meta) meta.textContent = ''; if (mode) mode.textContent = 'esquerdo carrega · direito mínimo'; } else { if (name) name.textContent = title.name; if (meta) meta.textContent = title.meta ? '| ' + title.meta : ''; if (mode) mode.textContent = fireModeLabel(w); } }
   for (let i = 0; i < NADE.max; i++) $('nade' + i).classList.toggle('on', i < p.nades);
   const pm = $('powermeter');
@@ -4014,7 +4016,7 @@ function updateHud(dt) {
     if (!p.alive) updateRespawnBtn(p);
   } crossEl.style.visibility = p.alive && !(predator && predator.phase === 'fly') ? '' : 'hidden';
   const dry = w.akimbo ? drumsEmpty(p, p.weapon) : p.mag[p.weapon] === 0;
-  $('reloadmsg').textContent = w.shield || w.melee ? '' : p.reloadEnd > gameTime ? (w.shellReload ? 'Recarregando... (atire para interromper)' : 'Recarregando...') : (dry ? (p.reserve[p.weapon] ? 'Aperte R' : 'Sem munição! Pegue uma caixa') : '');
+  $('reloadmsg').textContent = w.shield || w.melee ? '' : p.reloadEnd > gameTime ? (w.shellReload ? 'Recarregando... (atire para interromper)' : 'Recarregando...') : (dry ? (endlessReserve() || p.reserve[p.weapon] ? 'Aperte R' : 'Sem munição! Pegue uma caixa') : '');
   paintSaberHud(p, w);
   const left = Math.max(0, matchLimit() - gameTime); $('timer').textContent = armsMode() ? WEAPONS[p.primary].short : exploreMode() ? '∞' : x1Mode() && !Number.isFinite(matchLimit()) ? 'até 10' : Number.isFinite(left) ? `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'Treino ∞';
   if ($('pauseTime') && !$('pause').classList.contains('hidden')) $('pauseTime').textContent = $('timer').textContent;
