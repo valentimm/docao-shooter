@@ -7,7 +7,7 @@
 import { SKINS, skinOk } from '../../skins.js';
 import { ITEMS, itemById, parseLook, lookItemIds, isFreeItem, knifeKind, sniperKind, gunKey, parseGuns, GUN_EQUIP_KEYS, EARN } from '../../shared/closet.js';
 import { spDay, parseChal, applyChal, chalView } from '../../shared/challenges.js';
-import { rollBox, dupeCoins, BOX_NAME, BOX_PRICE, wheelInputs, rollWheel } from '../../shared/lootbox.js';
+import { rollBox, BOX_NAME, BOX_PRICE, wheelInputs, rollWheel } from '../../shared/lootbox.js';
 import { PROMO_ID, PROMO_NAME, PROMO_COINS, promoActive } from '../../shared/promo.js';
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -16,24 +16,27 @@ export const dayNow = () => Math.floor(now() / 86400);
 // instrução SQL do ganho: soma `c` Docoins respeitando o teto diário (atômico, uma linha). Entra no mesmo lote do ranking.
 // chal (opcional) = { old, json, reward }: desafios diários vão NO MESMO UPDATE (uma linha gravada por jogador por gravação).
 // O prêmio do desafio não entra no teto diário. "chal IS old" barra pagar duas vezes se duas salas gravarem juntas.
-export function coinCreditStmt(env, acct, c, chal = null) {
-  c = Math.max(0, Math.min(EARN.matchCap, c | 0)); if (!c && !chal) return null;
+export function coinCreditStmt(env, acct, c, chal = null, mapBoxes = 0) {
+  c = Math.max(0, Math.min(EARN.matchCap, c | 0));
+  const boxAdd = Math.max(0, Math.min(4, (chal ? Math.max(0, Math.min(3, chal.boxes | 0)) : 0) + (mapBoxes | 0)));
+  if (!c && !chal && !boxAdd) return null;
   const day = dayNow();
   const earn = `MAX(0, MIN(?3, ?4 - (CASE WHEN earn_day = ?2 THEN earn_today ELSE 0 END)))`;
   if (!chal) return env.DB.prepare(
     `UPDATE accounts SET
        coins = coins + ${earn},
        earn_today = (CASE WHEN earn_day = ?2 THEN earn_today ELSE 0 END) + ${earn},
-       earn_day = ?2
-     WHERE id = ?1`).bind(acct, day, c, EARN.dayCap);
+       earn_day = ?2,
+       boxes = boxes + ?5
+     WHERE id = ?1`).bind(acct, day, c, EARN.dayCap, boxAdd);
   return env.DB.prepare(
     `UPDATE accounts SET
        coins = coins + ${earn} + (CASE WHEN chal IS ?5 THEN ?6 ELSE 0 END),
        earn_today = (CASE WHEN earn_day = ?2 THEN earn_today ELSE 0 END) + ${earn},
        earn_day = ?2,
        chal = (CASE WHEN chal IS ?5 THEN ?7 ELSE chal END),
-       boxes = boxes + (CASE WHEN chal IS ?5 THEN ?8 ELSE 0 END)
-     WHERE id = ?1`).bind(acct, day, c, EARN.dayCap, chal.old, chal.reward | 0, chal.json, Math.max(0, Math.min(3, chal.boxes | 0)));
+       boxes = boxes + (CASE WHEN chal IS ?5 THEN ?8 ELSE 0 END) + ?9
+     WHERE id = ?1`).bind(acct, day, c, EARN.dayCap, chal.old, chal.reward | 0, chal.json, Math.max(0, Math.min(3, chal.boxes | 0)), Math.max(0, Math.min(4, mapBoxes | 0)));
 }
 // desafios: lê o estado das contas desta gravação (1 SELECT pequeno, só se a sala contou algo) e calcula o novo em JS
 export async function chalUpdates(env, items) {
@@ -53,10 +56,15 @@ export async function chalUpdates(env, items) {
 export async function wallet(env, id) { // saldo + mochila + quanto já ganhou hoje
   const [a, inv] = await env.DB.batch([
     env.DB.prepare('SELECT coins, custom, earn_day, earn_today, chal, knife, sniper, boxes, guns, box_buy_day FROM accounts WHERE id = ?').bind(id),
-    env.DB.prepare('SELECT item FROM inventory WHERE account_id = ?').bind(id),
+    env.DB.prepare('SELECT item, qty FROM inventory WHERE account_id = ?').bind(id),
   ]);
   const r = (a.results && a.results[0]) || { coins: 0, custom: null, earn_day: 0, earn_today: 0 };
-  const items = (inv.results || []).map((x) => x.item).filter((i) => itemById(i));
+  const items = [];
+  for (const x of inv.results || []) {
+    if (!itemById(x.item)) continue;
+    const n = Math.max(1, Math.min(99, x.qty == null ? 1 : x.qty | 0));
+    for (let i = 0; i < n; i++) items.push(x.item);
+  }
   const knife = knifeKind(r.knife) && (isFreeItem(r.knife) || items.includes(r.knife)) ? r.knife : null;
   const sniper = sniperKind(r.sniper) && (isFreeItem(r.sniper) || items.includes(r.sniper)) ? r.sniper : null;
   return { coins: r.coins | 0, custom: r.custom && parseLook(r.custom) ? r.custom : null, items, knife, sniper, guns: parseGuns(r.guns), boxes: r.boxes | 0, boxBought: (r.box_buy_day | 0) === spDay(), earnToday: r.earn_day === dayNow() ? r.earn_today | 0 : 0, dayCap: EARN.dayCap, chal: chalView(id, r.chal) };
@@ -184,28 +192,21 @@ function cryptoRand() {
 
 const dropView = (it) => ({ id: it.id, name: it.name, emoji: it.emoji, weight: it.weight, gun: it.gun || '', knife: it.knife || '', paint: it.paint || it.finish || '' });
 
-// Abre um caixote. O servidor sorteia. Repetida vira Docoins; skin nova entra na mochila. O débito do caixote é condicional.
+// Abre um caixote. O servidor sorteia. Skin repetida soma qty na mochila (não vira Docoin). O débito do caixote é condicional.
 export async function openBox(env, id) {
   const inv = await env.DB.prepare('SELECT item FROM inventory WHERE account_id = ?').bind(id).all();
   const owned = new Set((inv.results || []).map((x) => x.item));
   const it = rollBox(cryptoRand);
   if (!it) return { status: 500, error: 'O caixote veio vazio' };
   const dupe = owned.has(it.id);
-  const gain = dupe ? dupeCoins(it.weight) : 0;
-  const dec = await env.DB.prepare('UPDATE accounts SET boxes = boxes - 1, coins = coins + ?2 WHERE id = ?1 AND boxes >= 1').bind(id, gain).run();
+  const dec = await env.DB.prepare('UPDATE accounts SET boxes = boxes - 1 WHERE id = ?1 AND boxes >= 1').bind(id).run();
   if (!dec.meta || !dec.meta.changes) return { status: 409, error: 'Você não tem caixote para abrir' };
-  if (!dupe) {
-    try {
-      await env.DB.prepare('INSERT INTO inventory (account_id, item, acquired_at) VALUES (?1, ?2, ?3)').bind(id, it.id, now()).run();
-    } catch (e) {
-      const extra = dupeCoins(it.weight);
-      await env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1').bind(id, extra).run();
-      const row = await env.DB.prepare('SELECT coins, boxes FROM accounts WHERE id = ?').bind(id).first();
-      return { status: 200, dupe: true, item: dropView(it), coins: (row && row.coins) | 0, gain: extra, boxes: (row && row.boxes) | 0 };
-    }
-  }
+  await env.DB.prepare(
+    `INSERT INTO inventory (account_id, item, acquired_at, qty) VALUES (?1, ?2, ?3, 1)
+     ON CONFLICT(account_id, item) DO UPDATE SET qty = qty + 1`
+  ).bind(id, it.id, now()).run();
   const row = await env.DB.prepare('SELECT coins, boxes FROM accounts WHERE id = ?').bind(id).first();
-  return { status: 200, dupe, item: dropView(it), coins: (row && row.coins) | 0, gain, boxes: (row && row.boxes) | 0 };
+  return { status: 200, dupe, item: dropView(it), coins: (row && row.coins) | 0, gain: 0, boxes: (row && row.boxes) | 0 };
 }
 
 // A skin equipada só sai se ela foi uma das três e não voltou como prêmio.
@@ -214,45 +215,36 @@ function wheelEquip(current, spent, prizeId, dupe) {
   return !dupe && current === prizeId ? current : null;
 }
 
-// Gasta 3 skins e entrega uma de peso >= o maior das três. Repetida (que não foi gasta) vira Docoins.
+// Gasta 3 skins e entrega uma de peso >= o maior das três. Skin repetida soma qty (não vira Docoin).
 export async function spinWheel(env, id, ids) {
   const picked = wheelInputs(ids);
   if (!picked) return { status: 400, error: 'Escolha 3 skins diferentes da mochila' };
   const spent = picked.map((it) => it.id);
-  const inv = await env.DB.prepare('SELECT item FROM inventory WHERE account_id = ?').bind(id).all();
-  const owned = new Set((inv.results || []).map((x) => x.item));
-  if (!spent.every((sid) => owned.has(sid))) return { status: 409, error: 'Uma dessas skins não está na mochila' };
+  const inv = await env.DB.prepare('SELECT item, qty FROM inventory WHERE account_id = ?').bind(id).all();
+  const qtyOf = new Map((inv.results || []).map((x) => [x.item, Math.max(1, x.qty == null ? 1 : x.qty | 0)]));
+  if (!spent.every((sid) => (qtyOf.get(sid) || 0) >= 1)) return { status: 409, error: 'Uma dessas skins não está na mochila' };
   const it = rollWheel(picked, cryptoRand);
   if (!it) return { status: 500, error: 'A roleta veio vazia' };
-  const dupe = owned.has(it.id) && !spent.includes(it.id);
-  const gain = dupe ? dupeCoins(it.weight) : 0;
+  const keepPrize = spent.includes(it.id); // uma das três voltou: qty -1 +1 = net 0 nas outras
+  const dupe = qtyOf.has(it.id) && !keepPrize;
   const acc = await env.DB.prepare('SELECT knife, sniper, guns FROM accounts WHERE id = ?').bind(id).first();
   const guns = parseGuns(acc && acc.guns);
-  for (const k of GUN_EQUIP_KEYS) if (!wheelEquip(guns[k], spent, it.id, dupe)) delete guns[k];
+  for (const k of GUN_EQUIP_KEYS) if (!wheelEquip(guns[k], spent, it.id, false)) delete guns[k];
   const gunsJson = Object.keys(guns).length ? JSON.stringify(guns) : null;
-  const knife = wheelEquip(acc && acc.knife, spent, it.id, dupe);
-  const sniper = wheelEquip(acc && acc.sniper, spent, it.id, dupe);
-  const del = env.DB.prepare(
-    `DELETE FROM inventory WHERE account_id = ?1 AND item IN (?2, ?3, ?4)
-     AND (SELECT COUNT(*) FROM inventory WHERE account_id = ?1 AND item IN (?2, ?3, ?4)) = 3`
-  ).bind(id, spent[0], spent[1], spent[2]);
-  let wrote;
-  try {
-    wrote = dupe
-      ? await env.DB.batch([del, env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1 AND changes() = 3').bind(id, gain)])
-      : await env.DB.batch([del, env.DB.prepare('INSERT INTO inventory (account_id, item, acquired_at) SELECT ?1, ?2, ?3 WHERE changes() = 3').bind(id, it.id, now())]);
-  } catch (e) {
-    return { status: 409, error: 'Não deu pra girar. Tente de novo.' };
+  const knife = wheelEquip(acc && acc.knife, spent, it.id, false);
+  const sniper = wheelEquip(acc && acc.sniper, spent, it.id, false);
+  // baixa 1 de cada skin gasta; se qty chega a 0, apaga a linha
+  for (const sid of spent) {
+    const q = qtyOf.get(sid) | 0;
+    if (q <= 1) await env.DB.prepare('DELETE FROM inventory WHERE account_id = ?1 AND item = ?2').bind(id, sid).run();
+    else await env.DB.prepare('UPDATE inventory SET qty = qty - 1 WHERE account_id = ?1 AND item = ?2 AND qty >= 1').bind(id, sid).run();
+    qtyOf.set(sid, q - 1);
   }
-  const deleted = (wrote[0].meta && wrote[0].meta.changes) | 0;
-  const applied = (wrote[1].meta && wrote[1].meta.changes) | 0;
-  if (deleted !== 3) return { status: 409, error: 'Uma dessas skins não está na mochila' };
-  if (!dupe && !applied) {
-    try { await env.DB.prepare('INSERT INTO inventory (account_id, item, acquired_at) VALUES (?1, ?2, ?3)').bind(id, it.id, now()).run(); } catch (e) { /* já entrou */ }
-  } else if (dupe && !applied && gain) {
-    await env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1').bind(id, gain).run();
-  }
-  const gone = spent.filter((sid) => dupe || sid !== it.id);
+  await env.DB.prepare(
+    `INSERT INTO inventory (account_id, item, acquired_at, qty) VALUES (?1, ?2, ?3, 1)
+     ON CONFLICT(account_id, item) DO UPDATE SET qty = qty + 1`
+  ).bind(id, it.id, now()).run();
+  const gone = spent.filter((sid) => sid !== it.id || (qtyOf.get(sid) || 0) <= 0);
   await env.DB.prepare(
     `UPDATE accounts SET knife = ?2, sniper = ?3, guns = ?4
      WHERE id = ?1
@@ -263,7 +255,7 @@ export async function spinWheel(env, id, ids) {
   ).bind(id, knife, sniper, gunsJson, it.id, gone[0] || '', gone[1] || '', gone[2] || '').run();
   const done = await env.DB.prepare('SELECT coins, boxes, knife, sniper, guns FROM accounts WHERE id = ?').bind(id).first() || {};
   return {
-    status: 200, dupe, item: dropView(it), spent, gain: dupe ? gain : 0,
+    status: 200, dupe, item: dropView(it), spent, gain: 0,
     coins: (done.coins) | 0, boxes: (done.boxes) | 0,
     knife: done.knife || null, sniper: done.sniper || null, guns: parseGuns(done.guns),
   };

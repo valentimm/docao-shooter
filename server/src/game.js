@@ -9,7 +9,8 @@ import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap } 
 import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
 import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
 setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim } from '../../shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES } from '../../shared/invasion.js';
+import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
 import { TRAIN, isTraining, dummyX } from '../../shared/training.js';
@@ -401,12 +402,12 @@ startMsg() {
     for (const x in q) if (!q[x]) delete q[x];
     return Object.keys(q).length ? q : null;
   }
-  flushStats(e, final, won = false) {
+  flushStats(e, final, won = false, mapBox = false) {
     if (!e.acct || this.training || !this.io.stats) return;
     const k = e.sk | 0, d = e.sd | 0; e.sk = 0; e.sd = 0;
-    const c = this.coinsDelta(e, final, won), q = this.chalCounts(e, final, won);
-    if (!k && !d && !c && !final && !q) return;
-    try { this.io.stats([{ acct: e.acct.id, mode: this.cfg.mode, k, d, c, w: final && won ? 1 : 0, m: final ? 1 : 0, q }]); } catch (err) { console.error('stats', err && err.message); }
+    const c = this.coinsDelta(e, final, won), q = this.chalCounts(e, final, won), b = mapBox ? 1 : 0;
+    if (!k && !d && !c && !final && !q && !b) return;
+    try { this.io.stats([{ acct: e.acct.id, mode: this.cfg.mode, k, d, c, w: final && won ? 1 : 0, m: final ? 1 : 0, q, b }]); } catch (err) { console.error('stats', err && err.message); }
   }
   matchWon(e, rows) {
     if (this.inv) return !!this.inv.won;
@@ -414,9 +415,17 @@ startMsg() {
     if (this.nukeWinner) return this.nukeWinner === e.id;
     return !!rows[0] && rows[0].id === e.id && rows[0].kills > 0;
   }
+  mapBoxWinners(rows) {
+    const humans = this.humans().filter((e) => e.connected);
+    if (humans.length < MAP_BOX_MIN_HUMANS) return new Set();
+    const ranked = rows.filter((e) => !e.bot && !e.zt && e.connected && e.acct);
+    return new Set(ranked.slice(0, MAP_BOX_TOP).map((e) => e.acct.id));
+  }
   endMatch() {
     const rows = [...this.ents.values()].filter((e) => (e.bot && !e.zt) || e.connected).sort((a, b) => this.score(b) - this.score(a) || a.deaths - b.deaths);
-    for (const e of rows) if (e.acct && e.connected) this.flushStats(e, true, this.matchWon(e, rows));
+    const boxes = this.mapBoxWinners(rows);
+    this._mapBoxIds = [...rows].filter((e) => e.acct && boxes.has(e.acct.id)).map((e) => e.id);
+    for (const e of rows) if (e.acct && e.connected) this.flushStats(e, true, this.matchWon(e, rows), boxes.has(e.acct.id));
     this.state = 'over'; this.io.stopLoop(); this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.gifts = []; this.helis = []; this.gunships = []; this.nukes = [];
     this.io.broadcast(this.endMsg()); this.sendLobby();
   }
@@ -429,6 +438,7 @@ startMsg() {
     const boardRows = hit ? [hit, ...rows.filter((e) => e !== hit)] : rows; // mata-mata: quem estourou fica no topo mesmo com menos abates
     const winner = this.armsWinner || nukeId || (rows[0] ? rows[0].id : 0);
     return { t: 'end', mode: this.cfg.mode, ts, winTeam, board: boardRows.map((e) => [e.id, e.name, e.kills, e.deaths, e.bot, e.team, e.caps]), winner, map: this.mapId, next: this.nextMapId(), hostId: this.hostId,
+      mapBoxes: this._mapBoxIds || [],
       inv: this.inv ? { wave: this.inv.wave, won: this.inv.won ? 1 : 0, kills: this.inv.kills } : undefined };
   }
   score(e) { return this.armsMode ? armsScore(e) : this.teamMode ? e.kills + 2 * e.caps : e.kills; }
@@ -1294,6 +1304,7 @@ startMsg() {
   friends(a, b) { if (this.invasion) return !!(a && b && a !== b && !a.zt === !b.zt); return this.teamMode && a && b && a !== b && a.team === b.team && a.team >= 0; }
   damage(t, amount, a, w, head, back = false, ks = null, fx = 0, origin = a && a !== t && !a.fog ? a.pos : null) {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb) || gunfightFrozen(this.gf)) return false; // sem fogo amigo; Bomba e Gunfight: ninguém leva dano na preparação
+    if (t.zt && t.phaseUntil > this.T) return false; // Docão Fantasma faseado: imune
     if (this.compMode) amount = mitigate(t, amount, head);
     if (t.down && !t.zt) return false; // já está caído: o sangramento finaliza, dano extra não cria outra morte
     if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
@@ -1951,7 +1962,7 @@ startMsg() {
       players: () => g.humans(),
       spawnZombie(type, pos) {
         const z = g.makeEnt({ name: '', skin: SKINS[0].id, primary: 0, bot: true }); z.zt = type;
-        z.name = ({ walker: 'Docão Podre', runner: 'Esqueleto Corredor', tank: 'Barrigão de Gás', spitter: 'Cuspidor', boss: 'Docão Abóbora' })[type] || 'Zumbi';
+        z.name = (ZOMBIES[type] && ZOMBIES[type].name) || 'Zumbi';
         z.pos = { x: pos.x, y: pos.y, z: pos.z }; z.vel = { x: 0, y: 0, z: 0 }; z.alive = true; z.team = 1; z.invulnUntil = 0; z.weapon = KNIFE; z.slots = [KNIFE]; z.hist = []; z.respawnAt = Infinity;
         z.yaw = Math.atan2(-pos.x, -pos.z); g.pushHist(z);
         return z;
@@ -1999,7 +2010,7 @@ startMsg() {
   }
   killZombie(t, a, w, head, back, ks) {
     t.alive = false; t.hp = 0; t.deaths++; if (t.acct) t.sd++; t.respawnAt = Infinity;
-    if (a && a !== t && !a.zt) { a.kills++; if (this.survival && !a.bot) { const n = grantKill(a, t.zt, head); if (n) this.events.push(['spts', a.id, a.pts | 0, n, a.purseN | 0]); } if (a.acct) { a.sk++; this.cq(a, 'zk'); if (head) this.cq(a, 'zhs'); if (t.zt === 'spitter') this.cq(a, 'spit'); else if (t.zt === 'tank') this.cq(a, 'tank'); else if (t.zt === 'boss') this.cq(a, 'boss'); } if (a.alive && ks !== 'h' && ks !== 'x') this.streakKill(a); }
+    if (a && a !== t && !a.zt) { a.kills++; if (this.survival && !a.bot) { const n = grantKill(a, t.zt, head); if (n) this.events.push(['spts', a.id, a.pts | 0, n, a.purseN | 0]); } if (a.acct) { a.sk++; this.cq(a, 'zk'); if (head) this.cq(a, 'zhs'); if (t.zt === 'spitter') this.cq(a, 'spit'); else if (t.zt === 'tank') this.cq(a, 'tank'); else if (isBoss(t.zt)) this.cq(a, 'boss'); } if (a.alive && ks !== 'h' && ks !== 'x') this.streakKill(a); }
     const ev = ['k', a ? a.id : 0, t.id, w === KNIFE ? PISTOL : w, head ? 1 : 0, a ? a.kills : 0, t.deaths]; if (w === KNIFE) ev.push(back ? 2 : 1);
     if (ks) { while (ev.length < 8) ev.push(0); ev.push(ks); }
     this.events.push(ev);

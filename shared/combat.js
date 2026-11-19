@@ -52,7 +52,8 @@ export function explosionHits(c, o, ents, losClear, owner, teamMode, direct = nu
 const ZT_KNOCK = { tank: 0.2, boss: 0.08 };
 export function shotKnock(W, from, to, dmg, zt) {
   if (!W || !W.knock || !(dmg > 0)) return null;
-  const k = Math.min(1, dmg / (W.dmg * Math.max(1, W.pellets))) * (ZT_KNOCK[zt] ?? 1); let dx = to.x - from.x, dz = to.z - from.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+  const zk = typeof zt === 'string' && zt.startsWith('boss') ? 'boss' : zt;
+  const k = Math.min(1, dmg / (W.dmg * Math.max(1, W.pellets))) * (ZT_KNOCK[zk] ?? 1); let dx = to.x - from.x, dz = to.z - from.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
   return { x: dx * W.knock.push * k, y: W.knock.lift * k, z: dz * W.knock.push * k };
 }
 // raio × cápsula vertical em pos (com folga pad). Devolve t ≥ 0 do primeiro contato ou null.

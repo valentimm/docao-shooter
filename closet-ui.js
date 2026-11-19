@@ -429,7 +429,7 @@ function burst(host, look) {
 function abortReel() { reelGen += 1; if (reel) reel.abort(); reel = null; }
 function dropLine(r, kind) {
   const it = r.item, name = it ? `${it.emoji} ${it.name}` : 'uma skin';
-  if (r.dupe) return `Repetida: ${name}. Entrou ${r.gain} Docoins no lugar.`;
+  if (r.dupe) return `Repetida: ${name}. Entrou de novo na mochila.`;
   if (kind === 'wheel') return `A roleta parou em ${name}. Peso ${it.weight}. Já está na mochila.`;
   return `Nova skin: ${name}. Peso ${it.weight}. Já está na mochila.`;
 }
@@ -467,7 +467,7 @@ async function presentDrop(r, kind, pool) {
   const show = $('closetLootShow'), track = $('closetLootTrack'), kicker = $('closetLootKicker');
   const text = $('closetRevealText'), acts = $('closetRevealActs'), sparks = $('closetLootSparks');
   if (!it || !show || !track) {
-    if (text) text.textContent = r && r.dupe ? `Repetida. Entrou ${r.gain} Docoins.` : 'O caixote abriu.';
+    if (text) text.textContent = r && r.dupe ? 'Repetida. Entrou de novo na mochila.' : 'O caixote abriu.';
     $('closetReveal').classList.remove('hidden');
     return;
   }
@@ -477,7 +477,7 @@ async function presentDrop(r, kind, pool) {
   if (!source.some((i) => i.id === it.id)) source.push(it);
   const reduce = motionOff();
   const { cards, winAt } = buildStrip(source, it, reduce ? 0 : look.rank);
-  revealDrop = r.dupe ? null : it;
+  revealDrop = it;
   track.innerHTML = cards.map(cardHtml).join('');
   paintCardPreviews(track, cards);
   track.style.transform = 'translate3d(0,0,0)';
@@ -547,7 +547,7 @@ async function finishOpen() {
   try {
     const r = await openBox();
     if (r.error) { msg(r.error); return; }
-    msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
+    msg(r.dupe ? `Repetida: ${r.item.emoji} ${r.item.name} entrou de novo.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
     render();
     await presentDrop(r, 'box');
   } finally { busy = false; }
@@ -571,7 +571,7 @@ async function finishWheel(ids) {
     if (prevKnife && prevKnife !== (nowA.knife || '')) document.dispatchEvent(new CustomEvent('docao-knife-pick', { detail: '' }));
     if (prevSniper && prevSniper !== (nowA.sniper || '')) document.dispatchEvent(new CustomEvent('docao-sniper-pick', { detail: '' }));
     for (const [key, gid] of Object.entries(prevGuns)) if (gid && gid !== ((nowA.guns || {})[key] || '')) document.dispatchEvent(new CustomEvent('docao-gun-pick', { detail: { key, id: '' } }));
-    msg(r.dupe ? `Repetida. +${r.gain} Docoins.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
+    msg(r.dupe ? `Repetida: ${r.item.emoji} ${r.item.name} entrou de novo.` : `${r.item.emoji} ${r.item.name} entrou na mochila.`, true);
     render();
     const floor = wheelFloor(ids.map((id) => itemById(id)).filter(Boolean));
     const pool = lootItems().filter((i) => i.weight >= floor);

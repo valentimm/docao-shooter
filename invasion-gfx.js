@@ -5,7 +5,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { toon, outline, HEAD, headR, TORSO_PTS } from './docao.js';
-import { POWERS, POWER_KEYS, ZOMBIES } from './shared/invasion.js';
+import { POWERS, POWER_KEYS, ZOMBIES, isBoss } from './shared/invasion.js';
 
 const V3 = THREE.Vector3, V2 = THREE.Vector2;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -28,6 +28,11 @@ const ZCOL = {
   tank: { suit: '#7d8a3a', suit2: '#5b6628', snout: '#8a6a3a', eye: '#ff8a1a', metal: '#4b4e54', hat: null },
   spitter: { suit: '#6e8f5a', suit2: '#4a6640', snout: '#7a8a52', eye: '#7dff4a', metal: '#5a6a5e', hat: null },
   boss: { suit: '#3a2a40', suit2: '#24182a', snout: '#ff8a1a', eye: '#ffd24a', metal: '#3c3f46', hat: '#120c10' },
+  bossBelly: { suit: '#b73c28', suit2: '#8e2c1e', snout: '#c44b36', eye: '#ffd24a', metal: '#4a3a32', hat: null },
+  bossGhost: { suit: '#c8d8f0', suit2: '#9ab0d0', snout: '#e8f0ff', eye: '#a8e0ff', metal: '#6a7a90', hat: '#e8f4ff' },
+  bossMummy: { suit: '#d8c89a', suit2: '#b8a878', snout: '#c8b888', eye: '#2a1a10', metal: '#8a7a5a', hat: null },
+  bossWolf: { suit: '#4a3a32', suit2: '#2e241c', snout: '#6a4a3a', eye: '#ff4020', metal: '#3a3030', hat: null },
+  bossCrazy: { suit: '#6a2a6a', suit2: '#4a1a4a', snout: '#ff6a3a', eye: '#ff20a0', metal: '#3a2a40', hat: '#1a0a1a' },
 };
 let headGeo = null, torsoGeo = null;
 function getHeadGeo() {
@@ -46,7 +51,8 @@ export function makeZombie(type) {
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
   const mesh = (geo, mat, parent = body, ol = 0.012) => { const m = new THREE.Mesh(geo, mat); parent.add(m); if (ol) outline(m, ol); m.castShadow = true; return m; };
   const part = (geo, mat, parent, [x, y, z], [sx, sy, sz], rot = null, ol = 0.01) => { const m = mesh(geo, mat, parent, ol); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (rot) m.rotation.set(...rot); return m; };
-  const thin = type === 'runner', fat = type === 'tank', boss = type === 'boss', spit = type === 'spitter';
+  const thin = type === 'runner', fat = type === 'tank' || type === 'bossBelly', bossPumpkin = type === 'boss', spit = type === 'spitter';
+  const boss = isBoss(type);
   // pernas (endoesqueleto: coxa de metal, joelho, canela, pé)
   const legs = [];
   for (const s of [-1, 1]) {
@@ -63,12 +69,17 @@ export function makeZombie(type) {
     for (let i = 0; i < 3; i++) part(G.box, metalM, body, [0.12, 0.68 + i * 0.09, fat ? 0.55 : 0.4], [0.28, 0.025, 0.04], null, 0);
     part(G.box, suit2M, body, [-0.25, 0.55, 0.32], [0.16, 0.12, 0.05], [0, 0, 0.4], 0); // remendo
   } else for (let i = 0; i < 4; i++) part(G.box, metalM, body, [0, 0.6 + i * 0.11, 0.12], [0.36, 0.03, 0.2], null, 0); // costelas
-  if (fat) { // barrigão com o tanque de gás brilhando (explode quando morre)
+  if (type === 'tank') { // barrigão com o tanque de gás brilhando (explode quando morre)
     part(G.sph, suit2M, body, [0, 0.62, 0.25], [0.55, 0.5, 0.45]);
     part(G.cyl, toon('#c0392b'), body, [0, 0.9, -0.55], [0.22, 0.55, 0.22]);
     const lamp = part(G.sph, glowMat('#ff5a1a'), body, [0, 1.22, -0.55], [0.09, 0.09, 0.09], null, 0); lamp.userData.blink = true;
   }
-  if (type === 'walker' || boss) { // gravatinha borboleta (Freddy)
+  if (type === 'bossBelly') { // Barriguinha: camisa arregaçada e barriga de fora
+    part(G.sph, toon('#e8a090'), body, [0, 0.58, 0.38], [0.48, 0.42, 0.4]);
+    part(G.sph, toon('#d08070'), body, [0, 0.52, 0.52], [0.12, 0.1, 0.08], null, 0); // umbigo
+    for (const s of [-1, 1]) part(G.box, suitM, body, [s * 0.28, 0.95, 0.2], [0.22, 0.18, 0.08], [0.4, 0, s * 0.3], 0); // rolo da camisa
+  }
+  if (type === 'walker' || bossPumpkin) { // gravatinha borboleta (Freddy)
     for (const s of [-1, 1]) part(G.cone, darkM, body, [s * 0.08, 1.06, 0.3], [0.07, 0.12, 0.05], [0, 0, s * Math.PI / 2], 0);
   }
   // braços (metal com garras), levantados pra frente (pose de zumbi)
@@ -87,7 +98,7 @@ export function makeZombie(type) {
   const headPivot = new THREE.Group(); headPivot.position.y = 1.15; head.add(headPivot); // pivô no pescoço
   const hg = new THREE.Group(); hg.position.y = -1.15; headPivot.add(hg);
   if (spit) { part(G.cyl, metalM, body, [0, 1.15, 0.06], [0.06, 0.3, 0.06], [0.3, 0, 0]); head.position.y = 0.05; }
-  if (boss) { // cabeça de abóbora com cara entalhada
+  if (bossPumpkin) { // cabeça de abóbora com cara entalhada
     const pk = part(G.sph, toon('#e8701a'), hg, [0, 1.52, 0], [0.62, 0.52, 0.58], null, 0.014);
     pk.material.map = pumpkinFaceTex(); pk.material.needsUpdate = true; pk.rotation.y = -Math.PI / 2;
     for (let i = 0; i < 5; i++) part(G.sph, toon('#d6601a'), hg, [Math.cos(i * 1.26) * 0.3, 1.52, Math.sin(i * 1.26) * 0.3], [0.32, 0.5, 0.32], null, 0);
@@ -119,14 +130,32 @@ export function makeZombie(type) {
       const gl = glowSprite(C.eye, 0.45); gl.position.set(s * 0.17, 1.74, 0.52); hg.add(gl);
     }
   }
-  if (boss) { // capa rasgada
+  if (bossPumpkin) { // capa rasgada
     const cape = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.3, 1, 3), new THREE.MeshToonMaterial({ color: '#4a1a5a', side: THREE.DoubleSide })); cape.position.set(0, 0.65, -0.42); cape.rotation.x = 0.12; body.add(cape);
   }
+  if (type === 'bossGhost') { // véu translúcido
+    const veil = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.5, 1, 3), new THREE.MeshToonMaterial({ color: '#d8e8ff', transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
+    veil.position.set(0, 0.7, -0.35); veil.rotation.x = 0.15; body.add(veil);
+    setGhostLook({ group: g }, true);
+  }
+  if (type === 'bossMummy') { // faixas de atadura
+    for (let i = 0; i < 6; i++) part(G.box, toon('#efe6c8'), body, [(i % 2 ? 1 : -1) * 0.08, 0.45 + i * 0.12, 0.38], [0.55, 0.04, 0.08], [0, 0, (i % 2 ? 0.25 : -0.25)], 0);
+    part(G.box, toon('#efe6c8'), hg, [0, 1.78, 0.35], [0.5, 0.08, 0.12], [0.2, 0, 0], 0);
+  }
+  if (type === 'bossWolf') { // orelhas e focinho de lobo
+    for (const s of [-1, 1]) part(G.cone, suit2M, hg, [s * 0.28, 2.15, -0.05], [0.12, 0.28, 0.08], [0.2, 0, s * -0.35]);
+    part(G.cyl, snoutM, hg, [0, 1.48, 0.58], [0.16, 0.22, 0.14], [Math.PI / 2 - 0.2, 0, 0]);
+  }
+  if (type === 'bossCrazy') { // olhos tortos e coroa torta
+    part(G.cyl, toon(C.hat || '#1a0a1a'), hg, [0.08, 2.18, 0], [0.28, 0.22, 0.28], [0.15, 0, 0.4]);
+    part(G.box, toon('#ff20a0'), hg, [-0.2, 1.78, 0.48], [0.1, 0.08, 0.04], [0, 0, 0.5], 0);
+    part(G.box, toon('#20ffd0'), hg, [0.22, 1.7, 0.48], [0.08, 0.12, 0.04], [0, 0, -0.35], 0);
+  }
   // postura: corcunda (corredor bem inclinado pra frente)
-  body.rotation.x = thin ? 0.38 : spit ? 0.22 : fat ? 0.06 : 0.14;
+  body.rotation.x = thin ? 0.38 : spit ? 0.22 : fat ? 0.06 : type === 'bossWolf' ? 0.2 : 0.14;
   g.scale.setScalar(st.size); g.userData.size = st.size;
   const flashMats = [suitM, suit2M, metalM, snoutM];
-  return { group: g, body, legs, arms, head: headPivot, jaw: hg.userData.jaw || null, guns: [], flashMats, type, eyeM };
+  return { group: g, body, legs, arms, head: headPivot, jaw: hg.userData.jaw || null, guns: [], flashMats, type, eyeM, boss };
 }
 function pumpkinFaceTex() {
   return canvasTex(256, 128, (x, w, h) => {
@@ -283,8 +312,13 @@ export function makeDropMesh(kind) {
 export function tickDrop(g, T, born) { g.userData.icon.position.y = 1.0 + Math.sin(T * 3 + born) * 0.15; g.userData.ring.rotation.z = T * 2; }
 
 // ---------------- projéteis e efeitos ----------------
-export function makeSpitMesh(big) {
-  if (big) { const p = makePumpkin(1.1, true); return p; }
+// style: 0 cuspe, 1 abóbora, 2 mijo (Barriguinha)
+export function makeSpitMesh(style) {
+  if (style === 1 || style === true) { const p = makePumpkin(1.1, true); return p; }
+  if (style === 2) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#d4c84a')); m.scale.setScalar(0.2); g.add(m);
+    const gl = glowSprite('#c8b830', 1.0); g.add(gl); return g;
+  }
   const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#8aff4a')); m.scale.setScalar(0.17); g.add(m); const gl = glowSprite('#7dff4a', 0.9); g.add(gl); return g;
 }
 export function makePowerPumpkin() { return makePumpkin(0.75, true); }
