@@ -12,8 +12,8 @@ export const PROMO_EXPIRES_AT = Date.parse('2026-11-20T02:59:59.999Z');
 
 export const promoActive = (now = Date.now()) => now >= PROMO_STARTS_AT && now <= PROMO_EXPIRES_AT;
 
-// Z + 9 z + 18 u, grafia pedida (o nome longo quebra no CSS do popup)
-export const PROMO_THANKS_NAME = 'Z' + 'z'.repeat(9) + 'u'.repeat(18);
+// Z + 8 z + 18 u, grafia pedida (o nome longo quebra no CSS do popup)
+export const PROMO_THANKS_NAME = 'Z' + 'z'.repeat(8) + 'u'.repeat(18);
 
 export const PROMO_TITLE = 'DÉCIMO PINGOU 🐷💸';
 export const PROMO_KICKER = 'Promoção da casa';

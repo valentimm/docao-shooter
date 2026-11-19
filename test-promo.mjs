@@ -25,7 +25,7 @@ ok(promoActive(Date.parse('2026-11-19T23:59:59.999-03:00')), 'em 19/11 23:59 BRT
 ok(!promoActive(Date.parse('2026-11-18T23:59:59.999-03:00')), 'em 18/11 23:59 BRT ainda não aparece nem credita');
 ok(!promoActive(Date.parse('2026-11-20T00:00:00.000-03:00')), 'em 20/11 00:00 BRT já acabou');
 ok(promoActive(Date.now()), 'o relógio de agora (19/11) está dentro da janela');
-ok(PROMO_THANKS_NAME === 'Z' + 'z'.repeat(9) + 'u'.repeat(18) && PROMO_THANKS_NAME.length === 28, `agradecimento tem Z + 9 z + 18 u (${PROMO_THANKS_NAME})`);
+ok(PROMO_THANKS_NAME === 'Z' + 'z'.repeat(8) + 'u'.repeat(18) && PROMO_THANKS_NAME.length === 27, `agradecimento tem Z + 8 z + 18 u (${PROMO_THANKS_NAME})`);
 ok(promoCreditText().includes('1000 Docoins') && promoCreditText().includes('13º') && promoCreditText().includes('décimo pingou') && promoCreditText().includes('só hoje, até meia-noite'), 'texto do crédito cita 1000 Docoins, o 13º e que é só hoje');
 ok(promoCreditText().includes('Agradecimento especial à ' + PROMO_THANKS_NAME), 'texto do crédito agradece o nome pedido, grafia exata');
 ok(promoGuestText().includes('comanda') && promoGuestText().includes('13º') && promoGuestText().includes('só hoje, até meia-noite') && promoGuestText().includes('Agradecimento especial à ' + PROMO_THANKS_NAME), 'texto do convidado pede login, cita o 13º e agradece o nome');
