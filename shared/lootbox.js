@@ -2,7 +2,7 @@
 //  Caixote da Primeira Safra: skins de arma, faca e luva saem daqui, não da loja.
 //  O peso do catálogo (weight) é a faixa da sorte. Skin repetida entra de novo na mochila (qty), sem virar Docoin.
 //  O 1% é o peso 1250. Sem essa faixa, Rainbow e Obsidian de faca não saíam.
-//  Top 4 do placar: 1 caixote cada quando a sala tem mais de 6 jogadores de verdade (sem bot).
+//  Top 4 do placar: um sorteado ganha 1 caixote quando a sala tem mais de 6 jogadores de verdade (sem bot).
 // ============================================================
 import { ITEMS, itemById } from './closet.js';
 
@@ -10,8 +10,15 @@ export const BOX_ID = 'safra1';
 export const BOX_NAME = 'Caixote da Primeira Safra';
 export const BOX_EMOJI = '🌽';
 export const BOX_PRICE = 400; // 1 caixote comprado por dia de Brasília, além do grátis e dos desafios
-export const MAP_BOX_TOP = 4; // melhores do placar que ganham caixote
+export const MAP_BOX_TOP = 4; // melhores do placar que entram no sorteio
 export const MAP_BOX_MIN_HUMANS = 7; // mais de 6 jogadores de verdade
+// Entre os top N com conta, sorteia 1 ganhador (ou null). rng() ∈ [0, 1).
+export function pickMapBoxWinner(ranked, humanCount, rng = Math.random) {
+  if ((humanCount | 0) < MAP_BOX_MIN_HUMANS || !Array.isArray(ranked) || !ranked.length) return null;
+  const pool = ranked.slice(0, MAP_BOX_TOP);
+  if (!pool.length) return null;
+  return pool[Math.floor(rng() * pool.length)] || null;
+}
 // bp = pontos em 10.000 (72,5% = 7250). A soma é 10.000.
 export const ODDS = [
   { weight: 500, bp: 7250 },

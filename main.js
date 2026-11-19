@@ -9430,7 +9430,7 @@ function onlineEnd(m) {
   matchEnding.dance = outcome === 'win' && playerWonMatch({ mode: m.mode, rows, teamW: winTeam, invWon: m.inv && m.inv.won });
   $('finalboard').innerHTML = boardHtml();
   if (player && player.shieldBlocked > 0) $('finalboard').insertAdjacentHTML('beforeend', `<p class="shieldend">Dano segurado na tampa: ${Math.round(player.shieldBlocked)}</p>`);
-  if (Array.isArray(m.mapBoxes) && m.mapBoxes.includes(o.myId)) $('finalboard').insertAdjacentHTML('beforeend', '<p class="overnote">🌽 Top 4 da sala: você ganhou 1 caixote pra abrir no Brechó.</p>');
+  if (Array.isArray(m.mapBoxes) && m.mapBoxes.includes(o.myId)) $('finalboard').insertAdjacentHTML('beforeend', '<p class="overnote">🌽 Sorteio do top 4: você ganhou 1 caixote pra abrir no Brechó.</p>');
   $('overMap').innerHTML = `Mapa: <b>${escapeHtml(getMap(m.map).name)}</b> · próximo: <b>${escapeHtml(getMap(m.next).name)}</b>`;
   $('overChat').classList.remove('hidden');
   renderLobby();

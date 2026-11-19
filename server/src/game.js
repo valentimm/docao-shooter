@@ -10,7 +10,7 @@ import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
 import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
 setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES } from '../../shared/invasion.js';
-import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
+import { pickMapBoxWinner } from '../../shared/lootbox.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
 import { TRAIN, isTraining, dummyX } from '../../shared/training.js';
@@ -415,17 +415,16 @@ startMsg() {
     if (this.nukeWinner) return this.nukeWinner === e.id;
     return !!rows[0] && rows[0].id === e.id && rows[0].kills > 0;
   }
-  mapBoxWinners(rows) {
+  mapBoxWinner(rows) {
     const humans = this.humans().filter((e) => e.connected);
-    if (humans.length < MAP_BOX_MIN_HUMANS) return new Set();
     const ranked = rows.filter((e) => !e.bot && !e.zt && e.connected && e.acct);
-    return new Set(ranked.slice(0, MAP_BOX_TOP).map((e) => e.acct.id));
+    return pickMapBoxWinner(ranked, humans.length);
   }
   endMatch() {
     const rows = [...this.ents.values()].filter((e) => (e.bot && !e.zt) || e.connected).sort((a, b) => this.score(b) - this.score(a) || a.deaths - b.deaths);
-    const boxes = this.mapBoxWinners(rows);
-    this._mapBoxIds = [...rows].filter((e) => e.acct && boxes.has(e.acct.id)).map((e) => e.id);
-    for (const e of rows) if (e.acct && e.connected) this.flushStats(e, true, this.matchWon(e, rows), boxes.has(e.acct.id));
+    const win = this.mapBoxWinner(rows);
+    this._mapBoxIds = win ? [win.id] : [];
+    for (const e of rows) if (e.acct && e.connected) this.flushStats(e, true, this.matchWon(e, rows), !!(win && e.acct.id === win.acct.id));
     this.state = 'over'; this.io.stopLoop(); this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.gifts = []; this.helis = []; this.gunships = []; this.nukes = [];
     this.io.broadcast(this.endMsg()); this.sendLobby();
   }

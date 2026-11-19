@@ -18,7 +18,8 @@ export const dayNow = () => Math.floor(now() / 86400);
 // O prêmio do desafio não entra no teto diário. "chal IS old" barra pagar duas vezes se duas salas gravarem juntas.
 export function coinCreditStmt(env, acct, c, chal = null, mapBoxes = 0) {
   c = Math.max(0, Math.min(EARN.matchCap, c | 0));
-  const boxAdd = Math.max(0, Math.min(4, (chal ? Math.max(0, Math.min(3, chal.boxes | 0)) : 0) + (mapBoxes | 0)));
+  const mapAdd = Math.max(0, Math.min(1, mapBoxes | 0));
+  const boxAdd = Math.max(0, Math.min(3, chal ? chal.boxes | 0 : 0) + mapAdd);
   if (!c && !chal && !boxAdd) return null;
   const day = dayNow();
   const earn = `MAX(0, MIN(?3, ?4 - (CASE WHEN earn_day = ?2 THEN earn_today ELSE 0 END)))`;
@@ -36,7 +37,7 @@ export function coinCreditStmt(env, acct, c, chal = null, mapBoxes = 0) {
        earn_day = ?2,
        chal = (CASE WHEN chal IS ?5 THEN ?7 ELSE chal END),
        boxes = boxes + (CASE WHEN chal IS ?5 THEN ?8 ELSE 0 END) + ?9
-     WHERE id = ?1`).bind(acct, day, c, EARN.dayCap, chal.old, chal.reward | 0, chal.json, Math.max(0, Math.min(3, chal.boxes | 0)), Math.max(0, Math.min(4, mapBoxes | 0)));
+     WHERE id = ?1`).bind(acct, day, c, EARN.dayCap, chal.old, chal.reward | 0, chal.json, Math.max(0, Math.min(3, chal.boxes | 0)), mapAdd);
 }
 // desafios: lê o estado das contas desta gravação (1 SELECT pequeno, só se a sala contou algo) e calcula o novo em JS
 export async function chalUpdates(env, items) {
