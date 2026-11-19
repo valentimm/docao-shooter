@@ -10,20 +10,23 @@ import { grantPromo } from './server/src/shop.js';
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
-const INSIDE = Date.parse('2026-11-20T15:00:00.000Z'); // 12:00 BRT, no meio da janela
+const INSIDE = Date.parse('2026-11-19T15:00:00.000Z'); // 12:00 BRT, no meio da janela
 const OLD_PROMO_ID = 'churrasco-relampago-2026-11';
 const grant = (env, id, t = INSIDE) => grantPromo(env, id, t);
 
-ok(PROMO_ID === 'feriadao-relampago-2026-11-20' && PROMO_NAME === 'Feriadão Relâmpago', `promo ${PROMO_ID} / ${PROMO_NAME}`);
+ok(PROMO_ID === 'feriadao-relampago-2026-11-19' && PROMO_NAME === 'Feriadão Relâmpago', `promo ${PROMO_ID} / ${PROMO_NAME}`);
 ok(PROMO_COINS === 1000, `crédito é 1000 Docoins (${PROMO_COINS})`);
-ok(PROMO_STARTS_AT === Date.parse('2026-11-20T03:00:00.000Z'), 'abre em 20/11/2026 00:00:00.000 BRT');
-ok(PROMO_EXPIRES_AT === Date.parse('2026-11-21T02:59:59.999Z'), 'fecha em 20/11/2026 23:59:59.999 BRT');
+ok(PROMO_STARTS_AT === Date.parse('2026-11-19T03:00:00.000Z'), 'abre em 19/11/2026 00:00:00.000 BRT');
+ok(PROMO_EXPIRES_AT === Date.parse('2026-11-20T02:59:59.999Z'), 'fecha em 19/11/2026 23:59:59.999 BRT');
 ok(!promoActive(PROMO_STARTS_AT - 1) && promoActive(PROMO_STARTS_AT), 'ainda não vale no milissegundo anterior e abre no primeiro');
-ok(promoActive(INSIDE), 'vale no meio do dia 20/11 (12:00 BRT)');
+ok(promoActive(INSIDE), 'vale no meio do dia 19/11 (12:00 BRT)');
 ok(promoActive(PROMO_EXPIRES_AT) && !promoActive(PROMO_EXPIRES_AT + 1), 'ainda vale no último milissegundo e expira logo depois');
-ok(!promoActive(Date.parse('2026-11-19T23:59:59.999-03:00')), 'em 19/11 23:59 BRT ainda não aparece nem credita');
-ok(promoCreditText().includes('1000 Docoins') && promoCreditText().includes('Porca Véia') && promoCreditText().includes('feriadão') && promoCreditText().includes('só nesse feriado, até meia-noite'), 'texto do crédito cita 1000 Docoins, a Porca Véia, o feriadão e que é só nesse feriado');
-ok(promoGuestText().includes('comanda') && promoGuestText().includes('Feriadão Relâmpago') && promoGuestText().includes('só nesse feriado, até meia-noite'), 'texto do convidado pede login e cita o feriadão');
+ok(promoActive(Date.parse('2026-11-19T23:59:59.999-03:00')), 'em 19/11 23:59 BRT ainda vale');
+ok(!promoActive(Date.parse('2026-11-18T23:59:59.999-03:00')), 'em 18/11 23:59 BRT ainda não aparece nem credita');
+ok(!promoActive(Date.parse('2026-11-20T00:00:00.000-03:00')), 'em 20/11 00:00 BRT já acabou');
+ok(promoActive(Date.now()), 'o relógio de agora (19/11) está dentro da janela');
+ok(promoCreditText().includes('1000 Docoins') && promoCreditText().includes('Porca Véia') && promoCreditText().includes('feriadão') && promoCreditText().includes('só hoje, até meia-noite'), 'texto do crédito cita 1000 Docoins, a Porca Véia, o feriadão e que é só hoje');
+ok(promoGuestText().includes('comanda') && promoGuestText().includes('Feriadão Relâmpago') && promoGuestText().includes('só hoje, até meia-noite'), 'texto do convidado pede login e cita que é só hoje');
 
 const migs = readdirSync(new URL('./server/migrations/', import.meta.url)).filter((f) => f.endsWith('.sql')).sort();
 ok(migs.includes('0009_promo_claims.sql') && migs[migs.length - 1] === '0009_promo_claims.sql', `migração 0009 é a última (${migs[migs.length - 1]}) — a promo nova reusa promo_claims`);
