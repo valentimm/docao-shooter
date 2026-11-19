@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@vercel/functions": "^3.11.3",
     "playwright": "^1.64.1",
     "three": "^0.169.0"
   }
