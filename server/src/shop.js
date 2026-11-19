@@ -156,7 +156,7 @@ export async function buyBox(env, id) {
 }
 
 
-// Promoção vigente (Feriadão Relâmpago): +N Docoins uma vez por conta, só dentro da janela.
+// Promoção vigente (DÉCIMO PINGOU): +N Docoins uma vez por conta, só dentro da janela.
 // promoActive() exige início e fim. INSERT + crédito no mesmo lote atômico.
 // Segunda chamada (reload, outro aparelho) não soma de novo. Outro promo_id não bloqueia.
 export async function grantPromo(env, id, now = Date.now()) {

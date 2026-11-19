@@ -1,9 +1,9 @@
-// Feriadão Relâmpago: +1000 Docoins uma vez por conta, só na janela, sem crédito duplo.
-// Quem já pegou o Churrasco Relâmpago ainda leva esta. Sem navegador e sem wrangler.
+// DÉCIMO PINGOU: +1000 Docoins uma vez por conta, só na janela, sem crédito duplo.
+// Quem já pegou o Churrasco ou o Feriadão ainda leva esta. Sem navegador e sem wrangler.
 // Uso: node test-promo.mjs
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { PROMO_ID, PROMO_NAME, PROMO_COINS, PROMO_STARTS_AT, PROMO_EXPIRES_AT, promoActive, promoCreditText, promoGuestText } from './shared/promo.js';
+import { PROMO_ID, PROMO_NAME, PROMO_COINS, PROMO_STARTS_AT, PROMO_EXPIRES_AT, PROMO_THANKS_NAME, promoActive, promoCreditText, promoGuestText } from './shared/promo.js';
 import { START_COINS } from './shared/closet.js';
 import { grantPromo } from './server/src/shop.js';
 
@@ -11,10 +11,10 @@ const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const INSIDE = Date.parse('2026-11-19T15:00:00.000Z'); // 12:00 BRT, no meio da janela
-const OLD_PROMO_ID = 'churrasco-relampago-2026-11';
+const OLD_PROMO_IDS = ['churrasco-relampago-2026-11', 'feriadao-relampago-2026-11-19'];
 const grant = (env, id, t = INSIDE) => grantPromo(env, id, t);
 
-ok(PROMO_ID === 'feriadao-relampago-2026-11-19' && PROMO_NAME === 'Feriadão Relâmpago', `promo ${PROMO_ID} / ${PROMO_NAME}`);
+ok(PROMO_ID === 'decimo-pingou-2026-11-19' && PROMO_NAME === 'DÉCIMO PINGOU', `promo ${PROMO_ID} / ${PROMO_NAME}`);
 ok(PROMO_COINS === 1000, `crédito é 1000 Docoins (${PROMO_COINS})`);
 ok(PROMO_STARTS_AT === Date.parse('2026-11-19T03:00:00.000Z'), 'abre em 19/11/2026 00:00:00.000 BRT');
 ok(PROMO_EXPIRES_AT === Date.parse('2026-11-20T02:59:59.999Z'), 'fecha em 19/11/2026 23:59:59.999 BRT');
@@ -25,11 +25,13 @@ ok(promoActive(Date.parse('2026-11-19T23:59:59.999-03:00')), 'em 19/11 23:59 BRT
 ok(!promoActive(Date.parse('2026-11-18T23:59:59.999-03:00')), 'em 18/11 23:59 BRT ainda não aparece nem credita');
 ok(!promoActive(Date.parse('2026-11-20T00:00:00.000-03:00')), 'em 20/11 00:00 BRT já acabou');
 ok(promoActive(Date.now()), 'o relógio de agora (19/11) está dentro da janela');
-ok(promoCreditText().includes('1000 Docoins') && promoCreditText().includes('Porca Véia') && promoCreditText().includes('feriadão') && promoCreditText().includes('só hoje, até meia-noite'), 'texto do crédito cita 1000 Docoins, a Porca Véia, o feriadão e que é só hoje');
-ok(promoGuestText().includes('comanda') && promoGuestText().includes('Feriadão Relâmpago') && promoGuestText().includes('só hoje, até meia-noite'), 'texto do convidado pede login e cita que é só hoje');
+ok(PROMO_THANKS_NAME === 'Z' + 'z'.repeat(9) + 'u'.repeat(18) && PROMO_THANKS_NAME.length === 28, `agradecimento tem Z + 9 z + 18 u (${PROMO_THANKS_NAME})`);
+ok(promoCreditText().includes('1000 Docoins') && promoCreditText().includes('13º') && promoCreditText().includes('décimo pingou') && promoCreditText().includes('só hoje, até meia-noite'), 'texto do crédito cita 1000 Docoins, o 13º e que é só hoje');
+ok(promoCreditText().includes('Agradecimento especial à ' + PROMO_THANKS_NAME), 'texto do crédito agradece o nome pedido, grafia exata');
+ok(promoGuestText().includes('comanda') && promoGuestText().includes('13º') && promoGuestText().includes('só hoje, até meia-noite') && promoGuestText().includes('Agradecimento especial à ' + PROMO_THANKS_NAME), 'texto do convidado pede login, cita o 13º e agradece o nome');
 
 const migs = readdirSync(new URL('./server/migrations/', import.meta.url)).filter((f) => f.endsWith('.sql')).sort();
-ok(migs.includes('0009_promo_claims.sql') && migs[migs.length - 1] === '0009_promo_claims.sql', `migração 0009 é a última (${migs[migs.length - 1]}) — a promo nova reusa promo_claims`);
+ok(migs.includes('0009_promo_claims.sql') && migs[migs.length - 1] === '0010_inventory_qty.sql', `0009_promo_claims existe e a última migração é 0010 (${migs[migs.length - 1]}) — a promo reusa promo_claims`);
 const mig = read('./server/migrations/0009_promo_claims.sql');
 ok(/CREATE TABLE IF NOT EXISTS promo_claims/i.test(mig) && /PRIMARY KEY\s*\(\s*account_id\s*,\s*promo_id\s*\)/i.test(mig), '0009 cria promo_claims com chave (account_id, promo_id)');
 ok(!/\b(DROP|TRUNCATE|DELETE FROM)\b/i.test(mig.replace(/--.*$/gm, '')), 'migração não apaga conta nem tabela');
@@ -89,13 +91,13 @@ const firstTick = await grant(env, 6, PROMO_STARTS_AT);
 ok(firstTick.granted && coins(6) === 1200 && claims(6), 'no primeiro milissegundo da janela já credita');
 
 add(5, 'Veterano', 500);
-db.prepare('INSERT INTO promo_claims (account_id, promo_id, coins, claimed_at) VALUES (?, ?, ?, ?)').run(5, OLD_PROMO_ID, 1000, 1);
-ok(claims(5, OLD_PROMO_ID) && !claims(5), 'Veterano já pegou o Churrasco e ainda não o Feriadão');
+for (const oldId of OLD_PROMO_IDS) db.prepare('INSERT INTO promo_claims (account_id, promo_id, coins, claimed_at) VALUES (?, ?, ?, ?)').run(5, oldId, 1000, 1);
+ok(OLD_PROMO_IDS.every((id) => claims(5, id)) && !claims(5), 'Veterano já pegou o Churrasco e o Feriadão e ainda não o DÉCIMO PINGOU');
 const afterOld = await grant(env, 5);
-ok(afterOld.granted && afterOld.id === PROMO_ID && coins(5) === 1500, 'quem já pegou o Churrasco ainda leva o Feriadão');
-ok(db.prepare('SELECT COUNT(*) AS n FROM promo_claims WHERE account_id = 5').get().n === 2, 'duas reclamações (promos diferentes) na mesma conta');
+ok(afterOld.granted && afterOld.id === PROMO_ID && coins(5) === 1500, 'quem já pegou o Churrasco e o Feriadão ainda leva o DÉCIMO PINGOU');
+ok(db.prepare('SELECT COUNT(*) AS n FROM promo_claims WHERE account_id = 5').get().n === 3, 'três reclamações (promos diferentes) na mesma conta');
 const afterOld2 = await grant(env, 5);
-ok(!afterOld2.granted && coins(5) === 1500, 'segunda chamada do Feriadão não soma de novo, mesmo com o Churrasco antigo na tabela');
+ok(!afterOld2.granted && coins(5) === 1500, 'segunda chamada do DÉCIMO PINGOU não soma de novo, mesmo com as promos antigas na tabela');
 
 // /api/me: conta nova ganha a promo na primeira leitura, e só nela (relógio fingido dentro da janela)
 const { db: live, env: envMe } = memory();
@@ -158,7 +160,10 @@ try {
 // cliente: convidado não tem carteira local; o popup de login e o de crédito existem na UI
 const ui = read('./account-ui.js'), html = read('./index.html');
 ok(ui.includes('onPromoGrant') && ui.includes('showPromoGuestOnce') && ui.includes('promoCreditHtml') && ui.includes('promoGuestHtml'), 'account-ui abre o popup no crédito e convida quem não está logado');
-ok(html.includes('id="promoModal"') && html.includes('id="promoOk"') && html.includes('id="promoSkip"') && html.includes('Feriadão Relâmpago'), 'index.html tem o modal da promoção com o título do Feriadão');
+ok(html.includes('id="promoModal"') && html.includes('id="promoOk"') && html.includes('id="promoSkip"') && html.includes('DÉCIMO PINGOU'), 'index.html tem o modal da promoção com o título DÉCIMO PINGOU');
+const css = read('./style.css');
+ok(css.includes('.promo-thanks') && /overflow-wrap\s*:\s*anywhere/.test(css) && /word-break\s*:\s*break-word/.test(css), 'CSS quebra o nome longo no popup (overflow-wrap/word-break)');
+
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK');
 process.exit(fails.length ? 1 : 0);
