@@ -148,8 +148,9 @@ export async function buyBox(env, id) {
 }
 
 
-// Churrasco Relâmpago: +N Docoins uma vez por conta, enquanto a promoção estiver no prazo.
-// INSERT + crédito no mesmo lote atômico. Segunda chamada (reload, outro aparelho) não soma de novo.
+// Promoção vigente (Feriadão Relâmpago): +N Docoins uma vez por conta, só dentro da janela.
+// promoActive() exige início e fim. INSERT + crédito no mesmo lote atômico.
+// Segunda chamada (reload, outro aparelho) não soma de novo. Outro promo_id não bloqueia.
 export async function grantPromo(env, id, now = Date.now()) {
   if (!promoActive(now)) return { granted: false, expired: true };
   const t = Math.floor(now / 1000);
