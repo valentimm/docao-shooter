@@ -19,13 +19,16 @@ const equip = async (w) => { await G((w) => { const g = window.__docao, p = g.pl
 for (const [w, name] of [[0, 'Fuzil'], [2, 'Sniper Torresmo'], [5, 'Canhão do Barril'], [6, 'Carabina da Granja'], [4, 'Pistolinha']]) {
   await equip(w);
   const fov0 = await G(() => window.__docao.fov), kn0 = await G(() => window.__docao.fpKnife.t);
+  const vis0 = await G(() => window.__docao.fpVisible);
   await page.mouse.down({ button: 'right' }); await waitGame(0.5);
-  const r = await G(() => ({ ads: window.__docao.ads, fov: window.__docao.fov, scoped: window.__docao.scoped, weapon: window.__docao.player.weapon }));
+  const r = await G(() => ({ ads: window.__docao.ads, fov: window.__docao.fov, scoped: window.__docao.scoped, weapon: window.__docao.player.weapon, fpVisible: window.__docao.fpVisible }));
   await page.mouse.up({ button: 'right' }); await waitGame(0.5);
-  const r2 = await G(() => ({ ads: window.__docao.ads, fov: window.__docao.fov }));
+  const r2 = await G(() => ({ ads: window.__docao.ads, fov: window.__docao.fov, fpVisible: window.__docao.fpVisible }));
   const isScope = await G((w) => !!window.__docao.WEAPONS[w].scope, w);
   ok(r.weapon === w && r.ads > 0.8 && r.fov < fov0 - 5 && (!isScope || r.scoped), `${name}: botão direito mira (ads=${r.ads.toFixed(2)}, fov ${fov0.toFixed(0)}→${r.fov.toFixed(0)}${isScope ? ', luneta=' + r.scoped : ''})`);
+  if (isScope) ok(r.scoped && r.fpVisible === false, `${name}: com a luneta a arma some (fpVisible=${r.fpVisible})`);
   ok(r2.ads < 0.2 && Math.abs(r2.fov - fov0) < 2, `${name}: soltou, volta ao normal (fov ${r2.fov.toFixed(0)})`);
+  if (isScope) ok(vis0 === true && r2.fpVisible === true, `${name}: soltou, a arma volta na mão (fpVisible=${r2.fpVisible})`);
   ok(await G((k) => window.__docao.fpKnife.t >= k, kn0), `${name}: sem estocada de faca`);
 }
 // faca: botão direito = estocada, sem mira
