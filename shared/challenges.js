@@ -63,7 +63,7 @@ const L = [
   ['D46', 'Mate 5 Cuspidores', 'inv', 'spit', 5, 25, 'F'],
   ['D47', 'Chegue à wave 10 na Invasão', 'inv', 'wave', 10, 50, 'M', 'max'],
   ['D48', 'Mate 150 zumbis na Invasão (somando o dia)', 'inv', 'zk', 150, 55, 'M'],
-  ['D49', 'Derrube o Docão Abóbora (chefão)', 'inv', 'boss', 1, 60, 'M'],
+  ['D49', 'Derrube um chefão da Invasão', 'inv', 'boss', 1, 60, 'M'],
   ['D50', 'Reviva um aliado com a Ressurreição', 'inv', 'rev', 1, 50, 'M'],
   ['D51', 'Mate 3 Barrigões de Gás', 'inv', 'tank', 3, 45, 'M'],
   ['D52', 'Chegue à wave 15 na Invasão', 'inv', 'wave', 15, 90, 'D', 'max'],

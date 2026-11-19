@@ -1,7 +1,8 @@
 // ============================================================
 //  Caixote da Primeira Safra: skins de arma, faca e luva saem daqui, não da loja.
-//  O peso do catálogo (weight) é a faixa da sorte. Quem já tem a skin ganha Docoins (10% do peso).
+//  O peso do catálogo (weight) é a faixa da sorte. Skin repetida entra de novo na mochila (qty), sem virar Docoin.
 //  O 1% é o peso 1250. Sem essa faixa, Rainbow e Obsidian de faca não saíam.
+//  Top 4 do placar: 1 caixote cada quando a sala tem mais de 6 jogadores de verdade (sem bot).
 // ============================================================
 import { ITEMS, itemById } from './closet.js';
 
@@ -9,6 +10,8 @@ export const BOX_ID = 'safra1';
 export const BOX_NAME = 'Caixote da Primeira Safra';
 export const BOX_EMOJI = '🌽';
 export const BOX_PRICE = 400; // 1 caixote comprado por dia de Brasília, além do grátis e dos desafios
+export const MAP_BOX_TOP = 4; // melhores do placar que ganham caixote
+export const MAP_BOX_MIN_HUMANS = 7; // mais de 6 jogadores de verdade
 // bp = pontos em 10.000 (72,5% = 7250). A soma é 10.000.
 export const ODDS = [
   { weight: 500, bp: 7250 },
@@ -17,7 +20,7 @@ export const ODDS = [
   { weight: 1250, bp: 100 },
   { weight: 2000, bp: 50 },
 ];
-export const DUPE_RATE = 0.1;
+export const DUPE_RATE = 0.1; // legado (não paga mais Docoin; testes/docs ainda citam a taxa)
 export const dupeCoins = (weight) => Math.max(1, Math.round((weight | 0) * DUPE_RATE));
 export const lootItems = () => ITEMS.filter((i) => i.loot && i.weight > 0);
 export const lootPool = (weight) => lootItems().filter((i) => i.weight === weight);

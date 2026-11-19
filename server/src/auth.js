@@ -94,7 +94,8 @@ export async function recordStats(env, items) {
   const chOk = items.filter((i) => i && i.acct > 0 && typeof i.mode === 'string' && i.mode !== 'treino');
   const ch = await chalUpdates(env, chOk).catch((e) => { console.error('desafios', e && e.message); return new Map(); }); // só lê se a sala contou algo
   const coins = new Map(); for (const i of ok) if (i.c > 0) coins.set(i.acct, (coins.get(i.acct) || 0) + i.c);
-  const cs = [...new Set([...coins.keys(), ...ch.keys()])].map((a) => coinCreditStmt(env, a, coins.get(a) || 0, ch.get(a) || null)).filter(Boolean);
+  const mapBoxes = new Map(); for (const i of items) if (i && i.acct > 0 && (i.b | 0) > 0) mapBoxes.set(i.acct, (mapBoxes.get(i.acct) || 0) + (i.b | 0));
+  const cs = [...new Set([...coins.keys(), ...ch.keys(), ...mapBoxes.keys()])].map((a) => coinCreditStmt(env, a, coins.get(a) || 0, ch.get(a) || null, mapBoxes.get(a) || 0)).filter(Boolean);
   if (st.length || cs.length) await env.DB.batch([...st, ...cs]);
 }
 

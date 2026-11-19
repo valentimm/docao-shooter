@@ -29,4 +29,4 @@ export function shockReach(s, ents, T, friends, losClear, center) {
   return out;
 }
 export const shockDmg = (hp) => Math.max(0, Math.min(SHOCK.dmg, Math.ceil(hp) - SHOCK.minHp));
-export const shockStun = (t) => SHOCK.stun * (t && t.zt === 'boss' ? SHOCK.bossStun : 1);
+export const shockStun = (t) => SHOCK.stun * (t && typeof t.zt === 'string' && t.zt.startsWith('boss') ? SHOCK.bossStun : 1);

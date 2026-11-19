@@ -270,7 +270,7 @@ export function ensurePurse(e) {
 }
 export function papTierOf(e, w) { return (e && e.pap && e.pap[w] | 0) || 0; }
 
-export function killPoints(zt, head) { return (KILL[zt] || 100) + (head ? SURV.head : 0); }
+export function killPoints(zt, head) { const key = typeof zt === 'string' && zt.startsWith('boss') ? 'boss' : zt; return (KILL[key] || 100) + (head ? SURV.head : 0); }
 export function grantHit(e, zid) {
   ensurePurse(e);
   const k = String(zid);
@@ -778,7 +778,8 @@ export function isSurvivalMode(mode, cfg) {
 }
 
 export function pointsForKill(zt, opts = {}) {
-  const base = SURVIVAL.KILL[zt] ?? SURVIVAL.KILL.walker;
+  const key = typeof zt === 'string' && zt.startsWith('boss') ? 'boss' : zt;
+  const base = SURVIVAL.KILL[key] ?? SURVIVAL.KILL.walker;
   return base + (opts.head ? SURVIVAL.HEAD_BONUS : 0) + (opts.knife ? SURVIVAL.KNIFE_BONUS : 0);
 }
 

@@ -1,4 +1,4 @@
-// Caixote da Primeira Safra (sem navegador): faixas, catálogo e pagamento de repetida.
+// Caixote da Primeira Safra (sem navegador): faixas, catálogo e fórmula legada de repetida (hoje a repetida fica na mochila).
 // Uso: node test-lootbox.mjs
 import { ITEMS, itemById, isFreeItem } from './shared/closet.js';
 import { BOX_ID, BOX_NAME, ODDS, DUPE_RATE, dupeCoins, lootItems, lootPool, tierOf, rollBox, WHEEL_SIZE, wheelInputs, wheelFloor, wheelTable, wheelTier, rollWheel } from './shared/lootbox.js';
