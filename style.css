@@ -1895,8 +1895,24 @@ body.deadgray #game{filter:grayscale(.68) brightness(.72) contrast(1.06);transit
 /* Fim de partida na língua da comanda (igual à pausa): prancheta de madeira, papel, tinta e tijolo. */
 #gameover{
   background:rgba(41,30,24,.46);--ink:#34402e;--ink-deep:#203e35;--paper:#f6e4bd;--paper-2:#efdfbb;
-  --wood:#674029;--cream:#fff0cc;--brick:#a52e26;--olive:#536044;--shadow:#291e18
+  --wood:#674029;--cream:#fff0cc;--brick:#a52e26;--olive:#536044;--shadow:#291e18;
+  gap:16px;flex-wrap:wrap;align-items:center;justify-content:center;overflow:auto;padding:16px
 }
+#gameover .podium{flex:1 1 440px;width:min(520px,100%);max-width:520px;display:flex;flex-direction:column;gap:8px}
+#gameover .podium canvas{width:100%;height:min(42dvh,360px);display:block;border-radius:18px;background:radial-gradient(circle at 50% 16%,#fff8e4 0%,#f0c27a 46%,#a85a32 80%,#3a2218 100%);box-shadow:0 8px 0 #2a141088}
+@media (max-height:760px){
+  #gameover .podium canvas{height:min(30dvh,210px)}
+  .podium-card{min-height:62px;padding:6px 8px}
+}
+.podium-cards{display:grid;grid-template-columns:1fr 1.08fr 1fr;gap:8px;align-items:end}
+.podium-card{margin:0;padding:8px 10px;border-radius:12px;background:#fff6e4;border:3px solid #6b3a22;color:#3a2418;text-align:center;min-height:78px}
+.podium-card.empty{visibility:hidden}
+.podium-card b{display:block;font:900 15px/1.15 var(--font)}
+.podium-card em{display:block;margin-top:2px;font:900 13px/1.2 var(--font);font-style:normal;color:#a33b24}
+.podium-card small{display:block;margin-top:3px;font:700 12px/1.25 var(--font);color:#5c4630}
+.podium-card.p1{border-color:#c48812;background:#fff3c4;transform:translateY(-6px)}
+.podium-card.p2{border-color:#8d97a3}
+.podium-card.p3{border-color:#b06a32}
 #gameover.dancing{background:linear-gradient(90deg,rgba(41,30,24,.5),rgba(41,30,24,0) 56%)}
 #gameover .panel{
   position:relative;isolation:isolate;display:grid;grid-template-columns:1fr 1fr;column-gap:10px;

@@ -6,6 +6,8 @@ import { makeMenuBackdrop } from './menu-backdrop.js';
 import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
+import { emptyFun, notePodiumKill, notePodiumHurt, notePodiumDeath, awardPodium } from './shared/podium.js';
+import { createPodiumStage } from './podium-stage.js';
 import { makeFPSniper, poseSniperBolt, applySniperSkin } from './sniper-view.js';
 import { makeFPSaber, makeWorldSaber, setSaberColor, poseSaber } from './saber-view.js';
 import { makeFPCrossbow, makeFPBow, poseDraw, poseRelease, makeFlightShaft } from './bow-view.js';
@@ -847,7 +849,7 @@ function makeEntity(name, isPlayer, skinId, tag = '#ffffff') {
   const skin = getSkin(skinId);
   const e = { name, isPlayer, skinId: skin.id, float: !!skin.float, floatPh: Math.random() * 6, nextWisp: 0, shirt: (skin.shirt && skin.shirt.color) || '#d8261c', tag, pos: new V3(), vel: new V3(), yaw: 0, pitch: 0, crouch: 0, onGround: false, hp: 100, alive: true,
     kills: 0, deaths: 0, invulnUntil: 0, weapon: 0, primary: 0, nextPrimary: 0, mag: WEAPONS.map(() => 0), reserve: WEAPONS.map(() => 0), reloadEnd: 0, nextFire: 0, switchEnd: 0, actionEnd: 0,
-    respawnAt: 0, deathAt: 0, fxDeath: 0, lastAttacker: null, flashUntil: 0, nades: 0, smokeNades: 0, stunNades: 0, stunUntil: 0, charging: false, chargeStart: 0, nextNade: 0, gunKills: WEAPONS.map(() => 0),
+    respawnAt: 0, deathAt: 0, fxDeath: 0, lastAttacker: null, flashUntil: 0, nades: 0, smokeNades: 0, stunNades: 0, stunUntil: 0, charging: false, chargeStart: 0, nextNade: 0, gunKills: WEAPONS.map(() => 0), fun: emptyFun(),
     shieldHp: 0, shieldBroken: false, shieldBlocked: 0, shieldMedal: false, shieldDashAt: -99, shieldDashUntil: 0 };
     e.nextPrimary = isPlayer ? selectedPrimary : pickBotPrimary();
   e.nextSecondary = isPlayer ? selectedSecondary : PISTOL;
@@ -1232,6 +1234,7 @@ let matchEnding = null;
 const END_SLOWMO = 1.5, END_MENU_DELAY = 0.8;
 function clearMatchEnding() {
   if (matchEnding) resetAds(); // o zoom do fim só sai quando a próxima partida/menu começa
+  hidePodium();
   matchEnding = null;
   document.body.classList.remove('match-ended');
   $('matchResult').classList.add('hidden');
@@ -1259,11 +1262,12 @@ function revealEndMenu() {
   matchEnding.revealed = true;
   $('matchResult').classList.add('hidden');
   $('gameover').classList.remove('dancing'); $('gameover').classList.remove('hidden');
+  showPodium();
   if (!matchEnding.duration) startEndDance(); // movimento reduzido: sem câmera lenta, a dança já pode começar
 }
-function startEndDance() { // a dança da vitória entra só quando a câmera lenta acaba (o placar já estava na tela)
-  if (!matchEnding || !matchEnding.dance || matchEnding.danced) return;
-  matchEnding.danced = true; beginVictory();
+function startEndDance() { // os três do pódio dançam na tela de fim; a câmera do mapa não cola num Docão só
+  if (!matchEnding || matchEnding.danced) return;
+  matchEnding.danced = true;
 }
 function updateMatchEnding(realDt) {
   if (window.__endDt != null) realDt = window.__endDt; // testes: passo fixo da transição (independe do FPS da máquina)
@@ -2398,7 +2402,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (!online && compOn()) amount = mitigate(t, amount, head);
   if (!online) amount = subidoTaken(t, amount);
   if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
-  t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); // regen só com dano de outro
+  t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); if (!online && attacker && attacker !== t && attacker.fun) notePodiumHurt(attacker.fun, amount); // regen só com dano de outro
   if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
   if (t.isPlayer) { hurtFlash(); noteHit(origin); if (attacker && attacker !== t) noteFlinch(amount); sfx.oink(0.8, 1.15); }
   else { if (attacker && attacker !== t && !t.target) { t.target = attacker; t.aim = t.reaction * 0.5; } if (Math.random() < 0.3) sfx.oink(distVol(t.pos) * 0.6, 1.3); }
@@ -2481,7 +2485,8 @@ function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx
   }
   if (a) t.lastAttacker = a;
   if (t.isPlayer) t.killerName = a && a !== t && a.name ? a.name : (label || '');
-  if (a && a !== t && !friends(a, t)) a.kills++;
+  if (a && a !== t && !friends(a, t)) { a.kills++; if (!online && a.fun) notePodiumKill(a.fun, { head, knife: isKnife(wIdx), dist: a.pos && t.pos ? Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) : 0 }); }
+  if (!online) notePodiumDeath(t.fun);
   if (t === player) noteNemesisKill(a, t); // a 3ª seguida já sai com a caveira no feed
   addKillFeed(a, t, wIdx, head, back, label, fx);
   if (t !== player) noteNemesisKill(a, t); // o abate que acaba com o nemesis ainda mostra a marca
@@ -7026,6 +7031,7 @@ function setDance(id) {
   selectedDance = normDance(id);
   try { localStorage.setItem('docao.dance', selectedDance); } catch (e) { /* sem storage */ }
   document.querySelectorAll('[data-dance]').forEach((b) => b.classList.toggle('on', b.dataset.dance === selectedDance));
+  if (online && online.net) online.net.send({ t: 'prof', dance: myDance() });
   danceCast.forEach((d) => { if (d.model && d.model.shadowMat) d.model.shadowMat.color.set(d.id === selectedDance ? 0x3a1612 : 0x140e0c); });
 }
 function buildDancePicks() {
@@ -7482,6 +7488,36 @@ function startGame(mapId) {
   applyHeldGuns(getAccount() && getAccount().guns);
   camera.clearViewOffset(); state = 'playing'; lockPointer();
 }
+let podiumStage = null;
+function podiumRows() {
+  if (online && online.endMsg && Array.isArray(online.endMsg.podium)) return online.endMsg.podium;
+  const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths);
+  return awardPodium(rows.map((e) => ({
+    id: e.id, name: e.name, skin: e.skinId, dance: e.isPlayer ? myDance() : (e.dance || ''),
+    kills: e.kills | 0, deaths: e.deaths | 0, caps: e.caps | 0, fun: e.fun,
+  })));
+}
+function paintPodiumCards(rows) {
+  const box = $('podiumCards'); if (!box) return;
+  const byPlace = new Map((rows || []).map((r) => [r.place, r]));
+  box.innerHTML = [2, 1, 3].map((place) => {
+    const r = byPlace.get(place);
+    if (!r) return '<article class="podium-card empty"></article>';
+    return `<article class="podium-card p${place}"><b>${place}º ${escapeHtml(r.name)}</b><em>${r.emoji} ${escapeHtml(r.title)}</em><small>${escapeHtml(r.line)}</small></article>`;
+  }).join('');
+}
+function showPodium() {
+  const root = $('podium'), canvas = $('podiumCanvas'); if (!root || !canvas) return;
+  const rows = podiumRows();
+  root.classList.remove('hidden');
+  paintPodiumCards(rows);
+  if (!podiumStage) podiumStage = createPodiumStage(canvas);
+  podiumStage.setCast(rows);
+}
+function hidePodium() {
+  const root = $('podium'); if (root) root.classList.add('hidden');
+  if (podiumStage) { podiumStage.dispose(); podiumStage = null; }
+}
 function endGame() {
   stopInspect(true); stopEmote(); // fim no meio da inspeção ou da dança (a mira com zoom continua na câmera lenta)
   if (state === 'over' || !player) return;
@@ -7879,8 +7915,9 @@ function loop() {
     for (const p of pickups) p.mesh.rotation.y += dt;
     updateDeathSkinFx(dt);
     renderDanceShadows(danceT);
-  } else if (state === 'over' && (victory.on || matchEnding)) {
+  } else if (state === 'over') {
     if (matchEnding) updateMatchEnding(realDt); // câmera lenta do fim, na visão do jogador (e o relógio que leva à dança)
+    if (podiumStage) podiumStage.tick(dt);
     if (victory.on) {
       if (window.__danceT != null) victory.clock = window.__danceT; // testes: congela o passo da dança
       else victory.clock += dt;
@@ -9244,7 +9281,7 @@ function startOnlineMatch(m) {
   showcase.visible = false; $('killfeed').innerHTML = ''; flashMsg(survOn() ? `Survival · ${currentMap.name} · ${SURV.useLabel} usa a loja · E abre porta` : invMode() ? `Invasão 🎃 · ${currentMap.name} · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun] ? WEAPONS[x1Gun].short : ''}` : gfLive() ? `Gunfight ${gfS ? gfS.format : ''} · ${currentMap.name} · primeiro a ${GF_TO_WIN}` : `Mapa: ${currentMap.name}`);
   ['menu', 'gameover', 'pause', 'lobby', 'onlineModal'].forEach((id) => $(id).classList.add('hidden')); $('hud').classList.remove('hidden'); $('socialHud').classList.remove('hidden'); $('voiceHud').classList.remove('hidden'); $('overChat').classList.add('hidden');
   $('netbar').classList.remove('hidden'); $('netRoom').textContent = 'Sala ' + o.code;
-  camera.clearViewOffset(); state = 'playing'; if ($('teamPick').classList.contains('hidden')) lockPointer(); // escolhendo time: mouse livre pros botões
+  camera.clearViewOffset(); state = 'playing'; if (o.net) o.net.send({ t: 'prof', dance: myDance() }); if ($('teamPick').classList.contains('hidden')) lockPointer(); // escolhendo time: mouse livre pros botões
 }
 function netTick(dt) {
   const o = online; if (!o || !o.inMatch || !player) return;
@@ -9770,7 +9807,7 @@ function updateZombie(z, dt) {
 }
 function killZombieLocal(t, a, wIdx, head, back) {
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = Infinity; t.fxDeath = t.deathAt;
-  if (a && a !== t && !a.zt) a.kills++;
+  if (a && a !== t && !a.zt) { a.kills++; if (!online && a.fun) notePodiumKill(a.fun, { head, knife: isKnife(wIdx), dist: a.pos && t.pos ? Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) : 0 }); }
   sfx.die(distVol(t.pos) * 0.7);
   if (a && a.isPlayer) { sfx.kill(); if (!survOn()) notePlayerKill(t, head); if (wIdx >= 0) noteWeaponKill(a, wIdx); }
   if (isBoss(t.zt)) addKillFeed(a, t, wIdx, head, back);
