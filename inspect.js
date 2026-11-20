@@ -42,7 +42,8 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const Z = () => ({ x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, spin: 0, flick: 0, show: 0, finger: true });
 // Inspeção por modelo, no jeito do Counter-Strike. k 0 e 1 = descanso.
 // churrasqueira: o giro no dedo (flip do perfil knife). karambit: uma volta na argola e mostra a curva.
-// bayoneta: o pulso apresenta a lâmina e vira até o anel do cano. skeleton: a face furada, depois a outra.
+// bayoneta: o pulso apresenta a lâmina e vira até o anel do cano.
+// skeleton: o dedo se apoia no furo grande e a faca dá uma volta nele; depois mostra a face furada.
 // butterfly: o flick no pino e, em seguida, a lâmina aberta à mostra.
 export function knifeInspectLocal(kind, k) {
   const finger = kind !== 'skeleton' && kind !== 'karambit' && kind !== 'bayonet' && kind !== 'butterfly';
@@ -69,14 +70,16 @@ export function knifeInspectLocal(kind, k) {
     return z;
   }
   if (kind === 'skeleton') {
-    const env = ss(0.06, 0.24, t) * (1 - ss(0.82, 0.97, t));
-    const other = ss(0.42, 0.56, t) * (1 - ss(0.74, 0.9, t));
-    z.rx = 0.85 * env; // deita a face furada pra câmera
-    z.ry = -1.05 * env + 0.55 * other;
-    z.rz = -0.35 * env + 1.05 * other; // a outra face dos furos
+    const env = ss(0.04, 0.16, t) * (1 - ss(0.84, 0.98, t));
+    const show = ss(0.5, 0.64, t) * (1 - ss(0.78, 0.94, t));
+    z.spin = ss(0.1, 0.44, t) * Math.PI * 2; // volta no furo grande (pivô SKELETON_HOLE)
+    // mão sobe e tipa pra o dedo atravessar o furo; depois apresenta a face furada
+    z.y = 0.07 * env + 0.02 * show;
+    z.z = 0.05 * env + 0.06 * show;
     z.x = -0.02 * env;
-    z.y = 0.05 * env;
-    z.z = 0.1 * env; // chega mais perto, senão o furo some
+    z.rx = -0.55 * env + 0.9 * show;
+    z.ry = 0.15 * env - 0.7 * show;
+    z.rz = 0.1 * env + 0.85 * show;
     return z;
   }
   // butterfly

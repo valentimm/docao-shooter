@@ -507,6 +507,7 @@ startMsg() {
       case 'voice': {
         let scope = m.scope === 'all' || m.scope === 'team' ? m.scope : 'off';
         if (scope === 'team' && !this.teamMode) scope = 'all';
+        if (scope === 'all' && this.compMode) scope = this.teamMode ? 'team' : 'off'; // competitivo: voz só do time
         e.voice = scope; if (scope !== 'off') e.vu = 1; this.sendVoices(); break;
       }
       case 'sig': this.onSig(e, m); break;
@@ -545,12 +546,14 @@ startMsg() {
     this.postChat({ id: e.id, name: e.name, team: e.team, scope, dead, text }); this.cq(e, 'chat');
   }
   voiceReaches(from, to) {
-    const s = from.voice || 'off'; if (s === 'off' || from === to) return false;
+    let s = from.voice || 'off'; if (s === 'off' || from === to) return false;
+    if (s === 'all' && this.compMode) s = 'team'; // competitivo nunca abre a sala toda
     if (s === 'all') return true;
     return s === 'team' && this.teamMode && from.team >= 0 && from.team === to.team;
   }
   voicePair(a, b) { return this.voiceReaches(a, b) || this.voiceReaches(b, a); }
   sendVoices() {
+    if (this.compMode) for (const h of this.humans()) if (h.voice === 'all') h.voice = 'team';
     this.io.broadcast({ t: 'voices', list: this.humans().map((h) => [h.id, h.voice || 'off', h.team]) });
   }
   onSig(e, m) {

@@ -107,11 +107,27 @@ export function fillChips(host, spec) {
   for (const row of spec.rows) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'classchip' + (row.on ? ' on' : '');
+    b.className = 'classchip' + (row.on ? ' on' : '') + (spec.thumbs ? ' has-guns' : '');
     b.dataset.i = String(row.i);
     b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', row.on ? 'true' : 'false');
-    b.innerHTML = `<kbd>${row.i + 1}</kbd> ${esc(row.name)}`;
+    const top = document.createElement('span');
+    top.className = 'classchip-top';
+    top.innerHTML = `<kbd>${row.i + 1}</kbd><span class="classchip-name">${esc(row.name)}</span>`;
+    b.appendChild(top);
+    if (spec.thumbs) {
+      const guns = document.createElement('span');
+      guns.className = 'classchip-guns';
+      const ids = [row.primary ?? row.weapon, row.secondary, row.melee].filter((n) => n != null && n >= 0);
+      for (const wi of ids) guns.appendChild(photo(wi, spec.thumbs[wi], ''));
+      b.appendChild(guns);
+      if (row.weaponName) {
+        const sub = document.createElement('small');
+        sub.className = 'classchip-sub';
+        sub.textContent = row.weaponName;
+        b.appendChild(sub);
+      }
+    }
     b.onclick = (ev) => { ev.preventDefault(); spec.onPick(row.i); };
     host.appendChild(b);
   }

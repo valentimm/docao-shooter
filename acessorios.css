@@ -20,6 +20,8 @@
 }
 .classchip.on{border-color:#e8bc67;box-shadow:inset 0 0 0 2px #e8bc67}
 .classchip kbd{color:#e8bc67;margin-right:4px}
+.classchip-top{display:inline-flex;align-items:center;gap:4px}
+.classchip-name{font:800 13px/1.2 "Trebuchet MS",Arial,sans-serif}
 #benchBody{display:grid;grid-template-columns:220px 1fr;gap:14px}
 .bench-tray,.bench-work{background:#3e281a;border:2px solid #6d5033;border-radius:6px;padding:10px}
 .bench-gun{
@@ -259,7 +261,42 @@ button.clsrow:active{transform:none}
   background:linear-gradient(90deg,#a52e26 0%,#a52e26 88%,rgba(165,46,38,0) 100%);color:#fff6e4
 }
 #pauseClass #pauseGuns{max-height:none;overflow:visible}
-#lobbyClasses{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+#lobbyClasses{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+#lobbyClasses .classchip.has-guns{
+  display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+  min-width:148px;padding:8px 10px 10px;text-align:left
+}
+#lobbyClasses .classchip-guns{display:flex;gap:4px;align-items:center}
+#lobbyClasses .classchip .wthumb{
+  width:44px;height:28px;background-color:#58371f;box-shadow:inset 0 0 0 1px #6d5033
+}
+#lobbyClasses .classchip-sub{color:#e8bc67;font:700 11px/1 "Trebuchet MS",Arial,sans-serif;letter-spacing:.02em}
+#lobbyLoadoutRow.lobby-guns{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:0
+}
+#lobbyLoadoutRow .lobby-gun{
+  position:relative;flex:1 1 140px;min-width:120px;max-width:200px;
+  background:#3e281a;border:1px solid #6d5033;border-radius:6px;color:#fff0d1;padding:6px 28px 8px
+}
+#lobbyLoadoutRow .lobby-gun.in-hand{border-color:#e8bc67;box-shadow:inset 0 0 0 1px #e8bc67}
+#lobbyLoadoutRow .lobby-gun-face{
+  display:flex;flex-direction:column;align-items:stretch;gap:3px;width:100%;margin:0;padding:4px 2px;
+  border:0;border-radius:4px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer
+}
+#lobbyLoadoutRow .lobby-gun-face:hover{background:#58371f}
+#lobbyLoadoutRow .lobby-gun .wthumb{
+  width:100%;height:42px;background-color:#58371f;box-shadow:inset 0 0 0 1px #6d5033
+}
+#lobbyLoadoutRow .lobby-gun b{font:800 13px/1.2 "Trebuchet MS",Arial,sans-serif}
+#lobbyLoadoutRow .lobby-gun small{font:700 10px/1.2 "Trebuchet MS",Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#e8bc67}
+#lobbyLoadoutRow .lobby-gun .gun-step{
+  position:absolute;top:50%;transform:translateY(-50%);width:22px;height:22px;margin:0;padding:0;
+  border:1px solid #e8bc67;border-radius:50%;background:#58371f;color:#fff0d1;
+  font:800 14px/20px "Trebuchet MS",Arial,sans-serif;cursor:pointer
+}
+#lobbyLoadoutRow .lobby-gun .gun-step[data-dir="-1"]{left:4px}
+#lobbyLoadoutRow .lobby-gun .gun-step[data-dir="1"]{right:4px}
+#lobbyLoadoutRow .lobby-gun .gun-step:hover{background:#a52e26;border-color:#fff0d1}
 .cls-list .wthumb,#deathList .wthumb,#pauseGuns.cls-list .wthumb,#bLoadList .wthumb,#iLoadList .wthumb{
   width:72px;height:40px;background-color:transparent;background-size:contain;background-position:center;box-shadow:none
 }

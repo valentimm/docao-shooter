@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z } from './docao.js';
+import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
 import { makeFPSniper, poseSniperBolt, applySniperSkin } from './sniper-view.js';
@@ -1895,6 +1895,15 @@ function updateParticles(dt) {
     else if (p.kind === 'corn') { const g = groundAt(m.position.x, m.position.z, m.position.y) + 0.04; p.vel.y -= 12 * dt; m.position.addScaledVector(p.vel, dt); if (m.position.y <= g) { m.position.y = g; p.vel.y = Math.abs(p.vel.y) > 1.5 ? -p.vel.y * 0.35 : 0; p.vel.x *= 0.6; p.vel.z *= 0.6; p.spin.multiplyScalar(0.6); } m.rotation.x += p.spin.x * dt; m.rotation.z += p.spin.z * dt; m.material.opacity = k > 0.7 ? (1 - k) / 0.3 : 1; } // pipoca quicando
     else if (p.kind === 'smoke') { p.vel.multiplyScalar(1 - 1.5 * dt); p.vel.y += 0.6 * dt; m.position.addScaledVector(p.vel, dt); m.scale.setScalar(p.s0 * (1 + k * 2.2)); m.material.opacity = 0.7 * (1 - k); }
     else if (p.kind === 'spark') { p.vel.y -= 6 * dt; m.position.addScaledVector(p.vel, dt); m.material.opacity = 0.55 * (1 - k); m.scale.setScalar(1 - k * 0.35); }
+    else if (p.kind === 'goldflake') {
+      const g = groundAt(m.position.x, m.position.z, m.position.y) + 0.02;
+      p.vel.y -= 10 * dt; p.vel.x *= 1 - 1.4 * dt; p.vel.z *= 1 - 1.4 * dt;
+      m.position.addScaledVector(p.vel, dt);
+      if (m.position.y <= g) { m.position.y = g; p.vel.y = 0; p.vel.x *= 0.35; p.vel.z *= 0.35; }
+      if (p.spin) { m.rotation.x += p.spin.x * dt; m.rotation.y += p.spin.y * dt; m.rotation.z += p.spin.z * dt; }
+      m.material.opacity = k > 0.55 ? 0.95 * (1 - (k - 0.55) / 0.45) : 0.95;
+      m.scale.setScalar((p.s0 || 1) * (1 - k * 0.3));
+    }
     else if (p.kind === 'ray') { m.position.addScaledVector(p.vel, dt); const s = (p.flash ? 0.4 + k * 2.4 : p.ring ? 0.4 + k * (RAY_MOVE.radius / 0.2) : (p.s0 || 1) * (1 - k * 0.3)); m.scale.setScalar(s); if (m.material) m.material.opacity = (p.flash ? 0.95 : 0.8) * (1 - k); }
     else if (p.kind === 'raylight') { m.intensity = 12 * (1 - k); }
     if (k >= 1) { scene.remove(m); if (m.material && m.material.dispose && !m.userData.keepMat) m.material.dispose(); if (m.geometry && !m.userData.keepGeo && (p.kind === 'flash' || p.kind === 'ring' || p.kind === 'ray')) m.geometry.dispose(); particles.splice(i, 1); }
@@ -2520,6 +2529,50 @@ function finishReload(e) {
 function setWeapon(e, idx) { if (e.weapon !== idx) resetRecoil(e); e.weapon = idx; if (e.model) e.model.guns.forEach((g, i) => { g.visible = i === idx; if (g.userData.twin) g.userData.twin.visible = g.visible; if (g.userData.extra) g.userData.extra.visible = g.visible; }); syncShieldWorn(e); } // twin: 2º sabre ou revólver da esquerda. extra: o da direita do par.
 // pinta as lâminas dos dois sabres (e do par do Sabre Duplo)
 function colorSabers(guns, hex) { for (const i of [SABER, SABER2]) { const g = guns[i]; if (!g) continue; setSaberColor(g, hex); if (g.userData.twin) setSaberColor(g.userData.twin, hex); } }
+const goldFlakeGeo = new THREE.OctahedronGeometry(0.016, 0);
+function wearingGoldGloves(skinId) {
+  const skin = getSkin(skinId || (player && player.skinId) || selectedSkin);
+  const g = (skin.parts || []).find((p) => p.type === 'glove');
+  return !!(g && g.gold);
+}
+// Luvas Docão Gold: ao trocar de arma, brilhos caem da luva até o chão.
+function spawnGoldGloveSparkles() {
+  if (reducedAnims() || !player || !fp || !wearingGoldGloves()) return;
+  fp.root.updateMatrixWorld(true);
+  const origins = [];
+  const collect = (root) => {
+    if (!root || !root.visible) return;
+    root.traverse((o) => {
+      if (!(o.userData && o.userData.fpFist && o.userData.goldGlove)) return;
+      let ok = true; for (let n = o; n; n = n.parent) if (!n.visible) { ok = false; break; }
+      if (!ok) return;
+      const p = new V3(); o.getWorldPosition(p); origins.push(p);
+    });
+  };
+  const ref = fp.fpRef || {};
+  collect(ref.arms); collect(ref.armsP); collect(fp.kr); collect(fp.krGold);
+  collect(fp.pumpHand); collect(ref.saberR); collect(ref.saberL); collect(ref.bowGrip); collect(ref.bowDraw);
+  if (!origins.length) origins.push(camera.localToWorld(new V3(0.16, -0.18, -0.42)));
+  const per = Math.max(4, Math.ceil(12 / origins.length));
+  for (const origin of origins) {
+    for (let i = 0; i < per; i++) {
+      const m = new THREE.Mesh(goldFlakeGeo, new THREE.MeshBasicMaterial({
+        color: i % 3 ? 0xfff1a8 : 0xf3d78a, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      m.userData.keepGeo = true;
+      m.position.copy(origin).add(new V3(rand(-0.035, 0.035), rand(-0.02, 0.05), rand(-0.03, 0.03)));
+      const s0 = rand(0.7, 1.35); m.scale.setScalar(s0);
+      scene.add(m);
+      particles.push({
+        mesh: m, vel: new V3(rand(-0.35, 0.55), rand(0.08, 0.55), rand(-0.55, 0.25)),
+        life: rand(0.55, 0.95), t: 0, kind: 'goldflake', s0,
+        spin: new V3(rand(-10, 10), rand(-10, 10), rand(-10, 10)),
+      });
+    }
+  }
+  window.__goldGloveSparks = (window.__goldGloveSparks || 0) + 1;
+}
 function switchWeapon(e, idx) {
   if (e === player) { cancelUtilPress(); e.utilSel = ''; }
   if (e.down) return; // caído: a pistolinha temporária não troca o loadout
@@ -2540,6 +2593,7 @@ function switchWeapon(e, idx) {
     e.forceFumble = false;
     if (!isKnife(idx)) playCueList(drawCues(W.key), e.switchDur);
     if (isKnife(idx)) { fp.knifeDrawT = MELEE.draw + 0.1; sfx.knifeDraw(0.8); rightStale = rightDown; if (idx === KNIFE) startButterfly(); } // mirando e trocou pra faca: só estoca num clique novo. A dourada não é butterfly.
+    spawnGoldGloveSparkles();
   }
 }
 // troca rápida (V): corpo a corpo (faca ou sabre) ↔ última arma
@@ -5191,6 +5245,13 @@ function knifeAnim(dt) {
   }
 }
 const _kSpinQ = new THREE.Quaternion(), _kAxisQ = new THREE.Quaternion(), _kAxisX = new V3(1, 0, 0), _kPivot = new V3(), _kMoved = new V3();
+function knifeSpinPivot(mesh) {
+  const p = mesh && mesh.userData && mesh.userData.spinPivot;
+  if (p) return p;
+  if (mesh && mesh.userData && mesh.userData.knifeKind === 'skeleton') return SKELETON_HOLE;
+  return { x: 0, y: 0, z: KARAMBIT_RING_Z };
+}
+// Gira a faca em torno do furo (skeleton) ou da argola (karambit), sem deslocar o ponto de apoio do dedo.
 function applyKnifePivot(mesh, spin) {
   if (!mesh.userData.restQ) { mesh.userData.restQ = mesh.quaternion.clone(); mesh.userData.restP = mesh.position.clone(); }
   const moving = Math.abs(spin) > 1e-4;
@@ -5201,13 +5262,13 @@ function applyKnifePivot(mesh, spin) {
   if (!moving) return;
   _kSpinQ.identity().multiply(_kAxisQ.setFromAxisAngle(_kAxisX, spin));
   mesh.quaternion.multiply(_kSpinQ);
-  const s = mesh.scale.x || 1;
-  _kPivot.set(0, 0, KARAMBIT_RING_Z);
+  const s = mesh.scale.x || 1, piv = knifeSpinPivot(mesh);
+  _kPivot.set(piv.x, piv.y, piv.z);
   _kMoved.copy(_kPivot).applyQuaternion(_kSpinQ);
   _kPivot.sub(_kMoved).multiplyScalar(s).applyQuaternion(mesh.userData.restQ);
   mesh.position.add(_kPivot);
 }
-// Inspeção da faca: a mão (kr) acompanha baioneta e skeleton. A karambit gira na argola. A butterfly abre no pino.
+// Inspeção da faca: skeleton gira no furo grande; karambit na argola; butterfly no pino; baioneta no pulso.
 function poseKnifeInspect(ins) {
   const kp = fp.kpiv, kr = fp.kr;
   if (!kp || !kr) return;
@@ -8158,6 +8219,7 @@ function classRows() {
     const w = WEAPONS[pack.primary];
     return {
       i, name: c.name, weapon: pack.primary, weaponName: w.short || w.name,
+      primary: pack.primary, secondary: pack.secondary, melee: pack.melee,
       on: i === classIndex, last: i === spawnedClass,
     };
   });
@@ -8402,7 +8464,7 @@ function paintClassSurfaces() {
   paintPair('iLoadList', 'iLoadGun', LIVE_HINT);
   paintArms();
   const chips = $('lobbyClasses');
-  if (chips) fillChips(chips, { rows: classRows(), onPick: (i) => armClass(i) });
+  if (chips) fillChips(chips, { rows: classRows(), thumbs: weaponThumbs, onPick: (i) => armClass(i) });
   if (benchOn) paintBench();
 }
 function buildDeathPrimaries() { paintClassSurfaces(); }
@@ -8620,7 +8682,44 @@ function paintLoadoutDock() {
     card.querySelector('.gun-face').setAttribute('aria-label', hand ? `${label}, ${w ? w.name : ''}. Já nasce com ela na mão` : `Nascer com ${label}`);
   }
 }
-function syncLoadoutUi() { paintLoadoutDock(); fillLoadoutRow('lobbyLoadoutRow', 'lobby', false); buildDeathPrimaries(); buildDeathSec(); buildDeathMelee(); }
+// Lobby online: as mesmas três armas da classe, em miniatura, no lugar dos selects.
+function paintLobbyLoadout() {
+  const row = $('lobbyLoadoutRow'); if (!row) return;
+  row.classList.add('lobby-guns');
+  if (!row.querySelector('.lobby-gun')) {
+    row.innerHTML = '';
+    for (const [slot, label, list, get, set] of DOCK_SLOTS) {
+      const card = document.createElement('div');
+      card.className = 'lobby-gun';
+      card.dataset.slot = slot;
+      card.innerHTML = '<button type="button" class="gun-step" data-dir="-1" aria-label="Arma anterior">‹</button><button type="button" class="lobby-gun-face"><span class="wthumb" data-w="0"></span><b></b><small></small></button><button type="button" class="gun-step" data-dir="1" aria-label="Próxima arma">›</button>';
+      card.querySelector('.lobby-gun-face').onclick = () => setSpawnHand(slot);
+      card.querySelectorAll('.gun-step').forEach((b) => {
+        b.onclick = () => {
+          const L = pool(list); if (!L.length) return;
+          const cur = get(), at = L.indexOf(cur);
+          const n = L[(Math.max(0, at) + (b.dataset.dir === '1' ? 1 : L.length - 1)) % L.length];
+          set(n);
+        };
+      });
+      row.appendChild(card);
+    }
+  }
+  for (const [slot, label, , get] of DOCK_SLOTS) {
+    const card = row.querySelector(`[data-slot="${slot}"]`); if (!card) continue;
+    const i = get(), w = WEAPONS[i];
+    const thumb = card.querySelector('.wthumb'); thumb.dataset.w = String(i);
+    thumb.style.backgroundImage = weaponThumbs[i] ? `url("${weaponThumbs[i]}")` : '';
+    card.querySelector('b').textContent = (w && (w.short || w.name)) || '';
+    const hand = spawnHold === slot; card.classList.toggle('in-hand', hand);
+    card.querySelector('small').textContent = hand ? `${label} · na mão` : label;
+    card.querySelector('.lobby-gun-face').setAttribute('aria-label', hand ? `${label}, ${w ? w.name : ''}. Já nasce com ela na mão` : `Nascer com ${label}`);
+  }
+  let note = row.parentElement.querySelector('.loadout-note');
+  if (!note) { note = document.createElement('div'); note.className = 'sub loadout-note'; row.insertAdjacentElement('afterend', note); }
+  const txt = loadoutNote(); if (note.textContent !== txt) note.textContent = txt;
+}
+function syncLoadoutUi() { paintLoadoutDock(); paintLobbyLoadout(); buildDeathPrimaries(); buildDeathSec(); buildDeathMelee(); }
 function refreshMenuMode() {
   if ($('modeSel').value === 'survival') { $('modeSel').value = INV.mode; if ($('survSel')) $('survSel').value = 'survival'; }
   const v = [HIDE.mode, 'dom', ARMS_RACE.mode, 'bomb', COMP.mode, 'explore', TRAIN.mode, INV.mode, X1.mode, GF_MODE].includes($('modeSel').value) ? $('modeSel').value : 'dm';
@@ -8846,6 +8945,8 @@ setLootThumbSource(lootItemThumb);
 onAccount(a => { applyAccount(a); arsenalUi?.render(); paintDeathSkins(); }); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
 const roomLink = (code) => { const u = new URL(location.href); u.search = ''; const sv = new URLSearchParams(location.search).get('server'); if (sv) u.searchParams.set('server', sv); u.searchParams.set('sala', code); return u.toString(); };
 function socialTeam() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && (cfg.mode === 'dom' || isArmsRace(cfg.mode) || cfg.mode === 'bomb' || isComp(cfg.mode))); }
+// Competitivo: microfone e áudio só do time (sem "Todos" na sala).
+function socialVoiceTeamOnly() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && isComp(cfg.mode)); }
 function inviteBlurb(code) { return `Bora jogar Docão Shooter! Sala ${code}\n${roomLink(code)}`; }
 function fillInvite(code) { const link = roomLink(code); document.querySelectorAll('.invite-link').forEach((el) => { el.value = link; }); }
 async function copyText(s) {
@@ -9480,6 +9581,7 @@ initChat({
 initVoice({
   send: (m) => { if (online && online.net) online.net.send(m); },
   teamMode: () => socialTeam(),
+  teamOnly: () => socialVoiceTeamOnly(),
   myId: () => (online && online.myId) || 0,
   onChange: paintVoiceMarks,
 });
