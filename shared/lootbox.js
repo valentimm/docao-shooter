@@ -48,12 +48,10 @@ export const WHEEL_BOOST = 2;
 export function wheelInputs(ids) {
   if (!Array.isArray(ids) || ids.length !== WHEEL_SIZE) return null;
   const items = [];
-  const seen = new Set();
   for (const id of ids) {
-    if (typeof id !== 'string' || id.length > 8 || seen.has(id)) return null;
+    if (typeof id !== 'string' || id.length > 8) return null;
     const it = itemById(id);
     if (!it || !it.loot || !(it.weight > 0)) return null;
-    seen.add(id);
     items.push(it);
   }
   return items;

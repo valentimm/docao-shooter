@@ -404,7 +404,7 @@ export function applyBotDiff(bot, diffId, rnd = Math.random) {
   bot.coverUntil = 0; bot.coverGoal = null;
   bot.flankUntil = 0; bot.flankGoal = null;
   bot.holdUntil = 0; bot.burstAt = 0;
-  bot.heard = null; bot.heardAt = -99;
+  bot.heard = null; bot.heardAt = -99; bot.stepHeard = null;
   bot.sloppy = false;
   return bot;
 }
@@ -544,4 +544,37 @@ export function hearGunshot(bots, origin, shooter, now) {
     b.heard = { x: origin.x, y: origin.y, z: origin.z };
     b.heardAt = now;
   }
+}
+
+// Costas: o bot não vê quem está atrás do olhar. Passo bem perto é a única pista.
+export const STEP_ALERT = 5;
+export const STEP_ALERT_MEM = 1.6;
+
+export function isBehind(bot, other) {
+  if (!bot || !other || !bot.pos || !other.pos) return false;
+  const dx = other.pos.x - bot.pos.x, dz = other.pos.z - bot.pos.z;
+  const L = Math.hypot(dx, dz);
+  if (!(L > 0.35)) return false;
+  const dot = (Math.sin(bot.yaw || 0) * dx + Math.cos(bot.yaw || 0) * dz) / L;
+  return dot < -0.2;
+}
+
+export function noteFootstep(bots, walker, now, hostile = () => true) {
+  if (!walker || !walker.alive || walker.zt || !walker.pos) return;
+  for (const b of bots) {
+    if (!b || b === walker || !b.alive || !b.bot || b.zt || b.dummy) continue;
+    if (!hostile(b, walker)) continue;
+    const d = Math.hypot(b.pos.x - walker.pos.x, b.pos.z - walker.pos.z);
+    if (!(d <= STEP_ALERT) || d < 0.15) continue;
+    b.stepHeard = { who: walker, at: now };
+    if (!isBehind(b, walker) || (b.target && b.target.alive)) continue;
+    b.heard = { x: walker.pos.x, y: walker.pos.y, z: walker.pos.z };
+    b.heardAt = now;
+  }
+}
+
+export function canSpot(bot, other, now) {
+  if (!isBehind(bot, other)) return true;
+  const h = bot && bot.stepHeard;
+  return !!(h && h.who === other && now - h.at < STEP_ALERT_MEM);
 }

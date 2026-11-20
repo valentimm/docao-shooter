@@ -47,7 +47,7 @@ import { SEND_HZ, INTERP_DELAY } from './config.js';
 import { cleanName, NAME_MAX } from './shared/names.js';
 import { createPhysics, mapSolids, rayHitboxes } from './shared/physics.js';
 import { CROUCH, crouchAmount, stanceScale, eyeHeight, stepCrouch } from './shared/stance.js';
-import { footstepVolume, takeFootstep } from './shared/footsteps.js';
+import { footstepVolume, takeFootstep, makesFootsteps } from './shared/footsteps.js';
 import { explosionHits, rayCapsule, ROCKET_PAD, sniperSpread, shotKnock } from './shared/combat.js';
 import { meleeHit, MELEE_KINDS } from './shared/melee.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, commitSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc, aimForward } from './shared/saber.js';
@@ -80,7 +80,7 @@ import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, re
 import { HIDE, isHide, HIDE_PROPS, PROP_NAMES, ROLE_NAMES, hiderTeam, newHideState, startHideRound, stepHide, hideFrozen, hidersAlive, nextProp, propsForMap } from './shared/hide.js';
 import { X1, isX1, rollX1Weapon, x1SpawnSide } from './shared/x1.js';
 import { GF_MODE, GF_LIVE, GF_STUB_NOTICE, GF_TO_WIN, normFormat, mountGunfightHud, renderGunfightHud, syncGunfightHud, resetGunfightHud, tickGunfightBanner, spectatePool, cycleSpectate, spectateCaption, normalizeGunfight, adaptGunfightHud } from './gunfight-hud.js';
-import { normBotDiff, botDiffMeta, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot, scopeDelay } from './shared/bot-difficulty.js';
+import { normBotDiff, botDiffMeta, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot, scopeDelay, noteFootstep, canSpot } from './shared/bot-difficulty.js';
 import { SHIELD, isShieldW, shieldRaised, shieldOnBack, resetShield, shieldStage, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from './shared/shield.js';
 import { makeFPShield } from './shield-view.js';
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, rollFumble, pickBotSecondary, akimboReady, ammoLow } from './shared/revolver.js';
@@ -735,6 +735,7 @@ function updateFootsteps(dt) {
   const ear = player.alive ? player.pos : camera.position; // vivo: distância entre os corpos; morto: de onde a câmera está
   for (const e of entities) {
     if (!takeFootstep(e, dt)) continue;
+    if (!online) noteFootstep(entities, e, gameTime, (b, w) => !friends(b, w));
     const self = e === player;
     const vol = footstepVolume(self ? 0 : e.pos.distanceTo(ear));
     if (vol < 0.02) continue;
@@ -4767,7 +4768,7 @@ function updateFP(dt) {
   if (moving) {
     const prevBob = fp.bob;
     fp.bob += dt * 10;
-    if (Math.floor(prevBob / Math.PI) !== Math.floor(fp.bob / Math.PI)) {
+    if (makesFootsteps(p) && Math.floor(prevBob / Math.PI) !== Math.floor(fp.bob / Math.PI)) {
       try { withAudioTag('step', () => sfx.step(0.85)); } catch (e) { /* passo falho não trava o quadro */ }
     }
   }
@@ -5900,7 +5901,7 @@ function updateBot(b, dt) {
       const d = o.pos.distanceTo(b.pos);
       if (hideS && o.hider && d > HIDE.SPOT_R && o !== b.lastAttacker && !(o.hideSeenUntil > gameTime)) continue; // objeto parado de longe não chama atenção
       const score = considerTarget(mind, d, { attacker: o === b.lastAttacker, player: !!o.isPlayer, hp: o.hp });
-      if (score != null && score < bs && losClear(eye, center(o, 1.2)) && !smoked(eye, center(o, 1.2))) { best = o; bs = score; }
+      if (score != null && score < bs && canSpot(b, o, gameTime) && losClear(eye, center(o, 1.2)) && !smoked(eye, center(o, 1.2))) { best = o; bs = score; }
     }
     if (b.passive || b.stunUntil > gameTime || b.flashUntil > gameTime) best = null; // atordoado ou cego pela flash não trava alvo; fumaça continua cegando
     if (best !== b.target) { b.target = best; b.aim = 0; }

@@ -218,11 +218,13 @@ function wheelEquip(current, spent, prizeId, dupe) {
 // Gasta 3 skins e entrega uma de peso >= o maior das três. Skin repetida soma qty (não vira Docoin).
 export async function spinWheel(env, id, ids) {
   const picked = wheelInputs(ids);
-  if (!picked) return { status: 400, error: 'Escolha 3 skins diferentes da mochila' };
+  if (!picked) return { status: 400, error: 'Escolha 3 skins da mochila' };
   const spent = picked.map((it) => it.id);
   const inv = await env.DB.prepare('SELECT item, qty FROM inventory WHERE account_id = ?').bind(id).all();
   const qtyOf = new Map((inv.results || []).map((x) => [x.item, Math.max(1, x.qty == null ? 1 : x.qty | 0)]));
-  if (!spent.every((sid) => (qtyOf.get(sid) || 0) >= 1)) return { status: 409, error: 'Uma dessas skins não está na mochila' };
+  const need = new Map();
+  for (const sid of spent) need.set(sid, (need.get(sid) || 0) + 1);
+  for (const [sid, n] of need) if ((qtyOf.get(sid) || 0) < n) return { status: 409, error: 'Uma dessas skins não está na mochila' };
   const it = rollWheel(picked, cryptoRand);
   if (!it) return { status: 500, error: 'A roleta veio vazia' };
   const keepPrize = spent.includes(it.id); // uma das três voltou: qty -1 +1 = net 0 nas outras
@@ -244,7 +246,7 @@ export async function spinWheel(env, id, ids) {
     `INSERT INTO inventory (account_id, item, acquired_at, qty) VALUES (?1, ?2, ?3, 1)
      ON CONFLICT(account_id, item) DO UPDATE SET qty = qty + 1`
   ).bind(id, it.id, now()).run();
-  const gone = spent.filter((sid) => sid !== it.id || (qtyOf.get(sid) || 0) <= 0);
+  const gone = [...new Set(spent)].filter((sid) => sid !== it.id && (qtyOf.get(sid) || 0) <= 0);
   await env.DB.prepare(
     `UPDATE accounts SET knife = ?2, sniper = ?3, guns = ?4
      WHERE id = ?1

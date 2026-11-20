@@ -150,21 +150,37 @@ function renderBox() {
   const box = $('closetBox'); if (!box) return;
   if (getAccount()?.dev) { box.innerHTML = '<p class="closet-note">Todos os prêmios já estão na mochila em DEV. Escolha o visual em Personalizar ou no Arsenal.</p>'; return; }
   const a = getAccount(), n = a ? a.boxes | 0 : 0, owned = new Set(getItems());
-  wheelPick = wheelPick.filter((id) => owned.has(id)).slice(0, 3);
+  const copies = new Map();
+  for (const id of getItems()) {
+    const it = itemById(id);
+    if (it && it.loot && it.weight > 0) copies.set(id, (copies.get(id) || 0) + 1);
+  }
+  const kept = [];
+  const left = new Map(copies);
+  for (const id of wheelPick) {
+    if ((left.get(id) || 0) > 0 && kept.length < 3) { left.set(id, left.get(id) - 1); kept.push(id); }
+  }
+  wheelPick = kept;
   const weights = [...new Set(lootItems().map((i) => i.weight))].sort((x, y) => x - y);
   const catalogBody = weights.map((w) => {
     const list = lootItems().filter((i) => i.weight === w).map((i) => `<span class="loot-chip${owned.has(i.id) ? ' mine' : ''}">${lootOption(i)}</span>`).join('');
     return `<div class="closet-sec"><h4>Peso ${w}</h4><div class="loot-catalog">${list}</div></div>`;
   }).join('');
   const catalog = `<details class="loot-fold"><summary>Ver prêmios do caixote</summary>${catalogBody}</details>`;
-  const mine = lootItems().filter((i) => owned.has(i.id)).sort((x, y) => x.weight - y.weight || x.name.localeCompare(y.name, 'pt'));
+  const mine = [...copies.keys()].map((id) => itemById(id)).sort((x, y) => x.weight - y.weight || x.name.localeCompare(y.name, 'pt'));
+  const totalCopies = [...copies.values()].reduce((s, q) => s + q, 0);
+  const pickedOf = new Map();
+  for (const id of wheelPick) pickedOf.set(id, (pickedOf.get(id) || 0) + 1);
   const slots = [0, 1, 2].map((i) => {
     const it = itemById(wheelPick[i]);
     return `<button type="button" class="wheel-slot${it ? ' fill' : ''}" data-wheel-slot="${i}">${it ? lootOption(it, '<br>') : 'vazia'}</button>`;
   }).join('');
-  const picks = mine.map((i) => `<button type="button" class="loot-chip${wheelPick.includes(i.id) ? ' pick' : ''}" data-wheel-pick="${i.id}">${lootOption(i)}</button>`).join('');
+  const picks = mine.flatMap((i) => {
+    const on = pickedOf.get(i.id) || 0;
+    return Array.from({ length: copies.get(i.id) }, (_, n) => `<button type="button" class="loot-chip${n < on ? ' pick' : ''}" data-wheel-pick="${i.id}" data-copy="${n}">${lootOption(i)}</button>`);
+  }).join('');
   const wheel = `<div class="wheel-box"><div class="chal-head"><b>🎡 Roleta</b></div><div class="wheel-slots">${slots}</div>`
-    + (mine.length < 3 ? '<p class="closet-note">Precisa de 3 skins na mochila.</p>' : `<div class="loot-catalog">${picks}</div>`)
+    + (totalCopies < 3 ? '<p class="closet-note">Precisa de 3 skins na mochila.</p>' : `<div class="loot-catalog">${picks}</div>`)
     + `<button type="button" id="closetSpin" class="ticket-btn"${wheelPick.length === 3 ? '' : ' disabled'}>${wheelPick.length === 3 ? 'GIRAR A ROLETA' : 'ESCOLHA 3 SKINS'}</button></div>`;
   const coins = a ? a.coins | 0 : 0, bought = !!(a && a.boxBought), canBuy = !bought && coins >= BOX_PRICE;
   const buyLabel = bought ? 'CAIXOTE DE HOJE JÁ COMPRADO' : canBuy ? `COMPRAR 1 CAIXOTE · ${BOX_PRICE}` : `FALTAM ${BOX_PRICE - coins} DOCOINS`;
@@ -283,8 +299,9 @@ async function onClick(e) {
   if (t.closest('#closetBuyBox')) { askBox(); return; }
   const wp = t.closest('[data-wheel-pick]');
   if (wp) {
-    const id = wp.dataset.wheelPick, at = wheelPick.indexOf(id);
-    if (at >= 0) wheelPick.splice(at, 1); else if (wheelPick.length < 3) wheelPick.push(id);
+    const id = wp.dataset.wheelPick, n = +wp.dataset.copy, picked = wheelPick.filter((x) => x === id).length;
+    if (n < picked) wheelPick.splice(wheelPick.lastIndexOf(id), 1);
+    else if (wheelPick.length < 3) wheelPick.push(id);
     renderBox(); return;
   }
   const ws = t.closest('[data-wheel-slot]');

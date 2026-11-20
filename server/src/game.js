@@ -26,7 +26,7 @@ import { cleanName, uniqueName, NAME_MAX } from '../../shared/names.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, JUMP, SPEED, BOT_SPEED, EYE, WEAPONS, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE, SABER, SABER2, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, UZI, P90, DISC_W, CORN_W, EGG_W, NAIL, SEMI, MELEE, W_NADE, W_FALL, NADE, BACON_ITEM, noteHurt, resetRegen, regenStep, BOT_DEFS, BOT_RANGE, TAG_COLORS, TAMPA, RAY, GIFT_W } from '../../shared/rules.js';
 import { W_TANK, TANK, applyCheatText, clearCheats, stepCheats, packCheats, cheatEye, subidoTaken } from '../../shared/gta-cheats.js';
 import { rideShift, nevascaSolids } from '../../shared/nevasca.js';
-import { normBotDiff, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot as noteGunshot, scopeDelay } from '../../shared/bot-difficulty.js';
+import { normBotDiff, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot as noteGunshot, scopeDelay, noteFootstep, canSpot } from '../../shared/bot-difficulty.js';
 import { SHIELD, isShieldW, shieldRaised, resetShield, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from '../../shared/shield.js';
 import { normWeapons, normPowers, clampLoadout, botPool, weaponOn, powerOn } from '../../shared/loadout.js';
 import { clampKitMap, defaultKit, resolveWeapon } from '../../shared/attachments.js';
@@ -34,6 +34,7 @@ import { DANCE_TIME, danceId } from '../../shared/emote.js';
 import { meleeHit, MELEE_KINDS } from '../../shared/melee.js';
 import { mapSolids, createPhysics, raySphere, HITBOXES, rayHitboxes, fellOff, resolveFall, acceptFloorY } from '../../shared/physics.js';
 import { stanceScale, stanceHeight, stepCrouch } from '../../shared/stance.js';
+import { takeFootstep } from '../../shared/footsteps.js';
 import { traceShot } from '../../shared/penetration.js';
 import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from '../../shared/gas.js';
 import { DISC, stepDisc } from '../../shared/disc.js';
@@ -1769,11 +1770,21 @@ startMsg() {
     });
   }
   toMe(e, ev) { if (e.bot) return; if (!this.personal.has(e.id)) this.personal.set(e.id, []); this.personal.get(e.id).push(ev); }
+  hearSteps(dt) {
+    const bots = [];
+    for (const e of this.ents.values()) if (e.bot && !e.zt) bots.push(e);
+    if (!bots.length) return;
+    for (const e of this.ents.values()) {
+      if (!takeFootstep(e, dt)) continue;
+      noteFootstep(bots, e, this.T, (b, w) => !this.friends(b, w));
+    }
+  }
   // ---------- laço do servidor (20 Hz) ----------
   tick() {
     if (this.state !== 'playing') return;
     const t = this.now(); let dt = clamp(t - this.lastTick, 0, 0.25); this.lastTick = t; const frameDt = dt;
     this.T = t - this.t0; this.purge();
+    this.hearSteps(frameDt);
     if (this.mapId === 'posto-nevasca' && this.P.setMovers) this.P.setMovers(nevascaSolids(this.T));
     while (dt > 1e-4) { const h = Math.min(TICK, dt); dt -= h; for (const e of this.ents.values()) if (e.bot && !e.zt) this.updateBot(e, h); this.stepSabers(h); if (this.inv) this.inv.step(h); this.stepProjectiles(h); this.stepHelis(h); this.stepGunships(); }
     this.stepNukes(); if (this.gas) this.stepGas(); if (this.compMode) this.stepGround();
@@ -2108,7 +2119,7 @@ startMsg() {
         if (o === b || !o.alive || (!o.bot && !o.connected) || this.friends(o, b)) continue;
         const d = dist(o.pos, b.pos);
         const score = considerTarget(mind, d, { attacker: o.id === b.lastAttacker, player: !o.bot, hp: o.hp });
-        if (score != null && score < bs && this.P.losClear(eye, center(o, 1.2))) { best = o; bs = score; }
+        if (score != null && score < bs && canSpot(b, o, this.T) && this.P.losClear(eye, center(o, 1.2))) { best = o; bs = score; }
       }
       if (b.stunUntil > this.T || b.flashUntil > this.T) best = null; // levou choque ou flash: não trava alvo
       if (best !== b.target) { b.target = best; b.aim = 0; }
