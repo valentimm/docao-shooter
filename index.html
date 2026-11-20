@@ -202,7 +202,7 @@
     <label class="name-ticket"><span class="field-caption">Seu nome</span><input id="nameInput" class="nameField" maxlength="16" value="Docão" autocomplete="nickname" spellcheck="false"></label>
     <div id="acctStrip" class="acct-strip" role="group" aria-label="Conta e ranking">
       <span id="acctTxt" class="acct-txt">Convidado · crie uma conta para ter apelido só seu, skin guardada e ranking</span>
-      <span class="acct-btns"><button type="button" id="acctBtn">ENTRAR</button><button type="button" id="closetBtn">🧺 BRECHÓ</button><button type="button" id="rankBtn">RANKING</button></span>
+      <span class="acct-btns"><button type="button" id="acctBtn">ENTRAR</button><button type="button" id="closetBtn">🧺 BRECHÓ</button><button type="button" id="rankBtn">RANKING</button><button type="button" id="eloStripBtn">ELO</button></span>
     </div>
     <div id="dailyPanel" class="daily-panel" aria-label="Desafios do dia"></div>
     <div class="mappick">
@@ -234,7 +234,7 @@
       </label>
     </div>
     <section id="compPanel" hidden>
-      <p class="diffnote">Sala sem bots. O tamanho do time é o máximo: 3 cabem 6, 4 cabem 8, 5 cabem 10.</p>
+      <p class="diffnote">Sala sem bots. O tamanho do time é o máximo: 3 cabem 6, 4 cabem 8, 5 cabem 10. Primeiro time a 13 vence · 12 a 12 vai a dois.</p>
       <label id="compSideLabel"><span class="field-caption">Jogadores por time</span>
         <select aria-label="Jogadores por time" id="compSide"><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select>
       </label>
@@ -351,11 +351,16 @@
   <aside id="loadoutDock" class="loadout-dock" aria-label="Arma padrão">
     <p class="dock-title">Arma padrão</p>
   </aside>
-  <aside id="danceDock" class="dance-dock" aria-label="Dança da vitória">
-    <p class="dock-title">Dança da vitória</p>
-    <div class="dance-stage" id="danceStage">
-      <div class="dance-picks" id="dancePicks"></div>
-    </div>
+  <aside id="eloDock" class="elo-dock" aria-label="Elo competitivo">
+    <button type="button" id="compEloBtn" class="comp-elo-btn" aria-label="Seu Elo competitivo">
+      <span class="elo-brasao" id="compEloCrest" aria-hidden="true"></span>
+      <span class="comp-elo-text">
+        <span class="elo-kicker">Elo competitivo</span>
+        <b id="compEloTitle">Seu Elo</b>
+        <small id="compEloSub">Entre na conta para subir</small>
+        <span class="comp-elo-go">Ver</span>
+      </span>
+    </button>
   </aside>
   <nav class="showcase-actions" aria-label="Personagem e equipamento">
     <button type="button" class="arsenal-crate" aria-label="Arsenal" data-menu-view="arsenal" aria-controls="menu-arsenal" aria-expanded="false"><span class="plaque-surface" aria-hidden="true"></span><svg class="crate-mark" viewBox="0 0 56 57" aria-hidden="true">
@@ -397,6 +402,8 @@
     <div id="paneCreate">
       <label>Mapa<select id="roomMap"></select></label>
       <label>Modo<select id="roomMode"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="gf">Gunfight · rounds</option><option value="dom">Dominação (times)</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="comp">Competitivo · plantar o botijão</option></select></label>
+      <label id="roomEloLabel" class="room-elo hidden"><input type="checkbox" id="roomElo"> Esta partida vale Elo<small>Sem bots, sem killstreak e sem código do chat.</small></label>
+      <p id="roomEloNote" class="elo-lock hidden">Competitivo: o Elo sempre conta. Sem bots, sem killstreak e sem código do chat.</p>
       <label id="roomSideLabel" class="hidden">Por time<select id="roomSide" aria-label="Jogadores por time na sala"><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select></label>
       <label id="roomGfLabel" class="hidden">Formato<select id="roomGf" aria-label="Formato do Gunfight na sala"><option value="1">1v1</option><option value="2" selected>2v2</option><option value="3">3v3</option><option value="4">4v4</option></select></label>
       <label id="roomSurvLabel" class="hidden">Variante<select id="roomSurv" aria-label="Variante da Invasão"><option value="padrao" selected>Clássica</option><option value="survival">Survival</option></select></label>
@@ -518,6 +525,22 @@
   </div>
 </div>
 
+<div id="eloModal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="eloTitle">
+  <div class="ticket-panel wide">
+    <h2 id="eloTitle">Elo por modalidade</h2>
+    <div class="rank-tabs" id="eloModes"></div>
+    <div id="eloHero" class="elo-hero"></div>
+    <div id="eloHow" class="elo-how"></div>
+    <div id="eloTiers" class="elo-tiers"></div>
+    <div id="eloLadderWrap" class="hidden">
+      <h3 class="elo-ladder-title">Ranking · Docão Supremo</h3>
+      <div id="eloLadder" class="rank-body"></div>
+    </div>
+    <p class="acct-note">Cada modalidade tem o seu Elo: Corrida Armada, Duelo (Gunfight), X1 e Competitivo. Conta em partida online, com conta, sem bots. No Competitivo o Elo sempre vale. Nos outros três, só se a sala foi criada valendo Elo — e aí os códigos do chat não funcionam.</p>
+    <button type="button" id="eloClose" class="ticket-btn ghost">VOLTAR</button>
+  </div>
+</div>
+
 <div id="lobby" class="overlay hidden">
   <div class="panel">
     <h2>Sala <span id="lobbyCode" class="code">----</span></h2>
@@ -572,6 +595,8 @@
         <label>Tempo<select id="lobbyTime"><option value="0">Padrão</option><option value="3">3 min</option><option value="5">5 min</option><option value="7">7 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option></select></label>
         <label>Chat<select id="lobbyChatOn"><option value="1">Sim</option><option value="0">Não</option></select></label>
       </div>
+      <label id="lobbyEloLabel" class="room-elo hidden"><input type="checkbox" id="lobbyElo"> Esta partida vale Elo<small>Sem bots, sem killstreak e sem código do chat.</small></label>
+      <p id="lobbyEloNote" class="elo-lock hidden">Competitivo: o Elo sempre conta. Sem bots, sem killstreak e sem código do chat.</p>
       <div id="lobbyLimits" class="room-limits"></div>
       <button id="startOnline">INICIAR PARTIDA</button>
     </div>

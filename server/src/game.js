@@ -78,8 +78,9 @@ export class Game {
   constructor(cfg, io) {
     this.test = !!cfg.test; // só no `wrangler dev` com ALLOW_TEST=1: aceita teleporte (testes automatizados)
     const variant = cfg.variant === 'survival' || cfg.mode === 'survival' || cfg.survival === true || cfg.survival === 1 || isSurvival(cfg.surv) ? 'survival' : '';
-    this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), side: normSide(cfg.side), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers) };
+    this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), side: normSide(cfg.side), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers), elo: cfg.elo === true };
     if (this.cfg.mode === COMP.mode) { this.cfg.side = normSide(cfg.side); this.cfg.max = this.cfg.side * 2; this.cfg.fillBots = false; if (!BOMB_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = 'rodizio'; }
+    this.lockElo();
     if (isX1(this.cfg.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; }
     if (this.cfg.mode === GF_MODE) { this.cfg.gfFormat = normFormat(cfg.format ?? cfg.gfFormat); this.cfg.gfStub = !GF_LIVE; if (GF_LIVE) this.cfg.max = this.cfg.gfFormat * 2; }
     this.chatLog = Array.isArray(cfg.chatLog) ? cfg.chatLog.filter((x) => x && typeof x.text === 'string').slice(-30) : [];
@@ -98,6 +99,15 @@ export class Game {
   get armsMode() { return isArmsRace(this.cfg.mode); }
   get bombMode() { return this.cfg.mode === 'bomb' || this.compMode; }
   get x1Mode() { return isX1(this.cfg.mode); } // X1: duelo, mapa pequeno, mesma arma
+  // Competitivo sempre vale Elo. Corrida, Duelo (Gunfight) e X1 só se a sala foi criada com a opção.
+  lockElo() {
+    const opt = this.armsMode || this.x1Mode || (this.cfg.mode === GF_MODE && GF_LIVE);
+    if (this.cfg.mode === COMP.mode) { this.cfg.elo = true; this.cfg.fillBots = false; }
+    else if (!opt) this.cfg.elo = false;
+    else if (this.cfg.elo) this.cfg.fillBots = false;
+  }
+  eloOn() { return !!this.cfg.elo && (this.compMode || this.armsMode || this.x1Mode || this.gfMode); }
+  eloModeId() { return this.compMode ? 'comp' : this.armsMode ? 'arms' : this.x1Mode ? 'x1' : this.gfMode ? 'gf' : ''; }
   get survival() { return isSurvivalMode(this.cfg.mode, this.cfg); } // HOTMILK à Noite: portas, Papada, barraca, parede e Ray Gun
   get invasion() { return isInvasion(this.cfg.mode) || this.survival; } // Invasão, e o Survival que corre em cima das mesmas waves
   get mapList() {
@@ -426,8 +436,42 @@ startMsg() {
     const boxes = this.mapBoxWinners(rows);
     this._mapBoxIds = [...rows].filter((e) => e.acct && boxes.has(e.acct.id)).map((e) => e.id);
     for (const e of rows) if (e.acct && e.connected) this.flushStats(e, true, this.matchWon(e, rows), boxes.has(e.acct.id));
+    this.flushElo(rows);
     this.state = 'over'; this.io.stopLoop(); this.nades = []; this.shocks = []; this.rockets = []; this.blades = []; this.discs = []; this.rays = []; this.eggs = []; this.corns = []; this.cornPops = []; this.gifts = []; this.helis = []; this.gunships = []; this.nukes = [];
     this.io.broadcast(this.endMsg()); this.sendLobby();
+  }
+  // Só conta Elo sem bot na sala. Quem não tem conta não entra no cálculo.
+  flushElo(rows) {
+    if (!this.eloOn() || !this.io.elo) return;
+    const hasBots = [...this.ents.values()].some((e) => e.bot && !e.zt);
+    const humans = rows.filter((e) => !e.bot && e.connected && e.acct);
+    let winTeam = -1, players;
+    if (this.x1Mode) {
+      const duo = humans.slice(0, 2);
+      if (duo.length < 2) return;
+      const [a, b] = duo;
+      const sa = this.score(a), sb = this.score(b);
+      players = [
+        { acct: a.acct.id, team: 0, score: sa, entId: a.id },
+        { acct: b.acct.id, team: 1, score: sb, entId: b.id },
+      ];
+      winTeam = sa === sb ? -1 : sa > sb ? 0 : 1;
+    } else {
+      const ts = (this.bomb ? this.bomb.score : this.teamScore) || [0, 0];
+      const forced = this.forcedWinTeam;
+      winTeam = forced === 0 || forced === 1 ? forced : (ts[0] > ts[1] ? 0 : ts[1] > ts[0] ? 1 : -1);
+      players = humans.filter((e) => e.team === 0 || e.team === 1).map((e) => ({ acct: e.acct.id, team: e.team | 0, score: this.score(e), entId: e.id }));
+    }
+    try {
+      this.io.elo({
+        mode: this.eloModeId(),
+        eloOn: true,
+        fillBots: !!this.cfg.fillBots,
+        hasBots,
+        winTeam,
+        players,
+      });
+    } catch (err) { console.error('elo', err && err.message); }
   }
   endMsg() {
     const rows = [...this.ents.values()].filter((e) => (e.bot && !e.zt) || e.connected).sort((a, b) => this.score(b) - this.score(a) || a.deaths - b.deaths);
@@ -462,6 +506,7 @@ startMsg() {
         if ((isInvasion(m.mode) || m.mode === 'survival' || m.variant === 'survival' || m.survival === true) && m.max) m.max = Math.min(m.max | 0, INV.MAX_PLAYERS);
         if (m.max) this.cfg.max = clamp(m.max | 0, Math.max(2, this.humans().length), MAX_PLAYERS);
         if (typeof m.fillBots === 'boolean') this.cfg.fillBots = m.fillBots;
+        if (typeof m.elo === 'boolean' && this.state !== 'playing') this.cfg.elo = m.elo;
         if (typeof m.botDiff === 'string') { const next = normBotDiff(m.botDiff); if (next !== this.cfg.botDiff) { this.cfg.botDiff = next; for (const b of this.ents.values()) if (b.bot && !b.zt && !b.dummy) applyBotDiff(b, next); } else this.cfg.botDiff = next; }
         if (m.surv !== undefined && this.state !== 'playing') this.cfg.surv = normSurv(m.surv);
         if (m.time !== undefined) this.cfg.time = normTime(m.time);
@@ -474,6 +519,7 @@ startMsg() {
           if (this.cfg.map === 'random' || !BOMB_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = 'rodizio';
         }
         if (this.cfg.mode === COMP.mode) this.cfg.fillBots = false;
+        if (this.state !== 'playing') this.lockElo(); else if (this.cfg.elo) this.cfg.fillBots = false;
         if (m.variant === 'survival' || m.variant === 'padrao' || m.variant === 'standard' || m.variant === '') this.cfg.variant = m.variant === 'survival' ? 'survival' : '';
         if (typeof m.survival === 'boolean') this.cfg.variant = m.survival ? 'survival' : (this.cfg.mode === 'survival' ? 'survival' : '');
         if (this.survival && this.cfg.map !== 'random' && !SURVIVAL_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = SURVIVAL.DEFAULT_MAP;
@@ -534,13 +580,13 @@ startMsg() {
   onSay(e, m) {
     if (this.cfg.chat === false || e.bot) return;
     const text = this.cleanChat(m.text); if (!text) return;
-    if (isPokeCode(text) && this.state === 'playing' && !this.inv && !this.x1Mode && !this.armsMode && !this.gfMode) { e.pokeballs = Math.min(POKE.max, (e.pokeballs || 0) + 1); this.toMe(e, ['pkb', e.pokeballs]); } // código da Pokébola
-    if (this.state === 'playing' && e.alive && !e.down) { const msg = applyCheatText(e, text, this.T); if (msg) this.toMe(e, ['gtam', msg]); } // CJ05, LGPD e BIG: qualquer modo, inclusive Gunfight e Survival
+    if (!this.eloOn() && isPokeCode(text) && this.state === 'playing' && !this.inv && !this.x1Mode && !this.armsMode && !this.gfMode) { e.pokeballs = Math.min(POKE.max, (e.pokeballs || 0) + 1); this.toMe(e, ['pkb', e.pokeballs]); } // código da Pokébola
+    if (!this.eloOn() && this.state === 'playing' && e.alive && !e.down) { const msg = applyCheatText(e, text, this.T); if (msg) this.toMe(e, ['gtam', msg]); } // CJ05, LGPD e BIG: fora de partida valendo Elo
     const now = Date.now();
     const times = e.sayAt = (e.sayAt || []).filter((t) => now - t < 5000);
     if (times.length >= 4) return;
     times.push(now);
-    if (isMiniCode(text) && this.state === 'playing' && !this.inv && !this.x1Mode && !this.armsMode && !this.compMode && !this.gfMode && e.alive && !e.slots.includes(MINIGUN)) this.giveMinigun(e); // código da minigun (passa pelo limite do chat; já tendo, não reabastece nem esfria)
+    if (!this.eloOn() && isMiniCode(text) && this.state === 'playing' && !this.inv && !this.x1Mode && !this.armsMode && !this.compMode && !this.gfMode && e.alive && !e.slots.includes(MINIGUN)) this.giveMinigun(e); // código da minigun (passa pelo limite do chat; já tendo, não reabastece nem esfria)
     const scope = m.scope === 'team' && this.teamMode ? 'team' : 'all';
     const dead = this.state === 'playing' && !e.alive ? 1 : 0;
     this.postChat({ id: e.id, name: e.name, team: e.team, scope, dead, text }); this.cq(e, 'chat');
@@ -685,13 +731,13 @@ startMsg() {
   // abate que conta pra sequência (quem matou precisa estar vivo, igual ao cliente)
   streakKill(a) {
     if (!a.ksBank) this.resetStreak(a);
-    if (this.inv || this.armsMode) return; // Invasão e Corrida Armada: sem killstreaks (só os poderes de Halloween)
+    if (this.inv || this.eloOn()) return; // Invasão tem os poderes dela. Killstreak só sai quando a partida vale Elo.
     a.ksKills++; if (a.ksKills === 3) this.cq(a, 'seq3');
     for (const r of streakRewards(a.ksKills)) if (powerOn(r, this.cfg.powers) && r in a.ksBank) a.ksBank[r]++;
   }
   // F: 'p' = Míssil (abre o laptop; o cliente pilota e manda o impacto em 'ms'), 'h' = Gavião, 'x' = nuke
   useStreak(e, kind, startA) {
-    const B = e.ksBank; if (!B || e.bot || this.inv || this.armsMode || this.gfMode || bombFrozen(this.bomb)) return; // Invasão e Gunfight: sem killstreak. Bomba: nada de streak na preparação
+    const B = e.ksBank; if (!B || e.bot || this.inv || this.eloOn() || bombFrozen(this.bomb)) return; // partida valendo Elo: sem killstreak. Bomba: nada de streak na preparação.
     const streakId = kind === 'p' ? 'missile' : kind === 'h' ? 'heli' : kind === 'g' ? 'gunner' : kind === 'a' ? 'ac130' : kind === 'x' ? 'nuke' : null;
     if (streakId && !powerOn(streakId, this.cfg.powers)) return;
     if (kind === 'p') {
@@ -1355,7 +1401,7 @@ startMsg() {
     if (this.inv && t.zt) return this.killZombie(t, a, w, head, back, ks);
     t.alive = false; t.hp = 0; t.deaths++; if (t.acct) t.sd++; t.respawnAt = (this.compMode || this.gfMode) ? Infinity : this.T + (t.dummy ? TRAIN.respawn : this.armsMode ? ARMS_RACE.respawnTime : RESPAWN_TIME); if (!t.bot) { t.needRs = !this.compMode && !this.gfMode; t.rsReq = false; } // humano: só renasce clicando em Renascer. Competitivo e Gunfight esperam a próxima rodada.
     if (this.compMode) { t.armor = 0; t.helmet = false; t.keepKit = false; this.dropDeath(t); }
-    if (a && a !== t && !this.friends(a, t)) { a.kills++; if (this.compMode) payKill(a); if (a.acct) { a.sk++; if (!this.inv && !(this.teamMode && a.team === t.team)) a.ck = (a.ck | 0) + (t.bot || t.zt ? EARN.killBot : EARN.killHuman); this.chalKill(a, w, head, back, ks, fx); } if (a.alive && !this.x1Mode && !this.compMode && !this.gfMode && ks !== 'h' && ks !== 'x' && ks !== 'g' && ks !== 'a') this.streakKill(a); }
+    if (a && a !== t && !this.friends(a, t)) { a.kills++; if (this.compMode) payKill(a); if (a.acct) { a.sk++; if (!this.inv && !(this.teamMode && a.team === t.team)) a.ck = (a.ck | 0) + (t.bot || t.zt ? EARN.killBot : EARN.killHuman); this.chalKill(a, w, head, back, ks, fx); } if (a.alive && !this.eloOn() && ks !== 'h' && ks !== 'x' && ks !== 'g' && ks !== 'a') this.streakKill(a); }
     if (this.armsMode) {
       const result = armsRaceKill(a, t, w);
       for (const e of result.changed) this.equipArms(e);

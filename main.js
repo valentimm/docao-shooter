@@ -818,6 +818,7 @@ let rulesLive = false;
 const hideMode = () => isHide(mode);
 const teamMode = () => mode === 'dom' || armsMode() || mode === 'bomb' || compOn() || hideMode(); // modos com times
 const compOn = () => isComp(mode);
+const eloMatch = () => compOn() || !!(online && online.cfg && online.cfg.elo); // killstreak some só quando a partida vale Elo
 const plantOn = () => mode === 'bomb' || compOn();
 const training = () => isTraining(mode); // Estande do Docão: bots viram alvos
 const exploreMode = () => mode === 'explore';
@@ -2697,7 +2698,7 @@ function notePlayerKill(victim, head, fx = 0) {
   if (revenge) revengeName = null;
   const streak = feedbackKill({ head: !!head, dist, revenge, wall: !!(fx & 1) });
   if (streak >= 2) sfx.streak(streak);
-  if (!x1Mode() && !armsMode() && !compOn()) onRewardKill(); // X1 e Competitivo não juntam sequência (helicóptero, nuke)
+  if (!eloMatch() && !invMode()) onRewardKill(); // sequência só fora de partida valendo Elo (e da Invasão)
   if (!reducedAnims() && player.alive && player.weapon >= 0) { fp.killT = KILL_TIME; fp.killKey = WEAPONS[player.weapon] && WEAPONS[player.weapon].key; }
 }
 function hurtFlash() { hurtLevel = 1; }
@@ -3686,7 +3687,7 @@ function refreshStreakPrompt() {
   if (node) node.textContent = STREAK_PROMPT[id] || 'F · killstreak';
 }
 function bankStreak(id) {
-  if (invMode()) return;
+  if (invMode() || eloMatch()) return;
   streakReady.push(id);
   flashMsg(`${(STREAK_PROMPT[id] || id).replace('F · ', '')} pronto · aperte F`);
   refreshStreakPrompt();
@@ -3841,7 +3842,7 @@ function startNukeCountdown() {
   refreshStreakPrompt();
 }
 function useStreak() {
-  if (invMode() || gfLive()) return; // Invasão e Gunfight: sem killstreaks (F não faz nada; na Invasão só G/X dos poderes)
+  if (invMode() || eloMatch()) return; // Invasão tem os poderes dela. Killstreak só sai quando a partida vale Elo.
   if (!player || !player.alive || predator || nukeAt || radioCall || gunner || ac130) return;
   if (isBomb() && bombFrozen(bombS)) { if (streakReady.length) flashMsg('Killstreak só depois da preparação'); return; } // Bomba: nada de streak na preparação
   const id = streakReady.shift();
@@ -3860,7 +3861,7 @@ function finishRadioCall() {
 }
 function grantNuke() { bankStreak('nuke'); }
 function callNuke() {
-  if (invMode()) return;
+  if (invMode() || eloMatch()) return;
   if (!player || !player.alive || nukeAt) return;
   if (isBomb() && bombFrozen(bombS)) return;
   const i = streakReady.indexOf('nuke');
@@ -3869,7 +3870,7 @@ function callNuke() {
   startNukeCountdown();
 }
 function onRewardKill() {
-  if (invMode()) return; // Invasão: abates não rendem killstreak
+  if (invMode() || eloMatch()) return; // Invasão e partida valendo Elo: abates não rendem killstreak
   if (!player || !player.alive) return;
   rewardKills++;
   const cycle = streakCycle(rewardKills);
@@ -6370,7 +6371,7 @@ function setMenuView(view, trigger) {
 const crateJourney = { progress: 0, target: 0, phase: 'closed', view: 'arsenal', nextView: 'match', homeNear: .1, homePosition: new V3(), homeQuaternion: new THREE.Quaternion(), homeOffset: 0 };
 function crateMenuBusy(busy) {
   const menu = $('menu'); menu.setAttribute('aria-busy', String(busy));
-  for (const selector of ['.menu-panel', '.menu-tools', '.showcase-actions', '.menu-key-hints', '.loadout-dock', '.dance-dock']) menu.querySelector(selector).inert = busy;
+  for (const selector of ['.menu-panel', '.menu-tools', '.showcase-actions', '.menu-key-hints', '.loadout-dock', '.elo-dock']) { const el = menu.querySelector(selector); if (el) el.inert = busy; }
   if (busy) { menu.tabIndex = -1; menu.focus({ preventScroll: true }); }
 }
 function openMenuView(view, trigger) {
@@ -6995,7 +6996,7 @@ let showSpin = 0, showSpinVel = 0, showDrag = null; // giro manual do Docão no 
 function menuCanSpin(ev) {
   if (state !== 'menu' || crateJourney.phase !== 'closed' || (ev.button != null && ev.button !== 0)) return false;
   const t = ev.target;
-  return !!(t && t.closest && !t.closest('button, a, input, select, textarea, label, summary, .menu-panel, .loadout-dock, .dance-dock, .showcase-actions, .menu-tools, .menu-key-hints'));
+  return !!(t && t.closest && !t.closest('button, a, input, select, textarea, label, summary, .menu-panel, .loadout-dock, .elo-dock, .showcase-actions, .menu-tools, .menu-key-hints'));
 }
 $('menu').addEventListener('pointerdown', (ev) => {
   if (!menuCanSpin(ev)) return;
@@ -7029,20 +7030,11 @@ function setDance(id) {
 }
 function buildDancePicks() {
   const card = (d, cls) => `<button type="button" class="${cls}" data-dance="${d.id}">${cls === 'small' ? d.name : `<b>${d.name}</b><small>${d.line}</small>`}</button>`;
-  $('dancePicks').innerHTML = DANCES.map((d) => card(d, 'dance-pick')).join('');
-  $('pauseDancePicks').innerHTML = DANCES.map((d) => card(d, 'small')).join('');
-  const pick = (ev) => { const b = ev.target.closest('[data-dance]'); if (b) setDance(b.dataset.dance); };
-  $('dancePicks').addEventListener('click', pick);
-  $('pauseDancePicks').addEventListener('click', pick);
-  $('dancePicks').addEventListener('pointerover', (ev) => {
-    const b = ev.target.closest('[data-dance]');
-    danceCast.forEach((d) => {
-      if (!d.model || !d.model.shadowMat) return;
-      const hot = b && d.id === b.dataset.dance;
-      d.model.shadowMat.color.set(d.id === selectedDance ? 0x4a1a16 : hot ? 0x2c241c : 0x140e0c);
-    });
-  });
-  $('dancePicks').addEventListener('pointerleave', () => setDance(selectedDance));
+  const pause = $('pauseDancePicks');
+  if (pause) {
+    pause.innerHTML = DANCES.map((d) => card(d, 'small')).join('');
+    pause.addEventListener('click', (ev) => { const b = ev.target.closest('[data-dance]'); if (b) setDance(b.dataset.dance); });
+  }
   setDance(selectedDance);
 }
 buildDancePicks();
@@ -7534,6 +7526,7 @@ function refreshModeHud() {
   if (armsMode()) { closePauseClass(); closeBombPick(); invClosePick(); killcamGuns = false; }
   $('domhud').classList.toggle('hidden', mode !== 'dom'); $('bombhud').classList.toggle('hidden', !plantOn()); document.body.classList.toggle('bombmode', plantOn());
   document.body.classList.toggle('gfmode', gfLive());
+  document.body.classList.toggle('elo-match', eloMatch());
   const gfHud = $('gfhud'); if (gfHud) gfHud.classList.toggle('hidden', !gfLive());
   if (!gfLive()) { gfWatching = false; const w = $('gfWatch'); if (w) w.classList.add('hidden'); }
   const hint = $('deathSub');
@@ -8114,7 +8107,10 @@ function activePowers() {
   if (rulesLive) return matchLimits.powers;
   return null;
 }
-function clientPower(id) { if (gfLive()) return false; if (armsMode() && rulesLive && id !== 'ammo' && id !== 'health') return false; return powerOn(id, activePowers()); }
+function clientPower(id) {
+  if (['uav', 'missile', 'heli', 'gunner', 'ac130', 'nuke'].includes(id)) return !eloMatch() && !invMode() && powerOn(id, activePowers());
+  if (gfLive()) return false; if (armsMode() && rulesLive && id !== 'ammo' && id !== 'health') return false; return powerOn(id, activePowers());
+}
 function weaponAllowed(i) { const w = activeWeapons(); return !w || w.includes(i); }
 function pool(list) {
   const w = activeWeapons(); if (!w) return list.slice();
@@ -8131,7 +8127,7 @@ function limitSummary(limits) {
 }
 function limitsFromChecks(root) {
   const cats = [...root.querySelectorAll('[data-cat]:checked')].map((el) => el.dataset.cat);
-  const powers = [...root.querySelectorAll('[data-pow]:checked')].map((el) => el.dataset.pow);
+  const powers = [...root.querySelectorAll('[data-pow]')].filter((el) => el.checked || el.dataset.was === '1').map((el) => el.dataset.pow);
   return savedToLimits({ cats, powers });
 }
 function paintLimits(root, limits, editable) {
@@ -9013,6 +9009,16 @@ function onNetMessage(m) {
     case 's': if (o.pendingStart) { const b = o.snapBuf || (o.snapBuf = []); b.push(m); if (b.length > 3000) b.shift(); break; } if (o.inMatch && state !== 'over') applySnapshot(m); break; // resultado fechado: snapshot atrasado não mexe na cena
     case 'p': if (o.inMatch && state !== 'over') for (const ev of m.ev) personalEvent(ev); break;
     case 'end': if (o.inMatch) onlineEnd(m); break;
+    case 'elo': {
+      if (!Array.isArray(m.deltas) || !o.myId) break;
+      const mine = m.deltas.find((d) => d && d.id === o.myId);
+      if (mine) {
+        const sign = mine.delta >= 0 ? '+' : '';
+        flashMsg(`Elo ${m.modeName || ''} ${sign}${mine.delta} · ${mine.after} (${mine.emoji || ''} ${mine.tierName || mine.tier || ''})`.replace(/\s+/g, ' ').trim());
+        if (getAccount()) setTimeout(() => loadMe(), 800);
+      }
+      break;
+    }
     case 'hostMsg': if (m.msg) { $('lobbyStatus').textContent = m.msg; flashMsg(m.msg); } break;
     case 'teamOk': {
       o.myPref = m.pref; const msg = m.blocked ? 'Esse time ficaria com 2 jogadores a mais — você foi pro Automático (equilibrado).' : '';
@@ -9047,6 +9053,7 @@ function renderLobby() {
   $('lobbyTeam').classList.toggle('hidden', !dom);
   if (dom) { const me = rows.find((p) => p.id === o.myId); teamButtons($('lobbyTeamBtns'), me ? me.pref : -1, (t) => o.net.send({ t: 'team', team: t }), counts); }
   $('lobbyInfo').textContent = (isArmsRace(cfg.mode) ? 'CORRIDA ARMADA · ' : isComp(cfg.mode) ? 'COMPETITIVO · ' : cfg.mode === 'bomb' ? 'BOMBA (protótipo) · ' : cfg.mode === GF_MODE ? `GUNFIGHT ${normFormat(cfg.gfFormat)}v${normFormat(cfg.gfFormat)} · ` : isInvasion(cfg.mode) ? 'INVASÃO 🎃 (co-op) · ' : isX1(cfg.mode) ? 'X1 · ' : dom ? 'DOMINAÇÃO · ' : isTraining(cfg.mode) ? 'TREINO (Estande do Docão) · ' : 'MATA-MATA · ') + $('lobbyInfo').textContent;
+  if (cfg.elo) $('lobbyInfo').textContent += ' · VALENDO ELO';
   $('lobbyPlayers').innerHTML = `<table><tr><th style="text-align:left">Jogadores (${rows.length}/${cfg.max})</th><th>Ping</th></tr>${rows.map((p) =>
     `<tr data-pid="${p.bot ? '' : p.id}" class="${p.id === o.myId ? 'me' : ''}${!p.bot && voiceTalking(p.id) ? ' talking' : ''}${!p.bot && voiceMuted(p.id) ? ' vmuted' : ''}"><td style="text-align:left"><span class="dot" style="background:${(getSkin(p.skin).shirt || {}).color || '#d8261c'}"></span>${escapeHtml(p.name)}${p.id === L.hostId ? '<span class="host">★ anfitrião</span>' : ''}${dom && p.team >= 0 ? `<span class="tm${p.team}">${TEAM_NAMES[p.team]}${p.pref < 0 ? ' (auto)' : ''}</span>` : ''}</td><td>${p.id === o.myId ? o.net.ping : p.ping} ms</td></tr>`).join('')}</table>`;
   chatSetRoom(cfg.chat !== false); chatSetTeam(!!dom); voiceRefresh();
@@ -9056,7 +9063,7 @@ function renderLobby() {
   $('hostCtl').classList.toggle('hidden', !isHost); $('lobbyWait').classList.toggle('hidden', isHost || L.state !== 'lobby');
   const lobbyVariant = cfg.mode === 'survival' || cfg.variant === 'survival' || isSurvival(cfg.surv);
   const lobbyMode = cfg.mode === 'survival' ? INV.mode : (cfg.mode || 'dm');
-  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, lobbyMode, lobbyVariant); $('lobbyMax').value = String(cfg.max); if ($('lobbySide') && cfg.side) $('lobbySide').value = String(normSide(cfg.side)); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = lobbyMode; $('lobbySurv').value = lobbyVariant ? 'survival' : 'padrao'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
+  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, lobbyMode, lobbyVariant); $('lobbyMax').value = String(cfg.max); if ($('lobbySide') && cfg.side) $('lobbySide').value = String(normSide(cfg.side)); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = lobbyMode; if ($('lobbyElo')) $('lobbyElo').checked = !!cfg.elo; $('lobbySurv').value = lobbyVariant ? 'survival' : 'padrao'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
   $('lobbySurvLabel').classList.toggle('hidden', lobbyMode !== INV.mode);
   if ($('lobbySideLabel')) $('lobbySideLabel').classList.toggle('hidden', lobbyMode !== COMP.mode);
   if ($('lobbyGfLabel')) $('lobbyGfLabel').classList.toggle('hidden', lobbyMode !== GF_MODE);
@@ -9065,7 +9072,7 @@ function renderLobby() {
   if ((lobbyMode === GF_MODE || cfg.gfStub) && !GF_LIVE) $('lobbyInfo').textContent += ' · GUNFIGHT EM BREVE · a partida cai no Mata-mata';
   if ($('lobbyGf') && cfg.gfFormat) $('lobbyGf').value = String(normFormat(cfg.gfFormat));
   syncGfPick();
-  syncLobbyLimits(cfg, isHost); syncLoadoutUi(); paintCompSetup(lobbyMode);
+  syncLobbyLimits(cfg, isHost); syncLoadoutUi(); paintCompSetup(lobbyMode); paintEloPick();
   if (state === 'over') { const h = o.myId === o.hostId; $('againBtn').classList.toggle('hidden', !h); $('nextMapBtn').classList.toggle('hidden', !h); $('overWait').classList.toggle('hidden', h); }
 }
 function limitBlurb(cfg) {
@@ -9076,10 +9083,49 @@ function limitBlurb(cfg) {
   const p = allP ? 'todos os power-ups' : (cfg.powers.length ? cfg.powers.map((id) => (POWER_UPS.find((x) => x.id === id) || {}).title).filter(Boolean).join(', ') : 'nenhum power-up');
   return ` · armas: ${w} · power-ups: ${p}`;
 }
+const eloOptMode = (mode) => mode === 'arms' || mode === X1.mode || mode === GF_MODE;
+function paintEloPick() {
+  const mode = $('roomMode') && $('roomMode').value;
+  const opt = eloOptMode(mode), comp = mode === COMP.mode, roomOn = comp || (opt && $('roomElo') && $('roomElo').checked);
+  if ($('roomEloLabel')) $('roomEloLabel').classList.toggle('hidden', !opt);
+  if ($('roomEloNote')) $('roomEloNote').classList.toggle('hidden', !comp);
+  if ($('roomBots')) { $('roomBots').disabled = !!roomOn; if (roomOn) $('roomBots').value = '0'; }
+  const lm = $('lobbyMode') && $('lobbyMode').value;
+  const lopt = eloOptMode(lm), lcomp = lm === COMP.mode, lobbyOn = lcomp || (lopt && $('lobbyElo') && $('lobbyElo').checked);
+  if ($('lobbyEloLabel')) $('lobbyEloLabel').classList.toggle('hidden', !lopt);
+  if ($('lobbyEloNote')) $('lobbyEloNote').classList.toggle('hidden', !lcomp);
+  if ($('lobbyBots')) { $('lobbyBots').disabled = !!lobbyOn; if (lobbyOn) $('lobbyBots').value = '0'; }
+  lockStreakLimits($('roomLimits'), roomOn);
+  lockStreakLimits($('lobbyLimits'), lobbyOn);
+  refreshLockedSummary($('roomLimits'), roomOn);
+  refreshLockedSummary($('lobbyLimits'), lobbyOn);
+}
+const STREAK_POWERS = ['uav', 'missile', 'heli', 'gunner', 'ac130', 'nuke'];
+function lockStreakLimits(root, elo) {
+  if (!root) return;
+  root.querySelectorAll('[data-pow]').forEach((el) => {
+    if (!STREAK_POWERS.includes(el.dataset.pow)) return;
+    if (elo) {
+      if (!el.dataset.was) el.dataset.was = el.checked ? '1' : '0';
+      el.checked = false; el.disabled = true;
+    } else if (el.dataset.was) {
+      el.checked = el.dataset.was === '1'; el.disabled = false; delete el.dataset.was;
+    }
+  });
+}
+function refreshLockedSummary(root, elo) {
+  const sum = root && root.querySelector('summary');
+  if (!sum) return;
+  if (!elo) { sum.textContent = limitSummary(limitsFromChecks(root)); return; }
+  const cats = [...root.querySelectorAll('[data-cat]:checked')].map((el) => el.dataset.cat);
+  const powers = [...root.querySelectorAll('input[data-pow]:checked')].map((el) => el.dataset.pow);
+  sum.textContent = limitSummary(savedToLimits({ cats, powers }));
+}
 const sendCfg = (lim) => {
   if (!online) return; const mode = $('lobbyMode').value, L = lim || limitsFor(mode);
   if (mode === GF_MODE && !GF_LIVE && $('lobbyStatus')) $('lobbyStatus').textContent = GF_STUB_NOTICE;
-  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: mode === COMP.mode ? false : $('lobbyBots').value === '1', botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value });
+  const elo = mode === COMP.mode || (eloOptMode(mode) && $('lobbyElo') && $('lobbyElo').checked);
+  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: elo ? false : $('lobbyBots').value === '1', elo, botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value });
 };
 ['lobbyMap', 'lobbyMax', 'lobbyBots', 'lobbyTime', 'lobbyChatOn', 'lobbySide'].forEach((id) => { if ($(id)) $(id).onchange = sendCfg; });
 $('lobbyDiff').onchange = () => { saveBotDiff($('lobbyDiff').value); sendCfg(); };
@@ -9098,7 +9144,7 @@ $('lobbyMode').onchange = () => {
   if (mode === GF_MODE && !GF_LIVE) $('lobbyStatus').textContent = GF_STUB_NOTICE;
   if ($('lobbyMax')) $('lobbyMax').closest('label').classList.toggle('hidden', mode === COMP.mode);
   if (mode === INV.mode && isSurvival($('lobbySurv').value)) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('lobbyMap').value = ex; }
-  fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' || $('lobbyMode').value === COMP.mode ? BOMB_MAP : $('lobbyMap').value, mode, mode === INV.mode && isSurvival($('lobbySurv').value)); sendCfg(limitsFor(mode)); paintCompSetup();
+  fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' || $('lobbyMode').value === COMP.mode ? BOMB_MAP : $('lobbyMap').value, mode, mode === INV.mode && isSurvival($('lobbySurv').value)); paintEloPick(); sendCfg(limitsFor(mode)); paintCompSetup();
 };
 $('startOnline').onclick = () => {
   if (!online) return; const humans = online.lobby ? online.lobby.players.filter((p) => !p.bot).length : 0;
@@ -9109,14 +9155,16 @@ $('startOnline').onclick = () => {
 $('leaveLobby').onclick = () => leaveOnline();
 // ---------- menu online ----------
 function onlineTab(create) { $('tabCreate').classList.toggle('active', create); $('tabJoin').classList.toggle('active', !create); $('paneCreate').classList.toggle('hidden', !create); $('paneJoin').classList.toggle('hidden', create); }
-$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); };
+$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); };
+if ($('roomElo')) $('roomElo').onchange = paintEloPick;
+if ($('lobbyElo')) $('lobbyElo').onchange = () => { paintEloPick(); sendCfg(); };
 $('roomSurv').onchange = () => { const surv = isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMap').value, $('roomMode').value, surv); };
-$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); const map = surv ? SURVIVAL.DEFAULT_MAP : selectedMap; fillMapSelect($('roomMap'), map, $('roomMode').value, surv); if (surv) $('roomMap').value = SURVIVAL.DEFAULT_MAP; syncRoomLimits(); paintCompSetup(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
+$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); const map = surv ? SURVIVAL.DEFAULT_MAP : selectedMap; fillMapSelect($('roomMap'), map, $('roomMode').value, surv); if (surv) $('roomMap').value = SURVIVAL.DEFAULT_MAP; syncRoomLimits(); paintCompSetup(); paintEloPick(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
 $('onlineClose').onclick = () => { $('onlineModal').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('tabCreate').onclick = () => onlineTab(true); $('tabJoin').onclick = () => { onlineTab(false); $('joinCode').focus(); };
 $('createBtn').onclick = async () => {
   const b = $('createBtn'); b.disabled = true; $('onlineErr').textContent = 'Criando sala…';
-  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: comp ? false : $('roomBots').value === '1', botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value }); $('onlineErr').textContent = ''; joinRoom(code); }
+  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const elo = comp || (eloOptMode($('roomMode').value) && $('roomElo') && $('roomElo').checked); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: elo ? false : $('roomBots').value === '1', elo, botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value }); $('onlineErr').textContent = ''; joinRoom(code); }
   catch (e) { $('onlineErr').textContent = 'Não deu pra criar a sala: ' + (e.message || 'servidor fora do ar'); }
   b.disabled = false;
 };
@@ -9561,7 +9609,7 @@ function paintVoiceMarks() {
   });
 }
 initChat({
-  send: (m) => { if (online && online.net) online.net.send(m); else if (m && m.t === 'say' && state === 'playing') { if (!invMode() && !x1Mode() && !compOn() && !gfLive()) { if (isPokeCode(m.text)) grantPokeball(); if (isMiniCode(m.text)) grantMinigun(); } const msg = player && applyCheatText(player, m.text, gameTime); if (msg) flashMsg(msg); } }, // offline: o chat só serve pros códigos. Pokébola e minigun continuam fora de X1, Competitivo e Gunfight. CJ05, LGPD e BIG valem em qualquer modo.
+  send: (m) => { if (online && online.net) online.net.send(m); else if (m && m.t === 'say' && state === 'playing') { if (!invMode() && !x1Mode() && !compOn() && !gfLive() && !armsMode()) { if (isPokeCode(m.text)) grantPokeball(); if (isMiniCode(m.text)) grantMinigun(); } const msg = player && !compOn() && applyCheatText(player, m.text, gameTime); if (msg) flashMsg(msg); } }, // offline: o chat só serve pros códigos. Competitivo sempre vale Elo, então o código não entra. Online, a sala é que recusa quando está valendo Elo.
   teamMode: () => socialTeam(),
   me: () => {
     if (!online) return player ? { id: 0, name: player.name, team: -1, dead: !player.alive } : null;
