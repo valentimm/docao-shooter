@@ -102,17 +102,17 @@
   white-space:nowrap;
 }
 #gfWatch.hidden{display:none !important}
-body.gfmode #streakBar,
-body.gfmode #streakCount,
-body.gfmode #nukeReady,
-body.gfmode #strikeMap,
-body.gfmode #nukeBanner,
-body.gfmode #predatorHud,
-body.gfmode #heliHud,
-body.gfmode #gunnerHud,
-body.gfmode #ac130Hud,
-body.gfmode #ac130Vig,
-body.gfmode #ac130Alert,
+body.elo-match #streakBar,
+body.elo-match #streakCount,
+body.elo-match #nukeReady,
+body.elo-match #strikeMap,
+body.elo-match #nukeBanner,
+body.elo-match #predatorHud,
+body.elo-match #heliHud,
+body.elo-match #gunnerHud,
+body.elo-match #ac130Hud,
+body.elo-match #ac130Vig,
+body.elo-match #ac130Alert{display:none !important}
 body.gfmode #invPowers{display:none !important}
 body.gfmode #hud #deathpick.cls-screen,
 body.gfmode #deathpick,

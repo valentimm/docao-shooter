@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z } from './docao.js';
+import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
+import { emptyFun, notePodiumKill, notePodiumHurt, notePodiumDeath, awardPodium } from './shared/podium.js';
+import { createPodiumStage } from './podium-stage.js';
 import { makeFPSniper, poseSniperBolt, applySniperSkin } from './sniper-view.js';
 import { makeFPSaber, makeWorldSaber, setSaberColor, poseSaber } from './saber-view.js';
 import { makeFPCrossbow, makeFPBow, poseDraw, poseRelease, makeFlightShaft } from './bow-view.js';
@@ -818,6 +820,7 @@ let rulesLive = false;
 const hideMode = () => isHide(mode);
 const teamMode = () => mode === 'dom' || armsMode() || mode === 'bomb' || compOn() || hideMode(); // modos com times
 const compOn = () => isComp(mode);
+const eloMatch = () => compOn() || !!(online && online.cfg && online.cfg.elo); // killstreak some só quando a partida vale Elo
 const plantOn = () => mode === 'bomb' || compOn();
 const training = () => isTraining(mode); // Estande do Docão: bots viram alvos
 const exploreMode = () => mode === 'explore';
@@ -846,7 +849,7 @@ function makeEntity(name, isPlayer, skinId, tag = '#ffffff') {
   const skin = getSkin(skinId);
   const e = { name, isPlayer, skinId: skin.id, float: !!skin.float, floatPh: Math.random() * 6, nextWisp: 0, shirt: (skin.shirt && skin.shirt.color) || '#d8261c', tag, pos: new V3(), vel: new V3(), yaw: 0, pitch: 0, crouch: 0, onGround: false, hp: 100, alive: true,
     kills: 0, deaths: 0, invulnUntil: 0, weapon: 0, primary: 0, nextPrimary: 0, mag: WEAPONS.map(() => 0), reserve: WEAPONS.map(() => 0), reloadEnd: 0, nextFire: 0, switchEnd: 0, actionEnd: 0,
-    respawnAt: 0, deathAt: 0, fxDeath: 0, lastAttacker: null, flashUntil: 0, nades: 0, smokeNades: 0, stunNades: 0, stunUntil: 0, charging: false, chargeStart: 0, nextNade: 0, gunKills: WEAPONS.map(() => 0),
+    respawnAt: 0, deathAt: 0, fxDeath: 0, lastAttacker: null, flashUntil: 0, nades: 0, smokeNades: 0, stunNades: 0, stunUntil: 0, charging: false, chargeStart: 0, nextNade: 0, gunKills: WEAPONS.map(() => 0), fun: emptyFun(),
     shieldHp: 0, shieldBroken: false, shieldBlocked: 0, shieldMedal: false, shieldDashAt: -99, shieldDashUntil: 0 };
     e.nextPrimary = isPlayer ? selectedPrimary : pickBotPrimary();
   e.nextSecondary = isPlayer ? selectedSecondary : PISTOL;
@@ -1231,6 +1234,7 @@ let matchEnding = null;
 const END_SLOWMO = 1.5, END_MENU_DELAY = 0.8;
 function clearMatchEnding() {
   if (matchEnding) resetAds(); // o zoom do fim só sai quando a próxima partida/menu começa
+  hidePodium();
   matchEnding = null;
   document.body.classList.remove('match-ended');
   $('matchResult').classList.add('hidden');
@@ -1258,11 +1262,12 @@ function revealEndMenu() {
   matchEnding.revealed = true;
   $('matchResult').classList.add('hidden');
   $('gameover').classList.remove('dancing'); $('gameover').classList.remove('hidden');
+  showPodium();
   if (!matchEnding.duration) startEndDance(); // movimento reduzido: sem câmera lenta, a dança já pode começar
 }
-function startEndDance() { // a dança da vitória entra só quando a câmera lenta acaba (o placar já estava na tela)
-  if (!matchEnding || !matchEnding.dance || matchEnding.danced) return;
-  matchEnding.danced = true; beginVictory();
+function startEndDance() { // os três do pódio dançam na tela de fim; a câmera do mapa não cola num Docão só
+  if (!matchEnding || matchEnding.danced) return;
+  matchEnding.danced = true;
 }
 function updateMatchEnding(realDt) {
   if (window.__endDt != null) realDt = window.__endDt; // testes: passo fixo da transição (independe do FPS da máquina)
@@ -1895,6 +1900,15 @@ function updateParticles(dt) {
     else if (p.kind === 'corn') { const g = groundAt(m.position.x, m.position.z, m.position.y) + 0.04; p.vel.y -= 12 * dt; m.position.addScaledVector(p.vel, dt); if (m.position.y <= g) { m.position.y = g; p.vel.y = Math.abs(p.vel.y) > 1.5 ? -p.vel.y * 0.35 : 0; p.vel.x *= 0.6; p.vel.z *= 0.6; p.spin.multiplyScalar(0.6); } m.rotation.x += p.spin.x * dt; m.rotation.z += p.spin.z * dt; m.material.opacity = k > 0.7 ? (1 - k) / 0.3 : 1; } // pipoca quicando
     else if (p.kind === 'smoke') { p.vel.multiplyScalar(1 - 1.5 * dt); p.vel.y += 0.6 * dt; m.position.addScaledVector(p.vel, dt); m.scale.setScalar(p.s0 * (1 + k * 2.2)); m.material.opacity = 0.7 * (1 - k); }
     else if (p.kind === 'spark') { p.vel.y -= 6 * dt; m.position.addScaledVector(p.vel, dt); m.material.opacity = 0.55 * (1 - k); m.scale.setScalar(1 - k * 0.35); }
+    else if (p.kind === 'goldflake') {
+      const g = groundAt(m.position.x, m.position.z, m.position.y) + 0.02;
+      p.vel.y -= 10 * dt; p.vel.x *= 1 - 1.4 * dt; p.vel.z *= 1 - 1.4 * dt;
+      m.position.addScaledVector(p.vel, dt);
+      if (m.position.y <= g) { m.position.y = g; p.vel.y = 0; p.vel.x *= 0.35; p.vel.z *= 0.35; }
+      if (p.spin) { m.rotation.x += p.spin.x * dt; m.rotation.y += p.spin.y * dt; m.rotation.z += p.spin.z * dt; }
+      m.material.opacity = k > 0.55 ? 0.95 * (1 - (k - 0.55) / 0.45) : 0.95;
+      m.scale.setScalar((p.s0 || 1) * (1 - k * 0.3));
+    }
     else if (p.kind === 'ray') { m.position.addScaledVector(p.vel, dt); const s = (p.flash ? 0.4 + k * 2.4 : p.ring ? 0.4 + k * (RAY_MOVE.radius / 0.2) : (p.s0 || 1) * (1 - k * 0.3)); m.scale.setScalar(s); if (m.material) m.material.opacity = (p.flash ? 0.95 : 0.8) * (1 - k); }
     else if (p.kind === 'raylight') { m.intensity = 12 * (1 - k); }
     if (k >= 1) { scene.remove(m); if (m.material && m.material.dispose && !m.userData.keepMat) m.material.dispose(); if (m.geometry && !m.userData.keepGeo && (p.kind === 'flash' || p.kind === 'ring' || p.kind === 'ray')) m.geometry.dispose(); particles.splice(i, 1); }
@@ -2388,7 +2402,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (!online && compOn()) amount = mitigate(t, amount, head);
   if (!online) amount = subidoTaken(t, amount);
   if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
-  t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); // regen só com dano de outro
+  t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); if (!online && attacker && attacker !== t && attacker.fun) notePodiumHurt(attacker.fun, amount); // regen só com dano de outro
   if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
   if (t.isPlayer) { hurtFlash(); noteHit(origin); if (attacker && attacker !== t) noteFlinch(amount); sfx.oink(0.8, 1.15); }
   else { if (attacker && attacker !== t && !t.target) { t.target = attacker; t.aim = t.reaction * 0.5; } if (Math.random() < 0.3) sfx.oink(distVol(t.pos) * 0.6, 1.3); }
@@ -2471,7 +2485,8 @@ function kill(t, a, wIdx, head, back = false, noReward = false, label = null, fx
   }
   if (a) t.lastAttacker = a;
   if (t.isPlayer) t.killerName = a && a !== t && a.name ? a.name : (label || '');
-  if (a && a !== t && !friends(a, t)) a.kills++;
+  if (a && a !== t && !friends(a, t)) { a.kills++; if (!online && a.fun) notePodiumKill(a.fun, { head, knife: isKnife(wIdx), dist: a.pos && t.pos ? Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) : 0 }); }
+  if (!online) notePodiumDeath(t.fun);
   if (t === player) noteNemesisKill(a, t); // a 3ª seguida já sai com a caveira no feed
   addKillFeed(a, t, wIdx, head, back, label, fx);
   if (t !== player) noteNemesisKill(a, t); // o abate que acaba com o nemesis ainda mostra a marca
@@ -2520,6 +2535,50 @@ function finishReload(e) {
 function setWeapon(e, idx) { if (e.weapon !== idx) resetRecoil(e); e.weapon = idx; if (e.model) e.model.guns.forEach((g, i) => { g.visible = i === idx; if (g.userData.twin) g.userData.twin.visible = g.visible; if (g.userData.extra) g.userData.extra.visible = g.visible; }); syncShieldWorn(e); } // twin: 2º sabre ou revólver da esquerda. extra: o da direita do par.
 // pinta as lâminas dos dois sabres (e do par do Sabre Duplo)
 function colorSabers(guns, hex) { for (const i of [SABER, SABER2]) { const g = guns[i]; if (!g) continue; setSaberColor(g, hex); if (g.userData.twin) setSaberColor(g.userData.twin, hex); } }
+const goldFlakeGeo = new THREE.OctahedronGeometry(0.016, 0);
+function wearingGoldGloves(skinId) {
+  const skin = getSkin(skinId || (player && player.skinId) || selectedSkin);
+  const g = (skin.parts || []).find((p) => p.type === 'glove');
+  return !!(g && g.gold);
+}
+// Luvas Docão Gold: ao trocar de arma, brilhos caem da luva até o chão.
+function spawnGoldGloveSparkles() {
+  if (reducedAnims() || !player || !fp || !wearingGoldGloves()) return;
+  fp.root.updateMatrixWorld(true);
+  const origins = [];
+  const collect = (root) => {
+    if (!root || !root.visible) return;
+    root.traverse((o) => {
+      if (!(o.userData && o.userData.fpFist && o.userData.goldGlove)) return;
+      let ok = true; for (let n = o; n; n = n.parent) if (!n.visible) { ok = false; break; }
+      if (!ok) return;
+      const p = new V3(); o.getWorldPosition(p); origins.push(p);
+    });
+  };
+  const ref = fp.fpRef || {};
+  collect(ref.arms); collect(ref.armsP); collect(fp.kr); collect(fp.krGold);
+  collect(fp.pumpHand); collect(ref.saberR); collect(ref.saberL); collect(ref.bowGrip); collect(ref.bowDraw);
+  if (!origins.length) origins.push(camera.localToWorld(new V3(0.16, -0.18, -0.42)));
+  const per = Math.max(4, Math.ceil(12 / origins.length));
+  for (const origin of origins) {
+    for (let i = 0; i < per; i++) {
+      const m = new THREE.Mesh(goldFlakeGeo, new THREE.MeshBasicMaterial({
+        color: i % 3 ? 0xfff1a8 : 0xf3d78a, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      m.userData.keepGeo = true;
+      m.position.copy(origin).add(new V3(rand(-0.035, 0.035), rand(-0.02, 0.05), rand(-0.03, 0.03)));
+      const s0 = rand(0.7, 1.35); m.scale.setScalar(s0);
+      scene.add(m);
+      particles.push({
+        mesh: m, vel: new V3(rand(-0.35, 0.55), rand(0.08, 0.55), rand(-0.55, 0.25)),
+        life: rand(0.55, 0.95), t: 0, kind: 'goldflake', s0,
+        spin: new V3(rand(-10, 10), rand(-10, 10), rand(-10, 10)),
+      });
+    }
+  }
+  window.__goldGloveSparks = (window.__goldGloveSparks || 0) + 1;
+}
 function switchWeapon(e, idx) {
   if (e === player) { cancelUtilPress(); e.utilSel = ''; }
   if (e.down) return; // caído: a pistolinha temporária não troca o loadout
@@ -2540,6 +2599,7 @@ function switchWeapon(e, idx) {
     e.forceFumble = false;
     if (!isKnife(idx)) playCueList(drawCues(W.key), e.switchDur);
     if (isKnife(idx)) { fp.knifeDrawT = MELEE.draw + 0.1; sfx.knifeDraw(0.8); rightStale = rightDown; if (idx === KNIFE) startButterfly(); } // mirando e trocou pra faca: só estoca num clique novo. A dourada não é butterfly.
+    spawnGoldGloveSparkles();
   }
 }
 // troca rápida (V): corpo a corpo (faca ou sabre) ↔ última arma
@@ -2643,7 +2703,7 @@ function notePlayerKill(victim, head, fx = 0) {
   if (revenge) revengeName = null;
   const streak = feedbackKill({ head: !!head, dist, revenge, wall: !!(fx & 1) });
   if (streak >= 2) sfx.streak(streak);
-  if (!x1Mode() && !armsMode() && !compOn()) onRewardKill(); // X1 e Competitivo não juntam sequência (helicóptero, nuke)
+  if (!eloMatch() && !invMode()) onRewardKill(); // sequência só fora de partida valendo Elo (e da Invasão)
   if (!reducedAnims() && player.alive && player.weapon >= 0) { fp.killT = KILL_TIME; fp.killKey = WEAPONS[player.weapon] && WEAPONS[player.weapon].key; }
 }
 function hurtFlash() { hurtLevel = 1; }
@@ -3632,7 +3692,7 @@ function refreshStreakPrompt() {
   if (node) node.textContent = STREAK_PROMPT[id] || 'F · killstreak';
 }
 function bankStreak(id) {
-  if (invMode()) return;
+  if (invMode() || eloMatch()) return;
   streakReady.push(id);
   flashMsg(`${(STREAK_PROMPT[id] || id).replace('F · ', '')} pronto · aperte F`);
   refreshStreakPrompt();
@@ -3787,7 +3847,7 @@ function startNukeCountdown() {
   refreshStreakPrompt();
 }
 function useStreak() {
-  if (invMode() || gfLive()) return; // Invasão e Gunfight: sem killstreaks (F não faz nada; na Invasão só G/X dos poderes)
+  if (invMode() || eloMatch()) return; // Invasão tem os poderes dela. Killstreak só sai quando a partida vale Elo.
   if (!player || !player.alive || predator || nukeAt || radioCall || gunner || ac130) return;
   if (isBomb() && bombFrozen(bombS)) { if (streakReady.length) flashMsg('Killstreak só depois da preparação'); return; } // Bomba: nada de streak na preparação
   const id = streakReady.shift();
@@ -3806,7 +3866,7 @@ function finishRadioCall() {
 }
 function grantNuke() { bankStreak('nuke'); }
 function callNuke() {
-  if (invMode()) return;
+  if (invMode() || eloMatch()) return;
   if (!player || !player.alive || nukeAt) return;
   if (isBomb() && bombFrozen(bombS)) return;
   const i = streakReady.indexOf('nuke');
@@ -3815,7 +3875,7 @@ function callNuke() {
   startNukeCountdown();
 }
 function onRewardKill() {
-  if (invMode()) return; // Invasão: abates não rendem killstreak
+  if (invMode() || eloMatch()) return; // Invasão e partida valendo Elo: abates não rendem killstreak
   if (!player || !player.alive) return;
   rewardKills++;
   const cycle = streakCycle(rewardKills);
@@ -5191,6 +5251,13 @@ function knifeAnim(dt) {
   }
 }
 const _kSpinQ = new THREE.Quaternion(), _kAxisQ = new THREE.Quaternion(), _kAxisX = new V3(1, 0, 0), _kPivot = new V3(), _kMoved = new V3();
+function knifeSpinPivot(mesh) {
+  const p = mesh && mesh.userData && mesh.userData.spinPivot;
+  if (p) return p;
+  if (mesh && mesh.userData && mesh.userData.knifeKind === 'skeleton') return SKELETON_HOLE;
+  return { x: 0, y: 0, z: KARAMBIT_RING_Z };
+}
+// Gira a faca em torno do furo (skeleton) ou da argola (karambit), sem deslocar o ponto de apoio do dedo.
 function applyKnifePivot(mesh, spin) {
   if (!mesh.userData.restQ) { mesh.userData.restQ = mesh.quaternion.clone(); mesh.userData.restP = mesh.position.clone(); }
   const moving = Math.abs(spin) > 1e-4;
@@ -5201,13 +5268,13 @@ function applyKnifePivot(mesh, spin) {
   if (!moving) return;
   _kSpinQ.identity().multiply(_kAxisQ.setFromAxisAngle(_kAxisX, spin));
   mesh.quaternion.multiply(_kSpinQ);
-  const s = mesh.scale.x || 1;
-  _kPivot.set(0, 0, KARAMBIT_RING_Z);
+  const s = mesh.scale.x || 1, piv = knifeSpinPivot(mesh);
+  _kPivot.set(piv.x, piv.y, piv.z);
   _kMoved.copy(_kPivot).applyQuaternion(_kSpinQ);
   _kPivot.sub(_kMoved).multiplyScalar(s).applyQuaternion(mesh.userData.restQ);
   mesh.position.add(_kPivot);
 }
-// Inspeção da faca: a mão (kr) acompanha baioneta e skeleton. A karambit gira na argola. A butterfly abre no pino.
+// Inspeção da faca: skeleton gira no furo grande; karambit na argola; butterfly no pino; baioneta no pulso.
 function poseKnifeInspect(ins) {
   const kp = fp.kpiv, kr = fp.kr;
   if (!kp || !kr) return;
@@ -6309,7 +6376,7 @@ function setMenuView(view, trigger) {
 const crateJourney = { progress: 0, target: 0, phase: 'closed', view: 'arsenal', nextView: 'match', homeNear: .1, homePosition: new V3(), homeQuaternion: new THREE.Quaternion(), homeOffset: 0 };
 function crateMenuBusy(busy) {
   const menu = $('menu'); menu.setAttribute('aria-busy', String(busy));
-  for (const selector of ['.menu-panel', '.menu-tools', '.showcase-actions', '.menu-key-hints', '.loadout-dock', '.dance-dock']) menu.querySelector(selector).inert = busy;
+  for (const selector of ['.menu-panel', '.menu-tools', '.showcase-actions', '.menu-key-hints', '.loadout-dock', '.elo-dock']) { const el = menu.querySelector(selector); if (el) el.inert = busy; }
   if (busy) { menu.tabIndex = -1; menu.focus({ preventScroll: true }); }
 }
 function openMenuView(view, trigger) {
@@ -6934,7 +7001,7 @@ let showSpin = 0, showSpinVel = 0, showDrag = null; // giro manual do Docão no 
 function menuCanSpin(ev) {
   if (state !== 'menu' || crateJourney.phase !== 'closed' || (ev.button != null && ev.button !== 0)) return false;
   const t = ev.target;
-  return !!(t && t.closest && !t.closest('button, a, input, select, textarea, label, summary, .menu-panel, .loadout-dock, .dance-dock, .showcase-actions, .menu-tools, .menu-key-hints'));
+  return !!(t && t.closest && !t.closest('button, a, input, select, textarea, label, summary, .menu-panel, .loadout-dock, .elo-dock, .showcase-actions, .menu-tools, .menu-key-hints'));
 }
 $('menu').addEventListener('pointerdown', (ev) => {
   if (!menuCanSpin(ev)) return;
@@ -6964,24 +7031,16 @@ function setDance(id) {
   selectedDance = normDance(id);
   try { localStorage.setItem('docao.dance', selectedDance); } catch (e) { /* sem storage */ }
   document.querySelectorAll('[data-dance]').forEach((b) => b.classList.toggle('on', b.dataset.dance === selectedDance));
+  if (online && online.net) online.net.send({ t: 'prof', dance: myDance() });
   danceCast.forEach((d) => { if (d.model && d.model.shadowMat) d.model.shadowMat.color.set(d.id === selectedDance ? 0x3a1612 : 0x140e0c); });
 }
 function buildDancePicks() {
   const card = (d, cls) => `<button type="button" class="${cls}" data-dance="${d.id}">${cls === 'small' ? d.name : `<b>${d.name}</b><small>${d.line}</small>`}</button>`;
-  $('dancePicks').innerHTML = DANCES.map((d) => card(d, 'dance-pick')).join('');
-  $('pauseDancePicks').innerHTML = DANCES.map((d) => card(d, 'small')).join('');
-  const pick = (ev) => { const b = ev.target.closest('[data-dance]'); if (b) setDance(b.dataset.dance); };
-  $('dancePicks').addEventListener('click', pick);
-  $('pauseDancePicks').addEventListener('click', pick);
-  $('dancePicks').addEventListener('pointerover', (ev) => {
-    const b = ev.target.closest('[data-dance]');
-    danceCast.forEach((d) => {
-      if (!d.model || !d.model.shadowMat) return;
-      const hot = b && d.id === b.dataset.dance;
-      d.model.shadowMat.color.set(d.id === selectedDance ? 0x4a1a16 : hot ? 0x2c241c : 0x140e0c);
-    });
-  });
-  $('dancePicks').addEventListener('pointerleave', () => setDance(selectedDance));
+  const pause = $('pauseDancePicks');
+  if (pause) {
+    pause.innerHTML = DANCES.map((d) => card(d, 'small')).join('');
+    pause.addEventListener('click', (ev) => { const b = ev.target.closest('[data-dance]'); if (b) setDance(b.dataset.dance); });
+  }
   setDance(selectedDance);
 }
 buildDancePicks();
@@ -7429,6 +7488,36 @@ function startGame(mapId) {
   applyHeldGuns(getAccount() && getAccount().guns);
   camera.clearViewOffset(); state = 'playing'; lockPointer();
 }
+let podiumStage = null;
+function podiumRows() {
+  if (online && online.endMsg && Array.isArray(online.endMsg.podium)) return online.endMsg.podium;
+  const rows = entities.filter((e) => !e.zt).sort((a, b) => scoreOf(b) - scoreOf(a) || a.deaths - b.deaths);
+  return awardPodium(rows.map((e) => ({
+    id: e.id, name: e.name, skin: e.skinId, dance: e.isPlayer ? myDance() : (e.dance || ''),
+    kills: e.kills | 0, deaths: e.deaths | 0, caps: e.caps | 0, fun: e.fun,
+  })));
+}
+function paintPodiumCards(rows) {
+  const box = $('podiumCards'); if (!box) return;
+  const byPlace = new Map((rows || []).map((r) => [r.place, r]));
+  box.innerHTML = [2, 1, 3].map((place) => {
+    const r = byPlace.get(place);
+    if (!r) return '<article class="podium-card empty"></article>';
+    return `<article class="podium-card p${place}"><b>${place}º ${escapeHtml(r.name)}</b><em>${r.emoji} ${escapeHtml(r.title)}</em><small>${escapeHtml(r.line)}</small></article>`;
+  }).join('');
+}
+function showPodium() {
+  const root = $('podium'), canvas = $('podiumCanvas'); if (!root || !canvas) return;
+  const rows = podiumRows();
+  root.classList.remove('hidden');
+  paintPodiumCards(rows);
+  if (!podiumStage) podiumStage = createPodiumStage(canvas);
+  podiumStage.setCast(rows);
+}
+function hidePodium() {
+  const root = $('podium'); if (root) root.classList.add('hidden');
+  if (podiumStage) { podiumStage.dispose(); podiumStage = null; }
+}
 function endGame() {
   stopInspect(true); stopEmote(); // fim no meio da inspeção ou da dança (a mira com zoom continua na câmera lenta)
   if (state === 'over' || !player) return;
@@ -7473,6 +7562,7 @@ function refreshModeHud() {
   if (armsMode()) { closePauseClass(); closeBombPick(); invClosePick(); killcamGuns = false; }
   $('domhud').classList.toggle('hidden', mode !== 'dom'); $('bombhud').classList.toggle('hidden', !plantOn()); document.body.classList.toggle('bombmode', plantOn());
   document.body.classList.toggle('gfmode', gfLive());
+  document.body.classList.toggle('elo-match', eloMatch());
   const gfHud = $('gfhud'); if (gfHud) gfHud.classList.toggle('hidden', !gfLive());
   if (!gfLive()) { gfWatching = false; const w = $('gfWatch'); if (w) w.classList.add('hidden'); }
   const hint = $('deathSub');
@@ -7825,8 +7915,9 @@ function loop() {
     for (const p of pickups) p.mesh.rotation.y += dt;
     updateDeathSkinFx(dt);
     renderDanceShadows(danceT);
-  } else if (state === 'over' && (victory.on || matchEnding)) {
+  } else if (state === 'over') {
     if (matchEnding) updateMatchEnding(realDt); // câmera lenta do fim, na visão do jogador (e o relógio que leva à dança)
+    if (podiumStage) podiumStage.tick(dt);
     if (victory.on) {
       if (window.__danceT != null) victory.clock = window.__danceT; // testes: congela o passo da dança
       else victory.clock += dt;
@@ -8053,7 +8144,10 @@ function activePowers() {
   if (rulesLive) return matchLimits.powers;
   return null;
 }
-function clientPower(id) { if (gfLive()) return false; if (armsMode() && rulesLive && id !== 'ammo' && id !== 'health') return false; return powerOn(id, activePowers()); }
+function clientPower(id) {
+  if (['uav', 'missile', 'heli', 'gunner', 'ac130', 'nuke'].includes(id)) return !eloMatch() && !invMode() && powerOn(id, activePowers());
+  if (gfLive()) return false; if (armsMode() && rulesLive && id !== 'ammo' && id !== 'health') return false; return powerOn(id, activePowers());
+}
 function weaponAllowed(i) { const w = activeWeapons(); return !w || w.includes(i); }
 function pool(list) {
   const w = activeWeapons(); if (!w) return list.slice();
@@ -8070,7 +8164,7 @@ function limitSummary(limits) {
 }
 function limitsFromChecks(root) {
   const cats = [...root.querySelectorAll('[data-cat]:checked')].map((el) => el.dataset.cat);
-  const powers = [...root.querySelectorAll('[data-pow]:checked')].map((el) => el.dataset.pow);
+  const powers = [...root.querySelectorAll('[data-pow]')].filter((el) => el.checked || el.dataset.was === '1').map((el) => el.dataset.pow);
   return savedToLimits({ cats, powers });
 }
 function paintLimits(root, limits, editable) {
@@ -8158,6 +8252,7 @@ function classRows() {
     const w = WEAPONS[pack.primary];
     return {
       i, name: c.name, weapon: pack.primary, weaponName: w.short || w.name,
+      primary: pack.primary, secondary: pack.secondary, melee: pack.melee,
       on: i === classIndex, last: i === spawnedClass,
     };
   });
@@ -8402,7 +8497,7 @@ function paintClassSurfaces() {
   paintPair('iLoadList', 'iLoadGun', LIVE_HINT);
   paintArms();
   const chips = $('lobbyClasses');
-  if (chips) fillChips(chips, { rows: classRows(), onPick: (i) => armClass(i) });
+  if (chips) fillChips(chips, { rows: classRows(), thumbs: weaponThumbs, onPick: (i) => armClass(i) });
   if (benchOn) paintBench();
 }
 function buildDeathPrimaries() { paintClassSurfaces(); }
@@ -8620,7 +8715,44 @@ function paintLoadoutDock() {
     card.querySelector('.gun-face').setAttribute('aria-label', hand ? `${label}, ${w ? w.name : ''}. Já nasce com ela na mão` : `Nascer com ${label}`);
   }
 }
-function syncLoadoutUi() { paintLoadoutDock(); fillLoadoutRow('lobbyLoadoutRow', 'lobby', false); buildDeathPrimaries(); buildDeathSec(); buildDeathMelee(); }
+// Lobby online: as mesmas três armas da classe, em miniatura, no lugar dos selects.
+function paintLobbyLoadout() {
+  const row = $('lobbyLoadoutRow'); if (!row) return;
+  row.classList.add('lobby-guns');
+  if (!row.querySelector('.lobby-gun')) {
+    row.innerHTML = '';
+    for (const [slot, label, list, get, set] of DOCK_SLOTS) {
+      const card = document.createElement('div');
+      card.className = 'lobby-gun';
+      card.dataset.slot = slot;
+      card.innerHTML = '<button type="button" class="gun-step" data-dir="-1" aria-label="Arma anterior">‹</button><button type="button" class="lobby-gun-face"><span class="wthumb" data-w="0"></span><b></b><small></small></button><button type="button" class="gun-step" data-dir="1" aria-label="Próxima arma">›</button>';
+      card.querySelector('.lobby-gun-face').onclick = () => setSpawnHand(slot);
+      card.querySelectorAll('.gun-step').forEach((b) => {
+        b.onclick = () => {
+          const L = pool(list); if (!L.length) return;
+          const cur = get(), at = L.indexOf(cur);
+          const n = L[(Math.max(0, at) + (b.dataset.dir === '1' ? 1 : L.length - 1)) % L.length];
+          set(n);
+        };
+      });
+      row.appendChild(card);
+    }
+  }
+  for (const [slot, label, , get] of DOCK_SLOTS) {
+    const card = row.querySelector(`[data-slot="${slot}"]`); if (!card) continue;
+    const i = get(), w = WEAPONS[i];
+    const thumb = card.querySelector('.wthumb'); thumb.dataset.w = String(i);
+    thumb.style.backgroundImage = weaponThumbs[i] ? `url("${weaponThumbs[i]}")` : '';
+    card.querySelector('b').textContent = (w && (w.short || w.name)) || '';
+    const hand = spawnHold === slot; card.classList.toggle('in-hand', hand);
+    card.querySelector('small').textContent = hand ? `${label} · na mão` : label;
+    card.querySelector('.lobby-gun-face').setAttribute('aria-label', hand ? `${label}, ${w ? w.name : ''}. Já nasce com ela na mão` : `Nascer com ${label}`);
+  }
+  let note = row.parentElement.querySelector('.loadout-note');
+  if (!note) { note = document.createElement('div'); note.className = 'sub loadout-note'; row.insertAdjacentElement('afterend', note); }
+  const txt = loadoutNote(); if (note.textContent !== txt) note.textContent = txt;
+}
+function syncLoadoutUi() { paintLoadoutDock(); paintLobbyLoadout(); buildDeathPrimaries(); buildDeathSec(); buildDeathMelee(); }
 function refreshMenuMode() {
   if ($('modeSel').value === 'survival') { $('modeSel').value = INV.mode; if ($('survSel')) $('survSel').value = 'survival'; }
   const v = [HIDE.mode, 'dom', ARMS_RACE.mode, 'bomb', COMP.mode, 'explore', TRAIN.mode, INV.mode, X1.mode, GF_MODE].includes($('modeSel').value) ? $('modeSel').value : 'dm';
@@ -8846,6 +8978,8 @@ setLootThumbSource(lootItemThumb);
 onAccount(a => { applyAccount(a); arsenalUi?.render(); paintDeathSkins(); }); initAccountUI(); initCloset(); document.addEventListener('docao-look-saved', () => { const a = getAccount(); if (a && a.skin && skinOk(a.skin)) setPreview(a.skin); }); loadMe().then(() => applyAccount(getAccount()));
 const roomLink = (code) => { const u = new URL(location.href); u.search = ''; const sv = new URLSearchParams(location.search).get('server'); if (sv) u.searchParams.set('server', sv); u.searchParams.set('sala', code); return u.toString(); };
 function socialTeam() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && (cfg.mode === 'dom' || isArmsRace(cfg.mode) || cfg.mode === 'bomb' || isComp(cfg.mode))); }
+// Competitivo: microfone e áudio só do time (sem "Todos" na sala).
+function socialVoiceTeamOnly() { if (!online) return false; const cfg = (online.lobby && online.lobby.cfg) || online.cfg; return !!(cfg && isComp(cfg.mode)); }
 function inviteBlurb(code) { return `Bora jogar Docão Shooter! Sala ${code}\n${roomLink(code)}`; }
 function fillInvite(code) { const link = roomLink(code); document.querySelectorAll('.invite-link').forEach((el) => { el.value = link; }); }
 async function copyText(s) {
@@ -8912,6 +9046,16 @@ function onNetMessage(m) {
     case 's': if (o.pendingStart) { const b = o.snapBuf || (o.snapBuf = []); b.push(m); if (b.length > 3000) b.shift(); break; } if (o.inMatch && state !== 'over') applySnapshot(m); break; // resultado fechado: snapshot atrasado não mexe na cena
     case 'p': if (o.inMatch && state !== 'over') for (const ev of m.ev) personalEvent(ev); break;
     case 'end': if (o.inMatch) onlineEnd(m); break;
+    case 'elo': {
+      if (!Array.isArray(m.deltas) || !o.myId) break;
+      const mine = m.deltas.find((d) => d && d.id === o.myId);
+      if (mine) {
+        const sign = mine.delta >= 0 ? '+' : '';
+        flashMsg(`Elo ${m.modeName || ''} ${sign}${mine.delta} · ${mine.after} (${mine.emoji || ''} ${mine.tierName || mine.tier || ''})`.replace(/\s+/g, ' ').trim());
+        if (getAccount()) setTimeout(() => loadMe(), 800);
+      }
+      break;
+    }
     case 'hostMsg': if (m.msg) { $('lobbyStatus').textContent = m.msg; flashMsg(m.msg); } break;
     case 'teamOk': {
       o.myPref = m.pref; const msg = m.blocked ? 'Esse time ficaria com 2 jogadores a mais — você foi pro Automático (equilibrado).' : '';
@@ -8946,6 +9090,7 @@ function renderLobby() {
   $('lobbyTeam').classList.toggle('hidden', !dom);
   if (dom) { const me = rows.find((p) => p.id === o.myId); teamButtons($('lobbyTeamBtns'), me ? me.pref : -1, (t) => o.net.send({ t: 'team', team: t }), counts); }
   $('lobbyInfo').textContent = (isArmsRace(cfg.mode) ? 'CORRIDA ARMADA · ' : isComp(cfg.mode) ? 'COMPETITIVO · ' : cfg.mode === 'bomb' ? 'BOMBA (protótipo) · ' : cfg.mode === GF_MODE ? `GUNFIGHT ${normFormat(cfg.gfFormat)}v${normFormat(cfg.gfFormat)} · ` : isInvasion(cfg.mode) ? 'INVASÃO 🎃 (co-op) · ' : isX1(cfg.mode) ? 'X1 · ' : dom ? 'DOMINAÇÃO · ' : isTraining(cfg.mode) ? 'TREINO (Estande do Docão) · ' : 'MATA-MATA · ') + $('lobbyInfo').textContent;
+  if (cfg.elo) $('lobbyInfo').textContent += ' · VALENDO ELO';
   $('lobbyPlayers').innerHTML = `<table><tr><th style="text-align:left">Jogadores (${rows.length}/${cfg.max})</th><th>Ping</th></tr>${rows.map((p) =>
     `<tr data-pid="${p.bot ? '' : p.id}" class="${p.id === o.myId ? 'me' : ''}${!p.bot && voiceTalking(p.id) ? ' talking' : ''}${!p.bot && voiceMuted(p.id) ? ' vmuted' : ''}"><td style="text-align:left"><span class="dot" style="background:${(getSkin(p.skin).shirt || {}).color || '#d8261c'}"></span>${escapeHtml(p.name)}${p.id === L.hostId ? '<span class="host">★ anfitrião</span>' : ''}${dom && p.team >= 0 ? `<span class="tm${p.team}">${TEAM_NAMES[p.team]}${p.pref < 0 ? ' (auto)' : ''}</span>` : ''}</td><td>${p.id === o.myId ? o.net.ping : p.ping} ms</td></tr>`).join('')}</table>`;
   chatSetRoom(cfg.chat !== false); chatSetTeam(!!dom); voiceRefresh();
@@ -8955,7 +9100,7 @@ function renderLobby() {
   $('hostCtl').classList.toggle('hidden', !isHost); $('lobbyWait').classList.toggle('hidden', isHost || L.state !== 'lobby');
   const lobbyVariant = cfg.mode === 'survival' || cfg.variant === 'survival' || isSurvival(cfg.surv);
   const lobbyMode = cfg.mode === 'survival' ? INV.mode : (cfg.mode || 'dm');
-  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, lobbyMode, lobbyVariant); $('lobbyMax').value = String(cfg.max); if ($('lobbySide') && cfg.side) $('lobbySide').value = String(normSide(cfg.side)); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = lobbyMode; $('lobbySurv').value = lobbyVariant ? 'survival' : 'padrao'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
+  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, lobbyMode, lobbyVariant); $('lobbyMax').value = String(cfg.max); if ($('lobbySide') && cfg.side) $('lobbySide').value = String(normSide(cfg.side)); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = lobbyMode; if ($('lobbyElo')) $('lobbyElo').checked = !!cfg.elo; $('lobbySurv').value = lobbyVariant ? 'survival' : 'padrao'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
   $('lobbySurvLabel').classList.toggle('hidden', lobbyMode !== INV.mode);
   if ($('lobbySideLabel')) $('lobbySideLabel').classList.toggle('hidden', lobbyMode !== COMP.mode);
   if ($('lobbyGfLabel')) $('lobbyGfLabel').classList.toggle('hidden', lobbyMode !== GF_MODE);
@@ -8964,7 +9109,7 @@ function renderLobby() {
   if ((lobbyMode === GF_MODE || cfg.gfStub) && !GF_LIVE) $('lobbyInfo').textContent += ' · GUNFIGHT EM BREVE · a partida cai no Mata-mata';
   if ($('lobbyGf') && cfg.gfFormat) $('lobbyGf').value = String(normFormat(cfg.gfFormat));
   syncGfPick();
-  syncLobbyLimits(cfg, isHost); syncLoadoutUi(); paintCompSetup(lobbyMode);
+  syncLobbyLimits(cfg, isHost); syncLoadoutUi(); paintCompSetup(lobbyMode); paintEloPick();
   if (state === 'over') { const h = o.myId === o.hostId; $('againBtn').classList.toggle('hidden', !h); $('nextMapBtn').classList.toggle('hidden', !h); $('overWait').classList.toggle('hidden', h); }
 }
 function limitBlurb(cfg) {
@@ -8975,10 +9120,49 @@ function limitBlurb(cfg) {
   const p = allP ? 'todos os power-ups' : (cfg.powers.length ? cfg.powers.map((id) => (POWER_UPS.find((x) => x.id === id) || {}).title).filter(Boolean).join(', ') : 'nenhum power-up');
   return ` · armas: ${w} · power-ups: ${p}`;
 }
+const eloOptMode = (mode) => mode === 'arms' || mode === X1.mode || mode === GF_MODE;
+function paintEloPick() {
+  const mode = $('roomMode') && $('roomMode').value;
+  const opt = eloOptMode(mode), comp = mode === COMP.mode, roomOn = comp || (opt && $('roomElo') && $('roomElo').checked);
+  if ($('roomEloLabel')) $('roomEloLabel').classList.toggle('hidden', !opt);
+  if ($('roomEloNote')) $('roomEloNote').classList.toggle('hidden', !comp);
+  if ($('roomBots')) { $('roomBots').disabled = !!roomOn; if (roomOn) $('roomBots').value = '0'; }
+  const lm = $('lobbyMode') && $('lobbyMode').value;
+  const lopt = eloOptMode(lm), lcomp = lm === COMP.mode, lobbyOn = lcomp || (lopt && $('lobbyElo') && $('lobbyElo').checked);
+  if ($('lobbyEloLabel')) $('lobbyEloLabel').classList.toggle('hidden', !lopt);
+  if ($('lobbyEloNote')) $('lobbyEloNote').classList.toggle('hidden', !lcomp);
+  if ($('lobbyBots')) { $('lobbyBots').disabled = !!lobbyOn; if (lobbyOn) $('lobbyBots').value = '0'; }
+  lockStreakLimits($('roomLimits'), roomOn);
+  lockStreakLimits($('lobbyLimits'), lobbyOn);
+  refreshLockedSummary($('roomLimits'), roomOn);
+  refreshLockedSummary($('lobbyLimits'), lobbyOn);
+}
+const STREAK_POWERS = ['uav', 'missile', 'heli', 'gunner', 'ac130', 'nuke'];
+function lockStreakLimits(root, elo) {
+  if (!root) return;
+  root.querySelectorAll('[data-pow]').forEach((el) => {
+    if (!STREAK_POWERS.includes(el.dataset.pow)) return;
+    if (elo) {
+      if (!el.dataset.was) el.dataset.was = el.checked ? '1' : '0';
+      el.checked = false; el.disabled = true;
+    } else if (el.dataset.was) {
+      el.checked = el.dataset.was === '1'; el.disabled = false; delete el.dataset.was;
+    }
+  });
+}
+function refreshLockedSummary(root, elo) {
+  const sum = root && root.querySelector('summary');
+  if (!sum) return;
+  if (!elo) { sum.textContent = limitSummary(limitsFromChecks(root)); return; }
+  const cats = [...root.querySelectorAll('[data-cat]:checked')].map((el) => el.dataset.cat);
+  const powers = [...root.querySelectorAll('input[data-pow]:checked')].map((el) => el.dataset.pow);
+  sum.textContent = limitSummary(savedToLimits({ cats, powers }));
+}
 const sendCfg = (lim) => {
   if (!online) return; const mode = $('lobbyMode').value, L = lim || limitsFor(mode);
   if (mode === GF_MODE && !GF_LIVE && $('lobbyStatus')) $('lobbyStatus').textContent = GF_STUB_NOTICE;
-  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: mode === COMP.mode ? false : $('lobbyBots').value === '1', botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value });
+  const elo = mode === COMP.mode || (eloOptMode(mode) && $('lobbyElo') && $('lobbyElo').checked);
+  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: elo ? false : $('lobbyBots').value === '1', elo, botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value });
 };
 ['lobbyMap', 'lobbyMax', 'lobbyBots', 'lobbyTime', 'lobbyChatOn', 'lobbySide'].forEach((id) => { if ($(id)) $(id).onchange = sendCfg; });
 $('lobbyDiff').onchange = () => { saveBotDiff($('lobbyDiff').value); sendCfg(); };
@@ -8997,7 +9181,7 @@ $('lobbyMode').onchange = () => {
   if (mode === GF_MODE && !GF_LIVE) $('lobbyStatus').textContent = GF_STUB_NOTICE;
   if ($('lobbyMax')) $('lobbyMax').closest('label').classList.toggle('hidden', mode === COMP.mode);
   if (mode === INV.mode && isSurvival($('lobbySurv').value)) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('lobbyMap').value = ex; }
-  fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' || $('lobbyMode').value === COMP.mode ? BOMB_MAP : $('lobbyMap').value, mode, mode === INV.mode && isSurvival($('lobbySurv').value)); sendCfg(limitsFor(mode)); paintCompSetup();
+  fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' || $('lobbyMode').value === COMP.mode ? BOMB_MAP : $('lobbyMap').value, mode, mode === INV.mode && isSurvival($('lobbySurv').value)); paintEloPick(); sendCfg(limitsFor(mode)); paintCompSetup();
 };
 $('startOnline').onclick = () => {
   if (!online) return; const humans = online.lobby ? online.lobby.players.filter((p) => !p.bot).length : 0;
@@ -9008,14 +9192,16 @@ $('startOnline').onclick = () => {
 $('leaveLobby').onclick = () => leaveOnline();
 // ---------- menu online ----------
 function onlineTab(create) { $('tabCreate').classList.toggle('active', create); $('tabJoin').classList.toggle('active', !create); $('paneCreate').classList.toggle('hidden', !create); $('paneJoin').classList.toggle('hidden', create); }
-$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); };
+$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); };
+if ($('roomElo')) $('roomElo').onchange = paintEloPick;
+if ($('lobbyElo')) $('lobbyElo').onchange = () => { paintEloPick(); sendCfg(); };
 $('roomSurv').onchange = () => { const surv = isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMap').value, $('roomMode').value, surv); };
-$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); const map = surv ? SURVIVAL.DEFAULT_MAP : selectedMap; fillMapSelect($('roomMap'), map, $('roomMode').value, surv); if (surv) $('roomMap').value = SURVIVAL.DEFAULT_MAP; syncRoomLimits(); paintCompSetup(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
+$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); const map = surv ? SURVIVAL.DEFAULT_MAP : selectedMap; fillMapSelect($('roomMap'), map, $('roomMode').value, surv); if (surv) $('roomMap').value = SURVIVAL.DEFAULT_MAP; syncRoomLimits(); paintCompSetup(); paintEloPick(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
 $('onlineClose').onclick = () => { $('onlineModal').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('tabCreate').onclick = () => onlineTab(true); $('tabJoin').onclick = () => { onlineTab(false); $('joinCode').focus(); };
 $('createBtn').onclick = async () => {
   const b = $('createBtn'); b.disabled = true; $('onlineErr').textContent = 'Criando sala…';
-  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: comp ? false : $('roomBots').value === '1', botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value }); $('onlineErr').textContent = ''; joinRoom(code); }
+  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const elo = comp || (eloOptMode($('roomMode').value) && $('roomElo') && $('roomElo').checked); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: elo ? false : $('roomBots').value === '1', elo, botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value }); $('onlineErr').textContent = ''; joinRoom(code); }
   catch (e) { $('onlineErr').textContent = 'Não deu pra criar a sala: ' + (e.message || 'servidor fora do ar'); }
   b.disabled = false;
 };
@@ -9095,7 +9281,7 @@ function startOnlineMatch(m) {
   showcase.visible = false; $('killfeed').innerHTML = ''; flashMsg(survOn() ? `Survival · ${currentMap.name} · ${SURV.useLabel} usa a loja · E abre porta` : invMode() ? `Invasão 🎃 · ${currentMap.name} · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun] ? WEAPONS[x1Gun].short : ''}` : gfLive() ? `Gunfight ${gfS ? gfS.format : ''} · ${currentMap.name} · primeiro a ${GF_TO_WIN}` : `Mapa: ${currentMap.name}`);
   ['menu', 'gameover', 'pause', 'lobby', 'onlineModal'].forEach((id) => $(id).classList.add('hidden')); $('hud').classList.remove('hidden'); $('socialHud').classList.remove('hidden'); $('voiceHud').classList.remove('hidden'); $('overChat').classList.add('hidden');
   $('netbar').classList.remove('hidden'); $('netRoom').textContent = 'Sala ' + o.code;
-  camera.clearViewOffset(); state = 'playing'; if ($('teamPick').classList.contains('hidden')) lockPointer(); // escolhendo time: mouse livre pros botões
+  camera.clearViewOffset(); state = 'playing'; if (o.net) o.net.send({ t: 'prof', dance: myDance() }); if ($('teamPick').classList.contains('hidden')) lockPointer(); // escolhendo time: mouse livre pros botões
 }
 function netTick(dt) {
   const o = online; if (!o || !o.inMatch || !player) return;
@@ -9460,7 +9646,7 @@ function paintVoiceMarks() {
   });
 }
 initChat({
-  send: (m) => { if (online && online.net) online.net.send(m); else if (m && m.t === 'say' && state === 'playing') { if (!invMode() && !x1Mode() && !compOn() && !gfLive()) { if (isPokeCode(m.text)) grantPokeball(); if (isMiniCode(m.text)) grantMinigun(); } const msg = player && applyCheatText(player, m.text, gameTime); if (msg) flashMsg(msg); } }, // offline: o chat só serve pros códigos. Pokébola e minigun continuam fora de X1, Competitivo e Gunfight. CJ05, LGPD e BIG valem em qualquer modo.
+  send: (m) => { if (online && online.net) online.net.send(m); else if (m && m.t === 'say' && state === 'playing') { if (!invMode() && !x1Mode() && !compOn() && !gfLive() && !armsMode()) { if (isPokeCode(m.text)) grantPokeball(); if (isMiniCode(m.text)) grantMinigun(); } const msg = player && !compOn() && applyCheatText(player, m.text, gameTime); if (msg) flashMsg(msg); } }, // offline: o chat só serve pros códigos. Competitivo sempre vale Elo, então o código não entra. Online, a sala é que recusa quando está valendo Elo.
   teamMode: () => socialTeam(),
   me: () => {
     if (!online) return player ? { id: 0, name: player.name, team: -1, dead: !player.alive } : null;
@@ -9480,6 +9666,7 @@ initChat({
 initVoice({
   send: (m) => { if (online && online.net) online.net.send(m); },
   teamMode: () => socialTeam(),
+  teamOnly: () => socialVoiceTeamOnly(),
   myId: () => (online && online.myId) || 0,
   onChange: paintVoiceMarks,
 });
@@ -9620,7 +9807,7 @@ function updateZombie(z, dt) {
 }
 function killZombieLocal(t, a, wIdx, head, back) {
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = Infinity; t.fxDeath = t.deathAt;
-  if (a && a !== t && !a.zt) a.kills++;
+  if (a && a !== t && !a.zt) { a.kills++; if (!online && a.fun) notePodiumKill(a.fun, { head, knife: isKnife(wIdx), dist: a.pos && t.pos ? Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) : 0 }); }
   sfx.die(distVol(t.pos) * 0.7);
   if (a && a.isPlayer) { sfx.kill(); if (!survOn()) notePlayerKill(t, head); if (wIdx >= 0) noteWeaponKill(a, wIdx); }
   if (isBoss(t.zt)) addKillFeed(a, t, wIdx, head, back);
