@@ -209,7 +209,9 @@ function FAMAS_SAFE() { return 15; }
   delete SURVIVAL_LAYOUTS['hotmilk-noite'];
   for (const map of INV_MAPS) {
     const solids = mapSolids(map), P = createPhysics(solids, map.size);
-    ok(bindStations(map, P) == null && stationsFor(map) == null, `${map.id}: sem Papada, barraca nem arma de teste`);
+    const spawn = (map.spawns && map.spawns[0]) || [0, 0];
+    const lay = bindStations(map, P, { x: spawn[0], z: spawn[1] });
+    ok(lay && lay.papada && !lay.box && !(lay.walls && lay.walls.length) && stationsFor(map) == null, `${map.id}: Papada no mapa, sem barraca nem parede inventada`);
   }
   const noite = getMap('hotmilk-noite');
   const Pn = createPhysics(mapSolids(noite), noite.size);
@@ -220,8 +222,8 @@ function FAMAS_SAFE() { return 15; }
 }
 
 // servidor: Survival debita e sincroniza; Padrão recusa; respawn volta pra pistola e faca
-function room(surv) {
-  const g = new Game({ code: 'TEST', map: 'fazenda-assombrada', max: 4, fillBots: false, mode: 'inv', surv }, { send() {}, broadcast() {}, startLoop() {}, stopLoop() {} });
+function room(surv, map = 'fazenda-assombrada') {
+  const g = new Game({ code: 'TEST', map, max: 4, fillBots: false, mode: 'inv', surv }, { send() {}, broadcast() {}, startLoop() {}, stopLoop() {} });
   let fake = 1000; g.now = () => fake;
   const a = g.join({ name: 'A' }).ent; g.welcome(a);
   g.onMessage(a.id, { t: 'start' }); a.connected = true;
@@ -230,9 +232,9 @@ function room(surv) {
   return { g, a, step };
 }
 {
-  const { g, a } = room(SURV_ID);
+  const { g, a } = room(SURV_ID, 'hotmilk-noite');
   ok(g.survival && a.slots[0] === PISTOL && a.slotOn[1] === 0 && a.slots[2] === KNIFE && a.weapon === PISTOL, 'servidor Survival: nasce pistola e faca');
-  ok(g.mapId === 'hotmilk-noite' && g.stations && g.stations.papada && g.stations.box && g.stations.walls.length >= 4, `servidor abre a HOTMILK à Noite e monta as estações (${g.mapId}, ${g.stations && g.stations.walls.length} paredes)`);
+  ok(g.mapId === 'hotmilk-noite' && g.stations && g.stations.papada && g.stations.box && g.stations.walls.length >= 4, `servidor na HOTMILK à Noite monta as estações (${g.mapId}, ${g.stations && g.stations.walls.length} paredes)`);
   a.pts = 10000; a.pos = { ...g.stations.papada, y: g.stations.papada.y }; a.weapon = PISTOL;
   g.onEvent(a, ['sv', 'pap']);
   ok(a.pap[PISTOL] === 1 && a.pts === 0, 'servidor debita a Papada e grava o tier');
@@ -280,6 +282,7 @@ function room(surv) {
 }
 {
   const { g, a, step } = room(SURV_ID);
+  ok(g.mapId === 'fazenda-assombrada' && g.stations && g.stations.papada && !g.stations.box, 'Fazenda no Survival fica no mapa e tem a Papada');
   const tune = getSurvivalWaveTuning(1, 1);
   const left = g.inv.phaseEnd - g.inv.T;
   ok(left <= tune.prep && left > tune.prep - 0.4, `servidor Survival espera ${tune.prep}s antes da wave 1`);

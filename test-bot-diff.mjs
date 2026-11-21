@@ -3,7 +3,7 @@
 import { Game } from './server/src/game.js';
 import {
   BOT_DIFFS, DEFAULT_BOT_DIFF, normBotDiff, botProfile, shotSpread, hitscanAim,
-  considerTarget, nadeChoice, hearGunshot, zombieTune, applyBotDiff,
+  considerTarget, nadeChoice, hearGunshot, zombieTune, applyBotDiff, isBehind, canSpot, noteFootstep, STEP_ALERT,
 } from './shared/bot-difficulty.js';
 
 const fails = [];
@@ -110,6 +110,23 @@ function boot(diff) {
   ok(!threw, 'Ceva com bots andando e atirando não quebra o tick');
   const stamped = applyBotDiff({ bot: true }, 'javali', () => 0);
   ok(stamped.reaction === botProfile('javali').reaction[0] && stamped.heardAt === -99, 'applyBotDiff sorteia dentro da faixa e zera a memória de som');
+}
+
+{
+  const bot = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, alive: true, bot: true, target: null };
+  const front = { pos: { x: 0, y: 0, z: 4 }, alive: true };
+  const back = { pos: { x: 0, y: 0, z: -3 }, alive: true };
+  const far = { pos: { x: 0, y: 0, z: -(STEP_ALERT + 4) }, alive: true };
+  ok(!isBehind(bot, front) && isBehind(bot, back), 'costas é o lado oposto do olhar');
+  ok(canSpot(bot, front, 0) && !canSpot(bot, back, 0), 'sem passo, o bot não descobre quem está atrás');
+  noteFootstep([bot], back, 10);
+  ok(canSpot(bot, back, 10.4) && bot.heard && bot.heard.z === -3, 'passo bem perto atrás entrega a posição');
+  noteFootstep([bot], far, 20);
+  ok(!canSpot(bot, far, 20), 'passo longe atrás não conta');
+  const mate = { pos: { x: 0, y: 0, z: -2 }, alive: true };
+  const quiet = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, alive: true, bot: true, target: null };
+  noteFootstep([quiet], mate, 1, () => false);
+  ok(!quiet.stepHeard, 'passo de aliado não acorda o bot');
 }
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK');

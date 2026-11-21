@@ -15,14 +15,14 @@ const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 const io = () => ({ send() {}, broadcast() {}, startLoop() {}, stopLoop() {} });
 
-const g = new Game({ code: 'INTG', map: 'rodizio', max: 4, fillBots: false, mode: 'inv', variant: 'survival', test: true }, io());
+const g = new Game({ code: 'INTG', map: 'hotmilk-noite', max: 4, fillBots: false, mode: 'inv', variant: 'survival', test: true }, io());
 const ana = g.join({ name: 'Ana' }).ent;
 const bia = g.join({ name: 'Bia' }).ent;
 g.welcome(ana);
 g.welcome(bia);
 g.onMessage(ana.id, { t: 'start' });
 
-ok(g.mapId === 'hotmilk-noite' && g.survival && g.invasion, 'Invasão + Survival abre só a HOTMILK à Noite');
+ok(g.mapId === 'hotmilk-noite' && g.survival && g.invasion, 'Invasão + Survival na HOTMILK abre a noite');
 ok(g.inv && g.inv.A && g.inv.A.survival === true, 'o núcleo da horda recebe survival:true');
 ok(ana.alive && bia.alive, 'os dois entram vivos');
 ok((ana.pts | 0) === 500 && ana.pts === ana.points && (bia.pts | 0) === 500 && bia.pts === bia.points, 'cada um entra com o próprio saldo de 500');

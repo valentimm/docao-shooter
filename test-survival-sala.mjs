@@ -62,8 +62,9 @@ try {
     await A.page.selectOption('#roomSurv', 'survival');
     await A.page.selectOption('#roomBots', '0');
     await A.page.selectOption('#roomMax', '4');
-    const mapLocked = await G(A.page, () => document.getElementById('roomMap').value);
-    ok(mapLocked === 'hotmilk-noite', `${tag} a sala Survival trava o mapa (${mapLocked})`);
+    const mapOpts = await G(A.page, () => [...document.getElementById('roomMap').options].map((o) => o.value));
+    ok(mapOpts.includes('hotmilk-noite') && mapOpts.includes('rodizio') && mapOpts.length > 2, `${tag} a sala Survival lista a HOTMILK e os outros mapas (${mapOpts.length})`);
+    await A.page.selectOption('#roomMap', 'hotmilk-noite');
     await A.page.click('#createBtn');
     ok(await until(A.page, () => window.__docao.online && window.__docao.online.myId > 0), `${tag} Ana entrou na sala`);
     const code = await G(A.page, () => window.__docao.online.code);

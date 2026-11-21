@@ -27,12 +27,16 @@ const ZCOL = {
   runner: { suit: '#8e6a3e', suit2: '#5e4426', snout: '#9a5a44', eye: '#ffe14a', metal: '#7a7f88', hat: null },
   tank: { suit: '#7d8a3a', suit2: '#5b6628', snout: '#8a6a3a', eye: '#ff8a1a', metal: '#4b4e54', hat: null },
   spitter: { suit: '#6e8f5a', suit2: '#4a6640', snout: '#7a8a52', eye: '#7dff4a', metal: '#5a6a5e', hat: null },
-  boss: { suit: '#3a2a40', suit2: '#24182a', snout: '#ff8a1a', eye: '#ffd24a', metal: '#3c3f46', hat: '#120c10' },
-  bossBelly: { suit: '#b73c28', suit2: '#8e2c1e', snout: '#c44b36', eye: '#ffd24a', metal: '#4a3a32', hat: null },
-  bossGhost: { suit: '#c8d8f0', suit2: '#9ab0d0', snout: '#e8f0ff', eye: '#a8e0ff', metal: '#6a7a90', hat: '#e8f4ff' },
-  bossMummy: { suit: '#d8c89a', suit2: '#b8a878', snout: '#c8b888', eye: '#2a1a10', metal: '#8a7a5a', hat: null },
-  bossWolf: { suit: '#4a3a32', suit2: '#2e241c', snout: '#6a4a3a', eye: '#ff4020', metal: '#3a3030', hat: null },
-  bossCrazy: { suit: '#6a2a6a', suit2: '#4a1a4a', snout: '#ff6a3a', eye: '#ff20a0', metal: '#3a2a40', hat: '#1a0a1a' },
+  boss: { suit: '#2a1c30', suit2: '#140c18', snout: '#ff6a12', eye: '#ffb020', metal: '#2c2e34', hat: '#0c080c' },
+  bossBelly: { suit: '#8e2418', suit2: '#5c140e', snout: '#8a3028', eye: '#ffd24a', metal: '#3a2c28', hat: null },
+  bossGhost: { suit: '#b7c6dc', suit2: '#8ea0ba', snout: '#d5e0ee', eye: '#eaf6ff', metal: '#5a6a80', hat: null },
+  bossMummy: { suit: '#cbb892', suit2: '#a89068', snout: '#b8a078', eye: '#ffd27a', metal: '#6a5a40', hat: null },
+  bossWolf: { suit: '#3a2c26', suit2: '#1c1410', snout: '#5a3a2e', eye: '#ff3018', metal: '#2a2222', hat: null },
+  bossCrazy: { suit: '#4a1848', suit2: '#2a0c2c', snout: '#e85a30', eye: '#ff20a0', metal: '#2a1a30', hat: null },
+  sling: { suit: '#c6e04a', suit2: '#8aaa28', snout: '#d8ee78', eye: '#f4ff6a', metal: '#6a7040', hat: null },
+  bat: { suit: '#3a2848', suit2: '#241830', snout: '#5a4068', eye: '#ff4a6a', metal: '#3a3040', hat: null },
+  cry: { suit: '#6a8ec8', suit2: '#4a6a98', snout: '#8aa8d8', eye: '#9ad0ff', metal: '#4a5a70', hat: null },
+  bossHosp: { suit: '#d8d2c6', suit2: '#b7aea0', snout: '#c8a898', eye: '#ff2020', metal: '#6a645c', hat: null },
 };
 let headGeo = null, torsoGeo = null;
 function getHeadGeo() {
@@ -74,10 +78,16 @@ export function makeZombie(type) {
     part(G.cyl, toon('#c0392b'), body, [0, 0.9, -0.55], [0.22, 0.55, 0.22]);
     const lamp = part(G.sph, glowMat('#ff5a1a'), body, [0, 1.22, -0.55], [0.09, 0.09, 0.09], null, 0); lamp.userData.blink = true;
   }
-  if (type === 'bossBelly') { // Barriguinha: camisa arregaçada e barriga de fora
-    part(G.sph, toon('#e8a090'), body, [0, 0.58, 0.38], [0.48, 0.42, 0.4]);
-    part(G.sph, toon('#d08070'), body, [0, 0.52, 0.52], [0.12, 0.1, 0.08], null, 0); // umbigo
-    for (const s of [-1, 1]) part(G.box, suitM, body, [s * 0.28, 0.95, 0.2], [0.22, 0.18, 0.08], [0.4, 0, s * 0.3], 0); // rolo da camisa
+  if (type === 'bossBelly') { // barriga esticada, veia, ponto e a camisa só no ombro
+    const flesh = toon('#d7a090'); const bruise = toon('#8a4060');
+    part(G.sph, flesh, body, [0, 0.52, 0.4], [0.58, 0.5, 0.48]);
+    part(G.sph, toon('#b56a62'), body, [0, 0.46, 0.64], [0.09, 0.07, 0.05], null, 0);
+    part(G.box, bruise, body, [-0.1, 0.64, 0.6], [0.028, 0.3, 0.018], [0.15, 0, 0.45], 0);
+    part(G.box, bruise, body, [0.14, 0.5, 0.62], [0.022, 0.22, 0.016], [-0.25, 0, -0.2], 0);
+    for (let i = 0; i < 5; i++) part(G.box, darkM, body, [-0.12 + i * 0.06, 0.74, 0.66], [0.012, 0.04, 0.012], null, 0);
+    part(G.sph, flesh, body, [0.46, 0.48, 0.08], [0.18, 0.15, 0.16], null, 0);
+    part(G.sph, flesh, body, [-0.44, 0.46, 0.04], [0.16, 0.14, 0.14], null, 0);
+    for (const s of [-1, 1]) part(G.box, suitM, body, [s * 0.36, 1.02, 0.12], [0.26, 0.14, 0.1], [0.55, 0, s * 0.35], 0);
   }
   if (type === 'walker' || bossPumpkin) { // gravatinha borboleta (Freddy)
     for (const s of [-1, 1]) part(G.cone, darkM, body, [s * 0.08, 1.06, 0.3], [0.07, 0.12, 0.05], [0, 0, s * Math.PI / 2], 0);
@@ -90,7 +100,8 @@ export function makeZombie(type) {
     if (sleeve) part(G.sph, suitM, arm, [0, -0.17, 0], [0.12, 0.22, 0.12]); else part(G.cyl, metalM, arm, [0, -0.17, 0], [0.04, 0.34, 0.04]);
     part(G.sph, metalM, arm, [0, -0.36, 0], [0.06, 0.06, 0.06], null, 0);
     part(G.cyl, metalM, arm, [0, -0.52, 0], [0.035, 0.3, 0.035], null, 0);
-    for (const f of [-1, 0, 1]) part(G.cone, toothM, arm, [f * 0.04, -0.72, 0.02], [0.022, 0.11, 0.022], [Math.PI, 0, 0], 0);
+    const claw = type === 'bossWolf' ? 0.2 : boss ? 0.15 : 0.11;
+    for (const f of [-1, 0, 1]) part(G.cone, toothM, arm, [f * 0.04, -0.72, 0.02], [0.022, claw, 0.022], [Math.PI, 0, 0], 0);
     arm.rotation.x = -1.25; arms.push(arm);
   }
   // cabeça: máscara do Docão gasta, focinho com mandíbula de metal, olhos fundos que brilham
@@ -98,13 +109,25 @@ export function makeZombie(type) {
   const headPivot = new THREE.Group(); headPivot.position.y = 1.15; head.add(headPivot); // pivô no pescoço
   const hg = new THREE.Group(); hg.position.y = -1.15; headPivot.add(hg);
   if (spit) { part(G.cyl, metalM, body, [0, 1.15, 0.06], [0.06, 0.3, 0.06], [0.3, 0, 0]); head.position.y = 0.05; }
-  if (bossPumpkin) { // cabeça de abóbora com cara entalhada
-    const pk = part(G.sph, toon('#e8701a'), hg, [0, 1.52, 0], [0.62, 0.52, 0.58], null, 0.014);
-    pk.material.map = pumpkinFaceTex(); pk.material.needsUpdate = true; pk.rotation.y = -Math.PI / 2;
-    for (let i = 0; i < 5; i++) part(G.sph, toon('#d6601a'), hg, [Math.cos(i * 1.26) * 0.3, 1.52, Math.sin(i * 1.26) * 0.3], [0.32, 0.5, 0.32], null, 0);
-    part(G.cyl, toon('#3a5a1a'), hg, [0, 2.07, 0], [0.06, 0.18, 0.06], [0.2, 0, 0.2]);
-    const inner = glowSprite('#ffb02a', 1.6); inner.position.set(0, 1.5, 0.5); hg.add(inner);
-    part(G.cyl, toon(C.hat), hg, [0, 2.2, 0], [0.32, 0.36, 0.32]); part(G.cyl, toon(C.hat), hg, [0, 2.03, 0], [0.5, 0.04, 0.5]); // cartola
+  if (bossPumpkin) { // abóbora podre: gomos escuros, olhos fundos e boca rasgada virados pra quem olha
+    const rind = toon('#a84410', { emissive: new THREE.Color('#ff5a10'), emissiveIntensity: 0.22 });
+    part(G.sph, rind, hg, [0, 1.55, 0], [0.6, 0.5, 0.56], null, 0.014);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      part(G.sph, toon(i % 2 ? '#7a300c' : '#d65a14'), hg, [Math.cos(a) * 0.2, 1.56 + (i % 2 ? 0.03 : -0.02), Math.sin(a) * 0.16], [0.26, 0.44, 0.24], null, 0);
+    }
+    for (const s of [-1, 1]) {
+      part(G.cone, darkM, hg, [s * 0.16, 1.66, 0.4], [0.12, 0.16, 0.07], [Math.PI / 2, 0, s * 0.35], 0);
+      const e = part(G.sph, eyeM, hg, [s * 0.16, 1.62, 0.5], [0.04, 0.055, 0.03], null, 0); e.userData.eye = true;
+      const gl = glowSprite('#ffb020', 0.5); gl.position.set(s * 0.16, 1.62, 0.56); hg.add(gl);
+    }
+    part(G.box, darkM, hg, [0, 1.36, 0.44], [0.32, 0.1, 0.08], null, 0);
+    for (let i = 0; i < 6; i++) part(G.cone, toothM, hg, [-0.14 + i * 0.055, 1.42, 0.5], [0.02, 0.06 + (i % 2) * 0.045, 0.02], [Math.PI, 0, (i - 2.5) * 0.12], 0);
+    part(G.box, darkM, hg, [-0.2, 1.55, 0.4], [0.025, 0.24, 0.03], [0, 0.15, 0.35], 0);
+    const leak = glowSprite('#ff6a10', 0.85); leak.position.set(0, 1.34, 0.52); hg.add(leak);
+    part(G.cyl, toon('#24380f'), hg, [0.05, 2.06, 0], [0.045, 0.16, 0.045], [0.55, 0.2, 0.45]);
+    part(G.cyl, toon(C.hat), hg, [0.05, 2.24, -0.02], [0.26, 0.3, 0.26], [0.14, 0, 0.2]);
+    part(G.cyl, toon(C.hat), hg, [0.02, 2.06, 0], [0.46, 0.04, 0.44], [0.08, 0, 0.12]);
   } else {
     const skull = mesh(getHeadGeo(), thin ? metalM : suitM, hg, 0.014); skull.scale.set(thin ? 0.8 : 1, thin ? 0.9 : 1, HEAD.zs * (thin ? 0.8 : 1));
     if (thin) skull.material = new THREE.MeshToonMaterial({ color: C.metal, transparent: true, opacity: 0.95 });
@@ -125,34 +148,93 @@ export function makeZombie(type) {
     hg.userData.jaw = jaw;
     // olhos fundos
     for (const s of [-1, 1]) {
-      part(G.sph, darkM, hg, [s * 0.17, 1.74, 0.43], [0.1, 0.09, 0.05], null, 0);
-      const e = part(G.sph, eyeM, hg, [s * 0.17, 1.74, 0.47], [0.045, 0.045, 0.03], null, 0); e.userData.eye = true;
-      const gl = glowSprite(C.eye, 0.45); gl.position.set(s * 0.17, 1.74, 0.52); hg.add(gl);
+      const crazy = type === 'bossCrazy';
+      const y = crazy ? (s < 0 ? 1.86 : 1.64) : 1.74;
+      const sc = crazy ? (s < 0 ? 0.072 : 0.04) : 0.045;
+      part(G.sph, darkM, hg, [s * 0.18, y, 0.43], [sc + 0.05, (crazy && s > 0 ? 0.1 : sc) + 0.04, 0.05], null, 0);
+      const pupil = crazy && s > 0 ? glowMat('#20ffd0') : eyeM;
+      const e = part(G.sph, pupil, hg, [s * 0.18, y, 0.48], [sc, crazy && s > 0 ? 0.1 : sc, 0.03], null, 0); e.userData.eye = true;
+      const gl = glowSprite(crazy && s > 0 ? '#20ffd0' : C.eye, crazy && s < 0 ? 0.62 : 0.42); gl.position.set(s * 0.18, y, 0.54); hg.add(gl);
     }
   }
-  if (bossPumpkin) { // capa rasgada
-    const cape = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.3, 1, 3), new THREE.MeshToonMaterial({ color: '#4a1a5a', side: THREE.DoubleSide })); cape.position.set(0, 0.65, -0.42); cape.rotation.x = 0.12; body.add(cape);
+  if (bossPumpkin) { // capa em tiras, não um retângulo só
+    const capeMat = new THREE.MeshToonMaterial({ color: '#1a0c16', side: THREE.DoubleSide });
+    for (const [x, z, ry, h] of [[0, -0.5, 0, 1.25], [-0.34, -0.28, 0.55, 1.05], [0.36, -0.26, -0.5, 0.95], [0.08, -0.55, 0.15, 0.8]]) {
+      const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.42, h), capeMat);
+      cape.position.set(x, 0.55 + h * 0.15, z); cape.rotation.y = ry; cape.rotation.x = 0.22; body.add(cape);
+    }
   }
-  if (type === 'bossGhost') { // véu translúcido
-    const veil = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.5, 1, 3), new THREE.MeshToonMaterial({ color: '#d8e8ff', transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
-    veil.position.set(0, 0.7, -0.35); veil.rotation.x = 0.15; body.add(veil);
+  if (type === 'bossGhost') { // lençol por cima do corpo, com buracos que continuam escuros quando ele fica transparente
+    eyeM.userData.keepSolid = true;
+    const sheet = toon('#d7e1ef', { transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false });
+    const hole = toon('#07080c'); hole.userData.keepSolid = true;
+    part(G.sph, sheet, hg, [0, 1.64, 0.02], [0.78, 0.84, 0.66], null, 0);
+    part(G.sph, sheet, body, [0, 0.82, 0.02], [0.95, 1.15, 0.72], null, 0);
+    for (const s of [-1, 1]) {
+      part(G.sph, hole, hg, [s * 0.16, 1.74, 0.58], [0.1, 0.14, 0.05], null, 0);
+      const gl = glowSprite('#d7f4ff', 0.28); gl.material.userData.keepSolid = true; gl.position.set(s * 0.16, 1.72, 0.66); hg.add(gl);
+    }
+    part(G.sph, hole, hg, [0, 1.46, 0.64], [0.12, 0.16, 0.05], null, 0);
+    for (let i = 0; i < 5; i++) part(G.cone, sheet, body, [-0.4 + i * 0.2, 0.12, 0.42], [0.07, 0.24, 0.015], [0.35, 0, (i - 2) * 0.18], 0);
     setGhostLook({ group: g }, true);
   }
-  if (type === 'bossMummy') { // faixas de atadura
-    for (let i = 0; i < 6; i++) part(G.box, toon('#efe6c8'), body, [(i % 2 ? 1 : -1) * 0.08, 0.45 + i * 0.12, 0.38], [0.55, 0.04, 0.08], [0, 0, (i % 2 ? 0.25 : -0.25)], 0);
-    part(G.box, toon('#efe6c8'), hg, [0, 1.78, 0.35], [0.5, 0.08, 0.12], [0.2, 0, 0], 0);
+  if (type === 'bossMummy') { // ataduras sujas, uma tira caída e um olho só de fora
+    const linen = toon('#e4d3aa'); const stain = toon('#6e5840');
+    for (let i = 0; i < 7; i++) part(G.box, i % 3 === 0 ? stain : linen, body, [0, 0.38 + i * 0.11, 0.02], [0.78, 0.05, 0.66], [0.08, i % 2 ? 0.45 : -0.3, i % 2 ? 0.16 : -0.1], 0);
+    part(G.box, linen, hg, [0.02, 1.86, 0.12], [0.58, 0.1, 0.46], [-0.15, 0.1, 0.12], 0);
+    part(G.box, linen, hg, [-0.02, 1.66, 0.28], [0.52, 0.09, 0.28], [0.25, -0.1, -0.08], 0);
+    part(G.box, stain, hg, [0.16, 1.74, 0.5], [0.16, 0.07, 0.06], [0.2, 0, 0.15], 0);
+    part(G.box, linen, body, [0.38, 0.5, 0.16], [0.05, 0.5, 0.035], [0.15, 0, 0.7], 0);
+    part(G.box, stain, hg, [-0.3, 1.48, 0.22], [0.035, 0.32, 0.03], [0.4, 0, -0.35], 0);
   }
-  if (type === 'bossWolf') { // orelhas e focinho de lobo
-    for (const s of [-1, 1]) part(G.cone, suit2M, hg, [s * 0.28, 2.15, -0.05], [0.12, 0.28, 0.08], [0.2, 0, s * -0.35]);
-    part(G.cyl, snoutM, hg, [0, 1.48, 0.58], [0.16, 0.22, 0.14], [Math.PI / 2 - 0.2, 0, 0]);
+  if (type === 'bossWolf') { // orelha alta, focinho comprido, presa e juba
+    for (const s of [-1, 1]) {
+      part(G.cone, suit2M, hg, [s * 0.24, 2.22, -0.04], [0.13, 0.46, 0.06], [0.12, 0, s * -0.18]);
+      part(G.cone, toon('#120c0c'), hg, [s * 0.24, 2.08, 0.01], [0.055, 0.18, 0.025], [0.12, 0, s * -0.18], 0);
+    }
+    part(G.cyl, snoutM, hg, [0, 1.46, 0.66], [0.13, 0.3, 0.15], [Math.PI / 2 - 0.4, 0, 0]);
+    part(G.sph, darkM, hg, [0, 1.44, 0.84], [0.045, 0.035, 0.03], null, 0);
+    for (const s of [-1, 1]) part(G.cone, toothM, hg, [s * 0.07, 1.34, 0.74], [0.028, 0.16, 0.026], [0.25, 0, s * 0.15], 0);
+    for (let i = 0; i < 7; i++) part(G.cone, suit2M, body, [-0.28 + i * 0.09, 1.15, -0.28], [0.05, 0.2, 0.04], [-0.9, 0, (i - 3) * 0.12], 0);
   }
-  if (type === 'bossCrazy') { // olhos tortos e coroa torta
-    part(G.cyl, toon(C.hat || '#1a0a1a'), hg, [0.08, 2.18, 0], [0.28, 0.22, 0.28], [0.15, 0, 0.4]);
-    part(G.box, toon('#ff20a0'), hg, [-0.2, 1.78, 0.48], [0.1, 0.08, 0.04], [0, 0, 0.5], 0);
-    part(G.box, toon('#20ffd0'), hg, [0.22, 1.7, 0.48], [0.08, 0.12, 0.04], [0, 0, -0.35], 0);
+  if (type === 'bossCrazy') { // cartola caída, sorriso a mais e a testa costurada
+    part(G.cyl, toon('#120810'), hg, [0.12, 2.2, -0.02], [0.24, 0.3, 0.24], [0.4, 0.3, 0.55]);
+    part(G.cyl, toon('#120810'), hg, [0.02, 2.02, 0.02], [0.4, 0.035, 0.36], [0.25, 0, 0.35]);
+    for (let i = 0; i < 7; i++) part(G.cone, toothM, hg, [-0.16 + i * 0.052, 1.32, 0.68], [0.016, 0.05 + (i % 2) * 0.05, 0.016], [Math.PI * 0.12, 0, (i - 3) * 0.08], 0);
+    for (let i = 0; i < 4; i++) part(G.box, darkM, hg, [-0.06 + i * 0.045, 1.98, 0.4], [0.012, 0.045, 0.012], null, 0);
+  }
+  if (type === 'sling') { // elásticos nos braços, puxados pra trás na hora do pulo
+    for (const arm of arms) part(G.box, toon('#f4ff6a'), arm, [0, -0.4, 0.04], [0.07, 0.5, 0.03], null, 0);
+  }
+  if (type === 'bat') {
+    const wings = [];
+    for (const s of [-1, 1]) {
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.42), new THREE.MeshToonMaterial({ color: '#241428', side: THREE.DoubleSide }));
+      w.position.set(s * 0.72, 1.02, -0.02); body.add(w); wings.push(w);
+    }
+    g.userData.wings = wings;
+    for (const s of [-1, 1]) part(G.cone, suit2M, hg, [s * 0.22, 2.08, 0.02], [0.08, 0.24, 0.04], [0.35, 0, s * -0.25]);
+  }
+  if (type === 'cry') {
+    const tears = [];
+    for (const s of [-1, 1]) {
+      const tear = new THREE.Mesh(G.sph, glowMat('#7ec8ff'));
+      tear.position.set(s * 0.16, 1.62, 0.55); tear.scale.set(0.045, 0.08, 0.04); hg.add(tear); tears.push(tear);
+    }
+    g.userData.tears = tears;
+  }
+  if (type === 'bossHosp') { // camisa de força fechada, correias e cabelo irregular
+    const jacket = toon('#e7e0d2'); const strap = toon('#b7a88e'); const buckle = toon('#5c5346');
+    part(G.box, jacket, body, [0, 0.78, 0.4], [0.82, 0.72, 0.18], null, 0);
+    part(G.cyl, jacket, body, [0.16, 0.96, 0.5], [0.12, 0.58, 0.12], [0, 0, 1.2]);
+    part(G.cyl, jacket, body, [-0.14, 0.76, 0.52], [0.12, 0.58, 0.12], [0, 0, -1.05]);
+    for (const y of [0.6, 0.84, 1.08]) part(G.box, strap, body, [0, y, 0.58], [0.74, 0.045, 0.04], [0, 0, y === 0.84 ? 0.12 : -0.08], 0);
+    for (const s of [-1, 1]) part(G.box, buckle, body, [s * 0.18, 0.84, 0.62], [0.09, 0.09, 0.035], null, 0);
+    for (const s of [-1, 1]) part(G.sph, toon('#6a3038'), hg, [s * 0.18, 1.68, 0.48], [0.08, 0.03, 0.02], null, 0);
+    for (let i = 0; i < 8; i++) part(G.cone, toon('#120c14'), hg, [-0.26 + (i % 5) * 0.12, 2.04 + (i % 3) * 0.03, -0.06 + (i % 2) * 0.08], [0.028, 0.16 + (i % 3) * 0.08, 0.028], [0.35, i * 0.4, (i - 3) * 0.22], 0);
   }
   // postura: corcunda (corredor bem inclinado pra frente)
-  body.rotation.x = thin ? 0.38 : spit ? 0.22 : fat ? 0.06 : type === 'bossWolf' ? 0.2 : 0.14;
+  body.rotation.x = thin ? 0.38 : spit ? 0.22 : fat ? 0.08 : type === 'bossWolf' ? 0.36 : type === 'bossCrazy' ? 0.24 : 0.14;
   g.scale.setScalar(st.size); g.userData.size = st.size;
   const flashMats = [suitM, suit2M, metalM, snoutM];
   return { group: g, body, legs, arms, head: headPivot, jaw: hg.userData.jaw || null, guns: [], flashMats, type, eyeM, boss };
@@ -181,6 +263,24 @@ export function animateZombie(m, z, dt, T, flashing) {
   m.group.position.set(z.pos.x, z.pos.y + (z.onGround ? Math.abs(sw) * 0.05 : 0), z.pos.z);
   m.group.rotation.y = z.yaw;
   m.body.rotation.z = Math.sin(z.walk * 0.5) * 0.08 * k;
+  const pose = z.pose || '';
+  if (m.type === 'sling' || m.type === 'bossHosp') {
+    if (pose === 'wind') { m.arms[0].rotation.x = 1.05; m.arms[1].rotation.x = 1.05; m.body.rotation.x = -0.4; }
+    else if (pose === 'sling') { m.arms[0].rotation.x = -2.5; m.arms[1].rotation.x = -2.5; m.body.rotation.x = 0.7; }
+    else if (m.type === 'bossHosp') { m.arms[0].rotation.z = 1.05; m.arms[1].rotation.z = -1.05; m.arms[0].rotation.x = -0.35; m.arms[1].rotation.x = -0.35; }
+  }
+  if (pose === 'cry') {
+    m.legs[0].rotation.x = 1.2; m.legs[1].rotation.x = 1.2;
+    m.arms[0].rotation.x = 0.55; m.arms[1].rotation.x = 0.5;
+    m.body.rotation.x = 0.42; m.group.position.y = z.pos.y - 0.32;
+  } else if (pose === 'frenzy' || pose === 'rage') {
+    m.body.rotation.x = pose === 'rage' ? 0.62 : 0.42;
+    m.arms[0].rotation.x = -1.85; m.arms[1].rotation.x = -1.75;
+  }
+  const tears = m.group.userData.tears;
+  if (tears) for (const tear of tears) { tear.visible = pose === 'cry'; tear.position.y = 1.62 - ((T * 1.6 + tear.position.x) % 1) * 0.4; }
+  const wings = m.group.userData.wings;
+  if (wings) { const f = Math.sin(T * (7 + Math.min(8, speed * 2))) * 0.75; wings[0].rotation.z = -0.45 + f; wings[1].rotation.z = 0.45 - f; }
   for (const mat of m.flashMats) mat.emissive.set(flashing ? 0x992222 : 0x000000);
   m.eyeM.color.set(T % 0.9 < 0.06 ? '#ffffff' : (ZCOL[m.type] || ZCOL.walker).eye); // pisca
   m.group.traverse((o) => { if (o.userData.blink) o.visible = T % 0.6 < 0.3; });
@@ -336,6 +436,6 @@ export function makeLanternCone() {
   m.rotation.y = Math.PI; return m;
 }
 export function setGhostLook(model, on) {
-  model.group.traverse((o) => { if (!o.material || o.userData.isOutline) { if (o.userData.isOutline) o.visible = !on; return; } for (const mat of [].concat(o.material)) { if (mat.userData.ghostBase === undefined) mat.userData.ghostBase = { t: mat.transparent, o: mat.opacity }; mat.transparent = on ? true : mat.userData.ghostBase.t; mat.opacity = on ? 0.28 : mat.userData.ghostBase.o; } });
+  model.group.traverse((o) => { if (!o.material || o.userData.isOutline) { if (o.userData.isOutline) o.visible = !on; return; } for (const mat of [].concat(o.material)) { if (mat.userData.keepSolid) continue; if (mat.userData.ghostBase === undefined) mat.userData.ghostBase = { t: mat.transparent, o: mat.opacity }; mat.transparent = on ? true : mat.userData.ghostBase.t; mat.opacity = on ? 0.28 : mat.userData.ghostBase.o; } });
 }
 export { POWER_KEYS };

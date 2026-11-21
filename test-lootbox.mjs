@@ -58,7 +58,7 @@ for (const floor of [750, 1000, 1250, 2000]) {
 ok(wheelTable(2000)[0].bp === 10000 && wheelTier(2000, 0) === 2000 && wheelTier(2000, 9999) === 2000, 'três skins no peso máximo devolvem o mesmo peso');
 ok(wheelTier(500, 0) === 500 && wheelTier(500, 4499) === 500 && wheelTier(500, 4500) === 750 && wheelTier(500, 9999) === 2000, 'faixas da roleta no piso 500');
 const low = pool(500), high = pool(2000), mid = pool(1250);
-ok(wheelInputs([low[0].id, low[0].id, low[1].id]) === null && wheelInputs([low[0].id, low[1].id]) === null && wheelInputs([low[0].id, low[1].id, ITEMS.find((i) => !i.loot).id]) === null, 'roleta recusa repetida, menos de 3 e item que não é skin');
+ok(wheelInputs([low[0].id, low[0].id, low[1].id]).map((it) => it.id).join(',') === [low[0].id, low[0].id, low[1].id].join(',') && wheelInputs([low[0].id, low[1].id]) === null && wheelInputs([low[0].id, low[1].id, ITEMS.find((i) => !i.loot).id]) === null, 'roleta aceita skin repetida e recusa menos de 3 ou item que não é skin');
 ok(wheelInputs([low[0].id, low[1].id, high[0].id]).length === WHEEL_SIZE && wheelFloor(wheelInputs([low[0].id, mid[0].id, high[0].id])) === 2000, 'o piso é o maior peso das 3');
 const rngW = mulberry32(20261030);
 const hitW = {}, nW = 20000, trio = [low[0], low[1], low[2]];

@@ -62,11 +62,13 @@ function boot(mode, extra = {}) {
   const inv = boot('inv', { map: 'hotmilk-noite', ask: 'hotmilk-noite' });
   ok(inv.g.mapId !== 'hotmilk-noite', `Invasão padrão não abre a HOTMILK à Noite (saiu ${inv.g.mapId})`);
   const via = boot('inv', { variant: 'survival', map: 'rodizio', ask: 'rodizio' });
-  ok(via.g.mapId === 'hotmilk-noite', 'mode inv + variant survival cai na HOTMILK à Noite');
+  ok(via.g.mapId === 'rodizio' && via.g.stations && via.g.stations.papada && !via.g.stations.box, 'Survival no Rodízio fica no mapa e ganha a Papada');
+  const arena = boot('survival', { map: 'arena', ask: 'arena' });
+  ok(arena.g.mapId === 'arena' && arena.g.stations && arena.g.stations.papada, 'Survival na Arena fica no mapa e ganha a Papada');
 }
 
-const { g, a } = boot('survival', { ask: 'arena' });
-ok(g.mapId === 'hotmilk-noite' && g.survival && g.invasion, 'mode survival ignora outro mapa e ainda roda a Invasão');
+const { g, a } = boot('survival', { map: 'hotmilk-noite', ask: 'hotmilk-noite' });
+ok(g.mapId === 'hotmilk-noite' && g.survival && g.invasion, 'mode survival na HOTMILK abre a noite e ainda roda a Invasão');
 ok(a.points === SURVIVAL.START_POINTS && g.surv.areas.has('saguao') && !g.surv.areas.has('cozinha'), `entra com ${a.points} pontos e só o saguão aberto`);
 ok(!unlockedZombieSpawns(map, g.surv).some((s) => s.area !== 'saguao'), 'zumbi só nasce no saguão enquanto as portas estão fechadas');
 

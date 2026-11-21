@@ -5,11 +5,11 @@
 //  pickups, Copo Bomba e foguetes (física + explosão), tempo de partida, fim de partida e bots.
 //  O cliente é dono só do próprio movimento (com checagem de velocidade/paredes) e manda eventos de tiro com origem+direção.
 // ============================================================
-import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap } from '../../maps.js';
+import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap } from '../../maps.js';
 import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
 import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
 setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES } from '../../shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE } from '../../shared/invasion.js';
 import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
@@ -26,7 +26,7 @@ import { cleanName, uniqueName, NAME_MAX } from '../../shared/names.js';
 import { KILL_LIMIT, TIME_LIMIT, normTime, RESPAWN_TIME, INVULN, JUMP, SPEED, BOT_SPEED, EYE, WEAPONS, PRIMARIES, SECONDARIES, MELEES, PISTOL, KNIFE, SABER, SABER2, isSaber, POKE, isPokeCode, MINIGUN, isMiniCode, UZI, P90, DISC_W, CORN_W, EGG_W, NAIL, SEMI, MELEE, W_NADE, W_FALL, NADE, BACON_ITEM, noteHurt, resetRegen, regenStep, BOT_DEFS, BOT_RANGE, TAG_COLORS, TAMPA, RAY, GIFT_W } from '../../shared/rules.js';
 import { W_TANK, TANK, applyCheatText, clearCheats, stepCheats, packCheats, cheatEye, subidoTaken } from '../../shared/gta-cheats.js';
 import { rideShift, nevascaSolids } from '../../shared/nevasca.js';
-import { normBotDiff, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot as noteGunshot, scopeDelay } from '../../shared/bot-difficulty.js';
+import { normBotDiff, applyBotDiff, profileOf, nextThink, considerTarget, hitscanAim, nadeChoice, nadeWaitFor, nadeCooldown, rollStrafe, wantPanicReload, wantSafeReload, refreshCover, refreshFlank, hearGunshot as noteGunshot, scopeDelay, noteFootstep, canSpot } from '../../shared/bot-difficulty.js';
 import { SHIELD, isShieldW, shieldRaised, resetShield, bulletOnShield, splashOnShield, meleeOnShield, hurtShield, noteBlocked, shieldBashHit, classifyRay, raisedAt, shieldAim, aimOffset, botWantsShield } from '../../shared/shield.js';
 import { normWeapons, normPowers, clampLoadout, botPool, weaponOn, powerOn } from '../../shared/loadout.js';
 import { clampKitMap, defaultKit, resolveWeapon } from '../../shared/attachments.js';
@@ -35,6 +35,7 @@ import { emptyFun, notePodiumKill, notePodiumHurt, notePodiumDeath, awardPodium 
 import { meleeHit, MELEE_KINDS } from '../../shared/melee.js';
 import { mapSolids, createPhysics, raySphere, HITBOXES, rayHitboxes, fellOff, resolveFall, acceptFloorY } from '../../shared/physics.js';
 import { stanceScale, stanceHeight, stepCrouch } from '../../shared/stance.js';
+import { takeFootstep } from '../../shared/footsteps.js';
 import { traceShot } from '../../shared/penetration.js';
 import { GAS, W_GAS, createGasSim, clipTrace, pelletOnGas, gasCenter } from '../../shared/gas.js';
 import { DISC, stepDisc } from '../../shared/disc.js';
@@ -117,8 +118,8 @@ export class Game {
       const L = ids.map((id) => getMap(id)).filter(Boolean);
       if (L.length) return L;
     }
-    return this.x1Mode ? X1_MAPS : this.bombMode ? BOMB_MAPS : this.survival ? SURVIVAL_MAPS : this.invasion ? INV_MAPS : PLAY_MAPS;
-  } // Survival: só a HOTMILK à Noite. Bomba: sites feitos à mão. X1: currais. Gunfight: pool do formato.
+    return this.x1Mode ? X1_MAPS : this.bombMode ? BOMB_MAPS : this.survival ? SURVIVAL_PLAY_MAPS : this.invasion ? INV_MAPS : PLAY_MAPS;
+  } // Survival: mapas da Invasão e a HOTMILK à Noite. Bomba: sites feitos à mão. X1: currais. Gunfight: pool do formato.
   nextMapId() { const L = this.mapList.filter((m) => !m.heavy || m.id === this.mapId); if (!L.length) return this.mapId; return L[(L.findIndex((m) => m.id === this.mapId) + 1) % L.length].id; } // mapa pesado (GLB) só entra quando alguém escolhe
   get training() { return isTraining(this.cfg.mode); } // Estande do Docão: bots = alvos parados/andando
   live() { return [...this.ents.values()].filter((e) => e.bot || e.connected); }
@@ -234,7 +235,7 @@ export class Game {
   entInfo(e) { const o = { id: e.id, name: e.name, skin: e.skin, bot: e.bot, tag: e.tag, kills: e.kills, deaths: e.deaths, alive: e.alive, primary: e.primary, w: e.weapon, team: e.team, caps: e.caps, pend: e.pendingTeam ? 1 : 0, kn: e.knife || undefined, sn: e.sniper || undefined, gn: e.guns && Object.keys(e.guns).length ? e.guns : undefined };
     if (this.armsMode) { o.arms = [e.armsStage, e.armsKills]; }
     if (this.compMode) o.gr = [e.cash | 0, e.armor | 0, e.helmet ? 1 : 0, (e.slots && e.slots[0]) ?? e.primary, (e.slots && e.slots[1]) ?? PISTOL, (e.slots && e.slots[2]) ?? KNIFE, e.weapon, e.nades | 0, e.smokeNades | 0, e.flashNades | 0];
-    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); }
+    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); }
     if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pn = e.purseN | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
     return o; }
   sendLobby() {
@@ -313,7 +314,8 @@ export class Game {
     const LIST = this.mapList;
     const x1Pool = X1_MAPS.filter((m) => m.id !== this.mapId);
     const x1Asked = this.mapId && X1_MAPS.some((m) => m.id === mapId) && mapId !== this.mapId; // "próximo mapa" respeita o curral seguinte; a primeira e o "de novo" sorteiam
-    let id = this.survival ? (SURVIVAL_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId && !m.heavy)).id) : mapId;
+    const survPool = SURVIVAL_PLAY_MAPS.filter((m) => !m.heavy || m.id === mapId);
+    let id = this.survival ? (mapId === 'random' ? pick(survPool.length ? survPool : SURVIVAL_PLAY_MAPS).id : (SURVIVAL_PLAY_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP)) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId && !m.heavy)).id) : mapId;
     if (this.invasion) for (const b of [...this.ents.values()]) if (b.bot) { this.ents.delete(b.id); } // começa sem zumbi velho/bot
     const map = getMap(id); this.mapId = id; this.map = map;
     this.surv = this.survival ? createMatchSurvival(map) : null;
@@ -528,7 +530,7 @@ startMsg() {
         if (this.state !== 'playing') this.lockElo(); else if (this.cfg.elo) this.cfg.fillBots = false;
         if (m.variant === 'survival' || m.variant === 'padrao' || m.variant === 'standard' || m.variant === '') this.cfg.variant = m.variant === 'survival' ? 'survival' : '';
         if (typeof m.survival === 'boolean') this.cfg.variant = m.survival ? 'survival' : (this.cfg.mode === 'survival' ? 'survival' : '');
-        if (this.survival && this.cfg.map !== 'random' && !SURVIVAL_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = SURVIVAL.DEFAULT_MAP;
+        if (this.survival && this.cfg.map !== 'random' && !SURVIVAL_PLAY_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = SURVIVAL.DEFAULT_MAP;
         if (typeof m.chat === 'boolean') this.cfg.chat = m.chat;
         if (m.weapons !== undefined || m.powers !== undefined) {
           if (m.weapons !== undefined) this.cfg.weapons = normWeapons(m.weapons);
@@ -1360,6 +1362,7 @@ startMsg() {
   damage(t, amount, a, w, head, back = false, ks = null, fx = 0, origin = a && a !== t && !a.fog ? a.pos : null) {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb) || gunfightFrozen(this.gf)) return false; // sem fogo amigo; Bomba e Gunfight: ninguém leva dano na preparação
     if (t.zt && t.phaseUntil > this.T) return false; // Docão Fantasma faseado: imune
+    if (t.zt) amount = zombieTaken(t, amount, w === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
     if (this.compMode) amount = mitigate(t, amount, head);
     if (t.down && !t.zt) return false; // já está caído: o sangramento finaliza, dano extra não cria outra morte
     if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
@@ -1825,11 +1828,21 @@ startMsg() {
     });
   }
   toMe(e, ev) { if (e.bot) return; if (!this.personal.has(e.id)) this.personal.set(e.id, []); this.personal.get(e.id).push(ev); }
+  hearSteps(dt) {
+    const bots = [];
+    for (const e of this.ents.values()) if (e.bot && !e.zt) bots.push(e);
+    if (!bots.length) return;
+    for (const e of this.ents.values()) {
+      if (!takeFootstep(e, dt)) continue;
+      noteFootstep(bots, e, this.T, (b, w) => !this.friends(b, w));
+    }
+  }
   // ---------- laço do servidor (20 Hz) ----------
   tick() {
     if (this.state !== 'playing') return;
     const t = this.now(); let dt = clamp(t - this.lastTick, 0, 0.25); this.lastTick = t; const frameDt = dt;
     this.T = t - this.t0; this.purge();
+    this.hearSteps(frameDt);
     if (this.mapId === 'posto-nevasca' && this.P.setMovers) this.P.setMovers(nevascaSolids(this.T));
     while (dt > 1e-4) { const h = Math.min(TICK, dt); dt -= h; for (const e of this.ents.values()) if (e.bot && !e.zt) this.updateBot(e, h); this.stepSabers(h); if (this.inv) this.inv.step(h); this.stepProjectiles(h); this.stepHelis(h); this.stepGunships(); }
     this.stepNukes(); if (this.gas) this.stepGas(); if (this.compMode) this.stepGround();
@@ -2164,7 +2177,7 @@ startMsg() {
         if (o === b || !o.alive || (!o.bot && !o.connected) || this.friends(o, b)) continue;
         const d = dist(o.pos, b.pos);
         const score = considerTarget(mind, d, { attacker: o.id === b.lastAttacker, player: !o.bot, hp: o.hp });
-        if (score != null && score < bs && this.P.losClear(eye, center(o, 1.2))) { best = o; bs = score; }
+        if (score != null && score < bs && canSpot(b, o, this.T) && this.P.losClear(eye, center(o, 1.2))) { best = o; bs = score; }
       }
       if (b.stunUntil > this.T || b.flashUntil > this.T) best = null; // levou choque ou flash: não trava alvo
       if (best !== b.target) { b.target = best; b.aim = 0; }
