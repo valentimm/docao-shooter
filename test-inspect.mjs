@@ -47,11 +47,12 @@ const fails = [], errors = []; const ok = (c, m) => { console.log((c ? 'OK   ' :
     if (jump > 0.05) bad.push(`${kind}:salto ${jump.toFixed(3)}`);
   }
   const at = (kind, k) => knifeInspectLocal(kind, k);
-  const chef = at('chef', 0.5), kara = at('karambit', 0.25), bay = at('bayonet', 0.7), skel = at('skeleton', 0.7), fly = at('butterfly', 0.7);
+  const chef = at('chef', 0.5), kara = at('karambit', 0.25), bay = at('bayonet', 0.7), skel = at('skeleton', 0.3), skelShow = at('skeleton', 0.7), fly = at('butterfly', 0.7);
   if (!chef.finger || kara.finger || bay.finger || skel.finger || fly.finger) bad.push('dedo');
   if (!(kara.spin > 2)) bad.push('karambit sem volta na argola');
   if (!(bay.rz > 0.8 && bay.z < 0)) bad.push('baioneta sem o anel');
-  if (!(skel.rx > 0.5 && skel.z > 0.05 && skel.ry < bay.ry)) bad.push('skeleton sem a face furada');
+  if (!(skel.spin > 2 && skel.rx < 0)) bad.push('skeleton sem volta no furo grande');
+  if (!(skelShow.rx > 0.2 && skelShow.z > 0.02)) bad.push('skeleton sem mostrar a face furada');
   if (!(fly.flick > 0.9 && fly.show > 0.9)) bad.push('butterfly sem o flick');
   const sig = [kara, bay, skel, fly].map((p) => [p.spin, p.rx, p.ry, p.rz, p.flick, p.show].map((n) => n.toFixed(2)).join(','));
   if (new Set(sig).size !== sig.length) bad.push('modelos iguais');

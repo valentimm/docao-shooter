@@ -735,6 +735,7 @@ export function makeFPArms(skinOrId, pose = 'rifle') {
     const hand = limbIdx++ === 0 ? 'right' : 'left';
     const gl = glove && (glove.hand === 'both' || (glove.hand || 'right') === hand); const handM = gl ? gloveMat(glove.color, glove) : skinM;
     const fist = addL(new THREE.SphereGeometry(r * 1.45, 18, 14), handM); fist.position.copy(b).addScaledVector(dir, r * 0.6); fist.scale.set(1, 0.9, 1.1);
+    fist.userData.fpFist = true; if (gl && glove.gold) fist.userData.goldGlove = true;
     if (gl) gloveSparkles(fist, glove, r * 1.45);
     const th = addL(new THREE.CapsuleGeometry(r * 0.42, r * 0.6, 4, 8), handM, 0.005); th.position.copy(fist.position).add(new V3(-0.03, 0.05, -0.04)); th.rotation.set(0.4, 0, 0.9);
     return limbG;
@@ -761,6 +762,7 @@ export function makeFPForearm(skinOrId) {
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.052, armLen, 14), skinM); outline(arm, 0.006); g.add(arm);
   const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.088, armLen * 0.42, 14), sleeveM); sleeve.position.y = armLen * 0.2; outline(sleeve, 0.005); arm.add(sleeve);
   const fist = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), handM); fist.scale.set(1.2, 0.82, 1.05); outline(fist, 0.007); g.add(fist);
+  fist.userData.fpFist = true; if (glove && glove.gold && handM !== skinM) fist.userData.goldGlove = true;
   const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.05, 4, 8), handM); thumb.position.set(0.05, 0.04, 0.02); thumb.rotation.set(0.7, 0, 0.8); outline(thumb, 0.004); g.add(thumb);
   if (glove && handM !== skinM) gloveSparkles(fist, glove, 0.1);
   g.userData.arm = arm; g.userData.armLen = armLen; g.userData.handR = 0.1;
@@ -916,6 +918,7 @@ function fillChef(g, th, golden = false) {
   for (const sx of [-1, 1]) { const lg = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.02), new THREE.MeshBasicMaterial({ map: knifeLogoTex, transparent: true })); lg.position.set(sx * 0.0162, -0.004, 0.022); lg.rotation.y = sx * Math.PI / 2; g.add(lg); }
 }
 // Skeleton: ponta afilada, três furos pequenos na lâmina e um furo grande no meio, na guarda. Cabo escuro canelado.
+// O furo grande (inspeção: o dedo se apoia nele) fica em SKELETON_HOLE no espaço da faca.
 function fillSkeleton(g, th, pal) {
   const m = (geo, mat, t = th) => { const o = new THREE.Mesh(geo, mat); g.add(o); if (t) outline(o, t); return o; };
   const s = new THREE.Shape();
@@ -930,7 +933,7 @@ function fillSkeleton(g, th, pal) {
   s.lineTo(-0.02, 0.016);
   s.closePath();
   const big = new THREE.Path();
-  big.absellipse(0.012, 0.001, 0.02, 0.02, 0, Math.PI * 2, true);
+  big.absellipse(SKELETON_HOLE_SHAPE[0], SKELETON_HOLE_SHAPE[1], 0.02, 0.02, 0, Math.PI * 2, true);
   s.holes.push(big);
   for (const [cx, cy, r] of [[0.068, 0.006, 0.0065], [0.096, 0.008, 0.0056], [0.122, 0.01, 0.0048]]) {
     const hole = new THREE.Path(); hole.absellipse(cx, cy, r, r, 0, Math.PI * 2, true); s.holes.push(hole);
@@ -942,6 +945,7 @@ function fillSkeleton(g, th, pal) {
   pom.absellipse(0, 0, 0.015, 0.017, 0, Math.PI * 2, false);
   const lace = new THREE.Path(); lace.absellipse(0.004, 0, 0.005, 0.005, 0, Math.PI * 2, true); pom.holes.push(lace);
   pal.dress(knifeShape(g, 0.0025, pom, pal.metal(), new THREE.Vector3(0, -0.002, 0.1), 12));
+  g.userData.spinPivot = { x: SKELETON_HOLE.x, y: SKELETON_HOLE.y, z: SKELETON_HOLE.z };
 }
 // Karambit: a garra sai da frente do cabo, desce e aponta pra frente. A argola fica no fim do cabo.
 function fillKarambit(g, th, pal) {
@@ -957,6 +961,7 @@ function fillKarambit(g, th, pal) {
   pal.dress(m(new THREE.BoxGeometry(0.04, 0.016, 0.012), pal.metal())).position.set(0, 0, -0.03);
   const ring = pal.dress(m(new THREE.TorusGeometry(0.024, 0.0055, 8, 16), pal.steel(), 0.003));
   ring.rotation.y = Math.PI / 2; ring.position.set(0, 0, KARAMBIT_RING_Z);
+  g.userData.spinPivot = { x: 0, y: 0, z: KARAMBIT_RING_Z };
 }
 // Bayonetta (baioneta): lâmina reta de ponta cortada, guarda cruzada e o anel que entrava no cano.
 function fillBayonet(g, th, pal) {
@@ -998,13 +1003,17 @@ function fillButterfly(g, th, pal) {
 }
 const KNIFE_FILL = { chef: fillChef, skeleton: fillSkeleton, karambit: fillKarambit, bayonet: fillBayonet, butterfly: fillButterfly };
 function fillKnife(g, kind, th, finish) {
-  g.userData.bflyBlade = null; g.userData.bflyBite = null;
+  g.userData.bflyBlade = null; g.userData.bflyBite = null; g.userData.spinPivot = null;
   if (kind === 'gold') { fillChef(g, th, true); return; }
   if (!KNIFE_FILL[kind] || kind === 'chef') { fillChef(g, th, false); return; }
   KNIFE_FILL[kind](g, th, knifePal(finish));
 }
 // O furo da argola. A inspeção da karambit gira em volta desse ponto.
 export const KARAMBIT_RING_Z = 0.086;
+// Centro do furo grande da skeleton (espaço da faca). O dedo se apoia aí na inspeção.
+// Shape (sx,sy) → após rotateY(π/2) e pos (0, 0.002, −0.03): (0, sy+0.002, −sx−0.03).
+const SKELETON_HOLE_SHAPE = [0.012, 0.001];
+export const SKELETON_HOLE = { x: 0, y: SKELETON_HOLE_SHAPE[1] + 0.002, z: -SKELETON_HOLE_SHAPE[0] - 0.03 };
 // k 0 = aberta na mão, k 1 = aberta de novo. No meio a lâmina dá uma volta e o cabo de cima abre.
 // show (inspeção) deixa a lâmina e o cabo de cima abertos, pra olhar o fio.
 export function poseButterfly(group, k, show = 0) {

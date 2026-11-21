@@ -9,6 +9,7 @@ import { unlockDevSkins } from './dev-skins.js';
 import { cleanNick, nickKey, nickError, passError } from '../../shared/nick.js';
 import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
+import { ELO_START, ELO_MODES, ELO_MODE_IDS, eloSummary, computeCompEloDeltas, eloEligible } from '../../shared/elo.js';
 import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, grantPromo, buyBox, openBox, spinWheel } from './shop.js';
 
 const ITERS = 100000; // teto do WebCrypto do Workers
@@ -112,11 +113,77 @@ async function myStats(env, id) {
   for (const r of results || []) { out[r.mode] = { kills: r.kills, deaths: r.deaths, wins: r.wins, matches: r.matches }; for (const k of ['kills', 'deaths', 'wins', 'matches']) out.all[k] += r[k]; }
   return out;
 }
+function blankElo(mode) {
+  return { mode, ...eloSummary(ELO_START, 0), wins: 0, peak: ELO_START };
+}
+async function loadEloRows(env, ids, mode) {
+  const uniq = [...new Set((ids || []).map((n) => n | 0).filter((n) => n > 0))];
+  const map = new Map();
+  if (!uniq.length) return map;
+  const fill = (results) => { for (const r of results || []) map.set(r.account_id, { rating: r.rating | 0, games: r.games | 0, wins: r.wins | 0, peak: r.peak | 0 }); };
+  const ph = uniq.map(() => '?').join(',');
+  try {
+    const { results } = await env.DB.prepare(`SELECT account_id, rating, games, wins, peak FROM mode_elo WHERE mode = ? AND account_id IN (${ph})`).bind(mode, ...uniq).all();
+    fill(results);
+  } catch (e) {
+    if (mode === 'comp') {
+      const { results } = await env.DB.prepare(`SELECT account_id, rating, games, wins, peak FROM comp_elo WHERE account_id IN (${ph})`).bind(...uniq).all();
+      fill(results);
+    }
+  }
+  for (const id of uniq) if (!map.has(id)) map.set(id, { rating: ELO_START, games: 0, wins: 0, peak: ELO_START });
+  return map;
+}
+export async function myElo(env, id) {
+  const modes = {};
+  for (const m of ELO_MODES) modes[m.id] = blankElo(m.id);
+  try {
+    const { results } = await env.DB.prepare('SELECT mode, rating, games, wins, peak FROM mode_elo WHERE account_id = ?').bind(id).all();
+    for (const r of results || []) {
+      if (!modes[r.mode]) continue;
+      modes[r.mode] = { mode: r.mode, ...eloSummary(r.rating | 0, r.games | 0), wins: r.wins | 0, peak: r.peak | 0 };
+    }
+  } catch (e) {
+    try {
+      const row = await env.DB.prepare('SELECT rating, games, wins, peak FROM comp_elo WHERE account_id = ?').bind(id).first();
+      if (row) modes.comp = { mode: 'comp', ...eloSummary(row.rating | 0, row.games | 0), wins: row.wins | 0, peak: row.peak | 0 };
+    } catch (e2) { /* migração ainda não aplicada */ }
+  }
+  return { modes, ...modes.comp };
+}
+// payload: { mode, eloOn, fillBots, hasBots, winTeam, players: [{ acct, team, score }] }
+export async function recordCompElo(env, payload) {
+  if (!env.DB || !payload) return null;
+  const mode = ELO_MODE_IDS.includes(payload.mode) ? payload.mode : (!payload.mode ? 'comp' : '');
+  const humans = (payload.players || []).filter((p) => p && (p.acct | 0) > 0);
+  const eloOn = mode === 'comp' || !!payload.eloOn;
+  if (!mode || !eloEligible({ fillBots: !!payload.fillBots, hasBots: !!payload.hasBots, humans, mode, eloOn })) return { skipped: 'bots', deltas: [] };
+  if (payload.winTeam !== 0 && payload.winTeam !== 1) return { skipped: 'draw', deltas: [] };
+  const ratings = await loadEloRows(env, humans.map((p) => p.acct), mode);
+  const input = humans.map((p) => {
+    const r = ratings.get(p.acct | 0) || { rating: ELO_START, games: 0 };
+    return { id: p.acct | 0, team: p.team | 0, score: p.score | 0, rating: r.rating, games: r.games };
+  });
+  const deltas = computeCompEloDeltas(input, payload.winTeam);
+  if (!deltas.length) return { skipped: 'empty', deltas: [] };
+  const t = now();
+  const stmts = deltas.map((d) => {
+    const prev = ratings.get(d.id) || { rating: ELO_START, games: 0, wins: 0, peak: ELO_START };
+    const games = (prev.games | 0) + 1;
+    const wins = (prev.wins | 0) + (d.won ? 1 : 0);
+    const peak = Math.max(prev.peak | 0, d.after);
+    return env.DB.prepare(
+      'INSERT INTO mode_elo (account_id, mode, rating, games, wins, peak, updated_at) VALUES (?1, ?7, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(account_id, mode) DO UPDATE SET rating = ?2, games = ?3, wins = ?4, peak = ?5, updated_at = ?6',
+    ).bind(d.id, d.after, games, wins, peak, t, mode);
+  });
+  await env.DB.batch(stmts);
+  return { deltas, mode };
+}
 
 // devolve Response ou null (rota não é de conta). json(obj, status, extraHeaders)
 export async function handleAccountRoute(req, env, url, json) {
   const p = url.pathname, m = req.method;
-  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/buy' || p === '/api/lootbox/wheel' || p === '/api/rank')) return null;
+  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/buy' || p === '/api/lootbox/wheel' || p === '/api/rank' || p === '/api/elo')) return null;
   if (!env.DB) return json({ error: 'Contas indisponíveis no momento. Você pode jogar como convidado.' }, 503);
   const ip = req.headers.get('CF-Connecting-IP') || 'local';
   try {
@@ -133,6 +200,33 @@ export async function handleAccountRoute(req, env, url, json) {
       if (hit) return hit;
       const { results } = await (mode === 'all' ? env.DB.prepare(q) : env.DB.prepare(q).bind(mode)).all();
       const resp = json({ mode, sort, rows: results || [] }, 200, { 'Cache-Control': 'public, max-age=60' });
+      try { await caches.default.put(ck, resp.clone()); } catch (e) { /* ok */ }
+      return resp;
+    }
+    if (p === '/api/elo' && m === 'GET') {
+      const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get('limit')) || 20));
+      const mode = ELO_MODE_IDS.includes(url.searchParams.get('mode')) ? url.searchParams.get('mode') : 'comp';
+      const ck = new Request(`https://elo.cache/${mode}/${limit}`); let hit = null;
+      try { hit = await caches.default.match(ck); } catch (e) { /* sem cache (dev local) */ }
+      if (hit) return hit;
+      let results = [];
+      try {
+        results = (await env.DB.prepare(
+          `SELECT a.nick AS nick, e.rating AS rating, e.games AS games, e.wins AS wins, e.peak AS peak
+           FROM mode_elo e JOIN accounts a ON a.id = e.account_id
+           WHERE e.mode = ?1 AND e.games > 0 ORDER BY e.rating DESC, e.wins DESC, a.nick ASC LIMIT ${limit}`,
+        ).bind(mode).all()).results || [];
+      } catch (e) {
+        if (mode === 'comp') {
+          results = (await env.DB.prepare(
+            `SELECT a.nick AS nick, e.rating AS rating, e.games AS games, e.wins AS wins, e.peak AS peak
+             FROM comp_elo e JOIN accounts a ON a.id = e.account_id
+             WHERE e.games > 0 ORDER BY e.rating DESC, e.wins DESC, a.nick ASC LIMIT ${limit}`,
+          ).all()).results || [];
+        }
+      }
+      const rows = results.map((r) => ({ nick: r.nick, rating: r.rating | 0, games: r.games | 0, wins: r.wins | 0, peak: r.peak | 0, tier: eloSummary(r.rating).tier }));
+      const resp = json({ mode, rows }, 200, { 'Cache-Control': 'public, max-age=60' });
       try { await caches.default.put(ck, resp.clone()); } catch (e) { /* ok */ }
       return resp;
     }
@@ -175,7 +269,7 @@ export async function handleAccountRoute(req, env, url, json) {
       const boxGrant = await grantLoginBox(env, a.id);
       const promoGrant = await grantPromo(env, a.id);
       const w = await wallet(env, a.id);
-      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant, promoGrant });
+      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), elo: await myElo(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant, promoGrant });
     }
     if (p === '/api/me/skin' && m === 'PUT') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);

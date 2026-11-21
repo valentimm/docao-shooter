@@ -4,7 +4,7 @@ import { sharedAudio, unlockAudio } from './audio.js';
 const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const $ = (id) => document.getElementById(id);
 
-let hooks = { send() {}, teamMode() { return false; }, myId() { return 0; }, onChange() {} };
+let hooks = { send() {}, teamMode() { return false; }, teamOnly() { return false; }, myId() { return 0; }, onChange() {} };
 let scope = 'off';
 let mode = 'hold'; // hold = só enquanto K está presa; open = microfone ligado o tempo todo
 let stream = null;
@@ -16,6 +16,15 @@ let peers = new Map();
 let muted = new Set();
 let talking = new Set();
 let actx = null;
+const teamOn = () => !!hooks.teamMode();
+const teamOnly = () => !!hooks.teamOnly && hooks.teamOnly();
+// Competitivo: sem voz pra sala toda. "all" vira "team".
+function clampScope(next) {
+  let s = next === 'team' || next === 'all' ? next : 'off';
+  if (s === 'all' && teamOnly()) s = teamOn() ? 'team' : 'off';
+  if (s === 'team' && !teamOn()) s = 'all';
+  return s;
+}
 
 export function voiceTalking(id) { return talking.has(id); }
 export function voiceMuted(id) { return muted.has(id); }
@@ -28,7 +37,7 @@ export function voiceToggleMute(id) {
 export function voiceScope() { return scope; }
 export function voiceSnap() { return { scope, mode }; }
 export function voiceCycle() {
-  const order = hooks.order ? hooks.order() : hooks.teamMode() ? ['off', 'all', 'team'] : ['off', 'all'];
+  const order = hooks.order ? hooks.order() : teamOnly() ? ['off', 'team'] : teamOn() ? ['off', 'all', 'team'] : ['off', 'all'];
   const i = order.indexOf(scope);
   setScope(order[(i < 0 ? 0 : i + 1) % order.length]);
 }
@@ -39,8 +48,7 @@ export function voiceUseHooks(next) {
 }
 export async function voiceArm(nextScope, nextMode) {
   const prev = { scope, mode };
-  let scopeTo = nextScope === 'team' || nextScope === 'all' ? nextScope : 'off';
-  if (scopeTo === 'team' && !hooks.teamMode()) scopeTo = 'all';
+  const scopeTo = clampScope(nextScope);
   if (scopeTo !== 'off') { const ok = await ensureMic(); if (!ok) return prev; }
   mode = nextMode === 'open' ? 'open' : 'hold';
   scope = scopeTo; ptt = false;
@@ -52,8 +60,7 @@ export async function voiceArm(nextScope, nextMode) {
 }
 export function voiceRestore(prev) {
   if (!prev) return;
-  scope = prev.scope === 'team' || prev.scope === 'all' ? prev.scope : 'off';
-  if (scope === 'team' && !hooks.teamMode()) scope = 'all';
+  scope = clampScope(prev.scope);
   mode = prev.mode === 'open' ? 'open' : 'hold';
   ptt = false;
   const mine = roster.get(hooks.myId()); if (mine) mine.scope = scope;
@@ -91,19 +98,30 @@ export function voiceReset() {
 }
 
 export function voiceRoster(list) {
-  roster = new Map((list || []).map(([id, sc, team]) => [id, { scope: sc || 'off', team }]));
+  roster = new Map((list || []).map(([id, sc, team]) => {
+    let s = sc || 'off';
+    if (s === 'all' && teamOnly()) s = 'team';
+    return [id, { scope: s, team }];
+  }));
   const mine = roster.get(hooks.myId());
   if (mine && mine.scope !== scope) scope = mine.scope;
+  enforceTeamOnly(false);
   if (scope === 'off') ptt = false;
   applyMic();
   syncPeers(); paint();
 }
 export function voiceSignal(from, kind, data) { onSignal(from, kind, data); }
-export function voiceRefresh() { paint(); syncPeers(); }
+export function voiceRefresh() { enforceTeamOnly(true); paint(); syncPeers(); }
+
+function enforceTeamOnly(notify) {
+  if (!teamOnly() || scope !== 'all') return;
+  scope = teamOn() ? 'team' : 'off';
+  const mine = roster.get(hooks.myId()); if (mine) mine.scope = scope;
+  if (notify) hooks.send({ t: 'voice', scope });
+}
 
 async function setScope(next) {
-  if (next !== 'off' && next !== 'all' && next !== 'team') next = 'off';
-  if (next === 'team' && !hooks.teamMode()) next = 'all';
+  next = clampScope(next);
   if (next === scope) { paint(); return; }
   if (next !== 'off') { const ok = await ensureMic(); if (!ok) { paint(); return; } }
   scope = next; ptt = false;
@@ -152,9 +170,11 @@ function audio() { actx = sharedAudio(); return actx; }
 
 function reaches(fromId, toId) {
   const a = roster.get(fromId); if (!a || a.scope === 'off' || fromId === toId) return false;
-  if (a.scope === 'all') return true;
+  let s = a.scope;
+  if (s === 'all' && teamOnly()) s = 'team';
+  if (s === 'all') return true;
   const b = roster.get(toId);
-  return a.scope === 'team' && !!b && a.team >= 0 && a.team === b.team;
+  return s === 'team' && !!b && a.team >= 0 && a.team === b.team;
 }
 function wantPeer(id) { return id !== hooks.myId() && roster.has(id) && (reaches(hooks.myId(), id) || reaches(id, hooks.myId())); }
 function iSend(id) { return reaches(hooks.myId(), id) && !!stream; }
@@ -236,13 +256,16 @@ function sample() {
   if (changed) hooks.onChange();
 }
 function paint() {
-  const team = hooks.teamMode();
+  const team = teamOn();
+  const only = teamOnly();
   const gate = mode === 'open' ? 'microfone aberto' : 'segure K';
-  const hint = scope === 'off' ? (mode === 'open' ? 'J troca a voz · mudo · aberto quando ligar' : 'J troca a voz · mudo') : scope === 'team' ? `J troca · ${gate} · só o time` : `J troca · ${gate} · a sala ouve`;
+  const hint = scope === 'off' ? (mode === 'open' ? 'J troca a voz · mudo · aberto quando ligar' : 'J troca a voz · mudo') : scope === 'team' ? `J troca · ${gate} · só o time${only ? ' · competitivo' : ''}` : `J troca · ${gate} · a sala ouve`;
   const hot = scope !== 'off' && !away && (mode === 'open' || ptt);
   document.querySelectorAll('[data-voicebox]').forEach((box) => {
     const teamBtn = box.querySelector('[data-voice=team]');
     if (teamBtn) teamBtn.classList.toggle('hidden', !team);
+    const allBtn = box.querySelector('[data-voice=all]');
+    if (allBtn) allBtn.classList.toggle('hidden', only);
     box.querySelectorAll('[data-voice]').forEach((b) => b.classList.toggle('on', b.dataset.voice === scope));
     box.querySelectorAll('[data-mic]').forEach((b) => b.classList.toggle('on', b.dataset.mic === mode));
     box.classList.toggle('live', hot);

@@ -30,12 +30,13 @@ function equipDevSkin(field, id, valid) {
 
 const KEY = 'docao.auth';
 let token = ''; try { if (!DEV_LOCAL) token = localStorage.getItem(KEY) || ''; } catch (e) { /* sem storage */ }
-let account = DEV_LOCAL ? devProfile() : null, stats = null, items = [], earn = { today: 0, cap: 0 }; // { nick, skin, custom, coins } · mochila (ids das partes) · ganho de hoje · { all:{kills,deaths,wins,matches}, dm:{...}, ... }
+let account = DEV_LOCAL ? devProfile() : null, stats = null, items = [], earn = { today: 0, cap: 0 }, elo = null; // { nick, skin, custom, coins } · mochila · ganho · stats · elo competitivo
 const subs = new Set();
 const emit = () => subs.forEach((f) => { try { f(account, stats); } catch (e) { console.error(e); } });
 export const getToken = () => token;
 export const getAccount = () => account;
 export const getStats = () => stats;
+export const getElo = () => elo;
 export const getItems = () => DEV_LOCAL ? ITEMS.map(item => item.id) : items.slice(); // mochila no cliente: vem do /api/me e da compra (sem polling)
 export const getEarn = () => earn;
 let chal = null, chalAt = 0; // desafios do dia (vêm no /api/me; o relógio do reset anda no cliente)
@@ -54,17 +55,17 @@ async function enter(path, nick, password) {
   if (DEV_LOCAL) return { account };
   const r = await api(path, { method: 'POST', body: { nick, password } });
   if (!r.ok || !r.data.token) return { error: r.data.error || 'Não deu certo. Tente de novo.' };
-  setToken(r.data.token); account = r.data.account; stats = null; items = []; emit(); refreshStats(); return { account };
+  setToken(r.data.token); account = r.data.account; stats = null; items = []; elo = null; emit(); refreshStats(); return { account };
 }
 export const register = (nick, password) => enter('/api/auth/register', nick, password);
 export const login = (nick, password) => enter('/api/auth/login', nick, password);
-export async function logout() { if (DEV_LOCAL) return; const t = token; if (t) await api('/api/auth/logout', { method: 'POST', auth: true }); setToken(''); account = null; stats = null; items = []; emit(); }
-export function dropSession() { if (DEV_LOCAL) return; setToken(''); account = null; stats = null; items = []; emit(); } // token vencido/recusado pelo servidor da sala
+export async function logout() { if (DEV_LOCAL) return; const t = token; if (t) await api('/api/auth/logout', { method: 'POST', auth: true }); setToken(''); account = null; stats = null; items = []; elo = null; emit(); }
+export function dropSession() { if (DEV_LOCAL) return; setToken(''); account = null; stats = null; items = []; elo = null; emit(); } // token vencido/recusado pelo servidor da sala
 export async function refreshStats() {
   if (DEV_LOCAL) { emit(); return { account, items: getItems() }; }
   if (!token) return null; const r = await api('/api/me', { auth: true });
   if (r.status === 401) { dropSession(); return null; }
-  if (r.ok) { account = r.data.account; stats = r.data.stats; items = r.data.items || []; earn = r.data.earn || earn; chal = r.data.chal || null; chalAt = Date.now(); emit(); if (r.data.promoGrant && r.data.promoGrant.granted) promoSubs.forEach((f) => { try { f(r.data.promoGrant); } catch (e) { console.error(e); } }); } return r.ok ? r.data : null;
+  if (r.ok) { account = r.data.account; stats = r.data.stats; elo = r.data.elo || null; items = r.data.items || []; earn = r.data.earn || earn; chal = r.data.chal || null; chalAt = Date.now(); emit(); if (r.data.promoGrant && r.data.promoGrant.granted) promoSubs.forEach((f) => { try { f(r.data.promoGrant); } catch (e) { console.error(e); } }); } return r.ok ? r.data : null;
 }
 export const loadMe = refreshStats; // no começo: confere o token guardado (se vencer, volta a convidado)
 let skinTimer = 0, skinWant = '';
@@ -162,5 +163,9 @@ export async function spinWheel(ids) {
 }
 export async function loadRank(mode = 'all', sort = 'kills') {
   const r = await api(`/api/rank?mode=${encodeURIComponent(mode)}&sort=${encodeURIComponent(sort)}&limit=20`);
+  return r.ok ? r.data.rows || [] : null;
+}
+export async function loadEloRank(mode = 'comp', limit = 20) {
+  const r = await api(`/api/elo?mode=${encodeURIComponent(mode)}&limit=${encodeURIComponent(limit)}`);
   return r.ok ? r.data.rows || [] : null;
 }

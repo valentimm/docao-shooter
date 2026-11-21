@@ -15,7 +15,8 @@ import { UnoRoom } from './uno-room.js';
 export { TrucoRoom, UnoRoom };
 import { Game } from './game.js';
 import { SKINS } from '../../skins.js';
-import { handleAccountRoute, accountFromToken, nickRegistered, saveSkin, recordStats } from './auth.js';
+import { handleAccountRoute, accountFromToken, nickRegistered, saveSkin, recordStats, recordCompElo } from './auth.js';
+import { eloTier, eloMode } from '../../shared/elo.js';
 import { equipKnife, equipSniper, equipGun } from './shop.js';
 import { knifeKind, sniperKind } from '../../shared/closet.js';
 import { cleanName, NAME_MAX } from '../../shared/names.js';
@@ -146,6 +147,23 @@ export class Room extends DurableObject {
       stopLoop() { if (self.loop) { clearInterval(self.loop); self.loop = null; } self.persist(); },
       saveCfg() { self.persist(); },
       stats(items) { if (self.env.DB && items.length) self.ctx.waitUntil(recordStats(self.env, items).catch((e) => console.error('stats', e && e.message))); },
+      elo(payload) {
+        if (!self.env.DB || !payload) return;
+        self.ctx.waitUntil((async () => {
+          try {
+            const r = await recordCompElo(self.env, payload);
+            if (!r || !r.deltas || !r.deltas.length) return;
+            const byAcct = new Map((payload.players || []).map((p) => [p.acct | 0, p.entId | 0]));
+            const deltas = r.deltas.map((d) => {
+              const tier = eloTier(d.after);
+              return { id: byAcct.get(d.id) || 0, acct: d.id, before: d.before, after: d.after, delta: d.delta, tier: tier.id, tierName: tier.name, emoji: tier.emoji };
+            });
+            const mode = eloMode(payload.mode) || eloMode('comp');
+            const s = JSON.stringify({ t: 'elo', mode: mode.id, modeName: mode.name, deltas });
+            for (const ws of self.sockets()) self.safeSend(ws, s);
+          } catch (e) { console.error('elo', e && e.message); }
+        })());
+      },
     });
   }
   // A simulação roda a 20 Hz "pegando carona" nas mensagens dos clientes (cada mensagem é uma invocação com o
@@ -168,7 +186,8 @@ export class Room extends DurableObject {
       const mode = b.mode === 'arms' || b.mode === 'dom' || b.mode === 'treino' || b.mode === 'inv' || b.mode === 'bomb' || b.mode === 'comp' || b.mode === 'x1' || b.mode === 'survival' || b.mode === 'gf' ? b.mode : 'dm';
       const side = b.side | 0;
       const gfN = b.format === '1v1' || b.format === 1 ? 1 : b.format === '3v3' || b.format === 3 ? 3 : b.format === '4v4' || b.format === 4 ? 4 : 2;
-      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: mode === 'x1' ? 'random' : (typeof b.map === 'string' ? b.map : 'arena'), max: mode === 'x1' ? 2 : (mode === 'comp' ? (side >= 3 && side <= 5 ? side : 5) * 2 : mode === 'gf' ? gfN * 2 : b.max), fillBots: mode === 'comp' ? false : b.fillBots !== false, mode, format: mode === 'gf' ? gfN : undefined, side, variant: b.variant === 'survival' ? 'survival' : '', survival: b.survival === true, surv: b.surv, time: b.time, weapons: b.weapons, powers: b.powers });
+      const elo = mode === 'comp' || b.elo === true;
+      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: mode === 'x1' ? 'random' : (typeof b.map === 'string' ? b.map : 'arena'), max: mode === 'x1' ? 2 : (mode === 'comp' ? (side >= 3 && side <= 5 ? side : 5) * 2 : mode === 'gf' ? gfN * 2 : b.max), fillBots: mode === 'comp' || elo ? false : b.fillBots !== false, elo, mode, format: mode === 'gf' ? gfN : undefined, side, variant: b.variant === 'survival' ? 'survival' : '', survival: b.survival === true, surv: b.surv, time: b.time, weapons: b.weapons, powers: b.powers });
       this.persist(); await this.ctx.storage.setAlarm(Date.now() + EMPTY_TTL); // ninguém entrou? some
       return new Response('ok');
     }
