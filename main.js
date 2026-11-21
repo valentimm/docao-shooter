@@ -27,7 +27,7 @@ import { makeTablet, poseTablet, makeLaptop, poseLaptop, makeRadio, poseRadio } 
 import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap, BOMB_MAP } from './maps.js';
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss } from './shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES } from './shared/invasion.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
@@ -2386,6 +2386,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (state === 'over') return false; // resultado fechado
   if (!t.alive || gameTime < t.invulnUntil || friends(t, attacker) || bombFrozen(bombS) || (gfLive() && gunfightFrozen(gfS))) return false; // sem fogo amigo; Bomba e Gunfight: sem dano na preparação
   if (t.zt && t.phaseUntil > gameTime) return false; // Docão Fantasma faseado: imune
+  if (t.zt) amount = zombieTaken(t, amount, wIdx === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
   if (!online && compOn()) amount = mitigate(t, amount, head);
   if (!online) amount = subidoTaken(t, amount);
   if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
@@ -9037,7 +9038,7 @@ $('joinCode').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.ke
 function remoteEnt(info) {
   const o = online; if (info.id === o.myId || o.ents.has(info.id)) return o.ents.get(info.id);
   if (info.zt) { // Invasão: zumbi do servidor
-    const z = makeZombieEnt(info.zt, info.name); Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0 });
+    const z = makeZombieEnt(info.zt, info.name); Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0, pose: ZPOSE[info.zp] || '' });
     z.model.group.visible = false; o.ents.set(info.id, z); entities.push(z); return z;
   }
   const e = makeEntity(info.name, false, info.skin, info.tag || '#ffffff');
@@ -9660,14 +9661,14 @@ function startInvasionOffline() {
   inv.start();
 }
 // ---------- eventos (core offline chama direto; online chegam no snapshot) ----------
-const INV_EVENTS = new Set(['wv', 'za', 'zs', 'zx', 'zb', 'dp', 'dg', 'pw', 'pb', 'zh', 'zf']);
+const INV_EVENTS = new Set(['wv', 'za', 'zs', 'zx', 'zb', 'dp', 'dg', 'pw', 'pb', 'zh', 'zf', 'zp']);
 function invEvent(ev) {
   const k = ev[0], ent = (id) => (online ? entOf(id) : inv ? inv.zombies.find((z) => z.id === id) : null);
   const isMe = (id) => (online ? id === online.myId : !!player && id === player.id);
   if (k === 'wv') {
     const [, ph, w, x] = ev;
     if (ph === 0) invBanner('🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'troque de arma no painel (B)'}`);
-    else if (ph === 1) { invBanner(`WAVE ${w}/${INV.WAVES}`, x ? '🎃 O DOCÃO ABÓBORA chegou!' : w === 1 ? 'Os zumbis estão vindo da névoa!' : 'A névoa está fechando…', !!x); sfx.incoming(0.9); invClosePick(); }
+    else if (ph === 1) { const bossName = x > 0 && ZOMBIES[BOSS_TYPES[x - 1]] ? ZOMBIES[BOSS_TYPES[x - 1]].name : ''; invBanner(`WAVE ${w}/${INV.WAVES}`, bossName ? `🎃 ${bossName} chegou!` : w === 1 ? 'Os zumbis estão vindo da névoa!' : 'A névoa está fechando…', !!bossName); sfx.incoming(0.9); invClosePick(); }
     else if (ph === 2) { invBanner(`WAVE ${w} LIMPA!`, `Pausa de ${survOn() ? getSurvivalWaveTuning(w).gap : INV.BREAK} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}`); sfx.pickup(); if (player && player.alive) invOpenPick(); }
     else if (ph === 3) invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${INV.WAVES} waves` : `Sobreviveu até a wave ${w}`, true);
   } else if (k === 'za') { const z = ent(ev[1]); if (z) { z.atkT = gameTime; if (player && z.pos.distanceTo(player.pos) < 25) sfx.knife(distVol(z.pos) * 0.6, 'slash'); } }
@@ -9675,6 +9676,7 @@ function invEvent(ev) {
   else if (k === 'zx') { const [, id, c, style] = ev; invKillProj(id); const at = a3v(c); const st = style | 0; invRing(at, st === 1 ? '#ff8a1a' : st === 2 ? '#c8b830' : '#7dff4a', 0.2, st === 1 ? 3.6 : st === 2 ? 3.0 : 1.8, 0.4); if (st === 1) blastFx(at, 3.6); else { puff(at, st === 2 ? 0xc8b830 : 0x7dff4a); noise(0.2, st === 2 ? 500 : 900, 0.3 * distVol(at), 'bandpass'); } }
   else if (k === 'zh') { const at = a3v(ev[2]); invRing(at, '#a8c8ff', 1.2, 11, 0.55); tone('sawtooth', 90, 280, 0.35, 0.2 * distVol(at)); }
   else if (k === 'zf') { const z = entOf(ev[1]); if (z && z.model) { z.phaseUntil = ev[2] ? gameTime + 3 : 0; setGhostLook(z.model, !!ev[2] || z.zt === 'bossGhost'); } }
+  else if (k === 'zp') { const z = ent(ev[1]); if (z) z.pose = ZPOSE[ev[2]] || ''; }
   else if (k === 'zb') { const at = a3v(ev[2]); blastFx(at, ZOMBIES.tank.boom.radius); invRing(at, '#ff7a1a', 0.5, ZOMBIES.tank.boom.radius, 0.5); }
   else if (k === 'dp') { const [, id, ki, p] = ev; invAddDrop(id, DROP_KEYS[ki], p); }
   else if (k === 'dg') { const [, id, pid, ki] = ev; const d = invGfx.drops.get(id); if (d) { scene.remove(d.m); invGfx.drops.delete(id); }
@@ -9770,7 +9772,12 @@ function invHud(v, me, dt) {
   $('timer').textContent = ph === 'wave' ? `🧟 ${v.remaining}` : ph === 'over' ? '—' : `${Math.ceil(v.left)} s`;
   // chefão
   const boss = v.bossId ? (online ? entOf(v.bossId) : inv && inv.zombies.find((z) => z.id === v.bossId)) : null;
-  $('invBoss').classList.toggle('hidden', !(boss && boss.alive)); if (boss && boss.alive) $('invBossFill').style.width = (100 * Math.max(0, boss.hp) / (boss.maxHp || 1)).toFixed(1) + '%';
+  $('invBoss').classList.toggle('hidden', !(boss && boss.alive));
+  if (boss && boss.alive) {
+    const bossName = (ZOMBIES[boss.zt] && ZOMBIES[boss.zt].name) || boss.name || 'Chefão';
+    $('invBossName').textContent = `🎃 ${bossName.toUpperCase()}`;
+    $('invBossFill').style.width = (100 * Math.max(0, boss.hp) / (boss.maxHp || 1)).toFixed(1) + '%';
+  }
   // vidas
   if (me) $('invLives').innerHTML = `${'❤'.repeat(Math.max(0, me.lives))}<span class="lost">${'❤'.repeat(Math.max(0, INV.LIVES - me.lives))}</span>`;
   const out = !!(me && me.out && player && !player.alive);

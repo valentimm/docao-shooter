@@ -33,6 +33,10 @@ const ZCOL = {
   bossMummy: { suit: '#d8c89a', suit2: '#b8a878', snout: '#c8b888', eye: '#2a1a10', metal: '#8a7a5a', hat: null },
   bossWolf: { suit: '#4a3a32', suit2: '#2e241c', snout: '#6a4a3a', eye: '#ff4020', metal: '#3a3030', hat: null },
   bossCrazy: { suit: '#6a2a6a', suit2: '#4a1a4a', snout: '#ff6a3a', eye: '#ff20a0', metal: '#3a2a40', hat: '#1a0a1a' },
+  sling: { suit: '#c6e04a', suit2: '#8aaa28', snout: '#d8ee78', eye: '#f4ff6a', metal: '#6a7040', hat: null },
+  bat: { suit: '#3a2848', suit2: '#241830', snout: '#5a4068', eye: '#ff4a6a', metal: '#3a3040', hat: null },
+  cry: { suit: '#6a8ec8', suit2: '#4a6a98', snout: '#8aa8d8', eye: '#9ad0ff', metal: '#4a5a70', hat: null },
+  bossHosp: { suit: '#f2efe6', suit2: '#d8d0c4', snout: '#e8c8b8', eye: '#ff3030', metal: '#8a8478', hat: null },
 };
 let headGeo = null, torsoGeo = null;
 function getHeadGeo() {
@@ -151,6 +155,33 @@ export function makeZombie(type) {
     part(G.box, toon('#ff20a0'), hg, [-0.2, 1.78, 0.48], [0.1, 0.08, 0.04], [0, 0, 0.5], 0);
     part(G.box, toon('#20ffd0'), hg, [0.22, 1.7, 0.48], [0.08, 0.12, 0.04], [0, 0, -0.35], 0);
   }
+  if (type === 'sling') { // elásticos nos braços, puxados pra trás na hora do pulo
+    for (const arm of arms) part(G.box, toon('#f4ff6a'), arm, [0, -0.4, 0.04], [0.07, 0.5, 0.03], null, 0);
+  }
+  if (type === 'bat') {
+    const wings = [];
+    for (const s of [-1, 1]) {
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.42), new THREE.MeshToonMaterial({ color: '#241428', side: THREE.DoubleSide }));
+      w.position.set(s * 0.72, 1.02, -0.02); body.add(w); wings.push(w);
+    }
+    g.userData.wings = wings;
+    for (const s of [-1, 1]) part(G.cone, suit2M, hg, [s * 0.22, 2.08, 0.02], [0.08, 0.24, 0.04], [0.35, 0, s * -0.25]);
+  }
+  if (type === 'cry') {
+    const tears = [];
+    for (const s of [-1, 1]) {
+      const tear = new THREE.Mesh(G.sph, glowMat('#7ec8ff'));
+      tear.position.set(s * 0.16, 1.62, 0.55); tear.scale.set(0.045, 0.08, 0.04); hg.add(tear); tears.push(tear);
+    }
+    g.userData.tears = tears;
+  }
+  if (type === 'bossHosp') { // camisa de força, fivelas e cabelo em pé
+    part(G.box, toon('#f7f4ee'), body, [0, 0.82, 0.4], [0.72, 0.58, 0.1], null, 0);
+    part(G.box, toon('#efe6d8'), body, [0.12, 0.98, 0.48], [0.58, 0.055, 0.04], [0, 0, 0.65], 0);
+    part(G.box, toon('#efe6d8'), body, [-0.12, 0.74, 0.48], [0.58, 0.055, 0.04], [0, 0, -0.65], 0);
+    for (const s of [-1, 1]) part(G.box, toon('#b7a48c'), body, [s * 0.2, 0.88, 0.5], [0.07, 0.07, 0.04], null, 0);
+    for (let i = 0; i < 5; i++) part(G.cone, toon('#1a1020'), hg, [-0.18 + i * 0.09, 2.08, -0.04], [0.035, 0.14 + (i % 2) * 0.08, 0.035], [0.25, 0, (i - 2) * 0.28], 0);
+  }
   // postura: corcunda (corredor bem inclinado pra frente)
   body.rotation.x = thin ? 0.38 : spit ? 0.22 : fat ? 0.06 : type === 'bossWolf' ? 0.2 : 0.14;
   g.scale.setScalar(st.size); g.userData.size = st.size;
@@ -181,6 +212,24 @@ export function animateZombie(m, z, dt, T, flashing) {
   m.group.position.set(z.pos.x, z.pos.y + (z.onGround ? Math.abs(sw) * 0.05 : 0), z.pos.z);
   m.group.rotation.y = z.yaw;
   m.body.rotation.z = Math.sin(z.walk * 0.5) * 0.08 * k;
+  const pose = z.pose || '';
+  if (m.type === 'sling' || m.type === 'bossHosp') {
+    if (pose === 'wind') { m.arms[0].rotation.x = 1.05; m.arms[1].rotation.x = 1.05; m.body.rotation.x = -0.4; }
+    else if (pose === 'sling') { m.arms[0].rotation.x = -2.5; m.arms[1].rotation.x = -2.5; m.body.rotation.x = 0.7; }
+    else if (m.type === 'bossHosp') { m.arms[0].rotation.z = 1.05; m.arms[1].rotation.z = -1.05; m.arms[0].rotation.x = -0.35; m.arms[1].rotation.x = -0.35; }
+  }
+  if (pose === 'cry') {
+    m.legs[0].rotation.x = 1.2; m.legs[1].rotation.x = 1.2;
+    m.arms[0].rotation.x = 0.55; m.arms[1].rotation.x = 0.5;
+    m.body.rotation.x = 0.42; m.group.position.y = z.pos.y - 0.32;
+  } else if (pose === 'frenzy' || pose === 'rage') {
+    m.body.rotation.x = pose === 'rage' ? 0.62 : 0.42;
+    m.arms[0].rotation.x = -1.85; m.arms[1].rotation.x = -1.75;
+  }
+  const tears = m.group.userData.tears;
+  if (tears) for (const tear of tears) { tear.visible = pose === 'cry'; tear.position.y = 1.62 - ((T * 1.6 + tear.position.x) % 1) * 0.4; }
+  const wings = m.group.userData.wings;
+  if (wings) { const f = Math.sin(T * (7 + Math.min(8, speed * 2))) * 0.75; wings[0].rotation.z = -0.45 + f; wings[1].rotation.z = 0.45 - f; }
   for (const mat of m.flashMats) mat.emissive.set(flashing ? 0x992222 : 0x000000);
   m.eyeM.color.set(T % 0.9 < 0.06 ? '#ffffff' : (ZCOL[m.type] || ZCOL.walker).eye); // pisca
   m.group.traverse((o) => { if (o.userData.blink) o.visible = T % 0.6 < 0.3; });
