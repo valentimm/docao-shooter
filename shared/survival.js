@@ -623,7 +623,7 @@ function openSpot(phys, map, prefer, avoid) {
 }
 
 // A loja do mapa noturno sai das âncoras (Papada no saguão, barraca no ponto inicial, armas onde o mapa marcou).
-// Sem âncora e sem layout registrado, não inventa Papada no Rodízio, na Fazenda, na Arena nem em mapa nenhum.
+// Os outros mapas ganham só a máquina de upgrade, num chão livre perto de onde a partida começa.
 function mountWall(phys, w) {
   const chest = w.y > 0 ? w.y : 1.3;
   if (!phys || !phys.rayWorldN) return { x: w.x, y: chest, z: w.z, yaw: w.yaw || 0 };
@@ -671,10 +671,18 @@ function layoutFromAnchors(map, phys) {
   };
 }
 
-// Papada, barraca e parede só existem no layout do mapa (HOTMILK à Noite) ou num registerSurvivalMap.
-// anchor fica na assinatura porque o servidor passa o spawn; o mapa noturno não usa posição de teste.
+// Mapa sem âncora: a Papada fica perto do nascimento, fora do spawn e fora da parede.
+function papadaOnMap(map, phys, anchor) {
+  const sp = spawnsOf(map);
+  const prefer = anchor && Number.isFinite(anchor.x) ? anchor : (sp[0] || { x: 0, z: 0 });
+  const spot = phys ? openSpot(phys, map, prefer, sp) : testStations(map).papada;
+  const papada = settlePoint({ x: spot.x, y: spot.y, z: spot.z, yaw: spot.yaw || 0 }, map, phys || { groundAt: () => spot.y || 0, collides: () => false });
+  return { id: map.id, test: false, exclusive: false, papada, box: null, walls: [], doors: [] };
+}
+
+// Papada, barraca e parede autoriais ficam no layout (HOTMILK à Noite) ou num registerSurvivalMap.
+// Sem isso, todo mapa ainda recebe a máquina de upgrade.
 export function bindStations(map, phys, anchor) {
-  void anchor;
   const custom = map && SURVIVAL_LAYOUTS[map.id];
   if (custom && custom.papada && custom.box && Array.isArray(custom.walls) && custom.walls.length) {
     const lay = stationsFor(map);
@@ -687,7 +695,10 @@ export function bindStations(map, phys, anchor) {
       walls: lay.walls.map((w) => ({ ...w, y: w.y != null ? w.y : phys.groundAt(w.x, w.z, 2) + 1.35 })),
     };
   }
-  return layoutFromAnchors(map, phys);
+  const authored = layoutFromAnchors(map, phys);
+  if (authored) return authored;
+  if (!map) return null;
+  return papadaOnMap(map, phys, anchor);
 }
 
 export function stationsFor(map) {

@@ -26,7 +26,7 @@ import { mountStreakUi, setStreakCount, setStreakCycle, setStreakReady, openStri
 import { makeTablet, poseTablet, makeLaptop, poseLaptop, makeRadio, poseRadio } from './fp-gear.js';
 import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
-import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap, BOMB_MAP } from './maps.js';
+import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap, BOMB_MAP } from './maps.js';
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES } from './shared/invasion.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
@@ -7217,8 +7217,8 @@ const menuPool = (md, surv = false) => {
     const L = MAPS.filter((m) => ids.includes(m.id));
     if (L.length) return L;
   }
-  return (surv || isSurvivalMode(md)) ? SURVIVAL_MAPS : isX1(md) ? X1_MAPS : (md === 'bomb' || md === COMP.mode) ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : PLAY_MAPS;
-}; // Survival: só a HOTMILK à Noite. Bomba e Competitivo: sites feitos à mão. X1: currais. Gunfight: pool do formato.
+  return (surv || isSurvivalMode(md)) ? SURVIVAL_PLAY_MAPS : isX1(md) ? X1_MAPS : (md === 'bomb' || md === COMP.mode) ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : PLAY_MAPS;
+}; // Survival: mapas da Invasão e a HOTMILK à Noite. Bomba e Competitivo: sites feitos à mão. X1: currais. Gunfight: pool do formato.
 const mapKey = () => (bombMenu() || compMenu() ? 'docao.bombMap' : invMenu() ? 'docao.invMap' : x1Menu() ? 'docao.x1Map' : 'docao.map');
 const x1Menu = () => $('modeSel').value === X1.mode;
 const mapPool = () => menuPool($('modeSel').value, menuSurvival());
@@ -7238,10 +7238,8 @@ function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); }
 let selectedMap = storedMap();
 function syncMapForMode() {
   if (menuSurvival()) {
-    selectedMap = SURVIVAL.DEFAULT_MAP;
-    if (!currentMap || currentMap.id !== SURVIVAL.DEFAULT_MAP) loadMap(SURVIVAL.DEFAULT_MAP, true);
-    const m = getMap(SURVIVAL.DEFAULT_MAP);
-    if (m && !thumbs[m.id]) { try { thumbs[m.id] = renderThumb(m); } catch (e) { /* miniatura depois */ } }
+    if (!mapPool().some((m) => m.id === selectedMap)) selectedMap = mapPool().some((m) => m.id === INV.DEFAULT_MAP) ? INV.DEFAULT_MAP : SURVIVAL.DEFAULT_MAP;
+    if (!currentMap || currentMap.id !== selectedMap) loadMap(selectedMap, true);
     $('mapModal').classList.add('hidden');
     buildMapGrid();
     return;
@@ -7260,15 +7258,6 @@ function mapCard(id) {
 }
 function refreshMapUI() {
   const card = $('mapBtn');
-  if (menuSurvival()) {
-    const m = getMap(SURVIVAL.DEFAULT_MAP);
-    $('mapName').textContent = m ? m.name : 'HOTMILK à Noite';
-    $('mapDesc').textContent = 'Travado: o Survival só abre neste mapa.';
-    const th = card.querySelector('.thumb'); th.textContent = ''; th.style.backgroundImage = m && thumbs[m.id] ? `url(${thumbs[m.id]})` : ''; th.classList.remove('rnd');
-    const ch = card.querySelector('.mchange'); if (ch) ch.textContent = 'TRAVADO';
-    card.classList.add('locked'); card.title = 'O Survival só abre na HOTMILK à Noite';
-    return;
-  }
   card.classList.remove('locked'); card.title = 'Escolher mapa';
   const ch = card.querySelector('.mchange'); if (ch && ch.textContent !== 'TROCAR') ch.textContent = 'TROCAR';
   if (x1Menu()) {
@@ -7291,7 +7280,6 @@ function previewSelectedMap() {
   fetchMap(id, () => { if (selectedMap === id && state === 'menu') loadMap(id); });
 }
 function selectMap(id) {
-  if (menuSurvival()) { refreshMapUI(); return; }
   if (x1Menu()) { if (id !== 'random') loadMap(id); refreshMapUI(); return; } // no X1 o mapa da partida é sorteado; o clique só mostra o curral
   selectedMap = id; try { localStorage.setItem(mapKey(), id); } catch (e) { /* sem storage */ }
   previewSelectedMap();
@@ -7303,7 +7291,7 @@ function invThumbs() { // Rodízio/Fazenda: renderiza a miniatura só quando o m
   const next = () => { const m = todo.shift(); if (!m) { invThumbsBusy = false; buildMapGrid(); return; } try { thumbs[m.id] = renderThumb(m); } catch (e) { console.warn('miniatura', m.id, e); } refreshMapUI(); requestAnimationFrame(next); };
   requestAnimationFrame(next);
 }
-function buildMapGrid() { if (invMenu() && !menuSurvival()) invThumbs(); const g = $('mapGrid'); g.innerHTML = ''; for (const m of mapPool()) g.appendChild(mapCard(m.id)); if (!menuSurvival()) g.appendChild(mapCard('random')); refreshMapUI(); }
+function buildMapGrid() { if (invMenu()) invThumbs(); const g = $('mapGrid'); g.innerHTML = ''; for (const m of mapPool()) g.appendChild(mapCard(m.id)); g.appendChild(mapCard('random')); refreshMapUI(); }
 function makeThumbs() { // miniaturas renderizadas da vista aérea, uma por quadro pra não travar o menu
   const L = MAPS.filter((m) => !m.survivalOnly && !m.thumbUrl && (PLAY_MAPS.includes(m) || !INV_MAPS.includes(m))); // mapa GLB usa a foto (thumbUrl). HOTMILK à Noite e os mapas só da Invasão: miniatura sob demanda
   let i = 0; const next = () => {
@@ -7314,7 +7302,7 @@ function makeThumbs() { // miniaturas renderizadas da vista aérea, uma por quad
 }
 function nextOfflineMap() {
   if (x1Mode() || x1Menu()) { const i = X1_MAPS.findIndex((m) => currentMap && m.id === currentMap.id); return X1_MAPS[(i + 1) % X1_MAPS.length].id; }
-  const P = gfLive() ? mapPool() : plantOn() ? BOMB_MAPS : survivalMode() ? SURVIVAL_MAPS : invMode() ? INV_MAPS : MAPS.filter((x) => PLAY_MAPS.includes(x) || !INV_MAPS.includes(x)); const Q = P.filter((x) => !x.heavy || x === currentMap); return Q[(Math.max(0, Q.indexOf(currentMap)) + 1) % Q.length].id; // mapa pesado (GLB) não entra no rodízio
+  const P = gfLive() ? mapPool() : plantOn() ? BOMB_MAPS : survivalMode() ? SURVIVAL_PLAY_MAPS : invMode() ? INV_MAPS : MAPS.filter((x) => PLAY_MAPS.includes(x) || !INV_MAPS.includes(x)); const Q = P.filter((x) => !x.heavy || x === currentMap); return Q[(Math.max(0, Q.indexOf(currentMap)) + 1) % Q.length].id; // mapa pesado (GLB) não entra no rodízio
 } // Bomba: só mapas com sites. X1: o próximo curral.
 function resolveX1Map(mapId) {
   if (typeof mapId === 'string' && X1_MAPS.some((m) => m.id === mapId) && (!currentMap || mapId !== currentMap.id)) return mapId;
@@ -7323,10 +7311,10 @@ function resolveX1Map(mapId) {
 }
 function pickMapForMatch() {
   if (selectedMap !== 'random' && mapPool().some((m) => m.id === selectedMap)) return selectedMap;
-  if (selectedMap !== 'random') return (bombMenu() || compMenu()) ? BOMB_MAP : menuSurvival() ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : $('modeSel').value === GF_MODE ? (mapPool()[0] ? mapPool()[0].id : 'galpao-assalto') : PLAY_MAPS[0].id; // Bomba e Competitivo: mapa sem sites → Rodízio. Survival: HOTMILK à Noite. Gunfight: primeiro do pool.
+  if (selectedMap !== 'random') return (bombMenu() || compMenu()) ? BOMB_MAP : invMenu() ? INV.DEFAULT_MAP : $('modeSel').value === GF_MODE ? (mapPool()[0] ? mapPool()[0].id : 'galpao-assalto') : PLAY_MAPS[0].id; // Bomba e Competitivo: mapa sem sites → Rodízio. Gunfight: primeiro do pool.
   const pool = mapPool().filter((m) => !m.heavy && (!currentMap || m.id !== currentMap.id)); return pool[Math.floor(Math.random() * pool.length)].id;
 }
-$('mapBtn').onclick = () => { if (menuSurvival()) return; buildMapGrid(); $('mapModal').classList.remove('hidden'); };
+$('mapBtn').onclick = () => { buildMapGrid(); $('mapModal').classList.remove('hidden'); };
 $('mapClose').onclick = () => $('mapModal').classList.add('hidden');
 loadMap(selectedMap === 'random' || !mapReady(selectedMap) ? MAPS[0].id : selectedMap); if (selectedMap !== 'random' && !mapReady(selectedMap)) previewSelectedMap(); buildMapGrid(); makeThumbs();
 
@@ -7362,7 +7350,7 @@ function startGame(mapId) {
   const gfNotice = pickedRaw === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : '';
   const picked = gfNotice ? 'dm' : pickedRaw;
   const wantSurv = menuSurvival();
-  const id = picked === TRAIN.mode ? TRAIN.map : picked === HIDE.mode ? HIDE.MAP : picked === X1.mode ? resolveX1Map(mapId) : wantSurv ? SURVIVAL.DEFAULT_MAP : (typeof mapId === 'string' ? mapId : pickMapForMatch());
+  const id = picked === TRAIN.mode ? TRAIN.map : picked === HIDE.mode ? HIDE.MAP : picked === X1.mode ? resolveX1Map(mapId) : (typeof mapId === 'string' ? mapId : pickMapForMatch());
   if (!mapReady(id)) { // Breeze: baixa e começa sozinho quando terminar (se ainda estiver no menu)
     if (startGame.waiting) return; startGame.waiting = true;
     fetchMap(id, () => { startGame.waiting = false; if (state === 'menu') startGame(id); });
@@ -8029,7 +8017,7 @@ const MENU_RULES = {
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho, ray gun e saco de presentes. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. O esquerdo carrega a força. O direito joga na força mínima. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
-  survival: 'Survival, dentro da Invasão: o mapa trava na HOTMILK à Noite. Nasce de pistola e faca. F usa a loja (parede, Barraca da Sorte e Papada). E compra a porta. A Ray Gun só sai na barraca.',
+  survival: 'Survival, dentro da Invasão: a Papada aparece em todos os mapas. Nasce de pistola e faca. Na HOTMILK à Noite, F também usa a barraca e a parede, e E compra a porta. A Ray Gun só sai na barraca.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. N liga o noclip: voa na direção da mira, atravessa parede, Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Munição não acaba e a partida não termina.',
   hide: `🫥 COMO JOGAR · Docão Escondido (protótipo, estilo Prop Hunt)\n🙈 Escondidos: você vira um objeto do mapa. ${HIDE.KEY_LABEL} troca o objeto (só os que existem no mapa), ${HIDE.ROT_LABEL} gira, ${HIDE.LOCK_LABEL} trava a posição (só a câmera mexe). Mapa: Rodízio do Docão. Fique parado e sobreviva até o tempo acabar.\n🔫 Caçadores: ${HIDE.PREP} s presos e cegos no spawn, depois ${Math.round(HIDE.ROUND / 60 * 10) / 10} min pra achar e abater todos os objetos-Docão.\n🔁 Os papéis trocam toda rodada · primeiro time a ${HIDE.WIN} vence.`,
   x1: 'X1 · duelo. Mapa pequeno sorteado, cada um nasce de um lado. Primeiro a 10 abates. Só munição no chão, sem vida. A arma é a mesma pros dois e troca quando alguém cai.',
@@ -8653,9 +8641,9 @@ function refreshMenuMode() {
   if (showDiff) paintDiffNote();
   if (inv) paintSurvNote();
   const playTitle = inv ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
-  const playHint = surv ? 'HOTMILK À NOITE · LOJA E PORTAS' : inv ? 'CLÁSSICA · 20 WAVES' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : comp ? 'BOTIJÃO · ECONOMIA · PRIMEIRO A 13' : v === GF_MODE ? (GF_LIVE ? 'ROUNDS · PRIMEIRO A 6' : 'EM BREVE · CAI NO MATA-MATA') : 'SOLO · CONTRA BOTS';
+  const playHint = surv ? 'PAPADA EM TODOS OS MAPAS' : inv ? 'CLÁSSICA · 20 WAVES' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : comp ? 'BOTIJÃO · ECONOMIA · PRIMEIRO A 13' : v === GF_MODE ? (GF_LIVE ? 'ROUNDS · PRIMEIRO A 6' : 'EM BREVE · CAI NO MATA-MATA') : 'SOLO · CONTRA BOTS';
   $('playBtn').innerHTML = `<span class="play-title">${playTitle}</span><small>${playHint}</small>`;
-  $('menuRules').textContent = inv ? (surv ? 'Survival · dentro da Invasão, só na HOTMILK à Noite.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada.') : MENU_RULES[v];
+  $('menuRules').textContent = inv ? (surv ? 'Survival · a Papada fica em todos os mapas. A loja completa e as portas continuam na HOTMILK à Noite.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada.') : MENU_RULES[v];
   teamButtons($('menuTeamBtns'), menuTeam, (t) => { menuTeam = t; refreshMenuMode(); });
   syncLoadoutUi();
 }
@@ -8676,7 +8664,7 @@ function paintSurvNote() {
   const el = $('survNote'); if (!el) return;
   const surv = isSurvival($('survSel').value);
   el.textContent = surv
-    ? 'Survival: o mapa trava na HOTMILK à Noite. Nasce de pistola e faca. F usa a loja (parede, Barraca da Sorte e Papada). E compra a porta. A Ray Gun só sai na barraca.'
+    ? 'Survival: a Papada aparece em todos os mapas. Nasce de pistola e faca. Na HOTMILK à Noite, F também usa a barraca e a parede, e E compra a porta.'
     : 'Invasão clássica: 20 waves, 2 vidas, poderes no chão (G usa, X troca) e a Névoa Assombrada fecha o mapa. Os mapas da Invasão continuam valendo, inclusive o Rodízio.';
 }
 $('survSel').onchange = () => { try { localStorage.setItem('docao.surv', $('survSel').value); } catch (e) { /* */ } refreshMenuMode(); syncMapForMode(); };
@@ -8925,7 +8913,7 @@ function onNetMessage(m) {
   }
 }
 // ---------- lobby ----------
-function fillMapSelect(sel, value, md, surv = false) { // Invasão: lista própria (Rodízio, Fazenda Mal-Assombrada + mapas normais). Survival: só a HOTMILK à Noite. X1: o mapa é sempre sortido.
+function fillMapSelect(sel, value, md, surv = false) { // Invasão: lista própria. Survival: a mesma lista, mais a HOTMILK à Noite. X1: o mapa é sempre sortido.
   if (isX1(md)) {
     if (sel.dataset.pool !== 'x1') { sel.innerHTML = ''; sel.dataset.pool = 'x1'; sel.add(new Option('Sortido · curral pequeno', 'random')); }
     sel.value = 'random'; return;
@@ -9012,7 +9000,7 @@ $('leaveLobby').onclick = () => leaveOnline();
 function onlineTab(create) { $('tabCreate').classList.toggle('active', create); $('tabJoin').classList.toggle('active', !create); $('paneCreate').classList.toggle('hidden', !create); $('paneJoin').classList.toggle('hidden', create); }
 $('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); };
 $('roomSurv').onchange = () => { const surv = isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMap').value, $('roomMode').value, surv); };
-$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); const map = surv ? SURVIVAL.DEFAULT_MAP : selectedMap; fillMapSelect($('roomMap'), map, $('roomMode').value, surv); if (surv) $('roomMap').value = SURVIVAL.DEFAULT_MAP; syncRoomLimits(); paintCompSetup(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
+$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); fillMapSelect($('roomMap'), selectedMap, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
 $('onlineClose').onclick = () => { $('onlineModal').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('tabCreate').onclick = () => onlineTab(true); $('tabJoin').onclick = () => { onlineTab(false); $('joinCode').focus(); };
 $('createBtn').onclick = async () => {
@@ -10138,9 +10126,9 @@ function survBuild(layout) {
   survClear(); if (!layout) return;
   const meshes = [];
   const put = (mesh, p, yaw) => { mesh.position.set(p.x, (p.y || 0), p.z); mesh.rotation.y = yaw || 0; scene.add(mesh); meshes.push(mesh); return mesh; };
-  const pap = put(makePapada(), layout.papada, layout.papada.yaw);
-  const box = put(makeMysteryBox(), layout.box, layout.box.yaw);
-  const walls = layout.walls.map((w) => { const m = put(makeWallGun(WEAPONS[w.w] ? WEAPONS[w.w].short : 'Arma', fmtPts(w.price)), w, w.yaw); m.userData.wall = w; return m; });
+  const pap = layout.papada ? put(makePapada(), layout.papada, layout.papada.yaw) : null;
+  const box = layout.box ? put(makeMysteryBox(), layout.box, layout.box.yaw) : null;
+  const walls = (layout.walls || []).map((w) => { const m = put(makeWallGun(WEAPONS[w.w] ? WEAPONS[w.w].short : 'Arma', fmtPts(w.price)), w, w.yaw); m.userData.wall = w; return m; });
   survGfx = { layout, meshes, pap, box, walls, offer: null };
 }
 // Marcadores fora da tela caem no mesmo canto e cobrem o placar. Sobe um por vez até sair da HUD e um do outro.
@@ -10184,7 +10172,7 @@ function unstickSurvMarks() {
 }
 function survNearest() {
   if (!survGfx || !player) return null;
-  const spots = [{ kind: 'pap', p: survGfx.layout.papada, mesh: survGfx.pap }, { kind: 'box', p: survGfx.layout.box, mesh: survGfx.box }, ...survGfx.walls.map((m, i) => ({ kind: 'wall', p: survGfx.layout.walls[i], mesh: m, i }))];
+  const spots = [{ kind: 'pap', p: survGfx.layout.papada, mesh: survGfx.pap }, survGfx.layout.box ? { kind: 'box', p: survGfx.layout.box, mesh: survGfx.box } : null, ...survGfx.walls.map((m, i) => ({ kind: 'wall', p: survGfx.layout.walls[i], mesh: m, i }))].filter((s) => s && s.p);
   let best = null, bd = SURV.reach;
   for (const s of spots) { const d = Math.hypot(player.pos.x - s.p.x, player.pos.z - s.p.z); if (d < bd && Math.abs(player.pos.y - (s.p.y || 0)) < 2.4) { bd = d; best = s; } }
   return best;
@@ -10429,8 +10417,9 @@ function survTick(dt) {
       if (d < 4) { el.classList.add('hidden'); return; }
       placeMark(el, new V3(p.x, (p.y || 0) + 2.8, p.z), color, Math.round(d) + ' m');
     };
-    pin('papMark', survGfx.layout.papada, '#ff7a18');
-    pin('boxMark', survGfx.layout.box, '#ffd24a');
+    if (survGfx.layout.papada) pin('papMark', survGfx.layout.papada, '#ff7a18');
+    if (survGfx.layout.box) pin('boxMark', survGfx.layout.box, '#ffd24a');
+    else { const m = $('boxMark'); if (m) m.classList.add('hidden'); }
     unstickSurvMarks();
   } else {
     for (const id of ['papMark', 'boxMark']) { const m = $(id); if (m) m.classList.add('hidden'); }

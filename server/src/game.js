@@ -5,7 +5,7 @@
 //  pickups, Copo Bomba e foguetes (física + explosão), tempo de partida, fim de partida e bots.
 //  O cliente é dono só do próprio movimento (com checagem de velocidade/paredes) e manda eventos de tiro com origem+direção.
 // ============================================================
-import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_MAPS, getMap } from '../../maps.js';
+import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap } from '../../maps.js';
 import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
 import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
 setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
@@ -107,8 +107,8 @@ export class Game {
       const L = ids.map((id) => getMap(id)).filter(Boolean);
       if (L.length) return L;
     }
-    return this.x1Mode ? X1_MAPS : this.bombMode ? BOMB_MAPS : this.survival ? SURVIVAL_MAPS : this.invasion ? INV_MAPS : PLAY_MAPS;
-  } // Survival: só a HOTMILK à Noite. Bomba: sites feitos à mão. X1: currais. Gunfight: pool do formato.
+    return this.x1Mode ? X1_MAPS : this.bombMode ? BOMB_MAPS : this.survival ? SURVIVAL_PLAY_MAPS : this.invasion ? INV_MAPS : PLAY_MAPS;
+  } // Survival: mapas da Invasão e a HOTMILK à Noite. Bomba: sites feitos à mão. X1: currais. Gunfight: pool do formato.
   nextMapId() { const L = this.mapList.filter((m) => !m.heavy || m.id === this.mapId); if (!L.length) return this.mapId; return L[(L.findIndex((m) => m.id === this.mapId) + 1) % L.length].id; } // mapa pesado (GLB) só entra quando alguém escolhe
   get training() { return isTraining(this.cfg.mode); } // Estande do Docão: bots = alvos parados/andando
   live() { return [...this.ents.values()].filter((e) => e.bot || e.connected); }
@@ -303,7 +303,8 @@ export class Game {
     const LIST = this.mapList;
     const x1Pool = X1_MAPS.filter((m) => m.id !== this.mapId);
     const x1Asked = this.mapId && X1_MAPS.some((m) => m.id === mapId) && mapId !== this.mapId; // "próximo mapa" respeita o curral seguinte; a primeira e o "de novo" sorteiam
-    let id = this.survival ? (SURVIVAL_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId && !m.heavy)).id) : mapId;
+    const survPool = SURVIVAL_PLAY_MAPS.filter((m) => !m.heavy || m.id === mapId);
+    let id = this.survival ? (mapId === 'random' ? pick(survPool.length ? survPool : SURVIVAL_PLAY_MAPS).id : (SURVIVAL_PLAY_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP)) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId && !m.heavy)).id) : mapId;
     if (this.invasion) for (const b of [...this.ents.values()]) if (b.bot) { this.ents.delete(b.id); } // começa sem zumbi velho/bot
     const map = getMap(id); this.mapId = id; this.map = map;
     this.surv = this.survival ? createMatchSurvival(map) : null;
@@ -477,7 +478,7 @@ startMsg() {
         if (this.cfg.mode === COMP.mode) this.cfg.fillBots = false;
         if (m.variant === 'survival' || m.variant === 'padrao' || m.variant === 'standard' || m.variant === '') this.cfg.variant = m.variant === 'survival' ? 'survival' : '';
         if (typeof m.survival === 'boolean') this.cfg.variant = m.survival ? 'survival' : (this.cfg.mode === 'survival' ? 'survival' : '');
-        if (this.survival && this.cfg.map !== 'random' && !SURVIVAL_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = SURVIVAL.DEFAULT_MAP;
+        if (this.survival && this.cfg.map !== 'random' && !SURVIVAL_PLAY_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = SURVIVAL.DEFAULT_MAP;
         if (typeof m.chat === 'boolean') this.cfg.chat = m.chat;
         if (m.weapons !== undefined || m.powers !== undefined) {
           if (m.weapons !== undefined) this.cfg.weapons = normWeapons(m.weapons);

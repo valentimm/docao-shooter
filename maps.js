@@ -1615,3 +1615,5 @@ export const X1_MAPS = MAPS.filter((m) => m.x1);
 export const BOMB_MAPS = MAPS.filter((m) => m.bomb && !m.training && !m.invasionOnly && !m.survivalOnly);
 export const INV_MAPS = [...MAPS.filter((m) => INV_ONLY.has(m.id)), ...PLAY_MAPS];
 export const SURVIVAL_MAPS = MAPS.filter((m) => m.survivalOnly);
+// Survival joga nos mapas da Invasão e também na HOTMILK à Noite. A Papada existe em todos.
+export const SURVIVAL_PLAY_MAPS = [...INV_MAPS, ...SURVIVAL_MAPS.filter((m) => !INV_MAPS.includes(m))];
