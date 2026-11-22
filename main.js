@@ -19,6 +19,7 @@ import { INSPECT_DUR, INSPECT_HOLD, INSPECT_FADE, INSPECT_PROFILES, inspectKind,
 import { drawFlair, recoilFlair, recoilRecover, bobMul, idleFlair, rareFlair, locoFlair, killFlair, inspectFlair, reloadFlourish, drawCues, inspectCues, rareCue, ejectsBrass, brassPort, heatsBarrel, knifeExtra, saberCutDir, cupHandShake, tpReloadExtra, tpKickScale, RARE_IDLE_AFTER, KILL_TIME, EGG_P } from './weapon-anims.js';
 import { createSaberSfx } from './saber-sfx.js';
 import { createSniperSfx } from './sniper-sfx.js';
+import { createInvasionSfx } from './invasion-sfx.js';
 import { HIT_DIR_LIFE, addHit } from './damage-dir.js';
 import { resetFeedback, feedbackPoints, feedbackHit, feedbackKill, feedbackAward, feedbackMedal, tickFeedback } from './feedback.js';
 import { SMOKE, makeTacticalMesh, makeFlashMesh, makeSmokeCloud, inRadius, makeShockStake, makeShockArc } from './tactical-nades.js';
@@ -399,7 +400,7 @@ function initAudio() {
     const rate = c.sampleRate > 0 ? c.sampleRate : 44100;
     noiseBuf = c.createBuffer(1, rate, rate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    saberSfx.bind(actx, master); bindGrenadeVoice(actx, master); sniperSfx.bind(actx, master);
+    saberSfx.bind(actx, master); bindGrenadeVoice(actx, master); sniperSfx.bind(actx, master); invasionSfx.bind(actx, master);
     if (!c.__sleighHook) {
       c.__sleighHook = true;
       c.addEventListener('statechange', () => { try { flushSleigh(); } catch (e) { /* espera o próximo quadro */ } });
@@ -750,6 +751,7 @@ function updateFootsteps(dt) {
   }
 }
 const sniperSfx = createSniperSfx();
+const invasionSfx = createInvasionSfx();
 // Pan simples pro tiro de outra pessoa: o jogo não usa Panner 3D, só volume. As snipers ganham lado também.
 function stereoPan(pos) {
   if (!player || !pos) return 0;
@@ -4183,7 +4185,7 @@ const fp = (() => {
   // fuzil
   const r = new THREE.Group(); root.add(r); r.userData.rifleForward = -1;
   add(new THREE.BoxGeometry(0.11, 0.13, 0.62), toon(0x3b3f4a), 0, 0, -0.1, r).userData.gunPart = 'body';
-  add(new THREE.CylinderGeometry(0.022, 0.022, 0.32, 10), toon(0x22252c), 0, 0.01, -0.56, r).rotation.x = Math.PI / 2;
+  const rBarrel = add(new THREE.CylinderGeometry(0.022, 0.022, 0.32, 10), toon(0x22252c), 0, 0.01, -0.56, r); rBarrel.rotation.x = Math.PI / 2; rBarrel.userData.gunPart = 'barrel';
   const rMag = add(new THREE.BoxGeometry(0.075, 0.22, 0.11), toon(COLORS.red), 0, -0.15, -0.12, r); rMag.rotation.x = 0.2; // pente (sai/entra na recarga)
   rMag.userData.gunPart = 'mag';
   add(new THREE.BoxGeometry(0.1, 0.15, 0.24), toon(COLORS.red), 0, -0.03, 0.3, r).userData.gunPart = 'stock';
@@ -9794,6 +9796,17 @@ function updateZombie(z, dt) {
   if (z.remote) interpRemote(z);
   m.group.visible = true; z.stunned = z.stunUntil > gameTime;
   animateZombie(m, z, dt, gameTime, gameTime < z.flashUntil);
+  voiceZombie(z);
+}
+function voiceZombie(z) {
+  if (!player || !z.pos) return;
+  if (z.voiceAt == null) z.voiceAt = gameTime + ((z.id || 0) % 8) * 0.45;
+  if (gameTime < z.voiceAt) return;
+  const d = z.pos.distanceTo(player.pos);
+  if (d > 28) { z.voiceAt = gameTime + 0.7; return; }
+  const vol = distVol(z.pos) * (isBoss(z.zt) ? 0.72 : 0.48);
+  if (invasionSfx.voice(z.zt, vol, 'idle')) z.voiceAt = gameTime + (isBoss(z.zt) ? 2.1 : 3.2) + Math.random() * 2.2;
+  else z.voiceAt = gameTime + 0.35;
 }
 function killZombieLocal(t, a, wIdx, head, back) {
   t.alive = false; t.hp = 0; t.deaths++; t.deathAt = gameTime; t.respawnAt = Infinity; t.fxDeath = t.deathAt;
@@ -9846,10 +9859,16 @@ function invEvent(ev) {
     else if (ph === 1) { const bossName = x > 0 && ZOMBIES[BOSS_TYPES[x - 1]] ? ZOMBIES[BOSS_TYPES[x - 1]].name : ''; invBanner(`WAVE ${w}/${INV.WAVES}`, bossName ? `🎃 ${bossName} chegou!` : w === 1 ? 'Os zumbis estão vindo da névoa!' : 'A névoa está fechando…', !!bossName); sfx.incoming(0.9); invClosePick(); }
     else if (ph === 2) { invBanner(`WAVE ${w} LIMPA!`, `Pausa de ${survOn() ? getSurvivalWaveTuning(w).gap : INV.BREAK} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}`); sfx.pickup(); if (player && player.alive) invOpenPick(); }
     else if (ph === 3) invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${INV.WAVES} waves` : `Sobreviveu até a wave ${w}`, true);
-  } else if (k === 'za') { const z = ent(ev[1]); if (z) { z.atkT = gameTime; if (player && z.pos.distanceTo(player.pos) < 25) sfx.knife(distVol(z.pos) * 0.6, 'slash'); } }
+  } else if (k === 'za') { const z = ent(ev[1]); if (z) { z.atkT = gameTime; z.voiceAt = gameTime + 0.7; if (player && z.pos.distanceTo(player.pos) < 25) invasionSfx.voice(z.zt, distVol(z.pos) * 0.9, 'bite'); } }
   else if (k === 'zs') { const [, id, style, p, v] = ev; const m = makeSpitMesh(style | 0); m.position.set(...p); scene.add(m); invGfx.projs.set(id, { m, pos: a3v(p), vel: a3v(v), born: gameTime, spit: true }); if (player) tone('sawtooth', style === 1 ? 160 : style === 2 ? 120 : 320, style === 1 ? 90 : 140, 0.18, 0.12 * distVol(a3v(p))); }
   else if (k === 'zx') { const [, id, c, style] = ev; invKillProj(id); const at = a3v(c); const st = style | 0; invRing(at, st === 1 ? '#ff8a1a' : st === 2 ? '#c8b830' : '#7dff4a', 0.2, st === 1 ? 3.6 : st === 2 ? 3.0 : 1.8, 0.4); if (st === 1) blastFx(at, 3.6); else { puff(at, st === 2 ? 0xc8b830 : 0x7dff4a); noise(0.2, st === 2 ? 500 : 900, 0.3 * distVol(at), 'bandpass'); } }
-  else if (k === 'zh') { const at = a3v(ev[2]); invRing(at, '#a8c8ff', 1.2, 11, 0.55); tone('sawtooth', 90, 280, 0.35, 0.2 * distVol(at)); }
+  else if (k === 'zh') {
+    const z = ent(ev[1]); const at = a3v(ev[2]); const rad = ev[3] > 0 ? +ev[3] : 11; const style = ev[4] | 0;
+    const col = ['#a8c8ff', '#ff8a1a', '#c8b830', '#ff4ad0'][style] || '#a8c8ff';
+    invRing(at, col, Math.min(1.2, rad * 0.18), rad, 0.55);
+    if (style === 0) { if (!(z && invasionSfx.voice(z.zt, 0.85 * distVol(at), 'howl'))) tone('sawtooth', 90, 280, 0.35, 0.2 * distVol(at)); }
+    else { noise(0.22, style === 2 ? 160 : style === 1 ? 80 : 220, 0.28 * distVol(at), 'lowpass'); if (style === 1) blastFx(at, Math.min(rad, 4.2)); }
+  }
   else if (k === 'zf') { const z = entOf(ev[1]); if (z && z.model) { z.phaseUntil = ev[2] ? gameTime + 3 : 0; setGhostLook(z.model, !!ev[2] || z.zt === 'bossGhost'); } }
   else if (k === 'zp') { const z = ent(ev[1]); if (z) z.pose = ZPOSE[ev[2]] || ''; }
   else if (k === 'zb') { const at = a3v(ev[2]); blastFx(at, ZOMBIES.tank.boom.radius); invRing(at, '#ff7a1a', 0.5, ZOMBIES.tank.boom.radius, 0.5); }

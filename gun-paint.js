@@ -240,9 +240,26 @@ function walk(obj, fn) {
   for (let i = 0; i < children.length; i++) walk(children[i], fn);
 }
 
+function dropDress(root, key) {
+  const dress = root.userData && root.userData[key];
+  if (!dress) return;
+  root.remove(dress);
+  const mats = new Set();
+  dress.traverse((o) => {
+    if (o.userData && o.userData.isOutline) return;
+    if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+    if (o.isMesh && o.material && !mats.has(o.material)) {
+      mats.add(o.material);
+      if (o.material.map && o.material.map.dispose) o.material.map.dispose();
+      if (o.material.dispose) o.material.dispose();
+    }
+  });
+  root.userData[key] = null;
+}
+
 function clearPaint(root) {
-  const dress = root.userData && root.userData.goldDress;
-  if (dress) { root.remove(dress); root.userData.goldDress = null; }
+  dropDress(root, 'goldDress');
+  dropDress(root, 'loreDress');
   walk(root, restoreMesh);
   if (root.userData) root.userData.gunPaint = '';
 }
@@ -269,6 +286,12 @@ function paintMesh(mesh, paint, rifleForward) {
     mat.color.set('#e8c56b');
     mat.map = null;
     if (mat.emissive && mat.emissive.set) { mat.emissive.set('#c4892a'); mat.emissiveIntensity = 0.38; }
+  } else if (paint === 'lore') {
+    const hex = LORE_PART[mesh.userData.gunPart];
+    if (!hex) return;
+    mat.color.set(hex);
+    mat.map = null;
+    if (mat.emissive && mat.emissive.set) { mat.emissive.set('#c4892a'); mat.emissiveIntensity = mesh.userData.gunPart === 'body' ? 0.28 : 0.1; }
   } else {
     mat.color.set('#ffffff');
     mat.map = TEX_OF[paint];
@@ -277,7 +300,6 @@ function paintMesh(mesh, paint, rifleForward) {
     else if (paint === 'sapphire' && mat.emissive && mat.emissive.set) { mat.emissive.set('#3d6dff'); mat.emissiveIntensity = 0.28; }
     else if (paint === 'emerald' && mat.emissive && mat.emissive.set) { mat.emissive.set('#1f8f4a'); mat.emissiveIntensity = 0.28; }
     else if (paint === 'ruby' && mat.emissive && mat.emissive.set) { mat.emissive.set('#d0123a'); mat.emissiveIntensity = 0.28; }
-    else if (paint === 'lore' && mat.emissive && mat.emissive.set) { mat.emissive.set('#c4892a'); mat.emissiveIntensity = 0.3; }
     else if (mat.emissive && mat.emissive.set) { mat.emissive.set('#000000'); mat.emissiveIntensity = 0.06; }
   }
   mat.needsUpdate = true;
@@ -319,15 +341,100 @@ function addGoldDress(group) {
   return dress;
 }
 
+// Mesmas cores da Docão Lore da Torresmo. O dragão, o focinho e o C! vão no enfeite.
+const LORE_PART = { body: '#e2b34a', stock: '#a56b2f', mag: '#8f1d22', barrel: '#3a2c1c' };
+
+function lorePlate() {
+  const tex = canvasTex(64, 64, (x, W, H) => {
+    x.fillStyle = '#d8261c';
+    x.beginPath();
+    x.roundRect(2, 2, W - 4, H - 4, 12);
+    x.fill();
+    drawLogo(x, W / 2, H * 0.56, H * 0.42, '#fff0cc');
+  });
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+  plate.userData.noPaint = true;
+  plate.userData.loreBit = true;
+  return plate;
+}
+
+// Dragão, anéis, focinho, orelha e o C! no mesmo desenho da sniper, encaixado no fuzil.
+// u > 0 aponta pra boca, nos dois modelos (1ª pessoa e mundo).
+function addLoreRifle(group) {
+  const front = group.userData.rifleForward < 0 ? -1 : 1;
+  const mid = front < 0 ? -0.08 : 0.02;
+  const zOf = (u) => mid + front * u;
+  const dress = new THREE.Group();
+  dress.name = 'lore-dress';
+  dress.userData.noPaint = true;
+  const gold = toon('#f3d78a'), emerald = toon('#1f8f4a'), deep = toon('#0e5a32');
+  const snoutC = toon('#f58a6e'), skin = toon('#f7a531'), earIn = toon('#e8682a');
+  const nose = toon('#3a0806'), eyeC = toon('#d8261c');
+  const side = -0.07;
+  const put = (geo, mat, x, y, z, ol = 0.003) => {
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    dress.add(mesh);
+    if (ol) outline(mesh, ol);
+    return mesh;
+  };
+  for (const u of [-0.02, 0.08, 0.16, 0.24]) {
+    const seg = put(new THREE.SphereGeometry(0.03, 10, 8), u > 0.1 ? emerald : deep, side, 0.02, zOf(u));
+    seg.scale.set(0.78, 0.62, 1.25);
+    const spike = put(new THREE.ConeGeometry(0.007, 0.022, 5), gold, side - 0.01, 0.046, zOf(u), 0);
+    spike.rotation.z = 0.7;
+  }
+  const headU = 0.32;
+  const head = put(new THREE.SphereGeometry(0.042, 12, 10), emerald, side - 0.006, 0.036, zOf(headU));
+  head.scale.set(0.95, 0.7, 1.15);
+  const jaw = put(new THREE.ConeGeometry(0.016, 0.05, 8), deep, side - 0.006, 0.024, zOf(headU + 0.045));
+  jaw.rotation.x = front > 0 ? -Math.PI / 2 : Math.PI / 2;
+  for (const s of [-1, 1]) {
+    const horn = put(new THREE.ConeGeometry(0.007, 0.04, 6), gold, side + s * 0.014, 0.072, zOf(headU - 0.01), 0);
+    horn.rotation.z = s * -0.35;
+    horn.rotation.x = front > 0 ? 0.35 : -0.35;
+  }
+  put(new THREE.SphereGeometry(0.008, 8, 6), eyeC, side - 0.032, 0.046, zOf(headU + 0.01), 0);
+  const wing = put(new THREE.SphereGeometry(0.03, 8, 6), emerald, side - 0.034, 0.06, zOf(headU - 0.03));
+  wing.scale.set(1.6, 0.28, 0.7);
+  wing.rotation.z = 0.8;
+  for (const u of [0.46, 0.56]) {
+    const ring = put(new THREE.TorusGeometry(0.028, 0.005, 6, 14), gold, 0, 0.02, zOf(u), 0);
+    ring.rotation.y = Math.PI / 2;
+  }
+  const cheekZ = zOf(-0.34);
+  const disc = put(new THREE.CylinderGeometry(0.042, 0.042, 0.01, 16), gold, side + 0.008, 0.01, cheekZ);
+  disc.rotation.z = Math.PI / 2;
+  const pig = put(new THREE.CylinderGeometry(0.028, 0.03, 0.016, 14), snoutC, side - 0.004, 0.01, cheekZ);
+  pig.rotation.z = Math.PI / 2;
+  for (const s of [-1, 1]) put(new THREE.SphereGeometry(0.006, 8, 6), nose, side - 0.014, 0.01 + s * 0.008, cheekZ + front * 0.006, 0);
+  for (const s of [-1, 1]) {
+    const ear = put(new THREE.SphereGeometry(0.02, 8, 6), skin, side - 0.006, 0.05, cheekZ + s * 0.024);
+    ear.scale.set(0.45, 1.35, 0.7);
+    const inner = put(new THREE.SphereGeometry(0.01, 8, 6), earIn, side - 0.014, 0.054, cheekZ + s * 0.024, 0);
+    inner.scale.set(0.3, 0.9, 0.45);
+  }
+  const tail = put(new THREE.TorusGeometry(0.018, 0.005, 6, 12, Math.PI * 1.6), skin, side - 0.006, 0.02, zOf(-0.14), 0);
+  tail.rotation.x = Math.PI / 2;
+  const plate = lorePlate();
+  plate.position.set(side - 0.016, 0.012, zOf(-0.2));
+  plate.rotation.y = -Math.PI / 2;
+  dress.add(plate);
+  group.add(dress);
+  return dress;
+}
+
 export function applyGunPaint(root, paint) {
   if (!root) return;
   const rifleForward = root.userData.rifleForward;
   const next = paint === 'gold' || TEX_OF[paint] || (paint === 'asiimov' && rifleForward) ? paint : '';
-  if ((root.userData.gunPaint || '') === next && (next !== 'gold' || root.userData.goldDress)) return;
+  const dressed = (next !== 'gold' || root.userData.goldDress) && (next !== 'lore' || root.userData.loreDress);
+  if ((root.userData.gunPaint || '') === next && dressed) return;
   clearPaint(root);
   resetWeaponCamo(root);
   root.userData.gunPaint = next;
   if (!next) return;
   walk(root, (o) => paintMesh(o, next, rifleForward));
   if (next === 'gold') root.userData.goldDress = addGoldDress(root);
+  if (next === 'lore') root.userData.loreDress = addLoreRifle(root);
 }
