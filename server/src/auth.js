@@ -9,7 +9,7 @@ import { unlockDevSkins } from './dev-skins.js';
 import { cleanNick, nickKey, nickError, passError } from '../../shared/nick.js';
 import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
-import { ELO_START, ELO_MODES, ELO_MODE_IDS, eloSummary, computeCompEloDeltas, eloEligible } from '../../shared/elo.js';
+import { ELO_START, ELO_MODES, ELO_MODE_IDS, eloSummary, computeCompEloDeltas, computeDmEloDeltas, eloEligible } from '../../shared/elo.js';
 import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, grantPromo, buyBox, openBox, spinWheel } from './shop.js';
 
 const ITERS = 100000; // teto do WebCrypto do Workers
@@ -158,13 +158,14 @@ export async function recordCompElo(env, payload) {
   const humans = (payload.players || []).filter((p) => p && (p.acct | 0) > 0);
   const eloOn = mode === 'comp' || !!payload.eloOn;
   if (!mode || !eloEligible({ fillBots: !!payload.fillBots, hasBots: !!payload.hasBots, humans, mode, eloOn })) return { skipped: 'bots', deltas: [] };
-  if (payload.winTeam !== 0 && payload.winTeam !== 1) return { skipped: 'draw', deltas: [] };
+  const dm = mode === 'dm';
+  if (!dm && payload.winTeam !== 0 && payload.winTeam !== 1) return { skipped: 'draw', deltas: [] };
   const ratings = await loadEloRows(env, humans.map((p) => p.acct), mode);
   const input = humans.map((p) => {
     const r = ratings.get(p.acct | 0) || { rating: ELO_START, games: 0 };
-    return { id: p.acct | 0, team: p.team | 0, score: p.score | 0, rating: r.rating, games: r.games };
+    return { id: p.acct | 0, team: p.team | 0, score: p.score | 0, deaths: p.deaths | 0, win: !!p.win, rating: r.rating, games: r.games };
   });
-  const deltas = computeCompEloDeltas(input, payload.winTeam);
+  const deltas = dm ? computeDmEloDeltas(input) : computeCompEloDeltas(input, payload.winTeam);
   if (!deltas.length) return { skipped: 'empty', deltas: [] };
   const t = now();
   const stmts = deltas.map((d) => {

@@ -233,10 +233,10 @@ function paintCompEloBtn() {
   btn.dataset.tier = t.id || '';
   if (!a || a.dev) {
     $('compEloTitle').textContent = t.name || 'Seu Elo';
-    $('compEloSub').textContent = a?.dev ? 'DEV local · Elo só em conta online' : '4 modalidades · entre na conta';
+    $('compEloSub').textContent = a?.dev ? 'DEV local · Elo só em conta online' : `${ELO_MODES.length} modalidades · entre na conta`;
   } else {
     $('compEloTitle').textContent = t.name;
-    $('compEloSub').textContent = '4 modalidades · toque para ver';
+    $('compEloSub').textContent = `${ELO_MODES.length} modalidades · toque para ver`;
   }
   btn.setAttribute('aria-label', `Elos, competitivo ${t.name}, ${v.rating}. Abrir as modalidades`);
 }
@@ -253,7 +253,10 @@ async function renderEloModal() {
   $('eloHero').innerHTML = logged
     ? `<div class="elo-badge">${crest}</div><div><b>${esc(meta.name)} · ${esc(t.name)}</b><span class="elo-rating">${v.rating}</span><small>${v.games | 0} partidas · ${v.wins | 0} vitórias · pico ${v.peak | v.rating}</small>${v.max ? '' : `<small>Próxima: ${esc(v.next.name)} (${v.next.min}+)</small>`}</div>`
     : `<div class="elo-badge">${crest}</div><div><b>${esc(meta.name)} · ${esc(t.name)}</b><span class="elo-rating">${ELO_START}</span><small>${a?.dev ? 'DEV local não grava Elo' : 'Entre na conta para começar a subir'}</small></div>`;
-  $('eloHow').innerHTML = `<p>${esc(meta.how)}</p><p><b>Elo:</b> sobe na vitória e cai na derrota. O quanto muda depende do Elo médio do outro lado e da sua performance.</p><p><b>Sem killstreak:</b> quando a partida vale Elo, Olho, míssil, gavião, chopper, grelha e fim da chapa ficam de fora.</p>`;
+  const eloLine = pick === 'dm'
+    ? '<p><b>Elo:</b> quem termina na frente sobe mais, e ficar perto do primeiro dói menos do que tomar um banho de abates. O Elo de cada um na sala muda o tamanho disso.</p>'
+    : '<p><b>Elo:</b> sobe na vitória e cai na derrota. O quanto muda depende do Elo médio do outro lado e da sua performance.</p>';
+  $('eloHow').innerHTML = `<p>${esc(meta.how)}</p>${eloLine}<p><b>Sem killstreak:</b> quando a partida vale Elo, Olho, míssil, gavião, chopper, grelha e fim da chapa ficam de fora.</p>`;
   $('eloTiers').innerHTML = ELO_TIERS.map((x) => `<div class="elo-tier${t.id === x.id ? ' on' : ''}"><div class="elo-tier-seal">${eloBrasaoHtml(x.min, ELO_SEAL[x.id], x.emoji, x.id)}</div><b>${esc(x.name)}</b><em>${x.min}+</em><small>${esc(x.blurb)}</small></div>`).join('');
   const wrap = $('eloLadderWrap'), box = $('eloLadder');
   const title = wrap && wrap.querySelector('.elo-ladder-title');
