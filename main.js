@@ -1154,9 +1154,13 @@ function deathFx(e) { // dispara uma vez por morte (offline: kill(); online: eve
       const dx = atk.pos.x - e.pos.x, dz = atk.pos.z - e.pos.z;
       if (dx * dx + dz * dz > 0.04) deathCamState.ang = Math.atan2(-dx, -dz);
     }
-    if (!reducedAnims()) {
-      const show = deathSkinShow(getAccount());
-      if (show.dragon || show.coins) deathSkinFx.play(e.pos, show, scene, deathCamState.ang);
+  }
+  if (!reducedAnims()) {
+    // Local: conta (comportamento atual). Remoto/bot: sniper/guns da própria entidade.
+    const show = deathSkinShow(e.isPlayer ? (getAccount() || e) : e);
+    if (show.dragon || show.coins) {
+      const yaw = e.isPlayer ? deathCamState.ang : (Number.isFinite(e.yaw) ? e.yaw : 0);
+      deathSkinFx.play(e.pos, show, scene, yaw);
     }
   }
 }
@@ -4616,6 +4620,7 @@ function applyWorldGuns(e, guns) {
   for (const key of GUN_EQUIP_KEYS) applyWorldGun(e, key, g[key] || '');
 }
 function applyHeldSniper(id) {
+  if (player) player.sniper = id || '';
   const gun = fp.guns[SNIPER_W];
   const kind = sniperKind(id);
   paintSniper({ guns: fp.guns }, id);
@@ -4626,7 +4631,11 @@ function applyHeldSniper(id) {
     paintWeaponThumbs();
   }
 }
-function applyWorldSniper(e, id) { if (e && e.model) paintSniper(e.model, id); }
+function applyWorldSniper(e, id) {
+  if (!e) return;
+  e.sniper = id || '';
+  if (e.model) paintSniper(e.model, id);
+}
 fp.tablet = makeTablet(); fp.laptop = makeLaptop(); fp.radio = makeRadio(); fpScene.add(fp.tablet, fp.laptop, fp.radio);
 // Mãos dentro da arma (pump, ferrolho, braço da faca) não entram na camuflagem nem na miniatura.
 function markWeaponHands() {
@@ -9258,7 +9267,7 @@ function startOnlineMatch(m) {
   player.primary = player.nextPrimary = selectedPrimary; player.nextSecondary = selectedSecondary; player.nextMelee = selectedMelee; player.slots = [selectedPrimary, selectedSecondary, selectedMelee]; setWeapon(player, selectedPrimary); // até o servidor mandar o renascimento
   if (survOn()) { player.pts = me.pts | 0; player.points = player.pts; player._purse = player.pts; player.purseN = me.pn | 0; player.pap = me.pap || {}; player.slotOn = me.slotOn || [1, 0, 1]; if (me.slots) player.slots = me.slots.slice(); }
   if (armsMode()) { [player.armsStage, player.armsKills] = me.arms || [0, 0]; equipArmsLocal(player); }
-  entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.guns = { ...(me.gn || {}) }; player.ownGuns = { ...player.guns }; player.caps = me.caps || 0; if (me.gr) applyGr(player, me.gr[0], me.gr[1], me.gr[2], me.gr[3], me.gr[4], me.gr[5], me.gr[6], me.gr[7], me.gr[8], me.gr[9]); applyTeam(player, me.team ?? -1);
+  entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.sniper = me.sn || ''; player.guns = { ...(me.gn || {}) }; player.ownGuns = { ...player.guns }; player.caps = me.caps || 0; if (me.gr) applyGr(player, me.gr[0], me.gr[1], me.gr[2], me.gr[3], me.gr[4], me.gr[5], me.gr[6], me.gr[7], me.gr[8], me.gr[9]); applyTeam(player, me.team ?? -1);
   for (const info of m.ents) remoteEnt(info);
   if (survivalMode()) beginSurvival(m.doors);
   invApplyLook(invMode()); if (invMode()) for (const [id, ki, pos] of m.drops || []) invAddDrop(id, DROP_KEYS[ki], pos);

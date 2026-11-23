@@ -33,5 +33,20 @@ ok(both.dragon && both.coins, 'Lore na Torresmo e Gold no fuzil saem juntos');
 const other = deathSkinShow({ sniper: plainRifle, guns: { rifle: plainRifle } });
 ok(!other.dragon && !other.coins, 'outra pintura não dispara nada');
 
+const remote = deathSkinShow({ sniper: loreSniper, guns: {}, yaw: 1.2, isPlayer: false, remote: true, bot: false });
+ok(remote.dragon && !remote.coins, 'entidade remota com Torresmo Lore dispara o dragão');
+
+const remoteRifle = deathSkinShow({ guns: { rifle: loreRifle }, yaw: 0.4, isPlayer: false, remote: true });
+ok(remoteRifle.dragon && !remoteRifle.coins, 'entidade remota com Fuzil Lore dispara o dragão');
+
+const remoteGold = deathSkinShow({ guns: { rifle: goldRifle }, yaw: -0.8, isPlayer: false, remote: true });
+ok(!remoteGold.dragon && remoteGold.coins, 'entidade remota com Fuzil Gold dispara as moedas');
+
+const botLore = deathSkinShow({ sniper: loreSniper, guns: { rifle: goldRifle }, yaw: 2, isPlayer: false, bot: true });
+ok(botLore.dragon && botLore.coins, 'bot com Lore e Gold equipados dispara os dois');
+
+const botPlain = deathSkinShow({ bot: true, isPlayer: false, yaw: 0, guns: {} });
+ok(!botPlain.dragon && !botPlain.coins, 'bot sem essas skins não dispara efeito');
+
 if (fails.length) { console.log('FALHOU: ' + fails.join(' | ')); process.exit(1); }
 console.log('TUDO OK');
