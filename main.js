@@ -9112,7 +9112,7 @@ function limitBlurb(cfg) {
   const p = allP ? 'todos os power-ups' : (cfg.powers.length ? cfg.powers.map((id) => (POWER_UPS.find((x) => x.id === id) || {}).title).filter(Boolean).join(', ') : 'nenhum power-up');
   return ` · armas: ${w} · power-ups: ${p}`;
 }
-const eloOptMode = (mode) => mode === 'arms' || mode === X1.mode || mode === GF_MODE;
+const eloOptMode = (mode) => mode === 'dm' || mode === 'arms' || mode === X1.mode || mode === GF_MODE;
 function paintEloPick() {
   const mode = $('roomMode') && $('roomMode').value;
   const opt = eloOptMode(mode), comp = mode === COMP.mode, roomOn = comp || (opt && $('roomElo') && $('roomElo').checked);

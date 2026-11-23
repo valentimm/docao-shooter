@@ -101,15 +101,15 @@ export class Game {
   get armsMode() { return isArmsRace(this.cfg.mode); }
   get bombMode() { return this.cfg.mode === 'bomb' || this.compMode; }
   get x1Mode() { return isX1(this.cfg.mode); } // X1: duelo, mapa pequeno, mesma arma
-  // Competitivo sempre vale Elo. Corrida, Duelo (Gunfight) e X1 só se a sala foi criada com a opção.
+  // Competitivo sempre vale Elo. Mata-mata, Corrida, Duelo (Gunfight) e X1 só se a sala foi criada com a opção.
   lockElo() {
-    const opt = this.armsMode || this.x1Mode || (this.cfg.mode === GF_MODE && GF_LIVE);
+    const opt = this.cfg.mode === 'dm' || this.armsMode || this.x1Mode || (this.cfg.mode === GF_MODE && GF_LIVE);
     if (this.cfg.mode === COMP.mode) { this.cfg.elo = true; this.cfg.fillBots = false; }
     else if (!opt) this.cfg.elo = false;
     else if (this.cfg.elo) this.cfg.fillBots = false;
   }
-  eloOn() { return !!this.cfg.elo && (this.compMode || this.armsMode || this.x1Mode || this.gfMode); }
-  eloModeId() { return this.compMode ? 'comp' : this.armsMode ? 'arms' : this.x1Mode ? 'x1' : this.gfMode ? 'gf' : ''; }
+  eloOn() { return !!this.cfg.elo && (this.cfg.mode === 'dm' || this.compMode || this.armsMode || this.x1Mode || this.gfMode); }
+  eloModeId() { return this.cfg.mode === 'dm' ? 'dm' : this.compMode ? 'comp' : this.armsMode ? 'arms' : this.x1Mode ? 'x1' : this.gfMode ? 'gf' : ''; }
   get survival() { return isSurvivalMode(this.cfg.mode, this.cfg); } // HOTMILK à Noite: portas, Papada, barraca, parede e Ray Gun
   get invasion() { return isInvasion(this.cfg.mode) || this.survival; } // Invasão, e o Survival que corre em cima das mesmas waves
   get mapList() {
@@ -459,6 +459,9 @@ startMsg() {
         { acct: b.acct.id, team: 1, score: sb, entId: b.id },
       ];
       winTeam = sa === sb ? -1 : sa > sb ? 0 : 1;
+    } else if (this.cfg.mode === 'dm') {
+      players = humans.map((e) => ({ acct: e.acct.id, team: 0, score: e.kills | 0, deaths: e.deaths | 0, win: this.nukeWinner === e.id, entId: e.id }));
+      winTeam = -1;
     } else {
       const ts = (this.bomb ? this.bomb.score : this.teamScore) || [0, 0];
       const forced = this.forcedWinTeam;
