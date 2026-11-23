@@ -77,7 +77,7 @@
   <div id="killfeed"></div>
   <div id="centermsg"></div>
   <!-- Modo Invasão 🎃 -->
-  <div id="invhud" class="hidden"><b id="invWaveN">WAVE 1/20</b><small id="invWaveSub"></small><b id="survPts" class="hidden"><small>PONTOS</small><span>0</span></b><div id="invLives" title="vidas"></div></div>
+  <div id="invhud" class="hidden"><b id="invWaveN">WAVE 1/20</b><small id="invWaveSub"></small><b id="survPts" class="hidden"><small>PONTOS</small><span>0</span></b><div id="invLives" title="vidas"></div><small id="invDiffTag"></small></div>
     <div id="invBoss" class="hidden"><span id="invBossName">🎃 DOCÃO ABÓBORA</span><div class="ibar"><i id="invBossFill"></i></div></div>
   <div id="invBanner" class="hidden"></div>
   <div id="invPowers" class="hidden"><div id="invSlots"></div><div class="ikeys"><kbd>G</kbd> usa · <kbd>X</kbd> troca</div></div>
@@ -407,6 +407,7 @@
       <label id="roomSideLabel" class="hidden">Por time<select id="roomSide" aria-label="Jogadores por time na sala"><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select></label>
       <label id="roomGfLabel" class="hidden">Formato<select id="roomGf" aria-label="Formato do Gunfight na sala"><option value="1">1v1</option><option value="2" selected>2v2</option><option value="3">3v3</option><option value="4">4v4</option></select></label>
       <label id="roomSurvLabel" class="hidden">Variante<select id="roomSurv" aria-label="Variante da Invasão"><option value="padrao" selected>Clássica</option><option value="survival">Survival</option></select></label>
+      <label id="roomInvDiffLabel" class="hidden" title="Normal: quem fica sem vidas vira uma cruz e um aliado revive segurando E por 5 s. Hardcore: sem cruz e sem Ressurreição.">Dificuldade<select id="roomInvDiff" aria-label="Dificuldade da Invasão"><option value="normal" selected>Normal</option><option value="hard">Hardcore</option></select></label>
       <div class="row">
         <label>Máx. jogadores<select id="roomMax"><option>2</option><option>3</option><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option><option>29</option><option>30</option></select></label>
         <label>Completar com bots<select id="roomBots"><option value="1" selected>Sim</option><option value="0">Não</option></select></label>
@@ -592,6 +593,7 @@
         <label id="lobbySideLabel" class="hidden">Por time<select id="lobbySide" aria-label="Jogadores por time"><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select></label>
         <label id="lobbyGfLabel" class="hidden">Formato<select id="lobbyGf" aria-label="Formato do Gunfight"><option value="1">1v1</option><option value="2" selected>2v2</option><option value="3">3v3</option><option value="4">4v4</option></select></label>
         <label id="lobbySurvLabel" class="hidden">Variante<select id="lobbySurv" aria-label="Variante da Invasão na sala"><option value="padrao">Clássica</option><option value="survival">Survival</option></select></label>
+        <label id="lobbyInvDiffLabel" class="hidden" title="Normal: quem fica sem vidas vira uma cruz e um aliado revive segurando E por 5 s. Hardcore: sem cruz e sem Ressurreição.">Dificuldade<select id="lobbyInvDiff" aria-label="Dificuldade da Invasão na sala"><option value="normal">Normal</option><option value="hard">Hardcore</option></select></label>
         <label>Tempo<select id="lobbyTime"><option value="0">Padrão</option><option value="3">3 min</option><option value="5">5 min</option><option value="7">7 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option></select></label>
         <label>Chat<select id="lobbyChatOn"><option value="1">Sim</option><option value="0">Não</option></select></label>
       </div>
