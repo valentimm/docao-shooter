@@ -845,6 +845,8 @@ body.ghostfx #hud::before{content:'';position:fixed;inset:0;pointer-events:none;
 body.survmode #invBoss{top:188px}
 #invLives{font-size:18px;color:#ff4d6d;margin-top:3px;letter-spacing:3px}
 #invLives .lost{color:rgba(255,255,255,.22)}
+#invDiffTag{display:block;margin-top:2px;font-size:10px;letter-spacing:2px;color:#ffe6a0;opacity:.85}
+#invDiffTag.hard{color:#ff5a4a;opacity:1}
 #invBoss{position:absolute;top:118px;left:50%;transform:translateX(-50%);width:min(520px,60vw);text-align:center;color:#ffb35a;font-weight:bold;font-size:13px;text-shadow:0 1px 0 #000;pointer-events:none}
 #invBoss .ibar{height:12px;margin-top:3px;border-radius:6px;background:rgba(0,0,0,.55);border:1px solid #ff8a1a;overflow:hidden}
 #invBossFill{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff5a00,#ffb35a)}

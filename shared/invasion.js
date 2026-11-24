@@ -8,10 +8,11 @@
 //    Às vezes a wave vira temática: a horda puxa para um grupo de zumbis que já entrou na rotação.
 //    Chefão a cada 5 waves (Abóbora, Barriguinha, Fantasma, Múmia, Lobisomem, Louco ou Hospício).
 //    Pausa de ~15 s entre as waves. Wave 20 = vitória.
-//  • 2 vidas por jogador: morreu com vida sobrando, renasce normal; sem vidas, fica uma cruz com o nome
-//    no lugar da queda. Um aliado de pé segura E por 5 s (cavando) e traz essa pessoa de volta com 1 vida.
-//    Qualquer dano no meio zera o progresso. A Ressurreição continua valendo (máx. 4 por bloco de 5 waves
-//    e 1 por wave) e levanta todo mundo de uma vez. Todo mundo fora = fim de jogo.
+//  • 2 vidas por jogador: morreu com vida sobrando, renasce normal; sem vidas, fica assistindo.
+//    Normal: fica uma cruz no chão e um aliado revive segurando E 5 s (cavando). Qualquer dano no meio
+//    zera o progresso e é preciso soltar e segurar de novo. A Ressurreição também vale (máx. 4 por bloco
+//    de 5 waves e 1 por wave) e levanta todo mundo de uma vez. Hardcore: sem cruz e sem Ressurreição.
+//    Todo mundo fora = fim de jogo.
 //  • Poderes caem dos zumbis (chance baixa), pega no chão andando por cima, guarda até 3.
 //  • Névoa Assombrada (estilo tempestade do Fortnite): círculo seguro diminui e muda de lugar a cada wave.
 //    Fora dele o jogador perde vida; zumbi não sente a névoa.
@@ -28,6 +29,14 @@ export const INV = {
   MAX_PLAYERS: 30, DEFAULT_MAP: 'rodizio', ZOMBIE_LINGER: 2.4, SPAWN_MIN: 12,
 };
 export const isInvasion = (m) => m === INV.mode;
+// Dificuldade da Invasão (quem cria a sala escolhe; padrão Normal).
+//  • normal: como sempre + quem fica sem vidas vira uma cruz no chão; um aliado segura E por 5 s ao lado dela e revive.
+//  • hard (Hardcore): sem cruz e a Ressurreição nunca cai nem pode ser usada. Sem vidas = assistindo até o fim.
+// A cruz é só da Invasão Clássica: o Survival já tem o caído (shared/downed.js).
+export const INV_DIFFS = ['normal', 'hard'];
+export const INV_DIFF_LABEL = { normal: 'Normal', hard: 'Hardcore' };
+export function normInvDiff(v) { return v === 'hard' || v === 'hardcore' ? 'hard' : 'normal'; }
+export const INV_CROSS = { hold: 5, range: 2.2, reachY: 1.6, hp: 50, key: 'KeyE', keyLabel: 'E' };
 // A futura frente de down chama isto no zumbi (não implementa o estado caído).
 // order: { targetId?: number, hold?: boolean }. targetId troca o alvo na hora;
 // hold faz o zumbi parar de caçar. A.targetable(player) no adaptador, se existir,
@@ -177,80 +186,6 @@ export const POWERS = {
 export const POWER_KEYS = ['pumpkin', 'howl', 'potion', 'lantern', 'ghost', 'revive'];
 export const DROP_KEYS = [...POWER_KEYS, 'ammo']; // índice enviado no 'dp'/'dg': poderes e a caixa de munição que o zumbi solta
 export const KEYS = { use: 'KeyG', useLabel: 'G', cycle: 'KeyX', cycleLabel: 'X' };
-// Cruz de quem perdeu a última vida. O aliado segura a mesma tecla de desarmar (E) por GRAVE.time segundos.
-export const GRAVE = { time: 5, range: 2, reachY: 1.6, key: 'KeyE', keyLabel: 'E' };
-export function clearGrave(p) {
-  if (!p) return;
-  p.grave = null; p.revP = 0; p.revBy = 0;
-}
-export function placeGrave(p) {
-  if (!p || !p.pos) return;
-  p.grave = { x: p.pos.x, y: p.pos.y || 0, z: p.pos.z };
-  p.revP = 0; p.revBy = 0;
-}
-// Nasce ao lado de quem cavou, ainda em cima da cruz.
-export function graveSpawnAt(grave, digger) {
-  if (!grave) return null;
-  let x = grave.x, z = grave.z;
-  if (digger && digger.pos) {
-    let dx = grave.x - digger.pos.x, dz = grave.z - digger.pos.z;
-    const L = Math.hypot(dx, dz);
-    if (L < 0.2) { dx = 1; dz = 0; } else { dx /= L; dz /= L; }
-    x += dx * 0.75; z += dz * 0.75;
-  }
-  return { x, y: grave.y || 0, z };
-}
-function graveNear(h, g) {
-  if (!h || !h.pos || !g) return false;
-  const dx = h.pos.x - g.x, dy = (h.pos.y || 0) - (g.y || 0), dz = h.pos.z - g.z;
-  return Math.hypot(dx, dz) <= GRAVE.range && Math.abs(dy) <= GRAVE.reachY;
-}
-// Avança (ou zera) o desenterro. Devolve quem completou os 5 s: [{ who, by }].
-// Dano no meio (vida caiu) zera e exige soltar o botão antes de tentar de novo.
-export function stepGraves(players, dt) {
-  const list = players || [];
-  const dtS = Math.max(0, dt || 0);
-  const graves = [];
-  for (const p of list) {
-    if (!p) continue;
-    p.digLock = false;
-    if (p.graveBroke && !p.graveHold) p.graveBroke = false;
-    if (p.out && p.grave) graves.push(p);
-    else if (p.grave) clearGrave(p);
-  }
-  const up = [];
-  const busy = new Set();
-  for (const t of graves) {
-    const h = t.revBy ? list.find((p) => p && p.id === t.revBy) : null;
-    const hurt = !!(h && h._digHp != null && h.hp + 0.05 < h._digHp);
-    if (hurt) {
-      t.revBy = 0; t.revP = 0; h.graveBroke = true; h._digHp = h.hp;
-      continue;
-    }
-    const holding = h && h.alive && !h.out && !h.down && h.graveHold && !h.graveBroke && graveNear(h, t.grave);
-    if (holding) {
-      busy.add(h.id); h._digHp = h.hp; h.digLock = true;
-      t.revP = Math.min(1, (t.revP || 0) + dtS / GRAVE.time);
-      if (t.revP >= 1 - 1e-4) { t.revP = 1; up.push({ who: t, by: h }); }
-    } else { t.revBy = 0; t.revP = 0; }
-  }
-  for (const h of list) {
-    if (!h || !h.alive || h.out || h.down || !h.graveHold || h.graveBroke || busy.has(h.id)) continue;
-    let best = null, bd = Infinity;
-    for (const t of graves) {
-      if (t.revBy) continue;
-      if (!graveNear(h, t.grave)) continue;
-      const d = Math.hypot(h.pos.x - t.grave.x, h.pos.z - t.grave.z);
-      if (d < bd) { bd = d; best = t; }
-    }
-    if (!best) continue;
-    best.revBy = h.id;
-    best.revP = Math.min(1, dtS / GRAVE.time);
-    h._digHp = h.hp; h.digLock = true; busy.add(h.id);
-    if (best.revP >= 1 - 1e-4) { best.revP = 1; up.push({ who: best, by: h }); }
-  }
-  return up;
-}
 export const SPIT_GRAV = 20;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -374,8 +309,9 @@ export function scaleHit(o, d, pos, size, fn) {
 //   players() humanos na partida (vivos ou não): { id, pos, vel, alive, hp, yaw, pitch, lives, out, inv, ghostUntil }
 //   spawnZombie(type, pos) → ent (host cria e põe na lista dele; o core preenche os campos de zumbi)
 //   removeZombie(z) · hurtPlayer(p, dmg, src|null) · hurtZombie(z, dmg, by, kind) · knock(e, {x,y,z})
-//   heal(p, hp) · revive(p, pos) · invChanged(p) · emit(ev) · aimOf(p) → { o, d } · over(won, wave)
-//   rnd() opcional
+//   heal(p, hp) · revive(p, pos, { exact, hp }?) · invChanged(p) · emit(ev) · aimOf(p) → { o, d } · over(won, wave)
+//   rnd() opcional · hard (bool ou função): Hardcore
+//   players() também lê p.useHold (segurando E) para a cruz do Normal
 // ------------------------------------------------------------
 export class InvasionCore {
   constructor(A) {
@@ -387,8 +323,12 @@ export class InvasionCore {
     const R = Math.hypot(hx, hz) + 6; this.fog = { cx: 0, cz: 0, r: R, fx: 0, fz: 0, fr: R, tx: 0, tz: 0, tr: R, t0: 0, t1: 0 };
     this.flow = null; this.flowAt = -9; this.rev = null; this.fogTick = 0; this.overAt = 0;
     this.kills = 0;
+    this.crosses = []; // Normal: { p, x, y, z, by, prog } — quem ficou sem vidas espera aqui um aliado
   }
   get T() { return this.A.T(); }
+  // Hardcore: A.hard (bool ou função). Lido na hora (a sala pode trocar antes de começar).
+  get hard() { const h = this.A.hard; return typeof h === 'function' ? !!h() : !!h; }
+  get crossOn() { return !this.hard && !this.A.survival; }
   // Padrão: waveSpec. Survival liga A.specFor e o resto da simulação lê o spec que sair dali.
   specFor(w, n) {
     const fn = this.A.specFor;
@@ -403,18 +343,8 @@ export class InvasionCore {
     this.A.emit(['wv', 0, 0, r2(this.phaseEnd)]);
   }
   ensure(p, reset = false) {
-    if (reset || p.lives == null) { p.lives = INV.LIVES; p.out = false; p.inv = []; p.ghostUntil = 0; clearGrave(p); p.graveBroke = false; p.digLock = false; }
+    if (reset || p.lives == null) { p.lives = INV.LIVES; p.out = false; p.inv = []; p.ghostUntil = 0; p.graveBroke = false; p.digLock = false; p._digHp = null; }
     if (!p.inv) p.inv = []; return p;
-  }
-  runGraves(dt) {
-    for (const row of stepGraves(this.A.players(), dt)) this.raiseGrave(row.who, row.by);
-  }
-  raiseGrave(p, by) {
-    const at = graveSpawnAt(p.grave, by);
-    p.graveHere = at; p.out = false; p.lives = Math.max(1, p.lives || 0);
-    clearGrave(p);
-    this.A.revive(p, at);
-    this.A.emit(['gd', p.id, by ? by.id : 0]);
   }
   humansAlive() { return this.A.players().filter((p) => p.alive); }
   liveZombies() { return this.zombies.filter((z) => z.alive); }
@@ -432,9 +362,9 @@ export class InvasionCore {
     this.stepProjs(dt, T);
     this.stepLanterns(dt, T);
     this.stepDrops(T);
+    this.stepCrosses(dt);
     for (const z of this.zombies.filter((x) => !x.alive && T >= x.removeAt)) { this.zombies = this.zombies.filter((x) => x !== z); this.A.removeZombie(z); }
     if (this.phase === 'wave' && !this.queue.length && !this.bossPending && !this.liveZombies().length) this.endWave();
-    this.runGraves(dt);
     const H = this.A.players();
     if (H.length && H.every((p) => !p.alive && p.out)) { if (!this.overAt) this.overAt = T + 1.2; else if (T >= this.overAt) this.finish(false); }
     else this.overAt = 0;
@@ -1091,7 +1021,7 @@ export class InvasionCore {
   }
   drop(pos, bossBonus) {
     const H = this.A.players(), someoneOut = H.some((p) => p.out || !p.alive);
-    const keys = POWER_KEYS.filter((k) => k !== 'revive' || reviveAllowed(this.resCount, this.wave));
+    const keys = POWER_KEYS.filter((k) => k !== 'revive' || (!this.hard && reviveAllowed(this.resCount, this.wave))); // Hardcore: a Ressurreição nunca cai
     const w = (k) => (k === 'revive' ? POWERS.revive.w * (someoneOut ? 5 : 1) * (bossBonus ? 3 : 1) : POWERS[k].w);
     const sum = keys.reduce((a, k) => a + w(k), 0); let r = this.rnd() * sum, kind = keys[0];
     for (const k of keys) { r -= w(k); if (r <= 0) { kind = k; break; } }
@@ -1295,6 +1225,7 @@ export class InvasionCore {
   usePower(p, slot, aim) {
     if (!p.alive || this.phase === 'over' || !p.inv || !p.inv.length) return null;
     slot = clamp(slot | 0, 0, p.inv.length - 1); const kind = p.inv[slot];
+    if (kind === 'revive' && this.hard) { p.inv.splice(slot, 1); this.A.invChanged(p); return null; } // Hardcore: não existe (some do inventário)
     const at = { x: p.pos.x, y: p.pos.y, z: p.pos.z }, A = this.A, T = this.T;
     const a = aim && aim.o && aim.d ? aim : A.aimOf(p);
     if (kind === 'revive' && !A.players().some((q) => !q.alive && q !== p)) return null; // ninguém pra reviver: guarda
@@ -1321,7 +1252,7 @@ export class InvasionCore {
     } else if (kind === 'ghost') {
       p.ghostUntil = T + POWERS.ghost.dur; for (const z of this.zombies) if (z.target === p) z.target = null;
     } else if (kind === 'revive') {
-      let n = 0; for (const q of A.players()) if (!q.alive && q !== p) { q.out = false; q.lives = Math.max(1, q.lives || 0); clearGrave(q); A.revive(q, at); n++; }
+      let n = 0; for (const q of A.players()) if (!q.alive && q !== p) { q.out = false; q.lives = Math.max(1, q.lives || 0); A.revive(q, at); n++; }
       ev.push(n);
     }
     A.emit(ev); return kind;
@@ -1346,8 +1277,43 @@ export class InvasionCore {
   onPlayerDeath(p) {
     this.ensure(p); p.lives = Math.max(0, p.lives - 1); p.ghostUntil = 0;
     this.lanterns = this.lanterns.filter((l) => l.owner !== p);
-    if (p.lives <= 0) { p.out = true; placeGrave(p); return false; }
+    if (p.lives <= 0) { p.out = true; this.placeCross(p); return false; }
     return true;
+  }
+  // ---------- cruz (Normal) ----------
+  placeCross(p) {
+    if (!this.crossOn || this.phase === 'over' || !p || !p.pos) return null;
+    this.crosses = this.crosses.filter((c) => c.p !== p);
+    const x = p.pos.x, z = p.pos.z, P = this.A.P, y = P && P.groundAt ? P.groundAt(x, z, p.pos.y + 0.5) : p.pos.y;
+    const c = { p, x, y: Number.isFinite(y) ? y : p.pos.y, z, by: 0, prog: 0 };
+    this.crosses.push(c); return c;
+  }
+  // aliado de pé, perto da cruz e segurando E (useHold). Dano no meio (graveBroke) exige soltar e segurar de novo.
+  canRevive(q, c) {
+    return !!(q && q !== c.p && q.alive && !q.down && !q.zt && q.useHold && !q.graveBroke && hyp(q.pos.x - c.x, q.pos.z - c.z) <= INV_CROSS.range && Math.abs(q.pos.y - c.y) <= INV_CROSS.reachY);
+  }
+  stepCrosses(dt) {
+    const H = this.A.players(), busy = new Set();
+    for (const q of H) { q.digLock = false; if (q.graveBroke && !q.useHold) q.graveBroke = false; }
+    if (!this.crosses.length) return;
+    if (this.phase === 'over' || !this.crossOn) { this.crosses = []; return; }
+    this.crosses = this.crosses.filter((c) => {
+      const p = c.p;
+      if (!H.includes(p) || p.alive || !p.out) return false; // Ressurreição, saiu da sala ou já voltou
+      let r = c.by ? H.find((q) => q.id === c.by) : null;
+      if (r && r._digHp != null && r.hp + 0.05 < r._digHp) { c.by = 0; c.prog = 0; r.graveBroke = true; r._digHp = r.hp; r = null; } // dano no meio: zera e precisa soltar E
+      if (!this.canRevive(r, c) || busy.has(r)) r = null;
+      if (!r) { let bd = 1e9; for (const q of H) { if (busy.has(q) || !this.canRevive(q, c)) continue; const d = hyp(q.pos.x - c.x, q.pos.z - c.z); if (d < bd) { bd = d; r = q; } } }
+      if (!r) { c.by = 0; c.prog = 0; return true; } // soltou, morreu, tomou dano ou saiu de perto: zera
+      if (r.id !== c.by) { c.by = r.id; c.prog = 0; }
+      busy.add(r); c.prog += dt; r._digHp = r.hp; r.digLock = true;
+      if (c.prog < INV_CROSS.hold) return true;
+      p.out = false; p.lives = 0; // volta sem vida extra: morreu de novo, cruz de novo
+      this.A.revive(p, { x: c.x, y: c.y, z: c.z }, { exact: true, hp: INV_CROSS.hp });
+      this.A.emit(['cxr', p.id, r.id]);
+      r.digLock = false; r._digHp = null;
+      return false;
+    });
   }
   // onde renascer: perto de um aliado vivo e dentro da área segura
   spawnPoint(p, near = null) {
@@ -1367,19 +1333,17 @@ export class InvasionCore {
   stateArr() {
     const F = this.fog, T = this.T;
     return [PHASES.indexOf(this.phase), this.wave, r2(Math.max(0, this.phaseEnd - T)), this.liveZombies().length, this.queue.length + (this.bossPending ? 1 : 0) + this.liveZombies().length,
-      r2(F.cx), r2(F.cz), r2(F.r), r2(F.tx), r2(F.tz), r2(F.tr), this.bossId, this.A.players().map((p) => [p.id, p.lives ?? INV.LIVES, p.out ? 1 : 0, p.ghostUntil > T ? 1 : 0, p.grave ? r2(p.grave.x) : 0, p.grave ? r2(p.grave.y) : 0, p.grave ? r2(p.grave.z) : 0, p.grave ? Math.round((p.revP || 0) * 100) : 0, p.grave ? (p.revBy | 0) : 0]),
-      this.lanterns.map((l) => [l.owner.id, r2(l.until - T)]), themeIndex(this.spec && this.spec.theme)];
+      r2(F.cx), r2(F.cz), r2(F.r), r2(F.tx), r2(F.tz), r2(F.tr), this.bossId, this.A.players().map((p) => [p.id, p.lives ?? INV.LIVES, p.out ? 1 : 0, p.ghostUntil > T ? 1 : 0]),
+      this.lanterns.map((l) => [l.owner.id, r2(l.until - T)]), this.hard ? 1 : 0,
+      this.crosses.map((c) => [c.p.id, r2(c.x), r2(c.y), r2(c.z), c.by | 0, r2(c.prog)]), themeIndex(this.spec && this.spec.theme)];
   }
 }
 // lê o estado compacto (cliente online) no mesmo formato que o cliente offline monta a partir do core
 export function parseState(a) {
   if (!a) return null;
   return { phase: PHASES[a[0]] || 'prep', wave: a[1], left: a[2], alive: a[3], remaining: a[4], fog: { cx: a[5], cz: a[6], r: a[7], tx: a[8], tz: a[9], tr: a[10] }, bossId: a[11],
-    lives: new Map((a[12] || []).map((row) => {
-      const [id, l, o, g, gx, gy, gz, rp, rb] = row;
-      const out = !!o;
-      return [id, { lives: l, out, ghost: !!g, grave: out && row.length > 6 ? { x: gx, y: gy, z: gz } : null, revP: out ? (rp | 0) / 100 : 0, revBy: out ? (rb | 0) : 0 }];
-    })), lanterns: new Map((a[13] || []).map(([id, t]) => [id, t])), theme: a[14] | 0 };
+    lives: new Map((a[12] || []).map(([id, l, o, g]) => [id, { lives: l, out: !!o, ghost: !!g }])), lanterns: new Map((a[13] || []).map(([id, t]) => [id, t])),
+    hard: !!a[14], crosses: (a[15] || []).map(([id, x, y, z, by, prog]) => ({ id, x, y, z, by, prog })), theme: a[16] | 0 };
 }
 export function coreView(core) {
   if (!core) return null; const a = core.stateArr(); const v = parseState(a); return v;

@@ -30,13 +30,13 @@ import { makeTablet, poseTablet, makeLaptop, poseLaptop, makeRadio, poseRadio } 
 import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap, BOMB_MAP } from './maps.js';
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, GRAVE, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES, WAVE_THEMES } from './shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES, WAVE_THEMES, normInvDiff, INV_DIFF_LABEL, INV_CROSS } from './shared/invasion.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
 import { createNightAmbience } from './night-ambience.js';
 import { createInvMusic } from './invasion-music.js';
-import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook, makeGraveMark } from './invasion-gfx.js';
+import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook, makeCrossMesh, setCrossProgress, tickCross } from './invasion-gfx.js';
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
 import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
 import { breezeMap, buildBreezeWorld, breezeMapReady, prepareBreezeMap } from './breeze-map.js';
@@ -835,7 +835,7 @@ const invMode = () => isInvasion(mode) || survivalMode(); // Invasão 🎃, e o 
 let surv = null, doorGroups = new Map(), nightLights = [];
 const nightAmb = createNightAmbience();
 let inv = null, invNet = null; // offline: InvasionCore local · online: estado lido do snapshot (parseState)
-const invGfx = { hal: null, fog: null, drops: new Map(), projs: new Map(), rings: [], cones: new Map(), inv: [], sel: 0 };
+const invGfx = { hal: null, fog: null, crosses: new Map(), drops: new Map(), projs: new Map(), rings: [], cones: new Map(), inv: [], sel: 0 };
 let invZid = 1000, invMusic = null; // trilha de terror procedural (invasion-music.js)
 function invMusicOn(on) {
   try {
@@ -913,7 +913,7 @@ function pickSpawn(e) {
     const pool = list.length ? list : SPAWNS;
     return pool[(Math.random() * pool.length) | 0];
   }
-  if (invMode() && e.isPlayer && e.graveHere) { const g = e.graveHere; e.graveHere = null; e.reviveAt = null; return new V3(g.x, groundAt(g.x, g.z, (g.y || 0) + 0.3), g.z); } // desenterrado: nasce na cruz
+  if (invMode() && e.isPlayer && e.reviveExact && e.reviveAt) { const at = e.reviveAt; e.reviveExact = false; e.reviveAt = null; return new V3(at.x, groundAt(at.x, at.z, (at.y || 0) + 0.3), at.z); } // cruz: levanta onde caiu
   if (invMode() && inv && e.isPlayer) { const near = e.reviveAt || null; e.reviveAt = null; const q = e.spawnedOnce ? inv.spawnPoint(e, near) : null; e.spawnedOnce = true; if (q) return new V3(q.x, q.y, q.z); } // Invasão: renasce perto de um aliado, dentro da área segura
   const list = spawnList(bombS, bombL, e.team, SPAWNS); // Bomba: spawn do lado do time
   let best = list[0], bd = -Infinity;
@@ -5823,8 +5823,8 @@ function updatePlayer(dt) {
   if (!guiding && (keys.KeyW || keys.ArrowUp)) wish.add(fwd); if (!guiding && (keys.KeyS || keys.ArrowDown)) wish.sub(fwd);
   if (!guiding && (keys.KeyD || keys.ArrowRight)) wish.add(right); if (!guiding && (keys.KeyA || keys.ArrowLeft)) wish.sub(right);
   p.useHold = !!(keys[BOMB.KEY] && p.alive && !emote.on); if (bombLock(p) || gfLock(p)) wish.set(0, 0, 0); // Bomba e Gunfight: parado na preparação
-  const graveSpot = invMode() && p.alive && !p.down ? nearestGrave(p) : null;
-  p.graveHold = !!(graveSpot && keys[GRAVE.key] && !emote.on);
+  const graveSpot = invMode() && !survOn() && p.alive && !p.down ? nearestGrave(p) : null;
+  p.graveHold = !!(graveSpot && p.useHold); // Invasão Normal: cavando a cruz (mesmo E do useHold)
   if (p.graveHold) { wish.set(0, 0, 0); const dx = graveSpot.grave.x - p.pos.x, dz = graveSpot.grave.z - p.pos.z; if (dx * dx + dz * dz > 0.04) p.yaw = Math.atan2(-dx, -dz); } // cavando: olha pra cruz e não anda
   if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * (p.down ? DOWNED.speed : 1) * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime && !(p.flashUntil > gameTime) ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // caído rasteja. Em pé: faca corre; sabre anda normal; agachado anda mais devagar. Flashbang não deixa lento.
   if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(p.propLock ? 0 : HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
@@ -7917,7 +7917,7 @@ function loop() {
     if (gasSim && !online) stepGasLocal();
     if (gasView) gasView.update(dt, gameTime, player ? player.pos : null);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateGifts(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateDeathSkinFx(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode() && !compOn() && !gfLive()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
-    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateGfOffline(dt); stepGroundGuns(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud(); updateGraveView(); paintGraveHud();
+    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateGfOffline(dt); stepGroundGuns(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud(); updateGraveView();
     try { flushSleigh(); } catch (e) { /* trenó espera o contexto */ }
     if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; queueSleigh(); });
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
@@ -9121,12 +9121,13 @@ function renderLobby() {
   $('hostCtl').classList.toggle('hidden', !isHost); $('lobbyWait').classList.toggle('hidden', isHost || L.state !== 'lobby');
   const lobbyVariant = cfg.mode === 'survival' || cfg.variant === 'survival' || isSurvival(cfg.surv);
   const lobbyMode = cfg.mode === 'survival' ? INV.mode : (cfg.mode || 'dm');
-  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, lobbyMode, lobbyVariant); $('lobbyMax').value = String(cfg.max); if ($('lobbySide') && cfg.side) $('lobbySide').value = String(normSide(cfg.side)); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = lobbyMode; if ($('lobbyElo')) $('lobbyElo').checked = !!cfg.elo; $('lobbySurv').value = lobbyVariant ? 'survival' : 'padrao'; $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
+  if (isHost) { fillMapSelect($('lobbyMap'), cfg.map, lobbyMode, lobbyVariant); $('lobbyMax').value = String(cfg.max); if ($('lobbySide') && cfg.side) $('lobbySide').value = String(normSide(cfg.side)); $('lobbyBots').value = cfg.fillBots ? '1' : '0'; $('lobbyDiff').value = normBotDiff(cfg.botDiff); $('lobbyMode').value = lobbyMode; if ($('lobbyElo')) $('lobbyElo').checked = !!cfg.elo; $('lobbySurv').value = lobbyVariant ? 'survival' : 'padrao'; if ($('lobbyInvDiff')) $('lobbyInvDiff').value = normInvDiff(cfg.invDiff); $('lobbyTime').value = String(normTime(cfg.time)); $('lobbyChatOn').value = cfg.chat === false ? '0' : '1'; }
   $('lobbySurvLabel').classList.toggle('hidden', lobbyMode !== INV.mode);
+  if ($('lobbyInvDiffLabel')) $('lobbyInvDiffLabel').classList.toggle('hidden', lobbyMode !== INV.mode);
   if ($('lobbySideLabel')) $('lobbySideLabel').classList.toggle('hidden', lobbyMode !== COMP.mode);
   if ($('lobbyGfLabel')) $('lobbyGfLabel').classList.toggle('hidden', lobbyMode !== GF_MODE);
   if ($('lobbyMax')) $('lobbyMax').closest('label').classList.toggle('hidden', lobbyMode === COMP.mode);
-  if (lobbyMode === INV.mode) $('lobbyInfo').textContent += (lobbyVariant ? ' · SURVIVAL · HOTMILK À NOITE' : ' · CLÁSSICA');
+  if (lobbyMode === INV.mode) $('lobbyInfo').textContent += (lobbyVariant ? ' · SURVIVAL · HOTMILK À NOITE' : ' · CLÁSSICA') + ' · ' + INV_DIFF_LABEL[normInvDiff(cfg.invDiff)].toUpperCase();
   if ((lobbyMode === GF_MODE || cfg.gfStub) && !GF_LIVE) $('lobbyInfo').textContent += ' · GUNFIGHT EM BREVE · a partida cai no Mata-mata';
   if ($('lobbyGf') && cfg.gfFormat) $('lobbyGf').value = String(normFormat(cfg.gfFormat));
   syncGfPick();
@@ -9183,7 +9184,7 @@ const sendCfg = (lim) => {
   if (!online) return; const mode = $('lobbyMode').value, L = lim || limitsFor(mode);
   if (mode === GF_MODE && !GF_LIVE && $('lobbyStatus')) $('lobbyStatus').textContent = GF_STUB_NOTICE;
   const elo = mode === COMP.mode || (eloOptMode(mode) && $('lobbyElo') && $('lobbyElo').checked);
-  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: elo ? false : $('lobbyBots').value === '1', elo, botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value });
+  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: elo ? false : $('lobbyBots').value === '1', elo, botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value, invDiff: $('lobbyInvDiff') ? normInvDiff($('lobbyInvDiff').value) : undefined });
 };
 ['lobbyMap', 'lobbyMax', 'lobbyBots', 'lobbyTime', 'lobbyChatOn', 'lobbySide'].forEach((id) => { if ($(id)) $(id).onchange = sendCfg; });
 $('lobbyDiff').onchange = () => { saveBotDiff($('lobbyDiff').value); sendCfg(); };
@@ -9192,11 +9193,12 @@ $('lobbySurv').onchange = () => {
   fillMapSelect($('lobbyMap'), $('lobbyMap').value, $('lobbyMode').value, isSurvival($('lobbySurv').value));
   sendCfg();
 };
+if ($('lobbyInvDiff')) $('lobbyInvDiff').onchange = () => sendCfg(); // Invasão: Normal / Hardcore
 $('lobbyMode').onchange = () => {
   const mode = $('lobbyMode').value, humans = online && online.lobby ? online.lobby.players.filter((p) => !p.bot).length : 0;
   if (mode === X1.mode && humans > X1.MAX) { $('lobbyMode').value = (online.cfg && online.cfg.mode) || 'dm'; $('lobbyStatus').textContent = `X1 é duelo: só cabem ${X1.MAX} jogadores. Tem ${humans} na sala.`; return; }
   if (mode === X1.mode) $('lobbyMax').value = '2';
-  $('lobbySurvLabel').classList.toggle('hidden', mode !== INV.mode);
+  $('lobbySurvLabel').classList.toggle('hidden', mode !== INV.mode); if ($('lobbyInvDiffLabel')) $('lobbyInvDiffLabel').classList.toggle('hidden', mode !== INV.mode);
   if ($('lobbySideLabel')) $('lobbySideLabel').classList.toggle('hidden', mode !== COMP.mode);
   if ($('lobbyGfLabel')) $('lobbyGfLabel').classList.toggle('hidden', mode !== GF_MODE);
   if (mode === GF_MODE && !GF_LIVE) $('lobbyStatus').textContent = GF_STUB_NOTICE;
@@ -9213,16 +9215,16 @@ $('startOnline').onclick = () => {
 $('leaveLobby').onclick = () => leaveOnline();
 // ---------- menu online ----------
 function onlineTab(create) { $('tabCreate').classList.toggle('active', create); $('tabJoin').classList.toggle('active', !create); $('paneCreate').classList.toggle('hidden', !create); $('paneJoin').classList.toggle('hidden', create); }
-$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); };
+$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomInvDiffLabel')) $('roomInvDiffLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); };
 if ($('roomElo')) $('roomElo').onchange = paintEloPick;
 if ($('lobbyElo')) $('lobbyElo').onchange = () => { paintEloPick(); sendCfg(); };
 $('roomSurv').onchange = () => { const surv = isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMap').value, $('roomMode').value, surv); };
-$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); fillMapSelect($('roomMap'), selectedMap, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
+$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomInvDiffLabel')) $('roomInvDiffLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); fillMapSelect($('roomMap'), selectedMap, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
 $('onlineClose').onclick = () => { $('onlineModal').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('tabCreate').onclick = () => onlineTab(true); $('tabJoin').onclick = () => { onlineTab(false); $('joinCode').focus(); };
 $('createBtn').onclick = async () => {
   const b = $('createBtn'); b.disabled = true; $('onlineErr').textContent = 'Criando sala…';
-  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const elo = comp || (eloOptMode($('roomMode').value) && $('roomElo') && $('roomElo').checked); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: elo ? false : $('roomBots').value === '1', elo, botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value }); $('onlineErr').textContent = ''; joinRoom(code); }
+  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const elo = comp || (eloOptMode($('roomMode').value) && $('roomElo') && $('roomElo').checked); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: elo ? false : $('roomBots').value === '1', elo, botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value, invDiff: $('roomInvDiff') ? normInvDiff($('roomInvDiff').value) : 'normal' }); $('onlineErr').textContent = ''; joinRoom(code); }
   catch (e) { $('onlineErr').textContent = 'Não deu pra criar a sala: ' + (e.message || 'servidor fora do ar'); }
   b.disabled = false;
 };
@@ -9310,8 +9312,7 @@ function netTick(dt) {
   const p = player, msg = { t: 'u', sq: p.sq, y: +p.yaw.toFixed(3), pi: +p.pitch.toFixed(3), c: +p.crouch.toFixed(3), g: p.onGround ? 1 : 0, w: p.weapon, pg: o.net.ping, dn: emote.on ? myDance() : '' };
   if (p.alive) { msg.p = v3a(p.pos); msg.v = v3a(p.vel); }
   if (survOn() && keys[DOWNED.key] && p.alive && !p.down) msg.rh = 1;
-  if (bombS && p.useHold) msg.bk = 1; // Bomba: segurando E
-  if (invMode() && p.graveHold) msg.gh = 1; // Invasão: segurando E na cruz
+  if ((bombS || (invMode() && !survOn())) && p.useHold) msg.bk = 1; // Bomba: segurando E · Invasão Normal: segurando E na cruz
   if (o.evq.length) { msg.ev = o.evq; o.evq = []; }
   o.net.send(msg);
   $('netPing').textContent = o.net.ping + ' ms';
@@ -9874,7 +9875,7 @@ function startInvasionOffline() {
     hurtZombie(z, dmg, by, kind) { damage(z, dmg, by, kind === 'fall' ? W_FALL : W_NADE, false); },
     knock(e, v) { e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; if (e.isPlayer) lastKnock = gameTime; },
     heal(p, hp) { p.hp = Math.min(100, p.hp + hp); },
-    revive(p, at) { p.reviveAt = at; p.respawnAt = gameTime; if (p.isPlayer && !p.alive) { respawn(p); if (state === 'playing') lockPointer(); } },
+    revive(p, at, o) { p.reviveAt = at; p.reviveExact = !!(o && o.exact); p.respawnAt = gameTime; if (p.isPlayer && !p.alive) { respawn(p); if (o && o.hp) p.hp = Math.min(p.hp, o.hp); if (state === 'playing') lockPointer(); } },
     invChanged(p) { if (p.isPlayer) invSetInv(p.inv.map((k) => POWER_KEYS.indexOf(k))); },
     giveAmmo(p) { return !!p.isPlayer && refillAmmo(p); }, // caixa que o zumbi solta
     emit(ev) { invEvent(ev); },
@@ -9884,7 +9885,7 @@ function startInvasionOffline() {
   inv.start();
 }
 // ---------- eventos (core offline chama direto; online chegam no snapshot) ----------
-const INV_EVENTS = new Set(['wv', 'za', 'zs', 'zx', 'zb', 'dp', 'dg', 'pw', 'pb', 'zh', 'zf', 'zp']);
+const INV_EVENTS = new Set(['wv', 'za', 'zs', 'zx', 'zb', 'dp', 'dg', 'pw', 'pb', 'zh', 'zf', 'zp', 'cxr']);
 function invEvent(ev) {
   const k = ev[0], ent = (id) => (online ? entOf(id) : inv ? inv.zombies.find((z) => z.id === id) : null);
   const isMe = (id) => (online ? id === online.myId : !!player && id === player.id);
@@ -9920,7 +9921,11 @@ function invEvent(ev) {
     else if (pid && isMe(pid)) { sfx.pickup(); flashMsg(`${POWERS[POWER_KEYS[ki]].icon} ${POWERS[POWER_KEYS[ki]].name}! · ${KEYS.useLabel} usa`); }
     else if (pid) { const e = online ? entOf(pid) : null; if (e && POWER_KEYS[ki] === 'revive') flashMsg(`✨ ${e.name} pegou uma Ressurreição`); } }
   else if (k === 'pw') invPowerFx(ev);
-  else if (k === 'gd') { const who = online ? entOf(ev[1]) : entities.find((e) => e.id === ev[1]); tone('triangle', 420, 880, 0.45, 0.2); flashMsg(`${who ? who.name : 'Aliado'} saiu da cova`); }
+  else if (k === 'cxr') { // cruz: alguém levantou um aliado
+    const who = online ? entOf(ev[1]) : player, by = online ? entOf(ev[2]) : null, c = invGfx.crosses.get(ev[1]);
+    if (c) invRing(c.position, '#ffd24a', 0.4, 4, 0.8, 0.2); tone('triangle', 520, 1320, 0.6, 0.22);
+    flashMsg(isMe(ev[1]) ? `✝ ${by ? by.name : 'Um aliado'} te reviveu! (sem vida extra)` : isMe(ev[2]) ? `✝ Você reviveu ${who ? who.name : 'o aliado'}!` : `✝ ${by ? by.name : 'Alguém'} reviveu ${who ? who.name : 'um aliado'}`);
+  }
   else if (k === 'pb') { const [, id, c] = ev; invKillProj(id); const at = a3v(c); blastFx(at, POWERS.pumpkin.radius); invRing(at, '#ff8a1a', 0.5, POWERS.pumpkin.radius, 0.45); }
 }
 function invKillProj(id) { const p = invGfx.projs.get(id); if (p) { scene.remove(p.m); invGfx.projs.delete(id); } }
@@ -9956,6 +9961,7 @@ function invApplyLook(on) {
   if (invGfx.hal) { scene.remove(invGfx.hal); invGfx.hal.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); invGfx.hal = null; }
   if (!invGfx.fog) { invGfx.fog = makeFogWall(); scene.add(invGfx.fog.group); }
   invGfx.fog.group.visible = false;
+  for (const c of invGfx.crosses.values()) scene.remove(c); invGfx.crosses.clear();
   for (const d of invGfx.drops.values()) scene.remove(d.m); invGfx.drops.clear(); for (const p of invGfx.projs.values()) scene.remove(p.m); invGfx.projs.clear(); for (const r of invGfx.rings) scene.remove(r); invGfx.rings.length = 0;
   for (const c of invGfx.cones.values()) c.parent && c.parent.remove(c); invGfx.cones.clear();
   if (!currentMap) return;
@@ -9967,24 +9973,22 @@ function invApplyLook(on) {
 }
 // ---------- por quadro ----------
 let digCut = false, digThud = 0, digView = false, digWas = false;
-function graveName(id) {
-  const e = online ? entOf(id) : entities.find((x) => x.id === id);
-  return (e && e.name) || 'Aliado';
-}
+function graveName(id) { return invCrossName(id); }
 function graveRows() {
-  const v = invMode() ? invView() : null;
-  if (!v || !v.lives) return [];
-  const rows = [];
-  for (const [id, s] of v.lives) if (s.out && s.grave) rows.push({ id, grave: s.grave, revP: s.revP || 0, revBy: s.revBy || 0, name: graveName(id) });
-  return rows;
+  const v = invMode() && !survOn() ? invView() : null;
+  if (!v || !v.crosses) return [];
+  return v.crosses.map((c) => ({ id: c.id, grave: { x: c.x, y: c.y, z: c.z }, revP: c.by ? c.prog / INV_CROSS.hold : 0, revBy: c.by || 0, name: invCrossName(c.id) }));
 }
 function nearestGrave(p) {
-  if (!p || !p.pos || !invMode()) return null;
+  if (!p || !p.pos || !invMode() || survOn()) return null;
+  const c = (p === player) ? invCrossNear() : null;
+  if (c) return { id: c.id, grave: { x: c.x, y: c.y, z: c.z }, revP: c.by ? c.prog / INV_CROSS.hold : 0, revBy: c.by || 0, name: invCrossName(c.id) };
   let best = null, bd = Infinity;
   for (const row of graveRows()) {
+    if (row.id === p.id) continue;
     const dx = p.pos.x - row.grave.x, dy = (p.pos.y || 0) - (row.grave.y || 0), dz = p.pos.z - row.grave.z;
     const d = Math.hypot(dx, dz);
-    if (d > GRAVE.range || Math.abs(dy) > GRAVE.reachY || d >= bd) continue;
+    if (d > INV_CROSS.range || Math.abs(dy) > INV_CROSS.reachY || d >= bd) continue;
     bd = d; best = row;
   }
   return best;
@@ -9994,29 +9998,11 @@ function markDiggers() {
   for (const row of graveRows()) if (row.revBy && row.revP > 0) ids.add(row.revBy);
   for (const e of entities) if (e && !e.isPlayer) e.digging = ids.has(e.id);
 }
-function syncGraveMarks(v) {
-  if (!invGfx.graves) invGfx.graves = new Map();
-  const keep = new Set();
-  if (v && invMode()) for (const [id, s] of v.lives) {
-    if (!s.out || !s.grave) continue;
-    keep.add(id);
-    let g = invGfx.graves.get(id);
-    const label = graveName(id);
-    if (!g || g.userData.label !== label) {
-      if (g) scene.remove(g);
-      g = makeGraveMark(label); scene.add(g); invGfx.graves.set(id, g);
-    }
-    g.position.set(s.grave.x, s.grave.y || 0, s.grave.z);
-  }
-  for (const [id, g] of invGfx.graves) if (!keep.has(id)) { scene.remove(g); invGfx.graves.delete(id); }
-}
 function clearGraveMarks() {
-  if (!invGfx.graves) return;
-  for (const g of invGfx.graves.values()) scene.remove(g);
-  invGfx.graves.clear();
   digCut = false; digThud = 0; digWas = false;
   if (digView && ghost && player && player.alive) { ghost.model.group.visible = false; clearDigPose(ghost.model); }
   digView = false;
+  const gh = $('graveHud'); if (gh) gh.classList.add('hidden');
 }
 function updateGraveView() {
   const mineId = online ? online.myId : player && player.id;
@@ -10041,21 +10027,6 @@ function updateGraveView() {
   if (fp.root) fp.root.visible = false;
   digView = true;
 }
-function paintGraveHud() {
-  const el = $('graveHud'); if (!el) return;
-  if (!invMode() || state !== 'playing' || !player || !player.alive) { el.classList.add('hidden'); return; }
-  const near = nearestGrave(player);
-  const mineId = online ? online.myId : player.id;
-  if (!player.graveHold || !near) { digCut = false; digWas = false; }
-  else if (near.revBy === mineId && near.revP > 0) { digWas = true; digCut = false; }
-  else if (digWas) digCut = true;
-  if (!near) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden');
-  const mine = near.revBy === mineId && near.revP > 0;
-  $('graveTitle').textContent = mine || (near.revBy && near.revP > 0) ? 'Revivendo' : digCut ? 'Solte e segure de novo' : `Segure ${GRAVE.keyLabel}`;
-  $('graveFill').style.width = `${Math.round((mine || near.revP > 0 ? near.revP : 0) * 100)}%`;
-  $('graveSub').textContent = mine ? near.name : digCut ? 'O dano cortou o reviver' : near.revBy && near.revP > 0 ? `${graveName(near.revBy)} está desenterrando ${near.name}` : `para reviver ${near.name}`;
-}
 function invTick(dt) {
   if (survOn()) survTick(dt);
   if (!invMode()) return;
@@ -10065,6 +10036,7 @@ function invTick(dt) {
   if (invGfx.hal) invGfx.hal.userData.tick(gameTime);
   invGfx.fog.update(v.fog, gameTime, v.phase === 'wave' || v.phase === 'break');
   for (const d of invGfx.drops.values()) tickDrop(d.m, gameTime, d.born);
+  invSyncCrosses(v);
   for (const [id, p] of invGfx.projs) {
     if (p.nade) { for (let s = 0; s < 2; s++) PHYS.stepNade(p.pos, p.vel, dt / 2); p.m.rotation.x += dt * 6; }
     else { p.vel.y -= SPIT_GRAV * dt; p.pos.addScaledVector(p.vel, dt); }
@@ -10084,11 +10056,28 @@ function invTick(dt) {
   // fantasma: jogadores transparentes (outros) / tela azulada (você)
   const meId = online ? online.myId : player && player.id;
   for (const [id, s] of v.lives) { const e = online ? entOf(id) : null; if (e && e !== player && e.model && !!e.ghostLook !== s.ghost) { e.ghostLook = s.ghost; setGhostLook(e.model, s.ghost); } }
-  syncGraveMarks(v);
   const me = v.lives.get(meId) || null;
   if (player) player.ghostOn = !!(me && me.ghost);
   document.body.classList.toggle('ghostfx', !!(me && me.ghost && player && player.alive));
   invHud(v, me, dt);
+}
+// cruz (Invasão Normal): uma por jogador sem vidas, posição e progresso vêm do core/snapshot
+function invCrossName(id) { const e = online ? entOf(id) : (player && player.id === id ? player : null); return e ? e.name : 'Aliado'; }
+function invSyncCrosses(v) {
+  const seen = new Set();
+  for (const c of v.crosses || []) {
+    seen.add(c.id); let m = invGfx.crosses.get(c.id);
+    if (!m) { m = makeCrossMesh(invCrossName(c.id)); invGfx.crosses.set(c.id, m); scene.add(m); }
+    m.position.set(c.x, c.y, c.z); setCrossProgress(m, c.by ? c.prog / INV_CROSS.hold : 0); tickCross(m, gameTime);
+  }
+  for (const [id, m] of invGfx.crosses) if (!seen.has(id)) { scene.remove(m); invGfx.crosses.delete(id); }
+}
+// cruz mais perto de mim que dá pra reviver (mesma conta do core: raio no chão e altura)
+function invCrossNear() {
+  const v = invMode() && !survOn() && invView(); if (!v || !v.crosses || !v.crosses.length || !player || !player.alive) return null;
+  const meId = online ? online.myId : player.id; let best = null, bd = 1e9;
+  for (const c of v.crosses) { if (c.id === meId) continue; const d = Math.hypot(player.pos.x - c.x, player.pos.z - c.z); if (d <= INV_CROSS.range && Math.abs(player.pos.y - c.y) <= INV_CROSS.reachY && d < bd) { bd = d; best = c; } }
+  return best;
 }
 let invBannerT = 0;
 function invBanner(title, sub, big = false) { const b = $('invBanner'); b.innerHTML = `<b>${escapeHtml(title)}</b><span>${escapeHtml(sub || '')}</span>`; b.classList.remove('hidden'); b.classList.toggle('big', big); invBannerT = big ? 4 : 3; }
@@ -10111,7 +10100,8 @@ function invHud(v, me, dt) {
   if (me) $('invLives').innerHTML = `${'❤'.repeat(Math.max(0, me.lives))}<span class="lost">${'❤'.repeat(Math.max(0, INV.LIVES - me.lives))}</span>`;
   const out = !!(me && me.out && player && !player.alive);
   $('invOut').classList.toggle('hidden', !out); document.body.classList.toggle('invout', out); // sem vidas: some a tela de morte normal
-  if (out) { const mates = entities.filter((e) => !e.zt && e !== player && e.alive); $('invOutTxt').textContent = mates.length ? `Assistindo ${mates[0].name} · a cruz ficou onde você caiu · segure ${GRAVE.keyLabel} para desenterrar` : 'Ninguém de pé…'; }
+  if (out) { const mates = entities.filter((e) => !e.zt && e !== player && e.alive); $('invOutTxt').textContent = !mates.length ? 'Ninguém de pé…' : v.hard ? `Assistindo ${mates[0].name} · Hardcore: sem volta até o fim` : survOn() ? `Assistindo ${mates[0].name} · um aliado pode te reviver com a ✨ Ressurreição` : `Assistindo ${mates[0].name} · ✝ um aliado pode te reviver na cruz (segurando ${INV_CROSS.keyLabel} 5 s) ou com a ✨ Ressurreição`; }
+  { const tag = $('invDiffTag'); if (tag) { tag.textContent = v.hard ? '💀 HARDCORE' : 'NORMAL'; tag.classList.toggle('hard', !!v.hard); } }
   // névoa: fora da área segura = tela roxa + seta pro centro
   let outside = false;
   if (player && player.alive && v.fog) {
@@ -10618,6 +10608,7 @@ function parkDownFlash(open) {
 function paintDownHud() { try { paintDownHudBody(); } catch (e) { /* HUD do down não pode travar o quadro */ } }
 function paintDownHudBody() {
   const el = $('downHud'); if (!el) return;
+  if (invMode() && !survOn() && state === 'playing' && player) { paintCrossHud(el); return; }
   const on = survOn() && state === 'playing' && player;
   if (!on) { el.classList.add('hidden'); parkDownFlash(false); return; }
   const title = $('downTitle'), sub = $('downSub'), fill = $('downFill');
@@ -10640,6 +10631,20 @@ function paintDownHudBody() {
   title.textContent = busy ? `${mate.name} já está sendo levantado` : `Levantar ${mate.name}`;
   sub.textContent = busy ? 'Espera o outro terminar' : `Segure ${DOWNED.keyLabel} · perto e sem parede`;
   fill.style.width = `${Math.round((mine ? mate.revP || 0 : 0) * 100)}%`;
+}
+// Invasão Normal: perto da cruz de um aliado, segure E por 5 s
+function paintCrossHud(el) {
+  const c = invCrossNear();
+  if (!c) { el.classList.add('hidden'); parkDownFlash(false); digCut = false; digWas = false; return; }
+  el.classList.remove('hidden'); parkDownFlash(true);
+  const meId = online ? online.myId : player.id, name = invCrossName(c.id), holding = !!(player && player.useHold);
+  const mine = c.by === meId && c.prog > 0, busy = c.by && !mine;
+  if (!holding) { if (digWas) digCut = true; }
+  else if (mine) { digWas = true; digCut = false; }
+  else if (digWas) digCut = true;
+  $('downTitle').textContent = mine ? `Revivendo ${name}…` : digCut ? 'Solte e segure de novo' : busy ? `${invCrossName(c.by)} está revivendo ${name}` : `✝ ${name}`;
+  $('downSub').textContent = mine ? `Segure ${INV_CROSS.keyLabel} · ${Math.max(0, INV_CROSS.hold - c.prog).toFixed(1)} s` : digCut ? 'O dano cortou o reviver' : busy ? 'Espera o outro terminar' : `Segure ${INV_CROSS.keyLabel} para reviver`;
+  $('downFill').style.width = `${Math.round((mine || (c.by && c.prog > 0) ? Math.min(1, c.prog / INV_CROSS.hold) : 0) * 100)}%`;
 }
 function survNet(ev) {
   const k = ev[0];

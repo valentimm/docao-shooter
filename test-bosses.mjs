@@ -1,5 +1,5 @@
 // Chefões da Invasão: rotação, peso da horda e os zumbis novos. Uso: node test-bosses.mjs
-import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore, coreView, FERAL, FERAL_ACT, FERAL_FROM, feralChance, feralTune, spawnKind, THEME_P, WAVE_THEMES, themesForWave, rollTheme, applyTheme, themeIndex, GRAVE, stepGraves, placeGrave, clearGrave } from './shared/invasion.js';
+import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore, coreView, FERAL, FERAL_ACT, FERAL_FROM, feralChance, feralTune, spawnKind, THEME_P, WAVE_THEMES, themesForWave, rollTheme, applyTheme, themeIndex, INV_CROSS } from './shared/invasion.js';
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
@@ -313,50 +313,51 @@ ok(seen.size >= 8, 'o sorteio alcança temas diferentes');
   ok(themed.spec.theme && themed.spec.theme !== 'aereo', 'a wave seguinte não repete o mesmo tema');
 }
 
-// ---------- cruz: desenterrar quem perdeu a última vida ----------
+// ---------- cruz (Normal): desenterrar quem perdeu a última vida ----------
 {
-  ok(GRAVE.time === 5 && GRAVE.key === 'KeyE', 'desenterrar leva 5 s na tecla de desarmar');
+  ok(INV_CROSS.hold === 5 && INV_CROSS.key === 'KeyE', 'desenterrar leva 5 s na tecla de desarmar');
   const revived = [];
   let T = 0;
   const dead = { id: 1, pos: { x: 4, y: 1, z: -2 }, alive: false, hp: 0 };
-  const mate = { id: 2, pos: { x: 4.4, y: 1, z: -2.2 }, alive: true, hp: 80 };
+  const mate = { id: 2, pos: { x: 4.4, y: 1, z: -2.2 }, alive: true, hp: 80, useHold: false };
   const players = [dead, mate];
   const core = new InvasionCore({
-    size: [30, 30], T: () => T, nav: null, rnd: () => 0.9,
+    size: [30, 30], T: () => T, nav: null, rnd: () => 0.9, hard: false,
+    P: { groundAt: () => 1, losClear: () => true },
     players: () => players,
     emit() {},
-    revive(p, at) { revived.push({ id: p.id, x: at.x, z: at.z }); p.alive = true; p.hp = 100; },
+    revive(p, at, o) { revived.push({ id: p.id, x: at.x, z: at.z, o }); p.alive = true; p.hp = (o && o.hp) || 100; p.pos = { ...at }; },
   });
   core.ensure(dead, true); core.ensure(mate, true);
   dead.lives = 2; dead.alive = false;
-  ok(core.onPlayerDeath(dead) === true && !dead.grave && dead.lives === 1, 'com vida sobrando não fica cruz');
+  ok(core.onPlayerDeath(dead) === true && core.crosses.length === 0 && dead.lives === 1, 'com vida sobrando não fica cruz');
   dead.pos = { x: 4, y: 1, z: -2 }; dead.alive = false;
-  ok(core.onPlayerDeath(dead) === false && dead.out && dead.grave && dead.grave.x === 4 && dead.grave.z === -2, 'a última vida planta a cruz onde caiu');
-  mate.graveHold = true;
-  stepGraves(players, 2);
-  ok(dead.revBy === 2 && dead.revP > 0.35 && dead.revP < 0.45, '2 s segurando enche parte dos 5 s');
+  ok(core.onPlayerDeath(dead) === false && dead.out && core.crosses.length === 1 && core.crosses[0].x === 4 && core.crosses[0].z === -2, 'a última vida planta a cruz onde caiu');
+  mate.useHold = true;
+  core.stepCrosses(2);
+  const cr = core.crosses[0];
+  ok(cr.by === 2 && cr.prog > 1.9 && cr.prog < 2.1, '2 s segurando enche parte dos 5 s');
   mate.hp = 40;
-  stepGraves(players, 0.2);
-  ok(dead.revP === 0 && dead.revBy === 0 && mate.graveBroke, 'qualquer dano zera o desenterro');
-  stepGraves(players, 1);
-  ok(dead.revP === 0, 'continuar segurando depois do dano não recomeça');
-  mate.graveHold = false;
-  stepGraves(players, 0.05);
+  core.stepCrosses(0.2);
+  ok(cr.prog === 0 && cr.by === 0 && mate.graveBroke, 'qualquer dano zera o desenterro');
+  core.stepCrosses(1);
+  ok(cr.prog === 0, 'continuar segurando depois do dano não recomeça');
+  mate.useHold = false;
+  core.stepCrosses(0.05);
   ok(!mate.graveBroke, 'soltar o botão libera uma tentativa nova');
-  mate.graveHold = true;
+  mate.useHold = true;
   mate.pos = { x: 30, y: 1, z: 30 };
-  stepGraves(players, 1);
-  ok(dead.revP === 0, 'longe da cruz não cava');
+  core.stepCrosses(1);
+  ok(cr.prog === 0, 'longe da cruz não cava');
   mate.pos = { x: 4.3, y: 1, z: -2.1 }; mate.hp = 80; mate._digHp = null;
   core.phase = 'break'; core.phaseEnd = 1e9;
   for (let i = 0; i < 10; i++) { T += 0.5; core.step(0.5); }
-  ok(revived.length === 1 && dead.lives === 1 && !dead.out && !dead.grave && dead.alive, '5 s devolvem 1 vida e tiram a cruz');
-  ok(dead.graveHere && Math.hypot(dead.graveHere.x - 4, dead.graveHere.z + 2) < 1.2, 'quem volta nasce na cruz');
+  ok(revived.length === 1 && dead.lives === 0 && !dead.out && core.crosses.length === 0 && dead.alive, '5 s revivem sem vida extra e tiram a cruz');
+  ok(revived[0].o && revived[0].o.exact && revived[0].o.hp === INV_CROSS.hp && Math.hypot(revived[0].x - 4, revived[0].z + 2) < 0.2, 'quem volta nasce na cruz com meia vida');
   const view = coreView(core);
-  dead.out = true; dead.alive = false; placeGrave(dead); dead.revP = 0.4; dead.revBy = 2;
-  const row = coreView(core).lives.get(1);
-  ok(row && row.out && row.grave && row.grave.x === 4 && Math.abs(row.revP - 0.4) < 0.02 && row.revBy === 2, 'o estado leva a cruz e a barra pro HUD');
-  clearGrave(dead);
+  dead.out = true; dead.alive = false; dead.pos = { x: 4, y: 1, z: -2 }; core.placeCross(dead); core.crosses[0].prog = 2; core.crosses[0].by = 2;
+  const snap = coreView(core);
+  ok(snap.crosses.length === 1 && snap.crosses[0].id === 1 && snap.crosses[0].x === 4 && Math.abs(snap.crosses[0].prog - 2) < 0.02 && snap.crosses[0].by === 2, 'o estado leva a cruz e a barra pro HUD');
   ok(view && view.phase === 'break', 'a cruz não mexe na fase da wave');
 }
 
