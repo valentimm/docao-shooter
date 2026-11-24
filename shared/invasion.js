@@ -24,6 +24,8 @@
 // ============================================================
 import { zombieTune } from './bot-difficulty.js';
 import { fellOff } from './physics.js';
+import { HUPS, rollOffer, takeOffer, hReady, historiaSpot } from './historia-ups.js';
+import { rollPass, takePass, enqueueHistoria, nextHistoria, passLv, passHp, brasaStats, plateBlocks, coveiroScale } from './historia-pass.js';
 export const INV = {
   mode: 'inv', WAVES: 20, PREP: 12, BREAK: 15, LIVES: 2, INV_MAX: 3,
   DROP_LIFE: 35, PICK_R: 1.5, BOSS_EVERY: 5, RES_PER_BLOCK: 4, BLOCK: 5,
@@ -31,6 +33,9 @@ export const INV = {
   MAX_PLAYERS: 30, DEFAULT_MAP: 'rodizio', ZOMBIE_LINGER: 2.4, SPAWN_MIN: 12,
 };
 export const isInvasion = (m) => m === INV.mode;
+// Modo história: a mesma Invasão zumbi, sempre na HOTMILK à Noite (Papada, barraca, parede e portas) e sempre no Normal.
+export const HISTORIA = { mode: 'historia', map: 'hotmilk-noite', diff: 'normal' };
+export const isHistoria = (m) => m === HISTORIA.mode;
 // Dificuldade da Invasão (quem cria a sala escolhe; padrão Normal).
 //  • normal: como sempre + quem fica sem vidas vira uma cruz no chão; um aliado segura E por 5 s ao lado dela e revive.
 //  • hard (Hardcore): sem cruz e a Ressurreição nunca cai nem pode ser usada. Sem vidas = assistindo até o fim.
@@ -371,7 +376,7 @@ export class InvasionCore {
     this.resCount = { wave: {}, block: {} }; this.spec = null; this.bossId = 0; this.won = false; this.bossOrder = shuffleBosses(this.rnd);
     const [hx, hz] = A.size; this.hx = hx; this.hz = hz;
     const R = Math.hypot(hx, hz) + 6; this.fog = { cx: 0, cz: 0, r: R, fx: 0, fz: 0, fr: R, tx: 0, tz: 0, tr: R, t0: 0, t1: 0 };
-    this.flow = null; this.flowAt = -9; this.rev = null; this.fogTick = 0; this.overAt = 0;
+    this.flow = null; this.flowAt = -9; this.rev = null; this.fogTick = 0; this.overAt = 0; this.embers = [];
     this.kills = 0;
     this.crosses = []; // Normal: { p, x, y, z, by, prog } — quem ficou sem vidas espera aqui um aliado
   }
@@ -410,6 +415,7 @@ export class InvasionCore {
     for (const z of this.zombies) if (z.alive) this.stepZombie(z, dt, T);
     this.separate();
     this.stepProjs(dt, T);
+    this.stepPassives(dt, T);
     this.stepLanterns(dt, T);
     this.stepDrops(T);
     this.stepCrosses(dt);
@@ -439,8 +445,10 @@ export class InvasionCore {
   }
   endWave() {
     if (this.wave >= INV.WAVES) { this.finish(true); return; }
+    const bossWave = !!(this.spec && this.spec.boss);
     this.phase = 'break'; this.phaseEnd = this.T + (this.spec && this.spec.gap > 0 ? this.spec.gap : INV.BREAK);
     this.A.emit(['wv', 2, this.wave, r2(this.phaseEnd)]);
+    if (!bossWave) this.offerPassivas();
   }
   finish(won) {
     if (this.phase === 'over') return;
@@ -794,9 +802,19 @@ export class InvasionCore {
       return;
     }
     if (!z.goal || z.goalT < T || z.stuck > 2.5) {
-      const spot = nav && typeof nav.good === 'function' ? nav.good(this.rnd) : (nav && nav.good && nav.good.length ? nav.good[Math.floor(this.rnd() * nav.good.length)] : null);
-      z.goal = spot ? { x: spot.x, y: spot.y, z: spot.z } : { x: (this.A.fog && this.A.fog.cx) || 0, y: z.pos.y, z: (this.A.fog && this.A.fog.cz) || 0 };
-      z.goalT = T + 4 + this.rnd() * 3;
+      const prey = this.A.players().filter((p) => this.visible(p) && !p.zt)
+        .sort((a, b) => hyp(a.pos.x - z.pos.x, a.pos.z - z.pos.z) - hyp(b.pos.x - z.pos.x, b.pos.z - z.pos.z))[0];
+      if (z.stuck > 2.5 && prey) {
+        this.repathAround(z, T);
+        const s = this.routeTo(z, prey, T);
+        if (s && !s.hold && (s.x || s.z)) z.goal = { x: z.pos.x + s.x * 6, y: prey.pos.y, z: z.pos.z + s.z * 6 };
+        else z.goal = { x: prey.pos.x, y: prey.pos.y, z: prey.pos.z };
+        z.goalT = T + 3;
+      } else {
+        const spot = nav && typeof nav.good === 'function' ? nav.good(this.rnd) : (nav && nav.good && nav.good.length ? nav.good[Math.floor(this.rnd() * nav.good.length)] : null);
+        z.goal = spot ? { x: spot.x, y: spot.y, z: spot.z } : { x: (this.A.fog && this.A.fog.cx) || 0, y: z.pos.y, z: (this.A.fog && this.A.fog.cz) || 0 };
+        z.goalT = T + 4 + this.rnd() * 3;
+      }
       z.stuck = 0;
     }
     const dx = z.goal.x - z.pos.x, dz = z.goal.z - z.pos.z, d = Math.hypot(dx, dz);
@@ -845,7 +863,7 @@ export class InvasionCore {
       if (trick && trick.override) {
         mx = trick.hold ? 0 : (trick.mx || 0); mz = trick.hold ? 0 : (trick.mz || 0);
       } else if (st.fly) { mx = dx / dh; mz = dz / dh; z.aiState = 'fly'; }
-      else if (this.A.survival) {
+      else if (this.A.survival || z.detourUntil > T) {
         const nav = this.A.nav;
         const straight = !!(z.lastLos && nav && dh < 16 && Math.abs(dy) < 1.35 && dh > reach * 0.55 && nav.walk(z.pos, t.pos) >= 0);
         if (straight) { mx = dx / dh; mz = dz / dh; z.aiState = 'direct'; z.route = null; }
@@ -876,7 +894,8 @@ export class InvasionCore {
       if (z.feral) this.feralAct(z, st, t, dh, dx, dz, dy, T, trick);
       if (z.rushUntil > T && z.rushDir && !(trick && trick.override)) { mx = z.rushDir.x; mz = z.rushDir.z; }
       if (z.leapUntil > T && z.leapDir && !(trick && trick.hold)) { mx = z.leapDir.x; mz = z.leapDir.z; }
-      const faceX = this.A.survival && (mx || mz) ? mx : dx, faceZ = this.A.survival && (mx || mz) ? mz : dz;
+      const faceRoute = (this.A.survival || z.detourUntil > T) && (mx || mz);
+      const faceX = faceRoute ? mx : dx, faceZ = faceRoute ? mz : dz;
       const yawT = Math.atan2(faceX, faceZ); let dd = yawT - z.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); z.yaw += dd * Math.min(1, dt * tune.turn);
       if (z.slingHit && !(z.slingFly > T) && !(z.slingWind > T)) {
         const ram = z.slingHit, ramStun = z.slingStun || 0;
@@ -937,7 +956,7 @@ export class InvasionCore {
         const stepUp = nd && nd.y > z.pos.y + 0.4 && nd.y <= z.pos.y + 1.55 && hyp(nd.x - z.pos.x, nd.z - z.pos.z) < 2.4;
         const onto = t && dyP > 0.55 && dyP < 2.4 && dhP < 3.4;
         if (z.onGround && z.stuck > 0.28 && (stepUp || onto)) z.vel.y = 8.5;
-        if (z.stuck > 6) this.unstick(z);
+        if (z.stuck > 2.4) { this.repathAround(z, T); z.stuck = 0; }
       } else if (!st.fly) z.stuck = Math.max(0, z.stuck - dt * 0.5);
       if (st.fly && blocked && t) {
         const side = (z.id % 2 ? 1 : -1), dhb = hyp(t.pos.x - z.pos.x, t.pos.z - z.pos.z) || 1;
@@ -945,6 +964,52 @@ export class InvasionCore {
         z.vel.z += ((t.pos.x - z.pos.x) / dhb) * side * 2.4;
       }
     }
+    const chasing = !!(t && !stunned && !st.fly && !(trick && trick.hold) && ml > 0.2);
+    this.watchStuck(z, T, chasing);
+  }
+  // Parado no mesmo chão enquanto caça: o caminho atual está furado. Marca esses nós
+  // e pede outro até o jogador. Não teleporta.
+  watchStuck(z, T, chasing) {
+    if (!chasing) { z.watchAt = T; z.watchX = z.pos.x; z.watchZ = z.pos.z; return; }
+    if (z.watchAt == null) { z.watchAt = T; z.watchX = z.pos.x; z.watchZ = z.pos.z; return; }
+    if (T - z.watchAt < 2.6) return;
+    const moved = hyp(z.pos.x - z.watchX, z.pos.z - z.watchZ);
+    z.watchAt = T; z.watchX = z.pos.x; z.watchZ = z.pos.z;
+    if (moved >= 0.55) { z.stuckTries = Math.max(0, (z.stuckTries || 0) - 1); return; }
+    this.repathAround(z, T);
+  }
+  repathAround(z, T) {
+    if ((z.repathLock || 0) > T) return;
+    z.repathLock = T + 2.2;
+    if (!z.avoid) z.avoid = [];
+    z.avoid = z.avoid.filter((a) => a.until > T);
+    const here = this.standNode(z.pos.x, z.pos.y, z.pos.z);
+    const hereId = here ? here.id : -1;
+    const ban = (id) => {
+      if (id == null || id < 0 || id === hereId) return;
+      if (z.avoid.some((a) => a.id === id)) return;
+      z.avoid.push({ id, until: T + 9 });
+    };
+    if (z.node && z.node.id !== hereId) ban(z.node.id);
+    if (z.route && z.route[z.ri || 0]) ban(z.route[z.ri || 0].id);
+    if (z.route && z.route[(z.ri || 0) + 1]) ban(z.route[(z.ri || 0) + 1].id);
+    z.stuckTries = (z.stuckTries || 0) + 1;
+    if (z.stuckTries >= 3 && this.A.nav && this.A.nav.good) {
+      for (const n of this.A.nav.good) {
+        if (n.id === hereId) continue;
+        if (Math.hypot(n.x - z.pos.x, n.z - z.pos.z) < 1.8 && Math.abs(n.y - z.pos.y) < 0.8) ban(n.id);
+      }
+      z.stuckTries = 0;
+    }
+    if (z.avoid.length > 24) z.avoid.splice(0, z.avoid.length - 24);
+    z.avoidGen = (z.avoidGen || 0) + 1;
+    z.route = null; z.routeGen = -1; z.repathAt = 0; z.node = null; z.nodeAt = -9; z.stall = 0;
+    z.detourUntil = T + 9;
+  }
+  avoidIds(z, T) {
+    if (!z.avoid) return null;
+    z.avoid = z.avoid.filter((a) => a.until > T);
+    return z.avoid.length ? new Set(z.avoid.map((a) => a.id)) : null;
   }
   fallCfg() { const f = this.A.fall; return typeof f === 'function' ? f() : f; }
   fellOffMap(z) { return !!(z && z.alive && fellOff(this.fallCfg(), z.pos.y)); }
@@ -1026,9 +1091,16 @@ export class InvasionCore {
     if (!this.flow) this.buildFlow();
     const goal = z.routeGoal;
     const goalMoved = !goal || Math.hypot(goal.x - target.pos.x, goal.z - target.pos.z) > 2.4 || Math.abs(goal.y - target.pos.y) > 0.9;
-    const stale = z.routeGen !== this.flowGen || goalMoved || (z.stall || 0) > 0.9 || T >= (z.repathAt || 0);
+    const stale = z.routeGen !== this.flowGen || z.routeAvoid !== (z.avoidGen || 0) || goalMoved || (z.stall || 0) > 0.9 || T >= (z.repathAt || 0);
     if (stale) {
-      z.route = nav.path(z.pos, target.pos);
+      const avoid = this.avoidIds(z, T);
+      let route = nav.path(z.pos, target.pos, avoid);
+      if ((!route || !route.length) && z.avoid && z.avoid.length) {
+        z.avoid.shift();
+        route = nav.path(z.pos, target.pos, this.avoidIds(z, T));
+      }
+      z.route = route;
+      z.routeAvoid = z.avoidGen || 0;
       z.routeGoal = { x: target.pos.x, y: target.pos.y, z: target.pos.z };
       z.routeGen = this.flowGen;
       z.repathAt = T + 0.5;
@@ -1192,7 +1264,7 @@ export class InvasionCore {
         this.A.hurtPlayer(p, st.boom.dmg * (0.3 + 0.7 * k) * (z.dmgMul || 1), z);
       }
     }
-    if (z.id === this.bossId) { for (let i = 0; i < 2; i++) this.drop(z.pos, i === 0); this.dropAmmo(z.pos, 1.4); this.dropAmmo(z.pos, 1.4); return; }
+    if (z.id === this.bossId) { for (let i = 0; i < 2; i++) this.drop(z.pos, i === 0); this.dropAmmo(z.pos, 1.4); this.dropAmmo(z.pos, 1.4); this.offerHistoria(); return; }
     if (st && this.rnd() < st.drop) this.drop(z.pos, false);
     const ammoP = z.parts && z.parts.length ? Math.max(...z.parts.map((k) => INV_AMMO.zdrop[k] || 0)) : (INV_AMMO.zdrop[z.zt] || 0);
     if (this.rnd() < ammoP) this.dropAmmo(z.pos, 0.6);
@@ -1371,6 +1443,18 @@ export class InvasionCore {
   stepProjs(dt, T) {
     const P = this.A.P;
     this.projs = this.projs.filter((pr) => {
+      if (pr.kind === 'cough') {
+        const n = 3; let boom = false;
+        for (let i = 0; i < n && !boom; i++) {
+          const h = dt / n;
+          pr.vel.y -= SPIT_GRAV * 0.35 * h;
+          pr.pos.x += pr.vel.x * h; pr.pos.y += pr.vel.y * h; pr.pos.z += pr.vel.z * h;
+          if (T - pr.born > 2.4 || pr.pos.y <= P.groundAt(pr.pos.x, pr.pos.z, pr.pos.y + 0.4) + 0.08 || P.nadeBlocked(pr.pos.x, pr.pos.y, pr.pos.z)) boom = true;
+          for (const z of this.zombies) if (z.alive && d3({ x: z.pos.x, y: z.pos.y + z.size, z: z.pos.z }, pr.pos) < 0.7 * z.size + 0.35) boom = true;
+        }
+        if (!boom) return true;
+        this.coughBlast(pr); return false;
+      }
       if (pr.kind === 'pumpkin') {
         for (let s = 0; s < 2; s++) P.stepNade(pr.pos, pr.vel, dt / 2);
         let hit = T - pr.born >= POWERS.pumpkin.fuse;
@@ -1382,11 +1466,36 @@ export class InvasionCore {
       for (let i = 0; i < n && !boom; i++) {
         const h = dt / n; pr.vel.y -= SPIT_GRAV * h; pr.pos.x += pr.vel.x * h; pr.pos.y += pr.vel.y * h; pr.pos.z += pr.vel.z * h;
         if (T - pr.born > 4 || pr.pos.y <= P.groundAt(pr.pos.x, pr.pos.z, pr.pos.y + 0.3) + 0.05 || P.nadeBlocked(pr.pos.x, pr.pos.y, pr.pos.z)) boom = true;
-        for (const p of this.A.players()) if (p.alive && d3({ x: p.pos.x, y: p.pos.y + 1, z: p.pos.z }, pr.pos) < 0.9) boom = true;
+        if (!boom && this.A.story && this.A.story()) {
+          for (const p of this.A.players()) if (p && p.alive && plateBlocks(p, pr.pos, T)) { boom = 'plate'; break; }
+        }
+        for (const p of this.A.players()) {
+          if (boom === 'plate' || !p.alive || d3({ x: p.pos.x, y: p.pos.y + 1, z: p.pos.z }, pr.pos) >= 0.9) continue;
+          if (!pr.back && p.hReflectUntil > T) {
+            const src = pr.owner && pr.owner.pos;
+            if (src) {
+              const dx = src.x - pr.pos.x, dy = (src.y + 1.1) - pr.pos.y, dz = src.z - pr.pos.z, L = Math.hypot(dx, dy, dz) || 1;
+              const sp = Math.max(10, Math.hypot(pr.vel.x, pr.vel.y, pr.vel.z));
+              pr.vel.x = dx / L * sp; pr.vel.y = dy / L * sp; pr.vel.z = dz / L * sp;
+            } else { pr.vel.x *= -1; pr.vel.y *= -1; pr.vel.z *= -1; }
+            pr.back = p.id; boom = null; break;
+          }
+          if (pr.back === p.id) continue;
+          boom = true;
+        }
       }
       if (!boom) return true;
+      if (boom === 'plate') { this.A.emit(['zx', pr.id, [r2(pr.pos.x), r2(pr.pos.y), r2(pr.pos.z)], 0]); this.A.emit(['hbk', pr.id]); return false; }
       const S = pr.S, c = pr.pos, style = S.pee ? 2 : S.big ? 1 : 0;
       this.A.emit(['zx', pr.id, [r2(c.x), r2(c.y), r2(c.z)], style]);
+      if (pr.back) {
+        for (const z of this.zombies) {
+          if (!z.alive) continue;
+          const d = d3({ x: z.pos.x, y: z.pos.y + z.size, z: z.pos.z }, c); if (d > S.radius) continue;
+          this.A.hurtZombie(z, S.dmg * (0.45 + 0.55 * (1 - d / S.radius)), pr.owner, 'integra');
+        }
+        return false;
+      }
       for (const p of this.A.players()) {
         if (!p.alive) continue; const d = d3({ x: p.pos.x, y: p.pos.y + 0.9, z: p.pos.z }, c); if (d > S.radius) continue;
         this.A.hurtPlayer(p, S.dmg * (0.45 + 0.55 * (1 - d / S.radius)) * (pr.owner.dmgMul || 1), pr.owner);
@@ -1403,6 +1512,160 @@ export class InvasionCore {
       if (!isBoss(z.zt)) this.A.knock(z, { x: hx / L * W.knock * k, y: 6 * k, z: hz / L * W.knock * k });
       this.A.hurtZombie(z, W.dmg * (0.25 + 0.75 * k), pr.owner, 'pumpkin');
     }
+  }
+  coughBlast(pr) {
+    const c = pr.pos, R = pr.radius || 3.8;
+    this.A.emit(['zx', pr.id, [r2(c.x), r2(c.y), r2(c.z)], 3]);
+    for (const z of this.zombies) {
+      if (!z.alive) continue;
+      const d = d3({ x: z.pos.x, y: z.pos.y + z.size, z: z.pos.z }, c); if (d > R) continue;
+      const k = 1 - d / R, hx = z.pos.x - c.x, hz = z.pos.z - c.z, L = hyp(hx, hz) || 1;
+      if (!isBoss(z.zt)) this.A.knock(z, { x: hx / L * 5 * k, y: 3 * k, z: hz / L * 5 * k });
+      this.A.hurtZombie(z, (pr.dmg || 95) * (0.45 + 0.55 * k), pr.owner, 'tosse');
+    }
+  }
+  // Modo história: na morte do chefão, cada jogador recebe 3 upgrades diferentes dos que já tem.
+  offerHistoria() {
+    if (!this.A.story || !this.A.story()) return 0;
+    const taken = new Set(); let n = 0;
+    for (const p of this.A.players()) {
+      if (!p || p.bot || p.zt) continue;
+      const offer = rollOffer(p.hUps, this.rnd, taken);
+      if (!offer.length) continue;
+      taken.add(offer.slice().sort().join(','));
+      const shown = enqueueHistoria(p, offer);
+      if (shown) this.A.emit(['hoffer', p.id, ...shown.ids]);
+      n++;
+    }
+    return n;
+  }
+  // Wave sem chefão: 3 passivas. A mesma pode voltar até o ouro.
+  offerPassivas() {
+    if (!this.A.story || !this.A.story()) return 0;
+    const taken = new Set(); let n = 0;
+    for (const p of this.A.players()) {
+      if (!p || p.bot || p.zt) continue;
+      const offer = rollPass(p.hPass, this.rnd, taken);
+      if (!offer.length) continue;
+      taken.add(offer.slice().sort().join(','));
+      const shown = enqueueHistoria(p, { k: 'pass', ids: offer });
+      if (shown) this.A.emit(['hpoffer', p.id, ...shown.ids]);
+      n++;
+    }
+    return n;
+  }
+  showNextHistoria(p) {
+    const nxt = nextHistoria(p);
+    if (nxt) this.A.emit([nxt.k === 'pass' ? 'hpoffer' : 'hoffer', p.id, ...nxt.ids]);
+  }
+  pickHistoria(p, id) {
+    if (!this.A.story || !this.A.story() || !takeOffer(p, id)) return false;
+    this.A.emit(['hgot', p.id, id]);
+    this.showNextHistoria(p);
+    return true;
+  }
+  pickPassiva(p, id) {
+    if (!this.A.story || !this.A.story()) return false;
+    const lv = takePass(p, id);
+    if (!lv) return false;
+    if (id === 'porcao') {
+      const prev = p.hpCap > 100 ? p.hpCap : 100;
+      p.hpCap = passHp(lv);
+      p.hp = Math.min(p.hpCap, (p.hp || 0) + (p.hpCap - prev));
+    }
+    this.A.emit(['hpgot', p.id, id, lv, Math.round(p.hp || 0), p.hpCap | 0]);
+    this.showNextHistoria(p);
+    return true;
+  }
+  stepPassives(dt, T) {
+    if (!this.A.story || !this.A.story()) return;
+    this.embers = (this.embers || []).filter((em) => em.until > T);
+    for (const p of this.A.players()) {
+      if (!p || !p.alive || p.down || p.bot) continue;
+      const lv = passLv(p, 'brasa');
+      const st = brasaStats(lv);
+      if (!st || !p.pos) continue;
+      const x = p.pos.x, z = p.pos.z;
+      if (p._brx == null || Math.hypot(x - p._brx, z - p._brz) >= st.step) {
+        p._brx = x; p._brz = z;
+        const y = p.pos.y || 0;
+        this.embers.push({ x, y, z, until: T + st.life, r: st.r, dps: st.dps, owner: p });
+        this.A.emit(['hem', r2(x), r2(z), r2(y), r2(st.r), r2(st.life)]);
+      }
+    }
+    for (const em of this.embers) {
+      for (const z of this.zombies) {
+        if (!z.alive) continue;
+        if (hyp(z.pos.x - em.x, z.pos.z - em.z) > em.r) continue;
+        if (Math.abs((z.pos.y || 0) - em.y) > 2.4) continue;
+        this.A.hurtZombie(z, em.dps * dt * (isBoss(z.zt) ? 0.5 : 1), em.owner, 'brasa');
+      }
+    }
+  }
+  useHistoria(p, id, extra = {}) {
+    if (!this.A.story || !this.A.story() || !hReady(p, id, this.T)) return null;
+    const u = HUPS[id], T = this.T, A = this.A;
+    if (id === 'grok') {
+      const spot = historiaSpot(A.P, [this.hx, this.hz], extra.x, extra.z);
+      if (!spot) { if (A.deny) A.deny(p, 'O PC do Grok não achou chão aí'); return null; }
+      p.pos.x = spot.x; p.pos.y = spot.y; p.pos.z = spot.z;
+      if (p.vel) { p.vel.x = 0; p.vel.y = 0; p.vel.z = 0; }
+      p.onGround = true;
+    }
+    if (!p.hCd) p.hCd = {};
+    p.hCd[id] = T + u.cd;
+    p.hAnim = id; p.hAnimUntil = T + u.anim;
+    if (id === 'monster') p.hSpeedUntil = T + u.dur;
+    else if (id === 'torta') { A.heal(p, 50); p.hShield = 50; p.hShieldUntil = T + u.dur; }
+    else if (id === 'tosse') this.spitCough(p, extra);
+    else if (id === 'barriga') {
+      for (const z of this.zombies) {
+        if (!z.alive) continue;
+        const d = hyp(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+        if (d > 8 || Math.abs(z.pos.y - p.pos.y) > 3.2) continue;
+        z.stunUntil = Math.max(z.stunUntil || 0, T + 3);
+        if (z.vel) { z.vel.x = 0; z.vel.z = 0; }
+      }
+    } else if (id === 'bencao') {
+      for (const q of A.players()) {
+        if (!q || !q.alive || q.down) continue;
+        const d = hyp(q.pos.x - p.pos.x, q.pos.z - p.pos.z);
+        if (q !== p && (d > 8 || Math.abs((q.pos.y || 0) - p.pos.y) > 3.2)) continue;
+        q.hDmgUntil = T + u.dur;
+        if (q !== p) A.emit(['hbuff', q.id, 'dmg']);
+      }
+    } else if (id === 'cachaca') p.hImmuneUntil = T + u.dur;
+    else if (id === 'grokbot') p.hAimUntil = T + u.dur;
+    else if (id === 'integra') p.hReflectUntil = T + u.dur;
+    else if (id === 'cheers') {
+      const c = { x: p.pos.x, y: p.pos.y + 1, z: p.pos.z };
+      for (const z of this.zombies) {
+        if (!z.alive) continue;
+        const d = d3({ x: z.pos.x, y: z.pos.y + z.size, z: z.pos.z }, c); if (d > 8.5) continue;
+        const k = 1 - d / 8.5, hx = z.pos.x - c.x, hz = z.pos.z - c.z, L = hyp(hx, hz) || 1;
+        if (!isBoss(z.zt)) A.knock(z, { x: hx / L * 9 * k, y: 5 * k, z: hz / L * 9 * k });
+        A.hurtZombie(z, 1800 * (0.55 + 0.45 * k), p, 'cheers');
+      }
+      p.hp = 1; p.hShield = 0; p.hShieldUntil = 0; p.hRootUntil = T + 3;
+    } else if (id === 'joelhos') {
+      if (p.vel) p.vel.y = 20;
+      p.onGround = false; p.hHopUntil = T + 0.75;
+    } else if (id === 'cafe') {
+      const yaw = p.yaw || 0;
+      if (p.vel) { p.vel.x += -Math.sin(yaw) * 13; p.vel.z += -Math.cos(yaw) * 13; }
+      p.hDashUntil = T + 0.4;
+    }
+    A.emit(['hcast', p.id, id, Math.round(p.hp), Math.round(p.hShield || 0)]);
+    return id;
+  }
+  spitCough(p, extra) {
+    let dx = +extra.dx || 0, dy = +extra.dy || 0, dz = +extra.dz || 0, L = Math.hypot(dx, dy, dz);
+    if (!(L > 0.2)) { const a = this.A.aimOf(p); dx = a.d.x; dy = a.d.y; dz = a.d.z; L = Math.hypot(dx, dy, dz) || 1; }
+    const sp = 18, o = { x: p.pos.x + dx / L * 0.6, y: p.pos.y + 1.45, z: p.pos.z + dz / L * 0.6 };
+    const v = { x: dx / L * sp, y: dy / L * sp + 1.5, z: dz / L * sp };
+    const pr = { id: this.nid++, kind: 'cough', owner: p, pos: o, vel: v, born: this.T, dmg: 95, radius: 3.8 };
+    this.projs.push(pr);
+    this.A.emit(['zs', pr.id, 3, [r2(o.x), r2(o.y), r2(o.z)], [r2(v.x), r2(v.y), r2(v.z)]]);
   }
   // ---------- poderes ----------
   // usa o poder do slot (o cliente manda olho+direção; o host já validou). Devolve o tipo usado ou null.
@@ -1491,7 +1754,8 @@ export class InvasionCore {
       if (!r) { c.by = 0; c.prog = 0; return true; } // soltou, morreu, tomou dano ou saiu de perto: zera
       if (r.id !== c.by) { c.by = r.id; c.prog = 0; }
       busy.add(r); c.prog += dt; r._digHp = r.hp; r.digLock = true;
-      if (c.prog < INV_CROSS.hold) return true;
+      const dig = INV_CROSS.hold * (this.A.story && this.A.story() ? coveiroScale(r) : 1);
+      if (c.prog < dig) return true;
       p.out = false; p.lives = 0; // volta sem vida extra: morreu de novo, cruz de novo
       this.A.revive(p, { x: c.x, y: c.y, z: c.z }, { exact: true, hp: INV_CROSS.hp });
       this.A.emit(['cxr', p.id, r.id]);

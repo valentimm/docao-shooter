@@ -79,9 +79,10 @@ export function buildNav(o) {
     return list[0];
   }
   // A*
-  function path(from, to) {
+  function path(from, to, avoid) {
     const s = nearest(from.x, from.y, from.z), g = nearest(to.x, to.y, to.z); if (!s || !g) return null;
     if (s === g) return [g];
+    const blocked = (id) => !!(avoid && avoid.has && avoid.has(id) && id !== s.id && id !== g.id);
     const N = nodes.length, gs = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
     const heap = []; const push = (i, f) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
     const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
@@ -89,7 +90,7 @@ export function buildNav(o) {
     gs[s.id] = 0; push(s.id, h(s)); let it = 0;
     while (heap.length && it++ < 20000) {
       const [, i] = pop(); if (closed[i]) continue; closed[i] = 1; if (i === g.id) break;
-      for (const [j, c] of nodes[i].e) { if (!nodes[j].ok) continue; const ng = gs[i] + c; if (ng < gs[j]) { gs[j] = ng; prev[j] = i; push(j, ng + h(nodes[j])); } }
+      for (const [j, c] of nodes[i].e) { if (!nodes[j].ok || blocked(j)) continue; const ng = gs[i] + c; if (ng < gs[j]) { gs[j] = ng; prev[j] = i; push(j, ng + h(nodes[j])); } }
     }
     if (prev[g.id] < 0) return null;
     const out = []; for (let i = g.id; i >= 0; i = prev[i]) out.push(nodes[i]); out.reverse();

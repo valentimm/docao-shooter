@@ -183,11 +183,11 @@ export class Room extends DurableObject {
     if (url.pathname === '/init') {
       if (this.game) return new Response('exists', { status: 409 });
       const b = await req.json();
-      const mode = b.mode === 'arms' || b.mode === 'dom' || b.mode === 'treino' || b.mode === 'inv' || b.mode === 'bomb' || b.mode === 'comp' || b.mode === 'x1' || b.mode === 'survival' || b.mode === 'gf' ? b.mode : 'dm';
+      const mode = b.mode === 'arms' || b.mode === 'dom' || b.mode === 'treino' || b.mode === 'inv' || b.mode === 'historia' || b.mode === 'bomb' || b.mode === 'comp' || b.mode === 'x1' || b.mode === 'survival' || b.mode === 'gf' ? b.mode : 'dm';
       const side = b.side | 0;
       const gfN = b.format === '1v1' || b.format === 1 ? 1 : b.format === '3v3' || b.format === 3 ? 3 : b.format === '4v4' || b.format === 4 ? 4 : 2;
       const elo = mode === 'comp' || b.elo === true;
-      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: mode === 'x1' ? 'random' : (typeof b.map === 'string' ? b.map : 'arena'), max: mode === 'x1' ? 2 : (mode === 'comp' ? (side >= 3 && side <= 5 ? side : 5) * 2 : mode === 'gf' ? gfN * 2 : b.max), fillBots: mode === 'comp' || elo ? false : b.fillBots !== false, elo, mode, format: mode === 'gf' ? gfN : undefined, side, variant: b.variant === 'survival' ? 'survival' : '', survival: b.survival === true, surv: b.surv, time: b.time, weapons: b.weapons, powers: b.powers });
+      this.game = this.makeGame({ test: this.env.ALLOW_TEST === '1', code: b.code, map: mode === 'x1' ? 'random' : mode === 'historia' ? 'hotmilk-noite' : (typeof b.map === 'string' ? b.map : 'arena'), max: mode === 'x1' ? 2 : (mode === 'comp' ? (side >= 3 && side <= 5 ? side : 5) * 2 : mode === 'gf' ? gfN * 2 : b.max), fillBots: mode === 'comp' || elo ? false : b.fillBots !== false, elo, mode, format: mode === 'gf' ? gfN : undefined, side, variant: mode === 'historia' || b.variant === 'survival' ? 'survival' : '', survival: mode === 'historia' || b.survival === true, surv: mode === 'historia' ? 'survival' : b.surv, invDiff: mode === 'historia' ? 'normal' : b.invDiff, time: b.time, weapons: b.weapons, powers: b.powers });
       this.persist(); await this.ctx.storage.setAlarm(Date.now() + EMPTY_TTL); // ninguém entrou? some
       return new Response('ok');
     }

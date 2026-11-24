@@ -470,8 +470,12 @@ export function makeDropMesh(kind) {
 export function tickDrop(g, T, born) { g.userData.icon.position.y = 1.0 + Math.sin(T * 3 + born) * 0.15; g.userData.ring.rotation.z = T * 2; }
 
 // ---------------- projéteis e efeitos ----------------
-// style: 0 cuspe, 1 abóbora, 2 mijo (Barriguinha)
+// style: 0 cuspe, 1 abóbora, 2 mijo (Barriguinha), 3 tosse de energia
 export function makeSpitMesh(style) {
+  if (style === 3) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#b6ff4a')); m.scale.setScalar(0.34); g.add(m);
+    g.add(glowSprite('#d6ff6a', 1.5)); return g;
+  }
   if (style === 1 || style === true) { const p = makePumpkin(1.1, true); return p; }
   if (style === 2) {
     const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#d4c84a')); m.scale.setScalar(0.2); g.add(m);

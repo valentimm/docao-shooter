@@ -862,6 +862,32 @@ body.survmode #invBoss{top:188px}
 #invSlots .islot.on{border-color:rgba(255,154,58,.55)}
 #invSlots .islot.sel{border-color:#ff9a3a;box-shadow:0 0 12px rgba(255,140,40,.8);background:rgba(80,30,10,.6)}
 #invPowers .ikeys{font-size:11px;color:#eadcff;text-shadow:0 1px 0 #000}
+#hBar{position:absolute;right:18px;bottom:148px;z-index:6;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:auto;max-width:280px}
+#hPips{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:280px}
+#hPips span{background:rgba(28,16,12,.92);color:#fff6e8;border:2px solid #2a1410;border-radius:8px;padding:2px 6px;font:700 11px var(--font)}
+#hPips span.rank-1,#hOfferCards button small.rank-1{color:#e7a15a}
+#hPips span.rank-2,#hOfferCards button small.rank-2{color:#d5dbe3}
+#hPips span.rank-3,#hOfferCards button small.rank-3{color:#F7A531}
+#hSlots{display:flex;flex-direction:column;gap:6px}
+#hBar button{pointer-events:auto;text-align:left;background:rgba(28,16,12,.92);color:#fff6e8;border:3px solid #2a1410;border-radius:12px;padding:6px 10px;box-shadow:0 3px 0 #2a1410;cursor:pointer;font:700 13px/1.15 var(--font)}
+#hBar button b{display:block}
+#hBar button small{color:#ffd27a;font-size:11px}
+#hBar button.on{border-color:#7DF9FF}
+#hBar button.cd{opacity:.55}
+#hBar .hkey{font-size:11px;color:#eadcff;text-shadow:0 1px 0 #000}
+#hShield{background:#ffd0e4;color:#2a1410;border-radius:8px;padding:2px 8px;font:800 12px var(--font)}
+#hOffer,#hMap{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(12,8,6,.55);overflow:auto}
+#hOffer .hcard,#hMap .hcard{background:rgba(24,16,12,.94);border:4px solid #2a1410;border-radius:18px;padding:18px;box-shadow:0 8px 0 #2a1410;max-width:920px;max-height:calc(100vh - 24px);overflow:auto}
+#hOffer h3,#hMap h3{margin:0 0 6px;color:#F7A531;font-size:28px}
+#hOffer p,#hMap p{margin:0 0 12px;color:#ffe7c2}
+#hOfferCards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+#hOfferCards button{width:250px;text-align:left;background:#fff6e8;color:#2a1410;border:3px solid #2a1410;border-radius:14px;padding:12px;cursor:pointer;font:700 15px/1.25 var(--font)}
+#hOfferCards button i{display:inline-block;background:#F7A531;border-radius:6px;padding:0 6px;margin-right:6px}
+#hOfferCards button span,#hOfferCards button small{display:block;font-weight:600}
+#hOfferCards button small{color:#8a5a20;margin-top:6px}
+#hMap canvas{width:min(720px,86vw);height:auto;background:#1a120c;border:3px solid #2a1410;border-radius:12px;cursor:crosshair;display:block}
+#hMap .hrow{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+#hMap button{background:#F7A531;color:#2a1410;border:3px solid #2a1410;border-radius:10px;padding:6px 12px;font:800 14px var(--font);cursor:pointer}
 #invPowers kbd,#iLoad kbd{background:#ff9a3a;color:#2a1410;border-radius:4px;padding:0 4px;font-weight:bold;font-size:10px}
 #invFogArrow{position:absolute;top:40%;left:50%;transform:translateX(-50%);text-align:center;color:#f0d8ff;font-weight:bold;text-shadow:0 2px 0 #000;pointer-events:none}
 #invFogArrow i{display:block;font-style:normal;font-size:44px;color:#c070ff;transition:transform .1s}

@@ -223,7 +223,7 @@ function holdOk(h, t, losClear) {
 
 // humans: jogadores da partida (vivos ou não). losClear(a, b) → bool, ou null.
 // mem.allDownAt é o relógio de "ninguém de pé" (não encurta o sangramento de um solo).
-export function stepDowned(humans, dt, T, losClear, mem = { allDownAt: 0 }) {
+export function stepDowned(humans, dt, T, losClear, mem = { allDownAt: 0 }, holdOf = null) {
   const dtS = Math.max(0, dt || 0);
   const list = humans || [];
   const standing = [];
@@ -237,12 +237,16 @@ export function stepDowned(humans, dt, T, losClear, mem = { allDownAt: 0 }) {
     if (!mem.allDownAt) mem.allDownAt = T;
   } else mem.allDownAt = 0;
 
+  const holdFor = (h) => {
+    if (typeof holdOf === 'function') { const n = +holdOf(h); if (n > 0) return n; }
+    return DOWN.hold;
+  };
   const busy = new Set();
   for (const t of downed) {
     const h = t.revBy ? list.find((p) => p && p.id === t.revBy) : null;
     if (h && holdOk(h, t, losClear)) {
       busy.add(h.id);
-      t.revP = Math.min(1, (t.revP || 0) + dtS / DOWN.hold);
+      t.revP = Math.min(1, (t.revP || 0) + dtS / holdFor(h));
     } else {
       t.revBy = 0;
       t.revP = 0;
@@ -259,7 +263,7 @@ export function stepDowned(humans, dt, T, losClear, mem = { allDownAt: 0 }) {
     }
     if (!best) continue;
     best.revBy = h.id;
-    best.revP = Math.min(1, dtS / DOWN.hold);
+    best.revP = Math.min(1, dtS / holdFor(h));
     busy.add(h.id);
   }
   const up = [];
