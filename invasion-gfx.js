@@ -281,8 +281,10 @@ export function animateZombie(m, z, dt, T, flashing) {
   if (tears) for (const tear of tears) { tear.visible = pose === 'cry'; tear.position.y = 1.62 - ((T * 1.6 + tear.position.x) % 1) * 0.4; }
   const wings = m.group.userData.wings;
   if (wings) { const f = Math.sin(T * (7 + Math.min(8, speed * 2))) * 0.75; wings[0].rotation.z = -0.45 + f; wings[1].rotation.z = 0.45 - f; }
-  for (const mat of m.flashMats) mat.emissive.set(flashing ? 0x992222 : 0x000000);
-  m.eyeM.color.set(T % 0.9 < 0.06 ? '#ffffff' : (ZCOL[m.type] || ZCOL.walker).eye); // pisca
+  const eye = z.feral ? '#ff1c14' : (ZCOL[m.type] || ZCOL.walker).eye;
+  for (const mat of m.flashMats) mat.emissive.set(flashing ? 0x992222 : (z.feral ? (T % 0.4 < 0.08 ? 0x6a1010 : 0x2a0808) : 0x000000));
+  if (z.feral && pose !== 'cry') { m.body.rotation.x += 0.14; m.arms[0].rotation.x -= 0.22; m.arms[1].rotation.x -= 0.22; }
+  m.eyeM.color.set(T % (z.feral ? 0.45 : 0.9) < 0.06 ? '#ffffff' : eye); // pisca; feroz fica com o olho em brasa
   m.group.traverse((o) => { if (o.userData.blink) o.visible = T % 0.6 < 0.3; });
 }
 // morte: desaba e afunda; devolve true quando já pode sumir
@@ -402,6 +404,38 @@ function iconTex(k) {
   const t = canvasTex(128, 128, (x) => { const gr = x.createRadialGradient(64, 64, 10, 64, 64, 62); gr.addColorStop(0, powerColor(k) + 'cc'); gr.addColorStop(1, powerColor(k) + '00'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); x.font = '72px serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(k === 'ammo' ? '📦' : POWERS[k].icon, 64, 70); });
   iconTexCache.set(k, t); return t;
 }
+function graveNameSprite(label) {
+  const text = String(label || 'Aliado');
+  const font = 'bold 34px Fredoka, "Trebuchet MS", Arial, sans-serif';
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = font;
+  const w = Math.max(256, Math.ceil(probe.measureText(text).width) + 36), h = 64;
+  const tex = canvasTex(w, h, (x) => {
+    x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.lineWidth = 7; x.strokeStyle = '#2a1410'; x.strokeText(text, w / 2, h / 2);
+    x.fillStyle = '#ffe08a'; x.fillText(text, w / 2, h / 2);
+  });
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(w / h * 0.42, 0.42, 1); sp.position.y = 1.62;
+  return sp;
+}
+// Cruz de madeira fincada onde a pessoa perdeu a última vida, com o nome em cima.
+export function makeGraveMark(label) {
+  const g = new THREE.Group();
+  const wood = toon('#6b3e24'), iron = toon('#8d949c');
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.28, 0.12), wood);
+  outline(post, 0.008); post.position.y = 0.64; post.castShadow = true; g.add(post);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.12, 0.11), wood);
+  outline(bar, 0.008); bar.position.y = 1.02; bar.castShadow = true; g.add(bar);
+  const nail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.14), iron);
+  nail.position.set(0, 1.02, 0); g.add(nail);
+  const mound = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 8), toon('#6a4a2c'));
+  mound.scale.set(1.15, 0.28, 0.85); mound.position.y = 0.06; g.add(mound);
+  g.add(graveNameSprite(label));
+  g.userData.label = label || '';
+  return g;
+}
+
 export function makeDropMesh(kind) {
   const g = new THREE.Group();
   const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTex(kind), depthWrite: false, transparent: true, fog: false })); icon.scale.setScalar(1.0); icon.position.y = 1.0; g.add(icon);

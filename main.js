@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
+import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, poseDig, clearDigPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
 import { emptyFun, notePodiumKill, notePodiumHurt, notePodiumDeath, awardPodium } from './shared/podium.js';
@@ -30,13 +30,13 @@ import { makeTablet, poseTablet, makeLaptop, poseLaptop, makeRadio, poseRadio } 
 import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap, BOMB_MAP } from './maps.js';
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES } from './shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, GRAVE, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES, WAVE_THEMES } from './shared/invasion.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
 import { createNightAmbience } from './night-ambience.js';
 import { createInvMusic } from './invasion-music.js';
-import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook } from './invasion-gfx.js';
+import { makeZombie, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook, makeGraveMark } from './invasion-gfx.js';
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
 import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
 import { breezeMap, buildBreezeWorld, breezeMapReady, prepareBreezeMap } from './breeze-map.js';
@@ -913,6 +913,7 @@ function pickSpawn(e) {
     const pool = list.length ? list : SPAWNS;
     return pool[(Math.random() * pool.length) | 0];
   }
+  if (invMode() && e.isPlayer && e.graveHere) { const g = e.graveHere; e.graveHere = null; e.reviveAt = null; return new V3(g.x, groundAt(g.x, g.z, (g.y || 0) + 0.3), g.z); } // desenterrado: nasce na cruz
   if (invMode() && inv && e.isPlayer) { const near = e.reviveAt || null; e.reviveAt = null; const q = e.spawnedOnce ? inv.spawnPoint(e, near) : null; e.spawnedOnce = true; if (q) return new V3(q.x, q.y, q.z); } // Invasão: renasce perto de um aliado, dentro da área segura
   const list = spawnList(bombS, bombL, e.team, SPAWNS); // Bomba: spawn do lado do time
   let best = list[0], bd = -Infinity;
@@ -5822,6 +5823,9 @@ function updatePlayer(dt) {
   if (!guiding && (keys.KeyW || keys.ArrowUp)) wish.add(fwd); if (!guiding && (keys.KeyS || keys.ArrowDown)) wish.sub(fwd);
   if (!guiding && (keys.KeyD || keys.ArrowRight)) wish.add(right); if (!guiding && (keys.KeyA || keys.ArrowLeft)) wish.sub(right);
   p.useHold = !!(keys[BOMB.KEY] && p.alive && !emote.on); if (bombLock(p) || gfLock(p)) wish.set(0, 0, 0); // Bomba e Gunfight: parado na preparação
+  const graveSpot = invMode() && p.alive && !p.down ? nearestGrave(p) : null;
+  p.graveHold = !!(graveSpot && keys[GRAVE.key] && !emote.on);
+  if (p.graveHold) { wish.set(0, 0, 0); const dx = graveSpot.grave.x - p.pos.x, dz = graveSpot.grave.z - p.pos.z; if (dx * dx + dz * dz > 0.04) p.yaw = Math.atan2(-dx, -dz); } // cavando: olha pra cruz e não anda
   if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * (p.down ? DOWNED.speed : 1) * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime && !(p.flashUntil > gameTime) ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // caído rasteja. Em pé: faca corre; sabre anda normal; agachado anda mais devagar. Flashbang não deixa lento.
   if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(p.propLock ? 0 : HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
   if (!online) { const wasJet = !!p.jet, wasBig = !!p.big; stepCheats(p, gameTime, p.onGround); if (wasJet && !p.jet) flashMsg(p.jetGlide ? 'Jetpack acabou · descendo devagar' : 'Jetpack acabou'); if (wasBig && !p.big) flashMsg('Voltou ao tamanho normal'); }
@@ -5831,7 +5835,7 @@ function updatePlayer(dt) {
   const acc = p.onGround ? 14 : 4;
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
   jetVertical(p, !!(spaceHold && !chatTyping() && !guiding && !bombLock(p) && !gfLock(p)), dt);
-  if (!p.fly && !p.down && !p.tank && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !(hideS && p.propLock)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
+  if (!p.fly && !p.down && !p.tank && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !p.graveHold && !(hideS && p.propLock)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
   moveEntity(p, dt);
   checkFall(p); if (!p.alive) return;
@@ -5861,6 +5865,7 @@ function updatePlayer(dt) {
   if (guiding) { updatePredator(dt); if (predator) posePredatorCam(); return; }
   if (radioCall) { if (gameTime >= radioCall.at) finishRadioCall(); else return; } // chamando no rádio: sem tiro até terminar
   if (p.tank) { fireTank(p); return; }
+  if (p.graveHold) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; return; } // pá na mão: sem tiro até soltar
   if (emote.on) { // dança: anda e olha, mas a arma não dispara até a animação acabar
     if (gameTime >= emote.until) stopEmote();
     else {
@@ -6137,6 +6142,20 @@ function animateBot(b, dt) { // visual: andar, flutuar, piscar ao levar dano, bo
     b.downBlend = 0; b.wasPose = '';
     m.group.rotation.order = 'XYZ'; m.group.rotation.x = 0; m.group.rotation.z = 0; m.group.scale.set(1, 1, 1);
   }
+  if (b.digging && b.alive) {
+    m.group.scale.set(1, 1, 1);
+    m.group.position.set(b.pos.x, b.pos.y, b.pos.z);
+    m.group.rotation.order = 'XYZ';
+    m.group.rotation.set(0, b.yaw, 0);
+    const hit = poseDig(m, gameTime);
+    if (hit && gameTime > (b.digThud || 0)) { b.digThud = gameTime + 0.7; puff(new V3(b.pos.x, b.pos.y + 0.05, b.pos.z), 0x8a6840); noise(0.06, 220, 0.16 * distVol(b.pos)); }
+    b.wasDig = true; b.wasPose = 'dig';
+    const flashing = gameTime < b.flashUntil;
+    for (const mat of m.flashMats) mat.emissive.copy(flashing ? FLASH : mat.userData.baseEmissive);
+    b.bubble.visible = false;
+    return;
+  }
+  if (b.wasDig) { clearDigPose(m); b.wasDig = false; if (b.wasPose === 'dig') b.wasPose = ''; }
   const speed = Math.hypot(b.vel.x, b.vel.z); b.walk += dt * speed * 2.2; b.travel = (b.travel || 0) + speed * dt;
   if (b.float) { // Fantasminha: flutua de leve e deixa um rastro fraquinho
     m.group.position.set(b.pos.x, b.pos.y + 0.14 + Math.sin(gameTime * 2.6 + b.floatPh) * 0.07, b.pos.z);
@@ -7819,7 +7838,7 @@ document.addEventListener('keydown', (e) => {
   if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   if (e.code !== 'Space' || !e.repeat) keys[e.code] = true;
   if (e.code === 'Space') spaceHold = true;
-  if (state === 'playing' && survivalMode() && e.code === 'KeyE' && !e.repeat && player && player.alive) { e.preventDefault(); tryBuyDoor(); return; }
+  if (state === 'playing' && survivalMode() && e.code === 'KeyE' && !e.repeat && player && player.alive && !nearestGrave(player)) { e.preventDefault(); tryBuyDoor(); return; }
   if (state === 'playing' && player && invKey(e)) { e.preventDefault(); return; } // Invasão: G poder · X troca · B painel de armas na pausa
   if (state === 'playing' && player && gunner) { // no Chopper: 1/2 trocam a arma dele, F sai
     if (e.code === 'Digit1') setGunnerMode('mini');
@@ -7889,6 +7908,7 @@ function loop() {
     gameTime += dt;
     syncNevasca(gameTime);
     if (exploreMode() && player && player.alive) refillExplore(player);
+    markDiggers();
     if (state === 'playing') updatePlayer(dt); else if (player.alive) { stepCrouch(player, 0, dt, PHYS); player.vel.x = player.vel.z = 0; moveEntity(player, dt); }
     if (emote.on && state === 'playing') stepEmote(dt);
     if (online) netTick(dt);
@@ -7897,7 +7917,7 @@ function loop() {
     if (gasSim && !online) stepGasLocal();
     if (gasView) gasView.update(dt, gameTime, player ? player.pos : null);
     updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateGifts(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateDeathSkinFx(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode() && !compOn() && !gfLive()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
-    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateGfOffline(dt); stepGroundGuns(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud();
+    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateGfOffline(dt); stepGroundGuns(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud(); updateGraveView(); paintGraveHud();
     try { flushSleigh(); } catch (e) { /* trenó espera o contexto */ }
     if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; queueSleigh(); });
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
@@ -8786,7 +8806,7 @@ function refreshMenuMode() {
   const playTitle = inv ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
   const playHint = surv ? 'PAPADA EM TODOS OS MAPAS' : inv ? 'CLÁSSICA · 20 WAVES' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : comp ? 'BOTIJÃO · ECONOMIA · PRIMEIRO A 13' : v === GF_MODE ? (GF_LIVE ? 'ROUNDS · PRIMEIRO A 6' : 'EM BREVE · CAI NO MATA-MATA') : 'SOLO · CONTRA BOTS';
   $('playBtn').innerHTML = `<span class="play-title">${playTitle}</span><small>${playHint}</small>`;
-  $('menuRules').textContent = inv ? (surv ? 'Survival · a Papada fica em todos os mapas. A loja completa e as portas continuam na HOTMILK à Noite.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada.') : MENU_RULES[v];
+  $('menuRules').textContent = inv ? (surv ? 'Survival · a Papada fica em todos os mapas. A loja completa e as portas continuam na HOTMILK à Noite.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada. Algumas waves vêm com tema. Nas últimas entram zumbis ferozes. Sem vidas, a cruz fica no chão: segure E para desenterrar.') : MENU_RULES[v];
   teamButtons($('menuTeamBtns'), menuTeam, (t) => { menuTeam = t; refreshMenuMode(); });
   syncLoadoutUi();
 }
@@ -8808,7 +8828,7 @@ function paintSurvNote() {
   const surv = isSurvival($('survSel').value);
   el.textContent = surv
     ? 'Survival: a Papada aparece em todos os mapas. Nasce de pistola e faca. Na HOTMILK à Noite, F também usa a barraca e a parede, e E compra a porta.'
-    : 'Invasão clássica: 20 waves, 2 vidas, poderes no chão (G usa, X troca) e a Névoa Assombrada fecha o mapa. Os mapas da Invasão continuam valendo, inclusive o Rodízio.';
+    : 'Invasão clássica: 20 waves, 2 vidas, poderes no chão (G usa, X troca) e a Névoa Assombrada fecha o mapa. Algumas waves vêm com tema. Da wave 13 em diante entram zumbis ferozes. Sem vidas, a cruz fica no chão e um aliado segura E por 5 s para desenterrar. Os mapas da Invasão continuam valendo, inclusive o Rodízio.';
 }
 $('survSel').onchange = () => { try { localStorage.setItem('docao.surv', $('survSel').value); } catch (e) { /* */ } refreshMenuMode(); syncMapForMode(); };
 try { const s = localStorage.getItem('docao.surv'); if (s === 'survival' || s === 'padrao') $('survSel').value = s; } catch (e) { /* */ }
@@ -8899,7 +8919,7 @@ function updateRespawnBtn(p) {
   let txt = 'Aguarde…';
   let sub = 'Espaço';
   if (armsMode()) { txt = rsSent ? 'Nascendo…' : ok ? 'Renascer' : `Renascer em ${secs}s`; sub = 'Espaço'; }
-  else if (invMeOut()) { txt = 'Sem vidas'; sub = 'Espere a Ressurreição'; }
+  else if (invMeOut()) { txt = 'Sem vidas'; sub = 'A cruz ficou no chão · ou a Ressurreição'; }
   else if (rsSent) txt = 'Nascendo…';
   else if (ok) txt = 'Nasce';
   else if (Number.isFinite(p.respawnAt)) txt = `Nascer em ${secs}s`;
@@ -9223,7 +9243,7 @@ $('joinCode').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.ke
 function remoteEnt(info) {
   const o = online; if (info.id === o.myId || o.ents.has(info.id)) return o.ents.get(info.id);
   if (info.zt) { // Invasão: zumbi do servidor
-    const z = makeZombieEnt(info.zt, info.name); Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0, pose: ZPOSE[info.zp] || '' });
+    const z = makeZombieEnt(info.zt, info.name); Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0, pose: ZPOSE[info.zp] || '', feral: !!info.fr });
     z.model.group.visible = false; o.ents.set(info.id, z); entities.push(z); return z;
   }
   const e = makeEntity(info.name, false, info.skin, info.tag || '#ffffff');
@@ -9291,6 +9311,7 @@ function netTick(dt) {
   if (p.alive) { msg.p = v3a(p.pos); msg.v = v3a(p.vel); }
   if (survOn() && keys[DOWNED.key] && p.alive && !p.down) msg.rh = 1;
   if (bombS && p.useHold) msg.bk = 1; // Bomba: segurando E
+  if (invMode() && p.graveHold) msg.gh = 1; // Invasão: segurando E na cruz
   if (o.evq.length) { msg.ev = o.evq; o.evq = []; }
   o.net.send(msg);
   $('netPing').textContent = o.net.ping + ' ms';
@@ -9812,9 +9833,14 @@ function voiceZombie(z) {
   if (z.voiceAt == null) z.voiceAt = gameTime + ((z.id || 0) % 8) * 0.45;
   if (gameTime < z.voiceAt) return;
   const d = z.pos.distanceTo(player.pos);
-  if (d > 28) { z.voiceAt = gameTime + 0.7; return; }
-  const vol = distVol(z.pos) * (isBoss(z.zt) ? 0.72 : 0.48);
-  if (invasionSfx.voice(z.zt, vol, 'idle')) z.voiceAt = gameTime + (isBoss(z.zt) ? 2.1 : 3.2) + Math.random() * 2.2;
+  const crying = z.zt === 'cry' && z.pose === 'cry';
+  const bossClose = isBoss(z.zt) && d < 16;
+  if (d > (crying ? 40 : 28)) { z.voiceAt = gameTime + 0.7; return; }
+  let kind = 'idle', vol = distVol(z.pos) * (isBoss(z.zt) ? 0.72 : 0.48);
+  let wait = (isBoss(z.zt) ? 2.1 : 3.2) + Math.random() * 2.2;
+  if (crying) { kind = 'cry'; vol = distVol(z.pos) * 0.95; wait = 1.3 + Math.random() * 0.85; }
+  else if (bossClose) { kind = 'near'; vol = distVol(z.pos) * (d < 7 ? 1 : 0.84); wait = (d < 7 ? 1.1 : 1.75) + Math.random() * 0.65; }
+  if (invasionSfx.voice(z.zt, vol, kind)) z.voiceAt = gameTime + wait;
   else z.voiceAt = gameTime + 0.35;
 }
 function killZombieLocal(t, a, wIdx, head, back) {
@@ -9865,7 +9891,14 @@ function invEvent(ev) {
   if (k === 'wv') {
     const [, ph, w, x] = ev;
     if (ph === 0) invBanner('🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'troque de arma no painel (B)'}`);
-    else if (ph === 1) { const bossName = x > 0 && ZOMBIES[BOSS_TYPES[x - 1]] ? ZOMBIES[BOSS_TYPES[x - 1]].name : ''; invBanner(`WAVE ${w}/${INV.WAVES}`, bossName ? `🎃 ${bossName} chegou!` : w === 1 ? 'Os zumbis estão vindo da névoa!' : 'A névoa está fechando…', !!bossName); sfx.incoming(0.9); invClosePick(); }
+    else if (ph === 1) {
+      const bossName = x > 0 && ZOMBIES[BOSS_TYPES[x - 1]] ? ZOMBIES[BOSS_TYPES[x - 1]].name : '';
+      const theme = ev[6] > 0 ? WAVE_THEMES[ev[6] - 1] : null;
+      const late = w >= 13 && !bossName && !theme;
+      const title = theme ? theme.name : `WAVE ${w}/${INV.WAVES}`;
+      const sub = theme ? (bossName ? `🎃 ${bossName} chegou · ${theme.blurb}` : theme.blurb) : bossName ? `🎃 ${bossName} chegou!` : w === 1 ? 'Os zumbis estão vindo da névoa!' : late ? 'Zumbis ferozes saíram da névoa.' : 'A névoa está fechando…';
+      invBanner(title, sub, !!(bossName || theme)); sfx.incoming(0.9); invClosePick();
+    }
     else if (ph === 2) { invBanner(`WAVE ${w} LIMPA!`, `Pausa de ${survOn() ? getSurvivalWaveTuning(w).gap : INV.BREAK} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}`); sfx.pickup(); if (player && player.alive) invOpenPick(); }
     else if (ph === 3) invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${INV.WAVES} waves` : `Sobreviveu até a wave ${w}`, true);
   } else if (k === 'za') { const z = ent(ev[1]); if (z) { z.atkT = gameTime; z.voiceAt = gameTime + 0.7; if (player && z.pos.distanceTo(player.pos) < 25) invasionSfx.voice(z.zt, distVol(z.pos) * 0.9, 'bite'); } }
@@ -9875,7 +9908,7 @@ function invEvent(ev) {
     const z = ent(ev[1]); const at = a3v(ev[2]); const rad = ev[3] > 0 ? +ev[3] : 11; const style = ev[4] | 0;
     const col = ['#a8c8ff', '#ff8a1a', '#c8b830', '#ff4ad0'][style] || '#a8c8ff';
     invRing(at, col, Math.min(1.2, rad * 0.18), rad, 0.55);
-    if (style === 0) { if (!(z && invasionSfx.voice(z.zt, 0.85 * distVol(at), 'howl'))) tone('sawtooth', 90, 280, 0.35, 0.2 * distVol(at)); }
+    if (style === 0) { const kind = z && z.zt === 'cry' ? 'cry' : 'howl'; if (!(z && invasionSfx.voice(z.zt, (z && z.zt === 'cry' ? 1 : 0.85) * distVol(at), kind))) tone('sawtooth', 90, 280, 0.35, 0.2 * distVol(at)); }
     else { noise(0.22, style === 2 ? 160 : style === 1 ? 80 : 220, 0.28 * distVol(at), 'lowpass'); if (style === 1) blastFx(at, Math.min(rad, 4.2)); }
   }
   else if (k === 'zf') { const z = entOf(ev[1]); if (z && z.model) { z.phaseUntil = ev[2] ? gameTime + 3 : 0; setGhostLook(z.model, !!ev[2] || z.zt === 'bossGhost'); } }
@@ -9887,6 +9920,7 @@ function invEvent(ev) {
     else if (pid && isMe(pid)) { sfx.pickup(); flashMsg(`${POWERS[POWER_KEYS[ki]].icon} ${POWERS[POWER_KEYS[ki]].name}! · ${KEYS.useLabel} usa`); }
     else if (pid) { const e = online ? entOf(pid) : null; if (e && POWER_KEYS[ki] === 'revive') flashMsg(`✨ ${e.name} pegou uma Ressurreição`); } }
   else if (k === 'pw') invPowerFx(ev);
+  else if (k === 'gd') { const who = online ? entOf(ev[1]) : entities.find((e) => e.id === ev[1]); tone('triangle', 420, 880, 0.45, 0.2); flashMsg(`${who ? who.name : 'Aliado'} saiu da cova`); }
   else if (k === 'pb') { const [, id, c] = ev; invKillProj(id); const at = a3v(c); blastFx(at, POWERS.pumpkin.radius); invRing(at, '#ff8a1a', 0.5, POWERS.pumpkin.radius, 0.45); }
 }
 function invKillProj(id) { const p = invGfx.projs.get(id); if (p) { scene.remove(p.m); invGfx.projs.delete(id); } }
@@ -9928,10 +9962,100 @@ function invApplyLook(on) {
   if (on) { applyHalloweenPalette(scene, hemi, sun, currentMap); fpHemi.intensity = 1.2; invGfx.hal = buildHalloween(currentMap, nav, groundAt); scene.add(invGfx.hal); }
   else { applyPalette(scene, hemi, sun, currentMap); fpHemi.intensity = currentMap.palette.stars ? 1.25 : 1.8; }
   document.body.classList.toggle('invmode', !!on); invMusicOn(!!on);
-  ['invhud', 'invPowers'].forEach((id) => $(id).classList.toggle('hidden', !on)); if (!on) document.body.classList.remove('invout', 'ghostfx'); if (!on) { $('invBoss').classList.add('hidden'); $('invOut').classList.add('hidden'); $('invBanner').classList.add('hidden'); invBannerT = 0; $('fogVeil').style.opacity = '0'; invClosePick(); const sp = $('sPrompt'); if (sp) sp.classList.add('hidden'); for (const id of ['papMark', 'boxMark', 'papCard']) { const m = $(id); if (m) m.classList.add('hidden'); } $('invWaveN').textContent = 'WAVE 1/20'; $('invWaveSub').textContent = ''; const msg = $('centermsg'); if (msg) msg.style.top = ''; }
+  ['invhud', 'invPowers'].forEach((id) => $(id).classList.toggle('hidden', !on)); if (!on) document.body.classList.remove('invout', 'ghostfx'); if (!on) { $('invBoss').classList.add('hidden'); $('invOut').classList.add('hidden'); $('invBanner').classList.add('hidden'); const gh = $('graveHud'); if (gh) gh.classList.add('hidden'); clearGraveMarks(); invBannerT = 0; $('fogVeil').style.opacity = '0'; invClosePick(); const sp = $('sPrompt'); if (sp) sp.classList.add('hidden'); for (const id of ['papMark', 'boxMark', 'papCard']) { const m = $(id); if (m) m.classList.add('hidden'); } $('invWaveN').textContent = 'WAVE 1/20'; $('invWaveSub').textContent = ''; const msg = $('centermsg'); if (msg) msg.style.top = ''; }
   invGfx.inv = []; invGfx.sel = 0; invRenderSlots();
 }
 // ---------- por quadro ----------
+let digCut = false, digThud = 0, digView = false, digWas = false;
+function graveName(id) {
+  const e = online ? entOf(id) : entities.find((x) => x.id === id);
+  return (e && e.name) || 'Aliado';
+}
+function graveRows() {
+  const v = invMode() ? invView() : null;
+  if (!v || !v.lives) return [];
+  const rows = [];
+  for (const [id, s] of v.lives) if (s.out && s.grave) rows.push({ id, grave: s.grave, revP: s.revP || 0, revBy: s.revBy || 0, name: graveName(id) });
+  return rows;
+}
+function nearestGrave(p) {
+  if (!p || !p.pos || !invMode()) return null;
+  let best = null, bd = Infinity;
+  for (const row of graveRows()) {
+    const dx = p.pos.x - row.grave.x, dy = (p.pos.y || 0) - (row.grave.y || 0), dz = p.pos.z - row.grave.z;
+    const d = Math.hypot(dx, dz);
+    if (d > GRAVE.range || Math.abs(dy) > GRAVE.reachY || d >= bd) continue;
+    bd = d; best = row;
+  }
+  return best;
+}
+function markDiggers() {
+  const ids = new Set();
+  for (const row of graveRows()) if (row.revBy && row.revP > 0) ids.add(row.revBy);
+  for (const e of entities) if (e && !e.isPlayer) e.digging = ids.has(e.id);
+}
+function syncGraveMarks(v) {
+  if (!invGfx.graves) invGfx.graves = new Map();
+  const keep = new Set();
+  if (v && invMode()) for (const [id, s] of v.lives) {
+    if (!s.out || !s.grave) continue;
+    keep.add(id);
+    let g = invGfx.graves.get(id);
+    const label = graveName(id);
+    if (!g || g.userData.label !== label) {
+      if (g) scene.remove(g);
+      g = makeGraveMark(label); scene.add(g); invGfx.graves.set(id, g);
+    }
+    g.position.set(s.grave.x, s.grave.y || 0, s.grave.z);
+  }
+  for (const [id, g] of invGfx.graves) if (!keep.has(id)) { scene.remove(g); invGfx.graves.delete(id); }
+}
+function clearGraveMarks() {
+  if (!invGfx.graves) return;
+  for (const g of invGfx.graves.values()) scene.remove(g);
+  invGfx.graves.clear();
+  digCut = false; digThud = 0; digWas = false;
+  if (digView && ghost && player && player.alive) { ghost.model.group.visible = false; clearDigPose(ghost.model); }
+  digView = false;
+}
+function updateGraveView() {
+  const mineId = online ? online.myId : player && player.id;
+  const row = player && player.alive ? graveRows().find((r) => r.revBy === mineId && r.revP > 0) : null;
+  if (!row || !player || !player.alive || state !== 'playing') {
+    if (digView && ghost) clearDigPose(ghost.model);
+    if (digView && ghost && player && player.alive) ghost.model.group.visible = false;
+    digView = false;
+    return;
+  }
+  const g = ensureGhost(player.skinId);
+  g.model.group.visible = true;
+  g.model.group.scale.set(1, 1, 1);
+  g.model.group.position.set(player.pos.x, player.pos.y, player.pos.z);
+  g.model.group.rotation.order = 'XYZ';
+  g.model.group.rotation.set(0, player.yaw + Math.PI, 0);
+  const hit = poseDig(g.model, gameTime);
+  if (hit && gameTime > digThud) { digThud = gameTime + 0.7; puff(new V3(row.grave.x, (row.grave.y || 0) + 0.05, row.grave.z), 0x8a6840); noise(0.08, 180, 0.22); }
+  const ang = player.yaw + 0.75;
+  camera.position.set(player.pos.x + Math.sin(ang) * 3.3, player.pos.y + 1.6, player.pos.z + Math.cos(ang) * 3.3);
+  camera.lookAt(player.pos.x, player.pos.y + 0.9, player.pos.z);
+  if (fp.root) fp.root.visible = false;
+  digView = true;
+}
+function paintGraveHud() {
+  const el = $('graveHud'); if (!el) return;
+  if (!invMode() || state !== 'playing' || !player || !player.alive) { el.classList.add('hidden'); return; }
+  const near = nearestGrave(player);
+  const mineId = online ? online.myId : player.id;
+  if (!player.graveHold || !near) { digCut = false; digWas = false; }
+  else if (near.revBy === mineId && near.revP > 0) { digWas = true; digCut = false; }
+  else if (digWas) digCut = true;
+  if (!near) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const mine = near.revBy === mineId && near.revP > 0;
+  $('graveTitle').textContent = mine || (near.revBy && near.revP > 0) ? 'Revivendo' : digCut ? 'Solte e segure de novo' : `Segure ${GRAVE.keyLabel}`;
+  $('graveFill').style.width = `${Math.round((mine || near.revP > 0 ? near.revP : 0) * 100)}%`;
+  $('graveSub').textContent = mine ? near.name : digCut ? 'O dano cortou o reviver' : near.revBy && near.revP > 0 ? `${graveName(near.revBy)} está desenterrando ${near.name}` : `para reviver ${near.name}`;
+}
 function invTick(dt) {
   if (survOn()) survTick(dt);
   if (!invMode()) return;
@@ -9960,6 +10084,7 @@ function invTick(dt) {
   // fantasma: jogadores transparentes (outros) / tela azulada (você)
   const meId = online ? online.myId : player && player.id;
   for (const [id, s] of v.lives) { const e = online ? entOf(id) : null; if (e && e !== player && e.model && !!e.ghostLook !== s.ghost) { e.ghostLook = s.ghost; setGhostLook(e.model, s.ghost); } }
+  syncGraveMarks(v);
   const me = v.lives.get(meId) || null;
   if (player) player.ghostOn = !!(me && me.ghost);
   document.body.classList.toggle('ghostfx', !!(me && me.ghost && player && player.alive));
@@ -9971,7 +10096,8 @@ function invHud(v, me, dt) {
   if (invBannerT > 0) { invBannerT -= dt; if (invBannerT <= 0) $('invBanner').classList.add('hidden'); }
   const ph = v.phase;
   $('invWaveN').textContent = ph === 'prep' ? 'PREPARAÇÃO' : `WAVE ${Math.max(1, v.wave)}/${INV.WAVES}`;
-  $('invWaveSub').textContent = ph === 'wave' ? `🧟 ${v.remaining} zumbi${v.remaining === 1 ? '' : 's'} restando` : ph === 'break' || ph === 'prep' ? `Próxima wave em ${Math.ceil(v.left)} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}` : ph === 'over' ? 'Fim' : '';
+  const theme = ph === 'wave' && v.theme ? WAVE_THEMES[v.theme - 1] : null;
+  $('invWaveSub').textContent = ph === 'wave' ? `${theme ? theme.name + ' · ' : ''}🧟 ${v.remaining} zumbi${v.remaining === 1 ? '' : 's'} restando` : ph === 'break' || ph === 'prep' ? `Próxima wave em ${Math.ceil(v.left)} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}` : ph === 'over' ? 'Fim' : '';
   $('timer').textContent = ph === 'wave' ? `🧟 ${v.remaining}` : ph === 'over' ? '—' : `${Math.ceil(v.left)} s`;
   // chefão
   const boss = v.bossId ? (online ? entOf(v.bossId) : inv && inv.zombies.find((z) => z.id === v.bossId)) : null;
@@ -9985,7 +10111,7 @@ function invHud(v, me, dt) {
   if (me) $('invLives').innerHTML = `${'❤'.repeat(Math.max(0, me.lives))}<span class="lost">${'❤'.repeat(Math.max(0, INV.LIVES - me.lives))}</span>`;
   const out = !!(me && me.out && player && !player.alive);
   $('invOut').classList.toggle('hidden', !out); document.body.classList.toggle('invout', out); // sem vidas: some a tela de morte normal
-  if (out) { const mates = entities.filter((e) => !e.zt && e !== player && e.alive); $('invOutTxt').textContent = mates.length ? `Assistindo ${mates[0].name} · um aliado pode te reviver com a ✨ Ressurreição` : 'Ninguém de pé…'; }
+  if (out) { const mates = entities.filter((e) => !e.zt && e !== player && e.alive); $('invOutTxt').textContent = mates.length ? `Assistindo ${mates[0].name} · a cruz ficou onde você caiu · segure ${GRAVE.keyLabel} para desenterrar` : 'Ninguém de pé…'; }
   // névoa: fora da área segura = tela roxa + seta pro centro
   let outside = false;
   if (player && player.alive && v.fog) {

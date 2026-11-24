@@ -3,10 +3,15 @@
 //  Roda igual no cliente offline (solo) e no servidor online (autoritativo). Sem DOM, sem Three.js.
 //  • Todos os jogadores de verdade no mesmo time, sem bots de jogador. Sem fogo amigo: tiro, explosão, killstreak
 //    e poder nunca machucam jogador (nem você mesmo). Quem machuca jogador é zumbi e a Névoa Assombrada.
-//  • 20 waves, cada uma mais difícil (mais zumbis, mais vida, mais rápidos). Chefão a cada 5 waves (Abóbora,
-//    Barriguinha, Fantasma, Múmia, Lobisomem ou Louco). Pausa de ~15 s entre as waves. Wave 20 = vitória.
-//  • 2 vidas por jogador: morreu com vida sobrando, renasce normal; sem vidas, fica assistindo.
-//    Só a Ressurreição traz de volta (máx. 4 por bloco de 5 waves e 1 por wave). Todo mundo fora = fim de jogo.
+//  • 20 waves, cada uma mais difícil (mais zumbis, mais vida, mais rápidos). Da wave 13 em diante parte da
+//    horda nasce feroz: 1,5× o zumbi normal da wave, mais esperta e com um golpe a mais do próprio tipo.
+//    Às vezes a wave vira temática: a horda puxa para um grupo de zumbis que já entrou na rotação.
+//    Chefão a cada 5 waves (Abóbora, Barriguinha, Fantasma, Múmia, Lobisomem, Louco ou Hospício).
+//    Pausa de ~15 s entre as waves. Wave 20 = vitória.
+//  • 2 vidas por jogador: morreu com vida sobrando, renasce normal; sem vidas, fica uma cruz com o nome
+//    no lugar da queda. Um aliado de pé segura E por 5 s (cavando) e traz essa pessoa de volta com 1 vida.
+//    Qualquer dano no meio zera o progresso. A Ressurreição continua valendo (máx. 4 por bloco de 5 waves
+//    e 1 por wave) e levanta todo mundo de uma vez. Todo mundo fora = fim de jogo.
 //  • Poderes caem dos zumbis (chance baixa), pega no chão andando por cima, guarda até 3.
 //  • Névoa Assombrada (estilo tempestade do Fortnite): círculo seguro diminui e muda de lugar a cada wave.
 //    Fora dele o jogador perde vida; zumbi não sente a névoa.
@@ -73,8 +78,9 @@ export const ZOMBIES = {
   sling: { name: 'Docão Elástico', hp: 95, speed: 4.2, dmg: 16, rate: 1.05, reach: 1.7, size: 1, drop: 0.08, weight: 1.8, sling: { range: 16, wind: 0.65, speed: 20, max: 11, cd: 4.2, hop: 6.2 } },
   // Mais lento no plano. Voa na altura de quem está caçando, sem subir num telhado mais alto.
   bat: { name: 'Docão Morcego', hp: 80, speed: 3.15, dmg: 12, rate: 1.15, reach: 1.7, size: 0.92, drop: 0.07, weight: 1.6, fly: 1.85 },
-  // Sentado chorando (apanha menos). Perto, corre. Só tiro, sem chegar perto: aos 25% fica ainda mais rápido.
-  cry: { name: 'Docão Chorona', hp: 190, speed: 4.6, dmg: 14, rate: 0.85, reach: 1.6, size: 0.98, drop: 0.1, weight: 2.6, cry: { resist: 0.4, wake: 4.2, frenzy: 1.85, rage: 2.7, rageAt: 0.25 } },
+  // Sentada chorando (apanha menos). Perto, corre. Um minuto sem levar tiro, corre também.
+  // Só tiro, sem chegar perto: aos 25% fica ainda mais rápida.
+  cry: { name: 'Docão Chorona', hp: 190, speed: 4.6, dmg: 14, rate: 0.85, reach: 1.6, size: 0.98, drop: 0.1, weight: 2.6, cry: { resist: 0.4, wake: 4.2, frenzy: 1.85, rage: 2.7, rageAt: 0.25, alone: 60 } },
   // Docão Abóbora: abóbora explosiva, ou estoura o chão em volta. Na hora de atacar, sorteia um.
   boss: { name: 'Docão Abóbora', hp: 2600, speed: 4.4, dmg: 36, rate: 1.3, reach: 2.7, size: 1.7, drop: 1, spit: { range: 34, keep: 0, every: 4.2, speed: 17, dmg: 26, radius: 3.6, big: 1 }, moves: [
     { kind: 'spit' },
@@ -111,12 +117,50 @@ export const ZOMBIES = {
     { kind: 'howl' },
   ] },
 };
-export const zombieWeight = (type) => { const st = ZOMBIES[type]; return st && st.weight > 0 ? st.weight : 1; };
-// Chorona chorando toma menos dano. Aos 25% da vida, sem ter acordado, entra no frenesi extremo.
+// Feroz: 1,5 do zumbi normal da mesma wave (vida, velocidade, dano e peso no orçamento).
+// A fila marca com "f:" na frente do tipo. Chefão não entra nessa conta.
+export const FERAL = 1.5;
+export const FERAL_FROM = 13;
+export function spawnKind(token) {
+  const s = typeof token === 'string' ? token : '';
+  if (s.startsWith('f:')) return { type: s.slice(2), feral: true };
+  return { type: s, feral: false };
+}
+export function feralChance(w) {
+  if (w < FERAL_FROM) return 0;
+  const t = (Math.min(INV.WAVES, w) - FERAL_FROM) / (INV.WAVES - FERAL_FROM);
+  return Math.round((0.16 + 0.5 * t) * 100) / 100;
+}
+// Um golpe a mais, simples, do próprio tipo. A mira mais rápida fica em feralTune.
+export const FERAL_ACT = { walker: 'rush', runner: 'leap', tank: 'stomp', spitter: 'acid', sling: 'stun', bat: 'dive', cry: 'sob' };
+export function feralTune(base) {
+  return {
+    ...base,
+    retarget: [base.retarget[0] * 0.55, base.retarget[1] * 0.55],
+    losEvery: base.losEvery * 0.55,
+    aggro: base.aggro * 1.35,
+    spitLead: Math.min(0.9, (base.spitLead || 0) + 0.28),
+    spitErr: (base.spitErr || 0) * 0.4,
+    spitRate: base.spitRate * 0.72,
+    atkRate: base.atkRate * 0.78,
+    turn: base.turn + 4,
+    flank: Math.max(base.flank || 0, 3.4),
+  };
+}
+export const zombieWeight = (type) => {
+  const { type: base, feral } = spawnKind(type);
+  const st = ZOMBIES[base];
+  const w = st && st.weight > 0 ? st.weight : 1;
+  return feral ? w * FERAL : w;
+};
+// Chorona chorando toma menos dano. Cada tiro (queda do mapa não conta) reinicia o minuto.
+// Aos 25% da vida, sem ter acordado, entra no frenesi extremo.
 export function zombieTaken(z, amount, fall = false) {
   if (!z || !(amount > 0) || fall) return amount;
   const st = ZOMBIES[z.zt];
-  if (!st || !st.cry || z.mood === 'frenzy' || z.mood === 'rage') return amount;
+  if (!st || !st.cry) return amount;
+  z.shots = (z.shots || 0) + 1;
+  if (z.mood === 'frenzy' || z.mood === 'rage') return amount;
   const taken = amount * st.cry.resist;
   if (z.hp - taken <= (z.maxHp || st.hp) * st.cry.rageAt) z.mood = 'rage';
   return taken;
@@ -133,6 +177,80 @@ export const POWERS = {
 export const POWER_KEYS = ['pumpkin', 'howl', 'potion', 'lantern', 'ghost', 'revive'];
 export const DROP_KEYS = [...POWER_KEYS, 'ammo']; // índice enviado no 'dp'/'dg': poderes e a caixa de munição que o zumbi solta
 export const KEYS = { use: 'KeyG', useLabel: 'G', cycle: 'KeyX', cycleLabel: 'X' };
+// Cruz de quem perdeu a última vida. O aliado segura a mesma tecla de desarmar (E) por GRAVE.time segundos.
+export const GRAVE = { time: 5, range: 2, reachY: 1.6, key: 'KeyE', keyLabel: 'E' };
+export function clearGrave(p) {
+  if (!p) return;
+  p.grave = null; p.revP = 0; p.revBy = 0;
+}
+export function placeGrave(p) {
+  if (!p || !p.pos) return;
+  p.grave = { x: p.pos.x, y: p.pos.y || 0, z: p.pos.z };
+  p.revP = 0; p.revBy = 0;
+}
+// Nasce ao lado de quem cavou, ainda em cima da cruz.
+export function graveSpawnAt(grave, digger) {
+  if (!grave) return null;
+  let x = grave.x, z = grave.z;
+  if (digger && digger.pos) {
+    let dx = grave.x - digger.pos.x, dz = grave.z - digger.pos.z;
+    const L = Math.hypot(dx, dz);
+    if (L < 0.2) { dx = 1; dz = 0; } else { dx /= L; dz /= L; }
+    x += dx * 0.75; z += dz * 0.75;
+  }
+  return { x, y: grave.y || 0, z };
+}
+function graveNear(h, g) {
+  if (!h || !h.pos || !g) return false;
+  const dx = h.pos.x - g.x, dy = (h.pos.y || 0) - (g.y || 0), dz = h.pos.z - g.z;
+  return Math.hypot(dx, dz) <= GRAVE.range && Math.abs(dy) <= GRAVE.reachY;
+}
+// Avança (ou zera) o desenterro. Devolve quem completou os 5 s: [{ who, by }].
+// Dano no meio (vida caiu) zera e exige soltar o botão antes de tentar de novo.
+export function stepGraves(players, dt) {
+  const list = players || [];
+  const dtS = Math.max(0, dt || 0);
+  const graves = [];
+  for (const p of list) {
+    if (!p) continue;
+    p.digLock = false;
+    if (p.graveBroke && !p.graveHold) p.graveBroke = false;
+    if (p.out && p.grave) graves.push(p);
+    else if (p.grave) clearGrave(p);
+  }
+  const up = [];
+  const busy = new Set();
+  for (const t of graves) {
+    const h = t.revBy ? list.find((p) => p && p.id === t.revBy) : null;
+    const hurt = !!(h && h._digHp != null && h.hp + 0.05 < h._digHp);
+    if (hurt) {
+      t.revBy = 0; t.revP = 0; h.graveBroke = true; h._digHp = h.hp;
+      continue;
+    }
+    const holding = h && h.alive && !h.out && !h.down && h.graveHold && !h.graveBroke && graveNear(h, t.grave);
+    if (holding) {
+      busy.add(h.id); h._digHp = h.hp; h.digLock = true;
+      t.revP = Math.min(1, (t.revP || 0) + dtS / GRAVE.time);
+      if (t.revP >= 1 - 1e-4) { t.revP = 1; up.push({ who: t, by: h }); }
+    } else { t.revBy = 0; t.revP = 0; }
+  }
+  for (const h of list) {
+    if (!h || !h.alive || h.out || h.down || !h.graveHold || h.graveBroke || busy.has(h.id)) continue;
+    let best = null, bd = Infinity;
+    for (const t of graves) {
+      if (t.revBy) continue;
+      if (!graveNear(h, t.grave)) continue;
+      const d = Math.hypot(h.pos.x - t.grave.x, h.pos.z - t.grave.z);
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (!best) continue;
+    best.revBy = h.id;
+    best.revP = Math.min(1, dtS / GRAVE.time);
+    h._digHp = h.hp; h.digLock = true; busy.add(h.id);
+    if (best.revP >= 1 - 1e-4) { best.revP = 1; up.push({ who: best, by: h }); }
+  }
+  return up;
+}
 export const SPIT_GRAV = 20;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -166,7 +284,46 @@ export function waveSpec(w, n = 1) {
     bossKind: bossOfWave(w),
     bossHpMul,
     bossHp: ZOMBIES.boss.hp * bossHpMul, // vida da abóbora nesta wave; cada chefão usa a própria base × bossHpMul
+    feral: feralChance(w),
   };
+}
+// Waves temáticas. from = primeira wave em que todo tipo do tema já entrou na rotação normal.
+// O mix substitui o da wave: o orçamento continua o mesmo, mas a horda puxa para o tema.
+// THEME_P é a chance de a wave ser temática, entre as que já podem acontecer.
+export const THEME_P = 0.4;
+export const WAVE_THEMES = [
+  { id: 'aereo', name: 'Ataque Aéreo', from: 5, blurb: 'O céu fechou de morcego.', mix: { bat: 7, walker: 0.4 } },
+  { id: 'esqueleto', name: 'Corrida de Esqueleto', from: 2, blurb: 'Os esqueletos saíram na frente.', mix: { runner: 6, walker: 0.4 } },
+  { id: 'elastico', name: 'Festa do Elástico', from: 3, blurb: 'Eles vêm pulando.', mix: { sling: 6, walker: 0.35 } },
+  { id: 'cuspe', name: 'Cusparada', from: 4, blurb: 'Cuspe de todo lado.', mix: { spitter: 6, walker: 0.4 } },
+  { id: 'gas', name: 'Barrigada de Gás', from: 6, blurb: 'Os barrigões tomaram a frente.', mix: { tank: 5, walker: 0.5 } },
+  { id: 'choro', name: 'Coral de Choro', from: 7, blurb: 'O choro vem de todo canto.', mix: { cry: 6, walker: 0.35 } },
+  { id: 'porteira', name: 'Estouro da Porteira', from: 2, blurb: 'A porteira abriu de uma vez.', mix: { walker: 1.1, runner: 2.8 } },
+  { id: 'cerco', name: 'Cerco', from: 4, blurb: 'Cuspe na frente e podre fechando.', mix: { spitter: 2.6, walker: 1.2, runner: 0.6 } },
+  { id: 'investida', name: 'Investida', from: 3, blurb: 'Corredor e elástico, sem dar tempo.', mix: { runner: 2.4, sling: 2.6, walker: 0.3 } },
+  { id: 'cacada', name: 'Caçada', from: 5, blurb: 'Morcego em cima, esqueleto no chão.', mix: { bat: 3, runner: 2, walker: 0.3 } },
+  { id: 'paredao', name: 'Paredão', from: 6, blurb: 'Barrigão na frente, o resto atrás.', mix: { tank: 2.8, walker: 1.4, runner: 0.5 } },
+  { id: 'noite', name: 'Noite de Terror', from: 7, blurb: 'Choro, morcego e cuspe juntos.', mix: { cry: 2.4, bat: 2.4, spitter: 1.1, walker: 0.25 } },
+];
+export function themesForWave(w, mix) {
+  return WAVE_THEMES.filter((t) => t.from <= w && Object.keys(t.mix).every((k) => ZOMBIES[k] && t.mix[k] > 0 && (!mix || mix[k] > 0)));
+}
+export function rollTheme(w, rnd = Math.random, mix, avoidId = '') {
+  let pool = themesForWave(w, mix);
+  if (avoidId && pool.length > 1) pool = pool.filter((t) => t.id !== avoidId);
+  if (!pool.length || rnd() >= THEME_P) return null;
+  return pool[Math.floor(rnd() * pool.length) % pool.length];
+}
+export function applyTheme(spec, theme) {
+  if (!spec || !theme) return spec;
+  const mix = {};
+  for (const [k, v] of Object.entries(theme.mix)) if (v > 0 && ZOMBIES[k]) mix[k] = v;
+  if (!Object.keys(mix).length) return spec;
+  return { ...spec, mix, theme: theme.id, themeName: theme.name, themeBlurb: theme.blurb };
+}
+export function themeIndex(id) {
+  const i = WAVE_THEMES.findIndex((t) => t.id === id);
+  return i < 0 ? 0 : i + 1;
 }
 // fila da wave: o total é um orçamento. Tipo mais forte pesa mais e entra menos vezes.
 export function waveQueue(spec, rnd = Math.random) {
@@ -174,15 +331,19 @@ export function waveQueue(spec, rnd = Math.random) {
   if (!keys.length) return [];
   const sum = keys.reduce((a, k) => a + spec.mix[k], 0);
   const light = keys.slice().sort((a, b) => zombieWeight(a) - zombieWeight(b))[0];
+  const chance = spec.feral > 0 ? spec.feral : 0;
   const q = [];
   let budget = spec.total;
   let guard = Math.ceil(spec.total / zombieWeight(light)) + 4;
   while (budget + 1e-6 >= zombieWeight(light) && guard-- > 0) {
     let r = rnd() * sum, k = keys[0];
     for (const kk of keys) { r -= spec.mix[kk]; if (r <= 0) { k = kk; break; } }
-    if (zombieWeight(k) > budget + 1e-6) k = light;
-    q.push(k);
-    budget -= zombieWeight(k);
+    let feral = chance > 0 && rnd() < chance;
+    let wgt = zombieWeight(k) * (feral ? FERAL : 1);
+    if (feral && wgt > budget + 1e-6) { feral = false; wgt = zombieWeight(k); }
+    if (wgt > budget + 1e-6) { k = light; feral = false; wgt = zombieWeight(k); }
+    q.push(feral ? 'f:' + k : k);
+    budget -= wgt;
   }
   return q;
 }
@@ -242,8 +403,18 @@ export class InvasionCore {
     this.A.emit(['wv', 0, 0, r2(this.phaseEnd)]);
   }
   ensure(p, reset = false) {
-    if (reset || p.lives == null) { p.lives = INV.LIVES; p.out = false; p.inv = []; p.ghostUntil = 0; }
+    if (reset || p.lives == null) { p.lives = INV.LIVES; p.out = false; p.inv = []; p.ghostUntil = 0; clearGrave(p); p.graveBroke = false; p.digLock = false; }
     if (!p.inv) p.inv = []; return p;
+  }
+  runGraves(dt) {
+    for (const row of stepGraves(this.A.players(), dt)) this.raiseGrave(row.who, row.by);
+  }
+  raiseGrave(p, by) {
+    const at = graveSpawnAt(p.grave, by);
+    p.graveHere = at; p.out = false; p.lives = Math.max(1, p.lives || 0);
+    clearGrave(p);
+    this.A.revive(p, at);
+    this.A.emit(['gd', p.id, by ? by.id : 0]);
   }
   humansAlive() { return this.A.players().filter((p) => p.alive); }
   liveZombies() { return this.zombies.filter((z) => z.alive); }
@@ -263,6 +434,7 @@ export class InvasionCore {
     this.stepDrops(T);
     for (const z of this.zombies.filter((x) => !x.alive && T >= x.removeAt)) { this.zombies = this.zombies.filter((x) => x !== z); this.A.removeZombie(z); }
     if (this.phase === 'wave' && !this.queue.length && !this.bossPending && !this.liveZombies().length) this.endWave();
+    this.runGraves(dt);
     const H = this.A.players();
     if (H.length && H.every((p) => !p.alive && p.out)) { if (!this.overAt) this.overAt = T + 1.2; else if (T >= this.overAt) this.finish(false); }
     else this.overAt = 0;
@@ -276,11 +448,14 @@ export class InvasionCore {
       if (i > 0 && i % BOSS_TYPES.length === 0) this.bossOrder = shuffleBosses(this.rnd);
       this.spec.bossKind = this.bossOrder[((i % this.bossOrder.length) + this.bossOrder.length) % this.bossOrder.length];
     }
+    const theme = rollTheme(w, this.rnd, this.spec.mix, this.themeId);
+    this.spec = applyTheme(this.spec, theme);
+    if (theme) this.themeId = theme.id;
     this.queue = waveQueue(this.spec, this.rnd);
     this.nextSpawn = this.T + (this.spec.lead > 0 ? this.spec.lead : 0.8); this.bossPending = this.spec.boss; this.bossAt = this.T + 3.5; this.bossId = 0;
     this.planFog(w);
     const bossN = this.spec.boss ? BOSS_TYPES.indexOf(this.spec.bossKind) + 1 : 0;
-    this.A.emit(['wv', 1, w, bossN, this.spec.boss ? 1 : 0, this.queue.length + (this.spec.boss ? 1 : 0)]);
+    this.A.emit(['wv', 1, w, bossN, this.spec.boss ? 1 : 0, this.queue.length + (this.spec.boss ? 1 : 0), themeIndex(this.spec.theme)]);
   }
   endWave() {
     if (this.wave >= INV.WAVES) { this.finish(true); return; }
@@ -347,15 +522,19 @@ export class InvasionCore {
     }
     return best ? { x: best.x, y: best.y, z: best.z } : null;
   }
-  spawn(type) {
+  spawn(token) {
+    const { type, feral } = spawnKind(token);
     const pos = this.spawnPos(); if (!pos) return null;
-    const st = ZOMBIES[type], S = this.spec || waveSpec(1, 1);
+    const st = ZOMBIES[type]; if (!st) return null;
+    const S = this.spec || waveSpec(1, 1);
     const z = this.A.spawnZombie(type, pos); if (!z) return null;
     const waveMul = S.bossHp > 0 ? S.bossHp / ZOMBIES.boss.hp : (S.bossHpMul > 0 ? S.bossHpMul : 1);
-    const hp = isBoss(type) ? st.hp * waveMul : st.hp * S.hpMul;
-    Object.assign(z, { zt: type, zi: ZTYPES.indexOf(type), hp, maxHp: hp, alive: true, spd: st.speed * S.spdMul * (0.92 + this.rnd() * 0.16), dmgMul: S.dmgMul, size: st.size,
-      nextAtk: this.T + 0.6, nextSpit: this.T + 1 + this.rnd() * st.rate, nextHowl: this.T + 2 + this.rnd() * 2, nextPhase: this.T + 3 + this.rnd() * 2, phaseUntil: 0, stunUntil: 0, target: null, retarget: 0, node: null, nodeAt: -9, stuck: 0, removeAt: Infinity, lastLos: false, losAt: -9,
-      mood: st.cry ? 'cry' : '', pose: st.cry ? 'cry' : '', fly: !!st.fly, slingWind: 0, slingFly: 0, nextSling: this.T + 0.6, surge: false });
+    const fierce = feral ? FERAL : 1;
+    const hp = (isBoss(type) ? st.hp * waveMul : st.hp * S.hpMul) * fierce;
+    Object.assign(z, { zt: type, zi: ZTYPES.indexOf(type), hp, maxHp: hp, alive: true, spd: st.speed * S.spdMul * (0.92 + this.rnd() * 0.16) * fierce, dmgMul: (S.dmgMul || 1) * fierce, size: st.size, feral,
+      nextAtk: this.T + 0.6, nextSpit: this.T + 1 + this.rnd() * st.rate, nextHowl: this.T + 2 + this.rnd() * 2, nextPhase: this.T + 3 + this.rnd() * 2, nextFeral: this.T + 0.8 + this.rnd() * 1.4, phaseUntil: 0, stunUntil: 0, target: null, retarget: 0, node: null, nodeAt: -9, stuck: 0, removeAt: Infinity, lastLos: false, losAt: -9,
+      mood: st.cry ? 'cry' : '', pose: st.cry ? 'cry' : '', fly: !!st.fly, slingWind: 0, slingFly: 0, nextSling: this.T + 0.6, surge: false, quietAt: st.cry ? this.T : 0, shots: 0, shotsSeen: 0, rushUntil: 0, leapUntil: 0, diveUntil: 0 });
+    if (feral) z.name = `${st.name} Feroz`;
     z.vel.x = z.vel.y = z.vel.z = 0; z.onGround = true; z.crouch = 0;
     this.zombies.push(z); if (this.A.spawned) this.A.spawned(z); return z;
   }
@@ -463,9 +642,17 @@ export class InvasionCore {
     z.pose = pose;
     this.A.emit(['zp', z.id, Math.max(0, ZPOSE.indexOf(pose))]);
   }
+  // Sem tiro por `alone` segundos, a Chorona larga o choro e corre. Cada tiro reinicia a conta.
+  cryClock(z, st, T) {
+    if (!st || !st.cry || z.mood === 'frenzy' || z.mood === 'rage') return;
+    if ((z.shots || 0) !== (z.shotsSeen || 0)) { z.shotsSeen = z.shots || 0; z.quietAt = T; }
+    if (z.quietAt == null) z.quietAt = T;
+    if (T - z.quietAt >= (st.cry.alone > 0 ? st.cry.alone : 60)) z.mood = 'frenzy';
+  }
   // Elástico arma e se joga (alcance limitado). Chorona senta até acordar.
   trick(z, st, t, dh, dx, dz, dy, T) {
     if (st.cry) {
+      this.cryClock(z, st, T);
       if (z.mood !== 'rage' && dh < st.cry.wake && Math.abs(dy) < 2.4) z.mood = 'frenzy';
       if (z.mood !== 'frenzy' && z.mood !== 'rage') return { override: true, hold: true, noBite: true, pose: 'cry' };
       return { spMul: z.mood === 'rage' ? st.cry.rage : st.cry.frenzy, pose: z.mood };
@@ -488,12 +675,36 @@ export class InvasionCore {
       z.slingWind = T + sling.wind;
       z.nextSling = T + sling.cd;
       z.slingArm = { x: dx / dh, z: dz / dh, dist: Math.min(dh, sling.max) };
+      if (z.feral) { z.slingHit = st.dmg * 0.85; z.slingStun = 0.5; }
       return { override: true, hold: true, pose: 'wind' };
     }
     return null;
   }
+  // Golpe extra do feroz. O normal continua valendo; isto só acrescenta um.
+  feralAct(z, st, t, dh, dx, dz, dy, T, trick) {
+    if (T < (z.nextFeral || 0)) return;
+    const held = !!(trick && trick.hold);
+    if (z.zt === 'walker' && !held && z.lastLos && dh > 2.6 && dh < 9) {
+      z.nextFeral = T + 3.6; z.rushUntil = T + 0.48; z.rushDir = { x: dx / dh, z: dz / dh };
+    } else if (z.zt === 'runner' && !held && z.lastLos && dh > 3.4 && dh < 12 && !(z.leapUntil > T)) {
+      z.nextFeral = T + 2.6; z.leapUntil = T + 0.42; z.leapDir = { x: dx / dh, z: dz / dh };
+      z.vel.y = Math.max(z.vel.y, 6.4); z.onGround = false;
+    } else if (z.zt === 'tank' && dh < 4.8 && Math.abs(dy) < 2.2) {
+      z.nextFeral = T + 4.6;
+      this.bossNova(z, { dmg: 14, radius: 3.2, knock: 5.5, style: 1 });
+    } else if (z.zt === 'spitter' && z.lastLos && st.spit && dh > 4 && dh < st.spit.range + 2) {
+      z.nextFeral = T + 5.4;
+      this.spit(z, t, 0, { ...st.spit, pee: 1, slow: 1.8, dmg: 9, radius: 2.2, speed: st.spit.speed * 0.9 });
+    } else if (z.zt === 'bat' && dh < 9 && z.pos.y > t.pos.y + 1.3) {
+      z.nextFeral = T + 3.2; z.diveUntil = T + 0.65;
+    } else if (z.zt === 'cry' && z.mood !== 'frenzy' && z.mood !== 'rage' && dh < 7.2) {
+      z.nextFeral = T + 4.5;
+      this.bossHowl(z, { radius: 6.2, stun: 0.8, dmg: 5 }, 0);
+    }
+  }
   stepZombie(z, dt, T) {
-    const st = ZOMBIES[z.zt], P = this.A.P, tune = zombieTune(this.A.botDiff);
+    const st = ZOMBIES[z.zt], P = this.A.P, tune0 = zombieTune(this.A.botDiff), tune = z.feral ? feralTune(tune0) : tune0;
+    if (st.cry) this.cryClock(z, st, T);
     if (st.phaseEvery && T >= z.nextPhase) { // Docão Fantasma: some por alguns segundos (imune)
       z.phaseUntil = T + st.phaseDur; z.nextPhase = T + st.phaseEvery * (0.85 + this.rnd() * 0.3);
       z.phased = true; this.A.emit(['zf', z.id, 1]);
@@ -543,13 +754,16 @@ export class InvasionCore {
         }
       } else {
         const keep = st.spit && st.spit.keep ? st.spit.keep * tune.keep : 0;
-        let goDirect = z.lastLos && dh < 9 && Math.abs(dy) < (st.fly ? st.fly + 1.2 : 1.3);
+        let goDirect = z.lastLos && dh < (z.feral ? 14 : 9) && Math.abs(dy) < (st.fly ? st.fly + 1.2 : 1.3);
         if (spit && keep && dh < keep + 2) { goDirect = true; if (dh < keep - 2) { mx = -dx / dh; mz = -dz / dh; } }
         else if (goDirect) { if (dh > st.reach * 0.6) { mx = dx / dh; mz = dz / dh; } }
         else { const s = this.flowDir(z, T); if (s) { mx = s.x; mz = s.z; } else { mx = dx / dh; mz = dz / dh; } }
         // cerco: cada zumbi puxa um pouco pro lado (par/ímpar) pra não empilhar na mesma porta. 0 no Leitão e na Ceva.
         if (tune.flank > 0 && dh > st.reach * 2) { const side = (z.id % 2 ? 1 : -1) * (z.zt === 'runner' ? 1.35 : 1); mx += (-dz / dh) * tune.flank * 0.08 * side; mz += (dx / dh) * tune.flank * 0.08 * side; }
       }
+      if (z.feral) this.feralAct(z, st, t, dh, dx, dz, dy, T, trick);
+      if (z.rushUntil > T && z.rushDir && !(trick && trick.override)) { mx = z.rushDir.x; mz = z.rushDir.z; }
+      if (z.leapUntil > T && z.leapDir && !(trick && trick.hold)) { mx = z.leapDir.x; mz = z.leapDir.z; }
       const faceX = this.A.survival && (mx || mz) ? mx : dx, faceZ = this.A.survival && (mx || mz) ? mz : dz;
       const yawT = Math.atan2(faceX, faceZ); let dd = yawT - z.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); z.yaw += dd * Math.min(1, dt * tune.turn);
       if (z.slingHit && !(z.slingFly > T) && !(z.slingWind > T)) {
@@ -577,7 +791,12 @@ export class InvasionCore {
     if (trick && trick.pose != null) this.setPose(z, trick.pose);
     else if (!(z.slingWind > T) && !(z.slingFly > T)) this.setPose(z, '');
     const base = trick && trick.sp > 0 ? trick.sp : z.spd * tune.spd * ((trick && trick.spMul) || 1);
-    const ml = hyp(mx, mz), sp = base * (stunned || (trick && trick.hold) ? 0 : 1);
+    const ml = hyp(mx, mz);
+    let sp = base * (stunned || (trick && trick.hold) ? 0 : 1);
+    if (!(trick && trick.hold)) {
+      if (z.rushUntil > T) sp *= 1.45;
+      if (z.leapUntil > T) sp = Math.max(sp, (z.spd || 4) * 1.25);
+    }
     if (ml > 0) { mx = mx / Math.max(1, ml) * sp; mz = mz / Math.max(1, ml) * sp; }
     if (mx || mz) { const yawM = Math.atan2(mx, mz); if (!t || stunned) { let dd = yawM - z.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); z.yaw += dd * Math.min(1, dt * (6 * tune.turn / 8)); } }
     const acc = (z.onGround || z.fly) ? 9 : 2.5; z.vel.x += (mx - z.vel.x) * Math.min(1, acc * dt); z.vel.z += (mz - z.vel.z) * Math.min(1, acc * dt);
@@ -587,10 +806,11 @@ export class InvasionCore {
     }
     if (st.fly && P && P.groundAt) {
       const floor = P.groundAt(z.pos.x, z.pos.z, z.pos.y + 0.15);
-      const aim = t ? t.pos.y + 1.15 : floor + st.fly;
-      const bob = Math.sin(T * 3.1 + (z.id || 0)) * 0.12;
+      const diving = !!(t && z.diveUntil > T);
+      const aim = diving ? t.pos.y + 0.35 : (t ? t.pos.y + 1.15 : floor + st.fly);
+      const bob = diving ? 0 : Math.sin(T * 3.1 + (z.id || 0)) * 0.12;
       const want = Math.max(floor + 0.4, aim) + bob;
-      z.vel.y = clamp((want - z.pos.y) * 5, -4.5, 6.5);
+      z.vel.y = clamp((want - z.pos.y) * (diving ? 10 : 5), diving ? -10 : -4.5, diving ? 2 : 6.5);
       z.onGround = false;
     }
     const blocked = P.moveEntity(z, dt);
@@ -1101,7 +1321,7 @@ export class InvasionCore {
     } else if (kind === 'ghost') {
       p.ghostUntil = T + POWERS.ghost.dur; for (const z of this.zombies) if (z.target === p) z.target = null;
     } else if (kind === 'revive') {
-      let n = 0; for (const q of A.players()) if (!q.alive && q !== p) { q.out = false; q.lives = Math.max(1, q.lives || 0); A.revive(q, at); n++; }
+      let n = 0; for (const q of A.players()) if (!q.alive && q !== p) { q.out = false; q.lives = Math.max(1, q.lives || 0); clearGrave(q); A.revive(q, at); n++; }
       ev.push(n);
     }
     A.emit(ev); return kind;
@@ -1126,7 +1346,7 @@ export class InvasionCore {
   onPlayerDeath(p) {
     this.ensure(p); p.lives = Math.max(0, p.lives - 1); p.ghostUntil = 0;
     this.lanterns = this.lanterns.filter((l) => l.owner !== p);
-    if (p.lives <= 0) { p.out = true; return false; }
+    if (p.lives <= 0) { p.out = true; placeGrave(p); return false; }
     return true;
   }
   // onde renascer: perto de um aliado vivo e dentro da área segura
@@ -1147,15 +1367,19 @@ export class InvasionCore {
   stateArr() {
     const F = this.fog, T = this.T;
     return [PHASES.indexOf(this.phase), this.wave, r2(Math.max(0, this.phaseEnd - T)), this.liveZombies().length, this.queue.length + (this.bossPending ? 1 : 0) + this.liveZombies().length,
-      r2(F.cx), r2(F.cz), r2(F.r), r2(F.tx), r2(F.tz), r2(F.tr), this.bossId, this.A.players().map((p) => [p.id, p.lives ?? INV.LIVES, p.out ? 1 : 0, p.ghostUntil > T ? 1 : 0]),
-      this.lanterns.map((l) => [l.owner.id, r2(l.until - T)])];
+      r2(F.cx), r2(F.cz), r2(F.r), r2(F.tx), r2(F.tz), r2(F.tr), this.bossId, this.A.players().map((p) => [p.id, p.lives ?? INV.LIVES, p.out ? 1 : 0, p.ghostUntil > T ? 1 : 0, p.grave ? r2(p.grave.x) : 0, p.grave ? r2(p.grave.y) : 0, p.grave ? r2(p.grave.z) : 0, p.grave ? Math.round((p.revP || 0) * 100) : 0, p.grave ? (p.revBy | 0) : 0]),
+      this.lanterns.map((l) => [l.owner.id, r2(l.until - T)]), themeIndex(this.spec && this.spec.theme)];
   }
 }
 // lê o estado compacto (cliente online) no mesmo formato que o cliente offline monta a partir do core
 export function parseState(a) {
   if (!a) return null;
   return { phase: PHASES[a[0]] || 'prep', wave: a[1], left: a[2], alive: a[3], remaining: a[4], fog: { cx: a[5], cz: a[6], r: a[7], tx: a[8], tz: a[9], tr: a[10] }, bossId: a[11],
-    lives: new Map((a[12] || []).map(([id, l, o, g]) => [id, { lives: l, out: !!o, ghost: !!g }])), lanterns: new Map((a[13] || []).map(([id, t]) => [id, t])) };
+    lives: new Map((a[12] || []).map((row) => {
+      const [id, l, o, g, gx, gy, gz, rp, rb] = row;
+      const out = !!o;
+      return [id, { lives: l, out, ghost: !!g, grave: out && row.length > 6 ? { x: gx, y: gy, z: gz } : null, revP: out ? (rp | 0) / 100 : 0, revBy: out ? (rb | 0) : 0 }];
+    })), lanterns: new Map((a[13] || []).map(([id, t]) => [id, t])), theme: a[14] | 0 };
 }
 export function coreView(core) {
   if (!core) return null; const a = core.stateArr(); const v = parseState(a); return v;

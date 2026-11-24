@@ -235,7 +235,7 @@ export class Game {
   entInfo(e) { const o = { id: e.id, name: e.name, skin: e.skin, bot: e.bot, tag: e.tag, kills: e.kills, deaths: e.deaths, alive: e.alive, primary: e.primary, w: e.weapon, team: e.team, caps: e.caps, pend: e.pendingTeam ? 1 : 0, kn: e.knife || undefined, sn: e.sniper || undefined, gn: e.guns && Object.keys(e.guns).length ? e.guns : undefined };
     if (this.armsMode) { o.arms = [e.armsStage, e.armsKills]; }
     if (this.compMode) o.gr = [e.cash | 0, e.armor | 0, e.helmet ? 1 : 0, (e.slots && e.slots[0]) ?? e.primary, (e.slots && e.slots[1]) ?? PISTOL, (e.slots && e.slots[2]) ?? KNIFE, e.weapon, e.nades | 0, e.smokeNades | 0, e.flashNades | 0];
-    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); }
+    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); if (e.feral) o.fr = 1; }
     if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pn = e.purseN | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
     return o; }
   sendLobby() {
@@ -632,6 +632,7 @@ startMsg() {
       const p = obj3(m.p), v = obj3(m.v);
         if (p && gunfightFrozen(this.gf) && !(this.test && m.tp)) { e.vel.x = 0; e.vel.z = 0; this.toMe(e, ['pos', arr3(e.pos)]); e.lastUpd = t; }
         else if (p) {
+        const digX = e.pos.x, digZ = e.pos.z;
         const dt = clamp(t - (e.lastUpd || t), 0.016, 1);
         // Não confia em uma redução instantânea da hitbox enviada pelo cliente.
         // Clientes antigos omitem c e continuam em pé.
@@ -658,6 +659,7 @@ startMsg() {
         } else if (hopped || horiz > maxH || !inside || this.P.overlapping(p.x, p.y, p.z, 0.03, hBody, rBody) || (p.y - e.pos.y > yCap * Math.max(dt, 0.25) + 1)) {
           e.badMoves = (e.badMoves || 0) + 1; this.toMe(e, ['pos', arr3(e.pos)]); // anti-cheat: devolve pra última posição válida
         } else { e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) }; }
+        if (e.digLock && m.gh && e.alive) { e.pos.x = digX; e.pos.z = digZ; e.vel.x = 0; e.vel.z = 0; } // cavando a cruz: parado até soltar
         e.lastUpd = t;
       }
       if (Number.isFinite(m.y)) e.yaw = m.y + Math.PI; // câmera → modelo
@@ -668,6 +670,7 @@ startMsg() {
     }
     e.useHold = !!m.bk; // Modo Bomba: segurando E (plantar/desarmar)
     e.revHold = !!(m.rh && e.alive && !e.down); // Survival: segurando L para reviver quem está caído
+    e.graveHold = !!(m.gh && e.alive && !e.down && !e.out); // Invasão: segurando E na cruz de quem perdeu as vidas
     this.noteEmote(e, m.dn);
     if (Array.isArray(m.ev)) for (const ev of m.ev.slice(0, 24)) this.onEvent(e, ev);
   }
@@ -1738,6 +1741,7 @@ startMsg() {
       const pool = list.length ? list : this.spawns;
       return pool[(Math.random() * pool.length) | 0];
     }
+    if (this.inv && !e.bot && e.graveHere) { const g = e.graveHere; e.graveHere = null; e.reviveAt = null; return { x: g.x, y: this.P.groundAt(g.x, g.z, (g.y || 0) + 0.3), z: g.z }; } // desenterrado: nasce na cruz
     if (this.inv && !e.bot) { // Invasão: começa junto (spawns do mapa em ordem); renasce perto de um aliado, dentro da área segura
       if (e.firstSpawn != null) { const s = this.spawns[e.firstSpawn % this.spawns.length]; e.firstSpawn = null; return s; }
       const p = this.inv.spawnPoint(e, e.reviveAt || null); e.reviveAt = null; if (p) return { x: p.x, y: this.P.groundAt(p.x, p.z, p.y + 0.3), z: p.z };
