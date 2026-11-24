@@ -1,5 +1,5 @@
 // Chefões da Invasão: rotação, peso da horda e os zumbis novos. Uso: node test-bosses.mjs
-import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore } from './shared/invasion.js';
+import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore, coreView, FERAL, FERAL_ACT, FERAL_FROM, feralChance, feralTune, spawnKind, THEME_P, WAVE_THEMES, themesForWave, rollTheme, applyTheme, themeIndex, INV_CROSS } from './shared/invasion.js';
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
@@ -67,6 +67,17 @@ ok(core.trick(far, ZOMBIES.sling, {}, 30, 30, 0, 0, 3) == null, 'longe demais o 
 const sit = { mood: 'cry' };
 ok(core.trick(sit, ZOMBIES.cry, {}, 9, 9, 0, 0, 1).pose === 'cry' && sit.mood === 'cry', 'chorona longe fica sentada');
 ok(core.trick(sit, ZOMBIES.cry, {}, 2, 2, 0, 0, 1).pose === 'frenzy' && sit.mood === 'frenzy', 'chorona perto sai no frenesi');
+const lone = { mood: 'cry', quietAt: 0, shots: 0, shotsSeen: 0 };
+ok(core.trick(lone, ZOMBIES.cry, {}, 20, 20, 0, 0, 59).pose === 'cry' && lone.mood === 'cry', 'antes de 1 minuto a chorona continua sentada');
+ok(core.trick(lone, ZOMBIES.cry, {}, 20, 20, 0, 0, 60).pose === 'frenzy' && lone.mood === 'frenzy', '1 minuto sem tiro e ela entra no frenesi');
+const poked = { mood: 'cry', quietAt: 0, shots: 1, shotsSeen: 0 };
+ok(core.trick(poked, ZOMBIES.cry, {}, 20, 20, 0, 0, 90).pose === 'cry' && poked.quietAt === 90 && poked.mood === 'cry', 'um tiro reinicia o minuto da chorona');
+const counted = { zt: 'cry', hp: 190, maxHp: 190, mood: 'cry', shots: 0 };
+zombieTaken(counted, 8);
+ok(counted.shots === 1 && counted.mood === 'cry', 'tiro na chorona conta, e ela segue chorando se a vida aguenta');
+zombieTaken(counted, 40, true);
+ok(counted.shots === 1, 'queda do mapa não conta como tiro');
+ok(ZOMBIES.cry.cry.alone === 60, 'a chorona espera 60 s sem tiro');
 ok(ZOMBIES.bat.fly > 1 && ZOMBIES.bat.speed < ZOMBIES.walker.speed, 'morcego é mais lento e voa');
 ok(ZOMBIES.boss.hp >= 2400 && ZOMBIES.bossGhost.hp >= 2000 && ZOMBIES.bossMummy.hp > ZOMBIES.bossBelly.hp && ZOMBIES.bossHosp.hp > ZOMBIES.boss.hp, 'chefões têm mais vida, e Múmia e Hospício continuam entre os mais duros');
 
@@ -185,6 +196,170 @@ ok(scream.events.some((e) => e[0] === 'zh' && Math.abs(e[3] - 7.5) < 0.01) && sc
 scream.z.hp = scream.z.maxHp * 0.4; scream.z.nextAtk = 0; scream.z.surge = false;
 scream.step();
 ok(scream.z.surge && scream.z.nextAtk - scream.now() < 4, 'abaixo da metade o grito do Hospício volta mais cedo');
+
+ok(feralChance(1) === 0 && feralChance(FERAL_FROM - 1) === 0 && feralChance(FERAL_FROM) > 0 && feralChance(20) > feralChance(FERAL_FROM) && feralChance(20) <= 0.7, 'feroz só entra nas waves finais e a chance sobe até a 20');
+ok(waveSpec(12, 1).feral === 0 && waveSpec(20, 1).feral === feralChance(20), 'o spec da wave carrega a chance de feroz');
+ok(waveQueue(waveSpec(12, 1), () => 0).every((t) => !String(t).startsWith('f:')), 'wave 12 ainda é só zumbi normal');
+const late = waveQueue({ ...waveSpec(20, 1), feral: 1 }, () => 0);
+ok(late.length > 0 && late.every((t) => t.startsWith('f:walker')), 'com chance 1 o orçamento vira podre feroz');
+const spentF = late.reduce((a, t) => a + zombieWeight(t), 0);
+ok(spentF <= waveSpec(20, 1).total + 1e-6 && zombieWeight('f:walker') === FERAL && zombieWeight('walker') === 1, 'feroz pesa 1,5 e continua cabendo no orçamento');
+ok(['walker', 'runner', 'tank', 'spitter', 'sling', 'bat', 'cry'].every((t) => FERAL_ACT[t]) && !FERAL_ACT.boss, 'cada zumbi comum tem um golpe feroz e o chefão fica de fora');
+const smart = feralTune({ retarget: [1, 2], losEvery: 1, aggro: 10, spitLead: 0, spitErr: 1, spitRate: 1, atkRate: 1, turn: 8, flank: 0, spd: 1 });
+ok(smart.retarget[0] < 1 && smart.aggro > 10 && smart.flank > 3 && smart.turn > 8 && smart.spitErr < 1 && smart.spd === 1, 'feroz troca de alvo, cerca e cospe melhor sem dobrar a velocidade de novo');
+ok(spawnKind('f:tank').feral && spawnKind('f:tank').type === 'tank' && !spawnKind('walker').feral, 'a fila marca o feroz com f:');
+
+{
+  const made = [];
+  const born = new InvasionCore({
+    size: [30, 30], T: () => 10, rnd: () => 0.5, nav: { good: [{ x: 20, y: 0, z: 0, id: 0 }], nearest: () => ({ x: 20, y: 0, z: 0, id: 0 }) },
+    players: () => [{ id: 1, alive: true, pos: { x: 0, y: 0, z: 0 }, ghostUntil: 0 }],
+    P: { groundAt: () => 0, collides: () => false, losClear: () => false },
+    spawnZombie(type, pos) { const z = { id: made.length + 1, zt: type, name: ZOMBIES[type].name, pos: { ...pos }, vel: { x: 0, y: 0, z: 0 } }; made.push(z); return z; },
+    emit() {},
+  });
+  born.spec = { ...waveSpec(16, 1), feral: 1, hpMul: 2, spdMul: 1, dmgMul: 1, bossHp: 0 };
+  const z = born.spawn('f:walker');
+  ok(!!z && z.feral && z.zt === 'walker' && z.hp === ZOMBIES.walker.hp * 2 * FERAL && z.dmgMul === FERAL && Math.abs(z.spd - ZOMBIES.walker.speed * FERAL) < 1e-6 && z.name === 'Docão Podre Feroz', 'feroz nasce com 1,5 da vida, da velocidade e do dano da wave');
+  const plain = born.spawn('walker');
+  ok(plain && !plain.feral && plain.hp === ZOMBIES.walker.hp * 2 && plain.name === 'Docão Podre', 'o normal da mesma wave continua em 1×');
+}
+
+function feralSim(zt, x, y, extra = {}) {
+  let T = 8;
+  const player = { id: 1, alive: true, pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, ghostUntil: 0, stunUntil: 0 };
+  const events = [];
+  const core = new InvasionCore({
+    T: () => T, size: [40, 40], botDiff: 'ceva', rnd: () => 0.2, nav: null,
+    players: () => [player],
+    P: { groundAt: () => 0, losClear: () => true, collides: () => false, moveEntity(e, dt) { e.pos.x += (e.vel.x || 0) * dt; e.pos.z += (e.vel.z || 0) * dt; e.pos.y += (e.vel.y || 0) * dt; return false; } },
+    emit(ev) { events.push(ev.slice()); }, hurtPlayer() {}, knock() {},
+  });
+  const st = ZOMBIES[zt];
+  const z = {
+    id: 9, zt, feral: true, pos: { x, y, z: 0 }, vel: { x: 0, y: 0, z: 0 }, yaw: Math.PI, alive: true, onGround: true,
+    spd: st.speed * FERAL, dmgMul: FERAL, size: st.size, hp: st.hp, maxHp: st.hp,
+    nextAtk: 99, nextSpit: 99, nextHowl: 99, nextPhase: 99, nextFeral: 0, phaseUntil: 0, stunUntil: 0,
+    target: player, retarget: 99, node: null, nodeAt: -9, stuck: 0, lastLos: true, losAt: 8,
+    pose: zt === 'cry' ? 'cry' : '', mood: zt === 'cry' ? 'cry' : '', fly: !!st.fly, slingWind: 0, slingFly: 0, nextSling: 0,
+    quietAt: 8, shots: 0, shotsSeen: 0, ...extra,
+  };
+  return { z, player, events, step(dt = 1 / 30) { T += dt; core.stepZombie(z, dt, T); return T; } };
+}
+const rush = feralSim('walker', 6, 0);
+rush.step();
+ok(rush.z.rushUntil > 8 && rush.z.pos.x < 6, 'podre feroz arranca na direção do jogador');
+const leap = feralSim('runner', 8, 0);
+leap.step();
+ok(leap.z.leapUntil > 8 && leap.z.vel.y > 5, 'corredor feroz dá um pulo');
+const stomp = feralSim('tank', 3, 0);
+stomp.step();
+ok(stomp.events.some((e) => e[0] === 'zh' && e[4] === 1), 'barrigão feroz dá um pisão');
+const acid = feralSim('spitter', 10, 0);
+acid.step();
+ok(acid.events.some((e) => e[0] === 'zs' && e[2] === 2), 'cuspidor feroz larga um cuspe que deixa lento');
+const band = feralSim('sling', 8, 0);
+band.step();
+ok(band.z.slingWind > 8 && band.z.slingHit > 0 && band.z.slingStun > 0, 'elástico feroz arma o pulo com atordoamento na queda');
+const dive = feralSim('bat', 4, 3.2);
+dive.step();
+ok(dive.z.diveUntil > 8 && dive.z.vel.y < 0, 'morcego feroz mergulha em quem está embaixo');
+const sob = feralSim('cry', 5, 0);
+sob.step();
+ok(sob.z.mood === 'cry' && sob.player.stunUntil > 8 && sob.events.some((e) => e[0] === 'zh'), 'chorona feroz, ainda sentada, solta um soluço que trava quem está perto');
+const calm = feralSim('walker', 6, 0, { feral: false, nextFeral: 0 });
+calm.step();
+ok(!(calm.z.rushUntil > 8), 'o podre normal não arranca');
+
+function firstWave(type) {
+  if (type === 'walker') return 1;
+  for (let w = 1; w <= INV.WAVES; w++) if ((waveSpec(w, 1).mix[type] || 0) > 0) return w;
+  return 99;
+}
+const share = (q, type) => q.filter((t) => spawnKind(t).type === type).length / (q.length || 1);
+ok(WAVE_THEMES.length === 12 && new Set(WAVE_THEMES.map((t) => t.id)).size === 12, '12 waves temáticas, cada uma com um nome');
+ok(WAVE_THEMES.every((t) => t.name && t.blurb && t.from >= 2 && Object.keys(t.mix).every((k) => t.from >= firstWave(k))), 'tema só a partir da wave em que os tipos dele já existem');
+ok(!themesForWave(1, waveSpec(1, 1).mix).length && rollTheme(1, () => 0, waveSpec(1, 1).mix) == null, 'wave 1 continua a horda normal');
+ok(themesForWave(5, waveSpec(5, 1).mix).some((t) => t.id === 'aereo') && !themesForWave(4, waveSpec(4, 1).mix).some((t) => t.id === 'aereo'), 'ataque aéreo entra junto com o morcego');
+ok(!themesForWave(6, waveSpec(6, 1).mix).some((t) => t.id === 'noite') && themesForWave(7, waveSpec(7, 1).mix).some((t) => t.id === 'noite'), 'noite de terror espera o choro');
+ok(rollTheme(10, () => THEME_P, waveSpec(10, 1).mix) == null, 'acima da chance a wave não vira temática');
+const air = applyTheme(waveSpec(8, 1), WAVE_THEMES.find((t) => t.id === 'aereo'));
+const airQ = waveQueue(air, () => 0.4);
+ok(air.theme === 'aereo' && share(airQ, 'bat') >= 0.7 && air.total === waveSpec(8, 1).total, 'ataque aéreo enche a wave de morcego sem mudar o orçamento');
+const gas = applyTheme(waveSpec(8, 1), WAVE_THEMES.find((t) => t.id === 'gas'));
+ok(share(waveQueue(gas, () => 0.4), 'tank') >= 0.6, 'barrigada de gás é feita de barrigão');
+const hunt = applyTheme(waveSpec(8, 1), WAVE_THEMES.find((t) => t.id === 'cacada'));
+const huntQ = waveQueue(hunt, () => 0.3);
+ok(share(huntQ, 'bat') + share(huntQ, 'runner') >= 0.7, 'caçada junta morcego e esqueleto');
+const seen = new Set();
+for (let i = 0; i < WAVE_THEMES.length; i++) {
+  let n = 0;
+  const theme = rollTheme(12, () => (n++ === 0 ? 0 : (i + 0.2) / WAVE_THEMES.length), waveSpec(12, 1).mix);
+  if (theme) seen.add(theme.id);
+}
+ok(seen.size >= 8, 'o sorteio alcança temas diferentes');
+{
+  const evs = [];
+  const themed = new InvasionCore({
+    size: [20, 20], T: () => 4, nav: null, rnd: () => 0,
+    players: () => [{ id: 1, alive: true, pos: { x: 0, y: 0, z: 0 } }],
+    emit(ev) { evs.push(ev); },
+  });
+  themed.startWave(5);
+  const banner = evs.find((ev) => ev[0] === 'wv' && ev[1] === 1);
+  ok(themed.spec.theme === 'aereo' && themed.spec.boss && banner && banner[6] === themeIndex('aereo') && themed.spec.bossKind, 'a wave 5 pode ser Ataque Aéreo e ainda traz o chefão');
+  ok(coreView(themed).theme === themeIndex('aereo'), 'o estado da wave leva o tema para o HUD');
+  themed.startWave(6);
+  ok(themed.spec.theme && themed.spec.theme !== 'aereo', 'a wave seguinte não repete o mesmo tema');
+}
+
+// ---------- cruz (Normal): desenterrar quem perdeu a última vida ----------
+{
+  ok(INV_CROSS.hold === 5 && INV_CROSS.key === 'KeyE', 'desenterrar leva 5 s na tecla de desarmar');
+  const revived = [];
+  let T = 0;
+  const dead = { id: 1, pos: { x: 4, y: 1, z: -2 }, alive: false, hp: 0 };
+  const mate = { id: 2, pos: { x: 4.4, y: 1, z: -2.2 }, alive: true, hp: 80, useHold: false };
+  const players = [dead, mate];
+  const core = new InvasionCore({
+    size: [30, 30], T: () => T, nav: null, rnd: () => 0.9, hard: false,
+    P: { groundAt: () => 1, losClear: () => true },
+    players: () => players,
+    emit() {},
+    revive(p, at, o) { revived.push({ id: p.id, x: at.x, z: at.z, o }); p.alive = true; p.hp = (o && o.hp) || 100; p.pos = { ...at }; },
+  });
+  core.ensure(dead, true); core.ensure(mate, true);
+  dead.lives = 2; dead.alive = false;
+  ok(core.onPlayerDeath(dead) === true && core.crosses.length === 0 && dead.lives === 1, 'com vida sobrando não fica cruz');
+  dead.pos = { x: 4, y: 1, z: -2 }; dead.alive = false;
+  ok(core.onPlayerDeath(dead) === false && dead.out && core.crosses.length === 1 && core.crosses[0].x === 4 && core.crosses[0].z === -2, 'a última vida planta a cruz onde caiu');
+  mate.useHold = true;
+  core.stepCrosses(2);
+  const cr = core.crosses[0];
+  ok(cr.by === 2 && cr.prog > 1.9 && cr.prog < 2.1, '2 s segurando enche parte dos 5 s');
+  mate.hp = 40;
+  core.stepCrosses(0.2);
+  ok(cr.prog === 0 && cr.by === 0 && mate.graveBroke, 'qualquer dano zera o desenterro');
+  core.stepCrosses(1);
+  ok(cr.prog === 0, 'continuar segurando depois do dano não recomeça');
+  mate.useHold = false;
+  core.stepCrosses(0.05);
+  ok(!mate.graveBroke, 'soltar o botão libera uma tentativa nova');
+  mate.useHold = true;
+  mate.pos = { x: 30, y: 1, z: 30 };
+  core.stepCrosses(1);
+  ok(cr.prog === 0, 'longe da cruz não cava');
+  mate.pos = { x: 4.3, y: 1, z: -2.1 }; mate.hp = 80; mate._digHp = null;
+  core.phase = 'break'; core.phaseEnd = 1e9;
+  for (let i = 0; i < 10; i++) { T += 0.5; core.step(0.5); }
+  ok(revived.length === 1 && dead.lives === 0 && !dead.out && core.crosses.length === 0 && dead.alive, '5 s revivem sem vida extra e tiram a cruz');
+  ok(revived[0].o && revived[0].o.exact && revived[0].o.hp === INV_CROSS.hp && Math.hypot(revived[0].x - 4, revived[0].z + 2) < 0.2, 'quem volta nasce na cruz com meia vida');
+  const view = coreView(core);
+  dead.out = true; dead.alive = false; dead.pos = { x: 4, y: 1, z: -2 }; core.placeCross(dead); core.crosses[0].prog = 2; core.crosses[0].by = 2;
+  const snap = coreView(core);
+  ok(snap.crosses.length === 1 && snap.crosses[0].id === 1 && snap.crosses[0].x === 4 && Math.abs(snap.crosses[0].prog - 2) < 0.02 && snap.crosses[0].by === 2, 'o estado leva a cruz e a barra pro HUD');
+  ok(view && view.phase === 'break', 'a cruz não mexe na fase da wave');
+}
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK');
 process.exit(fails.length ? 1 : 0);

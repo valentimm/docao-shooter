@@ -686,6 +686,50 @@ export function setDownPose(model, blend) {
   }
 }
 
+// Pá de cabo de madeira e lâmina de metal. Fica na mão direita enquanto desenterra.
+export function makeShovel() {
+  const g = new THREE.Group();
+  const wood = toon('#8d5a32'), metal = toon('#d5dde4');
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.034, 0.95, 8), wood);
+  outline(handle, 0.004); handle.position.y = -0.12; g.add(handle);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.046, 0.08, 8), metal);
+  outline(collar, 0.004); collar.position.y = -0.55; g.add(collar);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 0.035), metal);
+  outline(blade, 0.004); blade.position.set(0, -0.7, 0.05); blade.rotation.x = -0.4; g.add(blade);
+  g.position.set(0.02, -0.5, 0.1);
+  return g;
+}
+// Um ciclo de cavar. Devolve true no instante em que a pá bate no chão.
+export function poseDig(model, t) {
+  if (!model || !model.arms || !model.arms[0]) return false;
+  if (!model.shovel) { model.shovel = makeShovel(); model.arms[0].add(model.shovel); }
+  model.shovel.visible = true;
+  if (model.guns) for (const gun of model.guns) {
+    if (!gun) continue;
+    gun.visible = false;
+    if (gun.userData && gun.userData.twin) gun.userData.twin.visible = false;
+    if (gun.userData && gun.userData.extra) gun.userData.extra.visible = false;
+  }
+  const cyc = ((t % 0.85) + 0.85) % 0.85 / 0.85;
+  const wind = cyc < 0.38 ? cyc / 0.38 : cyc < 0.55 ? 1 - (cyc - 0.38) / 0.17 : Math.max(0, 1 - (cyc - 0.55) / 0.45);
+  const rx = -0.2 - wind * 1.55;
+  model.arms[0].rotation.set(rx, 0.28, -0.18);
+  if (model.arms[1]) model.arms[1].rotation.set(rx + 0.12, -0.42, 0.32);
+  if (model.legs && model.legs[0]) {
+    model.legs[0].rotation.x = 0.22 * (1 - wind);
+    if (model.legs[1]) model.legs[1].rotation.x = -0.06;
+  }
+  return cyc >= 0.5 && cyc < 0.58;
+}
+export function clearDigPose(model) {
+  if (!model) return;
+  if (model.shovel) model.shovel.visible = false;
+  if (model.legs && model.legs[0]) {
+    model.legs[0].rotation.x = 0;
+    if (model.legs[1]) model.legs[1].rotation.x = 0;
+  }
+}
+
 export function setPose(model, pose) {
   model.arms.forEach((a, i) => {
     const s = i === 0 ? -1 : 1;

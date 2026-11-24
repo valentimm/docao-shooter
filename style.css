@@ -447,6 +447,11 @@ body:has(#pause:not(.hidden)) #streakBar { display: none !important; }
 #downBar{position:relative;height:18px;margin:8px 0 6px;background:#1a100c;border:2px solid #2a1410;border-radius:9px;overflow:hidden}
 #downFill{display:block;height:100%;width:0;background:linear-gradient(#ffe08a,#e63946)}
 #downSub{display:block;font-size:15px;font-weight:bold;color:#ffd27a;text-shadow:0 1px 0 #000}
+#graveHud{position:fixed;top:62%;left:50%;transform:translateX(-50%);width:min(440px,92vw);text-align:center;pointer-events:none;z-index:7;padding:10px 16px 12px;border-radius:14px;background:rgba(18,8,8,.82);border:3px solid #c9a27a;box-shadow:0 6px 0 #2a1410}
+#graveTitle{display:block;font-family:var(--font);font-size:26px;color:#fff6e4;-webkit-text-stroke:1px #2a1410;text-shadow:0 2px 0 #000}
+#graveBar{position:relative;height:18px;margin:8px 0 6px;background:#1a100c;border:2px solid #2a1410;border-radius:9px;overflow:hidden}
+#graveFill{display:block;height:100%;width:0;background:linear-gradient(#ffe08a,#c47a3a)}
+#graveSub{display:block;font-size:15px;font-weight:bold;color:#ffd27a;text-shadow:0 1px 0 #000}
 #sPrompt{top:56%}
 #bPrompt .bp1,#sPrompt .bp1{font-family:var(--font);font-size:22px;color:#fff;-webkit-text-stroke:1px #2a1410;text-shadow:0 2px 0 #000}
 #bPrompt .bp2,#sPrompt .bp2{font-size:14px;font-weight:bold;color:#ffd27a;text-shadow:0 1px 0 #000;margin-top:2px}
