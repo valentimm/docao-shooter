@@ -250,7 +250,7 @@ export class Game {
   entInfo(e) { const o = { id: e.id, name: e.name, skin: e.skin, bot: e.bot, tag: e.tag, kills: e.kills, deaths: e.deaths, alive: e.alive, primary: e.primary, w: e.weapon, team: e.team, caps: e.caps, pend: e.pendingTeam ? 1 : 0, kn: e.knife || undefined, sn: e.sniper || undefined, gn: e.guns && Object.keys(e.guns).length ? e.guns : undefined };
     if (this.armsMode) { o.arms = [e.armsStage, e.armsKills]; }
     if (this.compMode) o.gr = [e.cash | 0, e.armor | 0, e.helmet ? 1 : 0, (e.slots && e.slots[0]) ?? e.primary, (e.slots && e.slots[1]) ?? PISTOL, (e.slots && e.slots[2]) ?? KNIFE, e.weapon, e.nades | 0, e.smokeNades | 0, e.flashNades | 0];
-    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); if (e.feral) o.fr = 1; if (e.parts && e.parts.length) o.mu = e.parts; }
+    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); if (e.feral) o.fr = 1; if (e.parts && e.parts.length) o.mu = e.parts; if (e.egg) o.eg = e.egg; }
     if (e.soul) o.soul = e.soul;
     if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pn = e.purseN | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
     return o; }
@@ -764,6 +764,7 @@ startMsg() {
     if (k === 'pw' && this.inv) { const o = obj3(ev[2]), d = obj3(ev[3]); if (this.inv.usePower(e, ev[1] | 0, this.eyeOk(e, o) && d && vlen(d) > 0.5 ? { o, d: norm(d) } : null) === 'revive') this.cq(e, 'rev'); return; } // poder da Invasão (slot, olho, direção)
     if (k === 'hp' && this.inv) { this.inv.pickHistoria(e, ev[1]); return; }
     if (k === 'hs' && this.inv) { this.inv.pickPassiva(e, ev[1]); return; }
+    if (k === 'qe' && this.inv) { if (ev[1] === 'd') e.eggDanceUntil = this.T + 3.2; else if (ev[1] === 'u') this.inv.eggUse(e, ev[2]); else if (ev[1] === 's') this.inv.eggShock(e); return; }
     if (k === 'hu') return; // já aplicado antes do anti-cheat, no mesmo pacote da posição
     if (k === 'sv') return this.onSurvival(e, ev);
     if (k === 'gf') return this.gunnerFire(e, ev[1], ev[2]);
@@ -1414,6 +1415,8 @@ startMsg() {
   friends(a, b) { if (this.invasion) return !!(a && b && a !== b && !a.zt === !b.zt); return this.teamMode && a && b && a !== b && a.team === b.team && a.team >= 0; }
   damage(t, amount, a, w, head, back = false, ks = null, fx = 0, origin = a && a !== t && !a.fog ? a.pos : null) {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb) || gunfightFrozen(this.gf)) return false; // sem fogo amigo; Bomba e Gunfight: ninguém leva dano na preparação
+    if (t.eggHideUntil > this.T) return false; // pulou o muro
+    if (t.egg === 'lanche' && !isKnife(w) && w !== W_FALL) return false; // Lancheiro da tarde: só a faca
     if (t.zt && t.phaseUntil > this.T) return false; // Docão Fantasma faseado: imune
     if (t.zt) amount = zombieTaken(t, amount, w === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
     if (this.compMode) amount = mitigate(t, amount, head);

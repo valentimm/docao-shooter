@@ -26,6 +26,7 @@ import { zombieTune } from './bot-difficulty.js';
 import { fellOff } from './physics.js';
 import { HUPS, rollOffer, takeOffer, hReady, historiaSpot } from './historia-ups.js';
 import { rollPass, takePass, enqueueHistoria, nextHistoria, passLv, passHp, brasaStats, plateBlocks, coveiroScale } from './historia-pass.js';
+import { createEgg, stepRitual, notePool, eggAfterWave, EGG_SPOTS, nearSpot } from './historia-egg.js';
 export const INV = {
   mode: 'inv', WAVES: 20, PREP: 12, BREAK: 15, LIVES: 2, INV_MAX: 3,
   DROP_LIFE: 35, PICK_R: 1.5, BOSS_EVERY: 5, RES_PER_BLOCK: 4, BLOCK: 5,
@@ -394,7 +395,8 @@ export class InvasionCore {
     const custom = typeof this.A.specFor === 'function';
     const prep = custom ? this.specFor(1, Math.max(1, this.A.players().length)).prep : 0;
     this.phaseEnd = this.T + (prep > 0 ? prep : INV.PREP);
-    for (const p of this.A.players()) this.ensure(p, true);
+    for (const p of this.A.players()) { this.ensure(p, true); p.eggShock = p.eggShockNext = p.eggSuit = false; p.eggHideUntil = p.eggJumpUntil = p.eggPoolUntil = p.eggDanceUntil = p.eggShockAt = p.eggBoost = 0; }
+    this.egg = this.A.story && this.A.story() ? createEgg(this.rnd) : null;
     this.A.emit(['wv', 0, 0, r2(this.phaseEnd)]);
   }
   ensure(p, reset = false) {
@@ -403,6 +405,7 @@ export class InvasionCore {
   }
   humansAlive() { return this.A.players().filter((p) => p.alive); }
   liveZombies() { return this.zombies.filter((z) => z.alive); }
+  waveZombies() { return this.zombies.filter((z) => z.alive && !z.egg); }
   // ---------- laço ----------
   step(dt) {
     if (this.phase === 'over') return;
@@ -416,11 +419,12 @@ export class InvasionCore {
     this.separate();
     this.stepProjs(dt, T);
     this.stepPassives(dt, T);
+    this.stepEggs(dt, T);
     this.stepLanterns(dt, T);
     this.stepDrops(T);
     this.stepCrosses(dt);
     for (const z of this.zombies.filter((x) => !x.alive && T >= x.removeAt)) { this.zombies = this.zombies.filter((x) => x !== z); this.A.removeZombie(z); }
-    if (this.phase === 'wave' && !this.queue.length && !this.bossPending && !this.liveZombies().length) { this.shapeWant = false; this.endWave(); }
+    if (this.phase === 'wave' && !this.queue.length && !this.bossPending && !this.waveZombies().length) { this.shapeWant = false; this.endWave(); }
     const H = this.A.players();
     if (H.length && H.every((p) => !p.alive && p.out)) { if (!this.overAt) this.overAt = T + 1.2; else if (T >= this.overAt) this.finish(false); }
     else this.overAt = 0;
@@ -442,9 +446,11 @@ export class InvasionCore {
     this.planFog(w);
     const bossN = this.spec.boss ? BOSS_TYPES.indexOf(this.spec.bossKind) + 1 : 0;
     this.A.emit(['wv', 1, w, bossN, this.spec.boss ? 1 : 0, this.queue.length + (this.spec.boss ? 1 : 0), themeIndex(this.spec.theme)]);
+    this.openEggWave();
   }
   endWave() {
-    if (this.wave >= INV.WAVES) { this.finish(true); return; }
+    if (!this.egg) { if (this.wave >= INV.WAVES) { this.finish(true); return; } }
+    else if (this.closeEggWave().finish) { this.finish(true); return; }
     const bossWave = !!(this.spec && this.spec.boss);
     this.phase = 'break'; this.phaseEnd = this.T + (this.spec && this.spec.gap > 0 ? this.spec.gap : INV.BREAK);
     this.A.emit(['wv', 2, this.wave, r2(this.phaseEnd)]);
@@ -493,9 +499,9 @@ export class InvasionCore {
       if (want) { this.queue = rest; if (!this.zombies.some((z) => z.alive && z.zt === 'shape')) this.shapeWant = true; }
     }
     if (this.queue.length && T >= this.nextSpawn) {
-      if (this.liveZombies().length >= S.maxAlive) this.nextSpawn = T + 0.4;
+      if (this.waveZombies().length >= S.maxAlive) this.nextSpawn = T + 0.4;
       else {
-        const burst = Math.min(S.batch || 1, S.maxAlive - this.liveZombies().length); // lote (sem passar do teto)
+        const burst = Math.min(S.batch || 1, S.maxAlive - this.waveZombies().length); // lote (sem passar do teto)
         for (let i = 0; i < burst && this.queue.length; i++) if (this.spawn(this.queue[0])) this.queue.shift();
         this.nextSpawn = T + S.spawnEvery * (0.6 + this.rnd() * 0.8);
       }
@@ -557,7 +563,7 @@ export class InvasionCore {
     const pos = at || (type === 'shape' ? this.shapePos() : this.spawnPos()); if (!pos) return null;
     const waveN = Math.max(this.wave | 0, (this.spec && this.spec.w) | 0);
     let zt = type, parts = null;
-    if (type !== 'shape' && !isBoss(type) && waveN >= MUTANT_FROM && this.rnd() < MUTANT_P) {
+    if (!this._noMutant && type !== 'shape' && !isBoss(type) && waveN >= MUTANT_FROM && this.rnd() < MUTANT_P) {
       parts = rollMutantParts(type, this.rnd);
       if (parts) zt = 'mutant';
     }
@@ -831,6 +837,7 @@ export class InvasionCore {
   }
   stepZombie(z, dt, T) {
     if (z.zt === 'shape') { this.stepShape(z, dt, T); return; }
+    if (z.egg === 'lanche') { this.stepLanche(z, T); return; }
     const st = zombieProfile(z), P = this.A.P, tune0 = zombieTune(this.A.botDiff), tune = z.feral ? feralTune(tune0) : tune0;
     if (!st) return;
     if (st.cry) this.cryClock(z, st, T);
@@ -840,6 +847,7 @@ export class InvasionCore {
     } else if (z.phased && !(z.phaseUntil > T)) { z.phased = false; this.A.emit(['zf', z.id, 0]); }
     if (T >= z.retarget) { z.target = this.pickTarget(z); z.retarget = T + tune.retarget[0] + this.rnd() * (tune.retarget[1] - tune.retarget[0]); }
     let t = z.target; if (t && !this.zombieWants(t)) { t = z.target = null; }
+    if (z.egg === 'refri') { z.spd = Math.min(z.spd || 2, 2.3); if (t && hyp(t.pos.x - z.pos.x, t.pos.z - z.pos.z) > 5.2) t = z.target = null; }
     let mx = 0, mz = 0, trick = null; const stunned = z.stunUntil > T;
     if (st.fly) z.fly = true;
     if (st.surgeAt && z.hp <= z.maxHp * st.surgeAt) z.surge = true;
@@ -1258,12 +1266,13 @@ export class InvasionCore {
     if (st && st.boom) {
       const c = { x: z.pos.x, y: z.pos.y + 1, z: z.pos.z }; this.A.emit(['zb', z.id, [r2(c.x), r2(c.y), r2(c.z)]]);
       for (const p of this.A.players()) {
-        if (!p.alive) continue; const d = d3({ x: p.pos.x, y: p.pos.y + 1, z: p.pos.z }, c); if (d > st.boom.radius) continue;
+        if (!p.alive || p.eggHideUntil > this.T) continue; const d = d3({ x: p.pos.x, y: p.pos.y + 1, z: p.pos.z }, c); if (d > st.boom.radius) continue;
         const k = 1 - d / st.boom.radius, hx = p.pos.x - c.x, hz = p.pos.z - c.z, L = hyp(hx, hz) || 1;
         this.A.knock(p, { x: hx / L * st.boom.knock * k, y: 5 * k, z: hz / L * st.boom.knock * k });
         this.A.hurtPlayer(p, st.boom.dmg * (0.3 + 0.7 * k) * (z.dmgMul || 1), z);
       }
     }
+    if (z.egg) { this.noteEggDeath(z); return; }
     if (z.id === this.bossId) { for (let i = 0; i < 2; i++) this.drop(z.pos, i === 0); this.dropAmmo(z.pos, 1.4); this.dropAmmo(z.pos, 1.4); this.offerHistoria(); return; }
     if (st && this.rnd() < st.drop) this.drop(z.pos, false);
     const ammoP = z.parts && z.parts.length ? Math.max(...z.parts.map((k) => INV_AMMO.zdrop[k] || 0)) : (INV_AMMO.zdrop[z.zt] || 0);
@@ -1777,10 +1786,177 @@ export class InvasionCore {
     }
     return best ? { x: best.x, y: best.y, z: best.z } : null;
   }
+  // ---------- capítulos secretos (só Modo história) ----------
+  eggSay(text) { this.A.emit(['qe', 'msg', text]); }
+  openEggWave() {
+    const book = this.egg; if (!book) return;
+    if (this.wave === book.sodaWave && !book.sodaOut && this.wave <= 20) {
+      book.sodaOut = true;
+      const at = this.spawnPos() || { x: -8, y: 0, z: 16 };
+      this.spawnEgg('refri', at);
+    }
+    for (const p of this.A.players()) if (p && p.eggShockNext) {
+      p.eggShockNext = false; p.eggShock = true;
+      this.A.emit(['qe', 'shock', p.id]);
+    }
+  }
+  closeEggWave() {
+    const book = this.egg;
+    let waiting = false;
+    for (const p of this.A.players()) {
+      if (!p) continue;
+      if (p.eggShock || p.eggShockNext) waiting = true;
+      if (p.eggShock) { book.steps.muro = true; p.eggShock = false; }
+      if (p.eggBoost === this.wave) {
+        const base = p._hpCap0 > 100 ? p._hpCap0 : 100;
+        p.hpCap = p._hpCap0 || 0; p.eggBoost = 0;
+        p.hp = Math.min(p.hp || 0, base);
+        this.A.emit(['qe', 'hp', p.id, Math.round(p.hp), p.hpCap | 0]);
+      }
+    }
+    const was = book.secret;
+    const out = eggAfterWave(book, this.wave, waiting && !book.steps.muro);
+    if (!was && book.secret) this.eggSay('Os capítulos secretos da HOTMILK estão abertos.');
+    if (out.cap !== book.told) { book.told = out.cap; if (out.cap !== 20) this.A.emit(['qe', 'cap', out.cap]); }
+    return out;
+  }
+  spawnEgg(kind, at) {
+    const type = kind === 'cria' ? 'tank' : 'walker';
+    this._noMutant = true;
+    const z = this.spawn(type, at);
+    this._noMutant = false;
+    if (!z) return null;
+    z.egg = kind;
+    if (kind === 'cria') { z.hp = z.maxHp = Math.round(420 * ((this.spec && this.spec.hpMul) || 1)); z.size = 0.88; z.name = 'Cria do Barriguinha'; }
+    else if (kind === 'lanche') { z.hp = z.maxHp = 640; z.spd = 0; z.size = 1.05; z.name = 'Lancheiro da Tarde'; }
+    else { z.hp = z.maxHp = Math.round(900 * ((this.spec && this.spec.hpMul) || 1)); z.size = 1.35; z.spd = 2.2; z.name = 'Promo do Refri'; }
+    this.A.emit(['qe', 'z', z.id, kind, z.name, Math.round(z.hp), r2(z.size || 1)]);
+    return z;
+  }
+  summonCria(p) {
+    const book = this.egg; if (!book || book.steps.cria || book.criaLeft > 0 || !p || !p.pos) return;
+    let n = 0;
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const z = this.spawnEgg('cria', { x: p.pos.x + Math.cos(a) * 2.1, y: p.pos.y || 0, z: p.pos.z + Math.sin(a) * 2.1 });
+      if (z) n++;
+    }
+    if (!n) return;
+    book.criaLeft = n; book.criaArmed = true;
+  }
+  summonLanche() {
+    const book = this.egg; if (!book || book.steps.lanche || this.zombies.some((z) => z.alive && z.egg === 'lanche')) return;
+    const spot = EGG_SPOTS.pool;
+    this.eggSay('É hora do lanchinho da tarde');
+    this.spawnEgg('lanche', { x: spot.x + 2.1, y: spot.y, z: spot.z + 0.4 });
+  }
+  stepLanche(z) {
+    const spot = EGG_SPOTS.pool;
+    z.yaw = Math.atan2(z.pos.x - spot.x, z.pos.z - spot.z);
+    z.vel.x = z.vel.y = z.vel.z = 0;
+  }
+  noteEggDeath(z) {
+    const book = this.egg; if (!book || !z) return;
+    if (z.egg === 'cria') {
+      book.criaLeft = Math.max(0, (book.criaLeft | 0) - 1);
+      if (book.criaArmed && book.criaLeft === 0 && !book.steps.cria) {
+        book.steps.cria = true;
+        this.A.emit(['qe', 'step', 'cria']);
+        this.eggSay('Crias do barriguinha eliminadas, algo está estranho na hotmilk');
+      }
+    } else if (z.egg === 'lanche' && !book.steps.lanche) {
+      book.steps.lanche = true;
+      this.A.emit(['qe', 'step', 'lanche']);
+    } else if (z.egg === 'refri' && !book.fridge) {
+      book.fridge = true;
+      this.A.emit(['qe', 'fridge']);
+      this.eggSay('Finalmente a Promo Voltou');
+    }
+  }
+  eggUse(p, id) {
+    const book = this.egg; if (!book || !p || !p.alive || !p.pos || p.eggHideUntil > this.T) return false;
+    if (id === 'pool') {
+      if (book.steps.lanche || p.eggPoolUntil > this.T || !nearSpot(p.pos, EGG_SPOTS.pool, 2.3)) return false;
+      p.eggPoolUntil = this.T + 2;
+      this.A.emit(['qe', 'anim', p.id, 'pool']);
+      return true;
+    }
+    if (id === 'fridge') {
+      if (!book.fridge || book.drunk[p.id] || !nearSpot(p.pos, EGG_SPOTS.fridge, 1.8)) return false;
+      book.drunk[p.id] = this.wave;
+      book.steps.refri = true;
+      if (!(p.eggBoost > 0)) p._hpCap0 = p.hpCap || 0;
+      const base = p._hpCap0 > 100 ? p._hpCap0 : 100;
+      p.eggBoost = this.wave; p.hpCap = base + 50;
+      p.hp = Math.min(p.hpCap, (p.hp || 0) + 50);
+      this.A.emit(['qe', 'boost', p.id, Math.round(p.hp), p.hpCap]);
+      this.A.emit(['qe', 'step', 'refri']);
+      return true;
+    }
+    const wall = EGG_SPOTS.walls.find((w) => w.id === id);
+    if (wall && !book.steps.muro && !p.eggShockNext && !p.eggJumpUntil && nearSpot(p.pos, wall, 1.8)) {
+      p.eggJumpUntil = this.T + 0.8;
+      p.eggShockNext = true;
+      this.A.emit(['qe', 'anim', p.id, 'wall']);
+      return true;
+    }
+    return false;
+  }
+  eggShock(p) {
+    if (!this.egg || !p || !p.alive || !p.eggShock || p.eggShockAt > this.T) return false;
+    p.eggShockAt = this.T + 1.15;
+    this.A.emit(['qe', 'zap', p.id, r2(p.pos.x), r2(p.pos.y), r2(p.pos.z)]);
+    for (const z of this.zombies) {
+      if (!z.alive || !z.pos) continue;
+      const d = Math.hypot(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+      if (d > 6.5 || Math.abs((z.pos.y || 0) - (p.pos.y || 0)) > 2.4) continue;
+      z.stunUntil = Math.max(z.stunUntil || 0, this.T + 1.1);
+      this.A.hurtZombie(z, 55 * (0.55 + 0.45 * (1 - d / 6.5)), p, 'shock');
+    }
+    return true;
+  }
+  stepEggs(dt, T) {
+    const book = this.egg; if (!book || this.phase === 'over') return;
+    for (const p of this.A.players()) {
+      if (!p || p.bot || p.zt) continue;
+      if (p.alive && stepRitual(book, p, T) === 'summon') this.summonCria(p);
+      if (p.eggPoolUntil && T >= p.eggPoolUntil) {
+        p.eggPoolUntil = 0;
+        if (nearSpot(p.pos, EGG_SPOTS.pool, 2.6)) {
+          const n = notePool(book, p, this.wave || 1);
+          this.A.emit(['qe', 'pool', p.id, n === 'snack' ? 3 : n]);
+          if (n === 'snack') this.summonLanche();
+        }
+      }
+      if (p.eggJumpUntil && T >= p.eggJumpUntil) {
+        p.eggJumpUntil = 0; p.eggHideUntil = T + 10;
+        this.eggSay(`O player ${p.name || 'Docão'} cansou de ficar trancado na hotmilk, liberdade!`);
+        this.A.emit(['qe', 'hide', p.id, 10]);
+      }
+      if (p.eggHideUntil && T >= p.eggHideUntil && !p.eggSuit) {
+        p.eggHideUntil = 0; p.eggSuit = true;
+        this.A.emit(['qe', 'suit', p.id]);
+      }
+    }
+    for (const z of this.zombies) {
+      if (!z.alive || z.egg !== 'cria' || !z.pos) continue;
+      const x = z.pos.x, zz = z.pos.z;
+      if (z._px == null || Math.hypot(x - z._px, zz - z._pz) >= 0.9) {
+        z._px = x; z._pz = zz;
+        book.puddles.push({ x, z: zz, y: z.pos.y || 0, until: T + 5.5 });
+        this.A.emit(['qe', 'pee', r2(x), r2(zz), r2(z.pos.y || 0)]);
+      }
+    }
+    book.puddles = (book.puddles || []).filter((g) => g.until > T);
+    for (const g of book.puddles) for (const p of this.A.players()) {
+      if (!p || !p.alive || !p.pos || p.eggHideUntil > T) continue;
+      if (Math.hypot(p.pos.x - g.x, p.pos.z - g.z) <= 1.15 && Math.abs((p.pos.y || 0) - g.y) < 1.4) this.A.hurtPlayer(p, 14 * dt, null);
+    }
+  }
   // ---------- estado compacto (snapshot online) ----------
   stateArr() {
     const F = this.fog, T = this.T;
-    return [PHASES.indexOf(this.phase), this.wave, r2(Math.max(0, this.phaseEnd - T)), this.liveZombies().length, this.queue.length + (this.bossPending ? 1 : 0) + this.liveZombies().length,
+    return [PHASES.indexOf(this.phase), this.wave, r2(Math.max(0, this.phaseEnd - T)), this.waveZombies().length, this.queue.length + (this.bossPending ? 1 : 0) + this.waveZombies().length,
       r2(F.cx), r2(F.cz), r2(F.r), r2(F.tx), r2(F.tz), r2(F.tr), this.bossId, this.A.players().map((p) => [p.id, p.lives ?? INV.LIVES, p.out ? 1 : 0, p.ghostUntil > T ? 1 : 0]),
       this.lanterns.map((l) => [l.owner.id, r2(l.until - T)]), this.hard ? 1 : 0,
       this.crosses.map((c) => [c.p.id, r2(c.x), r2(c.y), r2(c.z), c.by | 0, r2(c.prog)]), themeIndex(this.spec && this.spec.theme)];
