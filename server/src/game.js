@@ -235,7 +235,8 @@ export class Game {
   entInfo(e) { const o = { id: e.id, name: e.name, skin: e.skin, bot: e.bot, tag: e.tag, kills: e.kills, deaths: e.deaths, alive: e.alive, primary: e.primary, w: e.weapon, team: e.team, caps: e.caps, pend: e.pendingTeam ? 1 : 0, kn: e.knife || undefined, sn: e.sniper || undefined, gn: e.guns && Object.keys(e.guns).length ? e.guns : undefined };
     if (this.armsMode) { o.arms = [e.armsStage, e.armsKills]; }
     if (this.compMode) o.gr = [e.cash | 0, e.armor | 0, e.helmet ? 1 : 0, (e.slots && e.slots[0]) ?? e.primary, (e.slots && e.slots[1]) ?? PISTOL, (e.slots && e.slots[2]) ?? KNIFE, e.weapon, e.nades | 0, e.smokeNades | 0, e.flashNades | 0];
-    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); if (e.feral) o.fr = 1; }
+    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); if (e.feral) o.fr = 1; if (e.parts && e.parts.length) o.mu = e.parts; }
+    if (e.soul) o.soul = e.soul;
     if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pn = e.purseN | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
     return o; }
   sendLobby() {
@@ -960,6 +961,7 @@ startMsg() {
     } else if (el >= w.reload * 0.8) { refillDrums(e, i, inf); e.reload = null; if (i === EGG_W) e.eggAt = R.start + w.reload * 0.8; } // ovo na mão: a puxada conta daqui
   }
   canShoot(e, w, hand = 0) {
+    if (e.soul) return false;
     if (e.down) {
       const P = WEAPONS[DOWN.pistol];
       if ((w | 0) !== DOWN.pistol || !P) return false;
@@ -1001,6 +1003,7 @@ startMsg() {
   // cadência pelo relógio do cliente (mesma checagem anti speed-hack dos tiros) + piso pelo relógio do servidor,
   // alcance/cone/pelas costas calculados aqui (shared/melee.js) contra posições e yaw voltados no tempo (lag comp).
   humanMelee(e, kindIdx, oA, dA, ct, rt) {
+    if (e.soul) { e.rejectedMelee = (e.rejectedMelee || 0) + 1; return; }
     const kind = MELEE_KINDS[kindIdx], o = obj3(oA), d0 = obj3(dA);
     if (!kind || !o || !d0 || vlen(d0) < 0.5 || !isKnife(e.weapon) || !e.slots.includes(e.weapon) || dist(o, center(e, EYE)) > 1.3 || !Number.isFinite(ct)) { e.rejectedMelee = (e.rejectedMelee || 0) + 1; return; }
     const off = this.now() - ct; e.maxOff = Math.max(e.maxOff ?? -Infinity, off);
@@ -1023,7 +1026,7 @@ startMsg() {
     return h;
   }
   humanNade(e, oA, vA, kind) {
-    if (this.armsMode) return;
+    if (e.soul || this.armsMode) return;
     const o = obj3(oA), v = obj3(vA); if (!this.eyeOk(e, o) || !v || vlen(v) > 34) return;
     if (kind === 'p') { if (!(e.pokeballs > 0)) return; e.pokeballs--; this.toMe(e, ['pkb', e.pokeballs]); this.throwNade(e, o, v, true); return; } // Pokébola
     if (e.nades <= 0) return;
@@ -1119,7 +1122,7 @@ startMsg() {
   // ---------- sabres (shared/saber.js). O servidor é quem aplica dano, alcance, combo, cooldown e o bloqueio. ----------
   saberSwing(e, ev) {
     const prof = saberProfile(WEAPONS[e.weapon]);
-    if (!e.alive || !prof) return;
+    if (e.soul || !e.alive || !prof) return;
     const o = obj3(ev[1]), dir = obj3(ev[2]);
     if (!this.eyeOk(e, o) || !dir) return;
     const st = ensureSaber(e);
@@ -1811,7 +1814,7 @@ startMsg() {
         if (!e.alive || e.zt || (!e.bot && !e.connected)) continue;
         const dx = e.pos.x - p.pos.x, dz = e.pos.z - p.pos.z; if (dx * dx + dz * dz > 1.5 || Math.abs(e.pos.y - p.pos.y) > 1.5) continue;
         const hpCap = e.hpCap > 0 ? e.hpCap : 100;
-        if (p.type === 'health') { if (e.hp >= hpCap) continue; e.hp = Math.min(hpCap, e.hp + 50); }
+        if (p.type === 'health') { const cursed = !!(this.invasion && this.inv && e.soul); if (e.hp >= hpCap && !cursed) continue; e.hp = Math.min(hpCap, e.hp + 50); if (cursed) this.inv.cure(e); }
         else if (p.type === 'grenade') { const sk = !e.bot && powerOn('stun', this.cfg.powers) && (e.shocks | 0) < SHOCK.max; if (e.nades >= NADE.max && !sk) continue; if (e.nades < NADE.max) e.nades++; if (sk) e.shocks = (e.shocks | 0) + 1; } // Copo Bomba também dá +1 pau de choque
         else if (!this.refillAmmo(e)) continue;
         p.active = false; p.respawnAt = this.T + (p.type === 'grenade' ? NADE.pickupRespawn : this.invasion && p.type === 'ammo' ? INV_AMMO.respawn : 15);
@@ -1828,9 +1831,10 @@ startMsg() {
       const age = this.T - b.born; if (age >= BACON_ITEM.life) return false; if (age < BACON_ITEM.from) return true;
       for (const e of this.ents.values()) {
         const hpCap = e.hpCap > 0 ? e.hpCap : 100;
-        if (!e.alive || e.zt || e.id === b.id || (!e.bot && !e.connected) || e.hp >= hpCap) continue;
+        const cursed = !!(this.invasion && this.inv && e.soul);
+        if (!e.alive || e.zt || e.id === b.id || (!e.bot && !e.connected) || (e.hp >= hpCap && !cursed)) continue;
         const dx = e.pos.x - b.x, dz = e.pos.z - b.z; if (dx * dx + dz * dz > R2 || Math.abs(e.pos.y - b.y) >= BACON_ITEM.dy) continue;
-        e.hp = Math.min(hpCap, e.hp + BACON_ITEM.heal); this.events.push(['bc', b.id, e.id, Math.round(e.hp)]); return false;
+        e.hp = Math.min(hpCap, e.hp + BACON_ITEM.heal); if (cursed) this.inv.cure(e); this.events.push(['bc', b.id, e.id, Math.round(e.hp)]); return false;
       }
       return true;
     });
@@ -2038,9 +2042,10 @@ startMsg() {
       hard: () => normInvDiff(g.cfg.invDiff) === 'hard', // Hardcore: sem cruz e sem Ressurreição (servidor manda)
       specFor: g.survival ? (w, n) => getSurvivalWaveTuning(w, n) : null,
       players: () => g.humans(),
-      spawnZombie(type, pos) {
+      spawnZombie(type, pos, parts) {
         const z = g.makeEnt({ name: '', skin: SKINS[0].id, primary: 0, bot: true }); z.zt = type;
-        z.name = (ZOMBIES[type] && ZOMBIES[type].name) || 'Zumbi';
+        if (parts && parts.length) z.parts = parts;
+        z.name = (type === 'mutant' ? 'Docão Mutação Macabra' : (ZOMBIES[type] && ZOMBIES[type].name)) || 'Zumbi';
         z.pos = { x: pos.x, y: pos.y, z: pos.z }; z.vel = { x: 0, y: 0, z: 0 }; z.alive = true; z.team = 1; z.invulnUntil = 0; z.weapon = KNIFE; z.slots = [KNIFE]; z.hist = []; z.respawnAt = Infinity;
         z.yaw = Math.atan2(-pos.x, -pos.z); g.pushHist(z);
         return z;
@@ -2050,7 +2055,7 @@ startMsg() {
       hurtPlayer(p, dmg, src) { g.damage(p, dmg, src || { fog: true, id: 0, zt: 'fog' }, src ? KNIFE : W_NADE, false, false, src ? null : 'fog'); },
       hurtZombie(z, dmg, by, kind) { g.damage(z, dmg, by, kind === 'fall' ? W_FALL : W_NADE, false, false, kind === 'fall' ? null : 'i' + POWER_KEYS.indexOf(kind)); },
       knock(e, v) { e.lastKnock = g.T; if (e.bot) { e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; } else g.toMe(e, ['kn', arr3(v)]); },
-      heal(p, hp) { p.hp = Math.min(100, p.hp + hp); g.toMe(p, ['heal', Math.round(p.hp)]); },
+      heal(p, hp) { p.hp = Math.min(100, p.hp + hp); g.toMe(p, ['heal', Math.round(p.hp)]); if (p.soul && g.inv) g.inv.cure(p); },
       revive(p, at, o) { p.needRs = false; p.rsReq = false; p.respawnAt = g.T + 0.4; p.reviveAt = at; p.reviveExact = !!(o && o.exact); p.reviveHp = (o && o.hp) || 0; }, // cruz: volta no lugar dela com meia vida
       invChanged(p) { const n = p.inv.length; if (n > (p.invSeen | 0)) g.cq(p, 'pw', n - (p.invSeen | 0)); p.invSeen = n; g.toMe(p, ['inv', p.inv.map((k) => POWER_KEYS.indexOf(k))]); },
       giveAmmo(p) { return g.refillAmmo(p); }, // caixa que o zumbi solta: o cliente espelha no 'dg'

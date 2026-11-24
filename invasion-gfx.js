@@ -239,6 +239,22 @@ export function makeZombie(type) {
   const flashMats = [suitM, suit2M, metalM, snoutM];
   return { group: g, body, legs, arms, head: headPivot, jaw: hg.userData.jaw || null, guns: [], flashMats, type, eyeM, boss };
 }
+// Dois modelos prontos, um de cada lado, costurados no meio. Cada metade continua com a animação do próprio tipo.
+export function makeMutant(a, b) {
+  const A = makeZombie(a), B = makeZombie(b);
+  A.pin = { x: -0.26, y: 0, z: 0, yaw: 0.42 };
+  B.pin = { x: 0.26, y: 0, z: 0, yaw: -0.42 };
+  A.group.scale.multiplyScalar(0.8);
+  B.group.scale.multiplyScalar(0.8);
+  const g = new THREE.Group();
+  g.add(A.group, B.group);
+  const seam = new THREE.Mesh(G.sph, glowMat('#d15cff'));
+  seam.scale.set(0.18, 0.28, 0.16);
+  seam.position.set(0, 1.05, 0.12);
+  g.add(seam);
+  g.userData.size = 1;
+  return { group: g, halves: [A, B], type: 'mutant', parts: [a, b], flashMats: A.flashMats.concat(B.flashMats), eyeM: A.eyeM, boss: false, legs: A.legs, arms: A.arms, body: A.body, head: A.head, jaw: A.jaw };
+}
 function pumpkinFaceTex() {
   return canvasTex(256, 128, (x, w, h) => {
     x.fillStyle = '#e8701a'; x.fillRect(0, 0, w, h);
@@ -250,6 +266,13 @@ function pumpkinFaceTex() {
 }
 // animação: andar arrastado, braços pra frente balançando, cabeça dando "tranco" (animatrônico), mandíbula abrindo, ataque
 export function animateZombie(m, z, dt, T, flashing) {
+  if (m.halves) {
+    const walk = z.walk || 0;
+    for (const h of m.halves) { z.walk = walk; animateZombie(h, z, dt, T, flashing); }
+    m.group.position.set(z.pos.x, z.pos.y, z.pos.z);
+    m.group.rotation.y = z.yaw;
+    return;
+  }
   const speed = Math.hypot(z.vel.x, z.vel.z); z.walk = (z.walk || 0) + dt * speed * (m.type === 'runner' ? 2.6 : 2.0);
   const sw = Math.sin(z.walk), k = Math.min(1, speed / 2);
   m.legs[0].rotation.x = sw * 0.7 * k; m.legs[1].rotation.x = -sw * 0.7 * k;
@@ -260,8 +283,9 @@ export function animateZombie(m, z, dt, T, flashing) {
   if (T > (z.twitchAt || 0)) { z.twitchAt = T + rnd(0.25, 1.6); z.twitch = [rnd(-0.35, 0.35), rnd(-0.5, 0.5), rnd(-0.3, 0.3)]; } // tranco de animatrônico
   const tw = z.twitch || [0, 0, 0]; m.head.rotation.set(tw[0] + (z.stunned ? 0.5 : 0), tw[1], tw[2] + (z.stunned ? Math.sin(T * 9) * 0.4 : 0));
   if (m.jaw) m.jaw.rotation.x = 0.15 + Math.max(0, Math.sin(T * (m.type === 'spitter' ? 5 : 7) + z.walk)) * 0.35 + swing * 0.5;
-  m.group.position.set(z.pos.x, z.pos.y + (z.onGround ? Math.abs(sw) * 0.05 : 0), z.pos.z);
-  m.group.rotation.y = z.yaw;
+  const bob = z.onGround ? Math.abs(sw) * 0.05 : 0;
+  if (m.pin) { m.group.position.set(m.pin.x, m.pin.y + bob, m.pin.z); m.group.rotation.y = m.pin.yaw; }
+  else { m.group.position.set(z.pos.x, z.pos.y + bob, z.pos.z); m.group.rotation.y = z.yaw; }
   m.body.rotation.z = Math.sin(z.walk * 0.5) * 0.08 * k;
   const pose = z.pose || '';
   if (m.type === 'sling' || m.type === 'bossHosp') {
@@ -272,7 +296,7 @@ export function animateZombie(m, z, dt, T, flashing) {
   if (pose === 'cry') {
     m.legs[0].rotation.x = 1.2; m.legs[1].rotation.x = 1.2;
     m.arms[0].rotation.x = 0.55; m.arms[1].rotation.x = 0.5;
-    m.body.rotation.x = 0.42; m.group.position.y = z.pos.y - 0.32;
+    m.body.rotation.x = 0.42; m.group.position.y = m.pin ? m.pin.y - 0.22 : z.pos.y - 0.32;
   } else if (pose === 'frenzy' || pose === 'rage') {
     m.body.rotation.x = pose === 'rage' ? 0.62 : 0.42;
     m.arms[0].rotation.x = -1.85; m.arms[1].rotation.x = -1.75;
