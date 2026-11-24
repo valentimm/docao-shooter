@@ -34,6 +34,7 @@ import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTOR
 import { HUPS, historiaSpot } from './shared/historia-ups.js';
 import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, platePoints } from './shared/historia-pass.js';
 import { createEgg, eggPrompt, eggCap, EGG_SPOTS } from './shared/historia-egg.js';
+import { breadBlocks } from './shared/historia-finale.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
@@ -2422,6 +2423,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (!t.alive || gameTime < t.invulnUntil || friends(t, attacker) || bombFrozen(bombS) || (gfLive() && gunfightFrozen(gfS))) return false; // sem fogo amigo; Bomba e Gunfight: sem dano na preparação
   if (!online && t.eggHideUntil > gameTime) return false;
   if (!online && t.zt && t.egg === 'lanche' && !isKnife(wIdx) && wIdx !== W_FALL) return false; // Lancheiro da tarde: só a faca
+  if (!online && breadBlocks(t, wIdx, gameTime)) return false; // pãozinho do Oclinhos: segura tiro por 3 s
   if (t.zt && t.phaseUntil > gameTime) return false; // Docão Fantasma faseado: imune
   if (t.zt) amount = zombieTaken(t, amount, wIdx === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
   if (!online && !t.zt && t.hImmuneUntil > gameTime) return false;
@@ -7623,6 +7625,7 @@ function hidePodium() {
   if (podiumStage) { podiumStage.dispose(); podiumStage = null; }
 }
 function endGame() {
+  stopStoryCut();
   stopInspect(true); stopEmote(); // fim no meio da inspeção ou da dança (a mira com zoom continua na câmera lenta)
   if (state === 'over' || !player) return;
   const boom = nukeWin; nukeWin = false; // Fim da chapa: o dono (ou o time dele) vence, mesmo atrás no placar
@@ -9344,7 +9347,7 @@ function remoteEnt(info) {
   const o = online; if (info.id === o.myId || o.ents.has(info.id)) return o.ents.get(info.id);
   if (info.zt) { // Invasão: zumbi do servidor
     const z = info.zt === 'shape' ? makeShapeEnt({ skin: info.skin, w: info.w, name: info.name }) : makeZombieEnt(info.zt, info.name, info.mu);
-    Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0, pose: ZPOSE[info.zp] || '', feral: !!info.fr, parts: info.mu || null, egg: info.eg || '' });
+    Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0, pose: ZPOSE[info.zp] || '', feral: !!info.fr, parts: info.mu || null, egg: info.eg || '', skin: info.skin || '', weapon: info.w | 0 });
     z.model.group.visible = false; o.ents.set(info.id, z); entities.push(z); return z;
   }
   const e = makeEntity(info.name, false, info.skin, info.tag || '#ffffff');
@@ -9940,8 +9943,8 @@ function makeZombieEnt(type, name, parts) {
 // zumbi: só visual (offline o core move; online vem do servidor)
 function updateZombie(z, dt) {
   const m = z.model;
-  if (!z.alive) { if (m && dieZombie(m, z, gameTime)) m.group.visible = false; if (z.soulMesh) z.soulMesh.group.visible = false; return; }
-  if (z.zt === 'shape' && m && m.legs) {
+  if (!z.alive) { if (m && m.group && m.group.userData.cast) { m.group.visible = false; return; } if (m && dieZombie(m, z, gameTime)) m.group.visible = false; if (z.soulMesh) z.soulMesh.group.visible = false; return; }
+  if ((z.zt === 'shape' || (m.group && m.group.userData.cast)) && m && m.legs) {
     if (z.remote) interpRemote(z);
     m.group.visible = true; animateBot(z, dt);
     if (z.pose === 'suck') m.group.rotation.x = 0.85;
@@ -10006,7 +10009,7 @@ function startInvasionOffline() {
     giveAmmo(p) { return !!p.isPlayer && refillAmmo(p); }, // caixa que o zumbi solta
     emit(ev) { invEvent(ev); },
     aimOf(p) { const d = new V3(); camera.getWorldDirection(d); return { o: camera.position.clone(), d }; },
-    over(won, wave) { setTimeout(() => endGame(), 1800); },
+    over(won) { const finale = !!(won && isHistoria(mode) && storyWaveCap() >= 30); if (finale) startStoryCut(); setTimeout(() => endGame(), finale ? 14000 : 1800); },
   });
   inv.start();
 }
@@ -10017,7 +10020,7 @@ function invEvent(ev) {
   const isMe = (id) => (online ? id === online.myId : !!player && id === player.id);
   if (k === 'wv') {
     const [, ph, w, x] = ev;
-    if (ph === 0) { if (isHistoria(mode)) { storyCapN = 0; storyEggMirror = null; for (const g of eggPee) if (g.mesh) scene.remove(g.mesh); eggPee = []; } invBanner(isHistoria(mode) ? 'HOTMILK À NOITE' : '🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'troque de arma no painel (B)'}`); }
+    if (ph === 0) { if (isHistoria(mode)) { storyCapN = 0; storyEggMirror = null; for (const g of eggPee) if (g.mesh) scene.remove(g.mesh); eggPee = []; clearStoryFire(); } invBanner(isHistoria(mode) ? 'HOTMILK À NOITE' : '🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'troque de arma no painel (B)'}`); }
     else if (ph === 1) {
       const bossName = x > 0 && ZOMBIES[BOSS_TYPES[x - 1]] ? ZOMBIES[BOSS_TYPES[x - 1]].name : '';
       const theme = ev[6] > 0 ? WAVE_THEMES[ev[6] - 1] : null;
@@ -10027,9 +10030,9 @@ function invEvent(ev) {
       invBanner(title, sub, !!(bossName || theme)); sfx.incoming(0.9); invClosePick();
     }
     else if (ph === 2) { invBanner(`WAVE ${w} LIMPA!`, `Pausa de ${survOn() ? getSurvivalWaveTuning(w).gap : INV.BREAK} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}`); sfx.pickup(); if (player && player.alive) invOpenPick(); }
-    else if (ph === 3) invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${storyWaveCap()} waves` : `Sobreviveu até a wave ${w}`, true);
+    else if (ph === 3) { invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${storyWaveCap()} waves` : `Sobreviveu até a wave ${w}`, true); if (x && isHistoria(mode) && storyWaveCap() >= 30) startStoryCut(); }
   } else if (k === 'za') { const z = ent(ev[1]); if (z) { z.atkT = gameTime; z.voiceAt = gameTime + 0.7; if (player && z.pos.distanceTo(player.pos) < 25) invasionSfx.voice(z.zt, distVol(z.pos) * 0.9, 'bite'); } }
-  else if (k === 'zs') { const [, id, style, p, v] = ev; const m = makeSpitMesh(style | 0); m.position.set(...p); scene.add(m); invGfx.projs.set(id, { m, pos: a3v(p), vel: a3v(v), born: gameTime, spit: true, cough: (style | 0) === 3 }); if (player) tone('sawtooth', style === 3 ? 90 : style === 1 ? 160 : style === 2 ? 120 : 320, style === 3 ? 40 : style === 1 ? 90 : 140, 0.18, 0.12 * distVol(a3v(p))); }
+  else if (k === 'zs') { const [, id, style, p, v] = ev; const st = style | 0; const grav = st === 3 ? 0.35 : st === 4 ? 0.35 : st === 5 ? 0.12 : st === 8 ? 0.04 : st === 9 ? 0.12 : 1; const m = makeSpitMesh(st); m.position.set(...p); scene.add(m); invGfx.projs.set(id, { m, pos: a3v(p), vel: a3v(v), born: gameTime, spit: true, grav, home: st === 5, life: st === 8 ? 8 : st === 5 ? 4.5 : 4 }); if (player) tone('sawtooth', st === 3 ? 90 : st === 1 ? 160 : st === 2 ? 120 : 320, st === 3 ? 40 : st === 1 ? 90 : 140, 0.18, 0.12 * distVol(a3v(p))); }
   else if (k === 'zx') { const [, id, c, style] = ev; invKillProj(id); const at = a3v(c); const st = style | 0; invRing(at, st === 3 ? '#d6ff6a' : st === 1 ? '#ff8a1a' : st === 2 ? '#c8b830' : '#7dff4a', 0.2, st === 3 ? 3.8 : st === 1 ? 3.6 : st === 2 ? 3.0 : 1.8, 0.4); if (st === 1 || st === 3) blastFx(at, st === 3 ? 3.8 : 3.6); else { puff(at, st === 2 ? 0xc8b830 : 0x7dff4a); noise(0.2, st === 2 ? 500 : 900, 0.3 * distVol(at), 'bandpass'); } }
   else if (k === 'hoffer') { if (isMe(ev[1])) { player.hOffer = ev.slice(2); player.hPOffer = null; openHOffer(player.hOffer, 'up'); } }
   else if (k === 'hgot') {
@@ -10193,8 +10196,14 @@ function invTick(dt) {
   invSyncCrosses(v);
   for (const [id, p] of invGfx.projs) {
     if (p.nade) { for (let s = 0; s < 2; s++) PHYS.stepNade(p.pos, p.vel, dt / 2); p.m.rotation.x += dt * 6; }
-    else { p.vel.y -= SPIT_GRAV * (p.cough ? 0.35 : 1) * dt; p.pos.addScaledVector(p.vel, dt); }
-    p.m.position.copy(p.pos); if (gameTime - p.born > 4.5) invKillProj(id);
+    else {
+      if (p.home && player && player.alive) {
+        const dx = player.pos.x - p.pos.x, dy = player.pos.y + 1 - p.pos.y, dz = player.pos.z - p.pos.z, L = Math.hypot(dx, dy, dz) || 1, sp = 6.5;
+        p.vel.x += (dx / L * sp - p.vel.x) * 0.18; p.vel.y += (dy / L * sp - p.vel.y) * 0.18; p.vel.z += (dz / L * sp - p.vel.z) * 0.18;
+      }
+      p.vel.y -= SPIT_GRAV * (p.grav != null ? p.grav : 1) * dt; p.pos.addScaledVector(p.vel, dt);
+    }
+    p.m.position.copy(p.pos); if (gameTime - p.born > (p.life || 4.5)) invKillProj(id);
   }
   for (let i = invGfx.rings.length - 1; i >= 0; i--) if (tickRing(invGfx.rings[i], dt)) { scene.remove(invGfx.rings[i]); invGfx.rings.splice(i, 1); }
   // lanterna: cone na frente de quem usou
@@ -10996,6 +11005,14 @@ function storyEggEvent(ev) {
   if (kind === 'shock') { const e = storyWho(ev[2]); if (e) { e.eggShock = true; e.eggShockNext = false; if (historiaMe(ev[2])) flashMsg('Controle da cancela · atire para dar choque'); } return; }
   if (kind === 'boost') { const e = storyWho(ev[2]); if (e) { e.hp = ev[3] | 0; e.hpCap = ev[4] | 0; } if (book && historiaMe(ev[2])) book.drunk[ev[2]] = 1; return; }
   if (kind === 'hp') { const e = storyWho(ev[2]); if (e) { e.hp = ev[3] | 0; e.hpCap = ev[4] | 0; e.eggShock = false; } return; }
+  if (kind === 'muro' && book) { book.muroTaken = true; return; }
+  if (kind === 'wv') { invBanner(ev[2], ev[3] || '', true); return; }
+  if (kind === 'fire') { ensureStoryFire(); return; }
+  if (kind === 'warn' && historiaMe(ev[2])) { flashMsg(ev[3]); msgTimer = 2.4; return; }
+  if (kind === 'bread') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z) z.breadUntil = gameTime + (+ev[3] || 3); return; }
+  if (kind === 'laser') { storyBeams.push({ x: ev[2], y: ev[3], z: ev[4], fx: ev[5], fz: ev[6], until: gameTime + 0.32, mesh: null }); return; }
+  if (kind === 'camp') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z && z.pos) { z.pos.set(ev[3], ev[4], ev[5]); if (z.vel) z.vel.set(0, 0, 0); } return; }
+  if (kind === 'ruin') { storyRuin(); return; }
 }
 function paintEggPrompt() {
   if (!isHistoria(mode) || state !== 'playing' || !player || !player.alive) return;
@@ -11056,6 +11073,8 @@ function stepEggLooks() {
   }
   for (const z of entities) {
     if (!z || !z.zt || !z.model || !z.model.group) continue;
+    if ((z.zt === 'corrupt' || z.zt === 'bossBig') && z.skin) dressCast(z);
+    dressStoryExtra(z);
     const s = z.egg === 'refri' ? 1.28 : z.egg === 'cria' ? 0.72 : z.egg === 'lanche' ? 1.05 : 0;
     if (s && !z.model.group.userData.eggFit) { z.model.group.scale.multiplyScalar(s); z.model.group.userData.eggFit = s; }
     if (z.egg === 'refri' && z.alive && Math.random() < 0.08) puff(center(z, (z.size || 1) * 1.2), 0xb7f3ff);
@@ -11068,6 +11087,157 @@ function stepEggLooks() {
     keep.push(g);
   }
   eggPee = keep;
+  stepStoryFire();
+  stepStoryBeams();
+  stepStoryCut();
+}
+let storyFire = null, storyBeams = [], storyCut = null, linkShirtTex = null;
+function linkShirtMap() {
+  if (linkShirtTex) return linkShirtTex;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = '#111'; x.fillRect(0, 0, 256, 96);
+  x.font = 'bold 42px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#F7A531';
+  x.fillText('LINK NELES', 128, 50);
+  linkShirtTex = new THREE.CanvasTexture(c); linkShirtTex.colorSpace = THREE.SRGBColorSpace;
+  return linkShirtTex;
+}
+function bigSkin() {
+  const item = itemById('c20');
+  if (item && item.costume) return Object.assign({ id: 'c20', name: 'Él Big' }, item.costume);
+  return getSkin('classico');
+}
+function dressCast(z) {
+  if (!z.model || !z.model.group || z.model.group.userData.cast) return;
+  const big = z.zt === 'bossBig';
+  scene.remove(z.model.group);
+  z.model = makeDocao(big ? bigSkin() : getSkin(z.skin || 'classico'));
+  if (z.pos) z.model.group.position.copy(z.pos);
+  z.model.group.rotation.y = z.yaw || 0;
+  z.model.group.userData.cast = 1;
+  z.model.group.userData.size = z.size || (big ? 2.15 : 1);
+  if (big) z.model.group.scale.setScalar(2.15);
+  scene.add(z.model.group);
+  z.bubble = new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 10), new THREE.MeshBasicMaterial({ color: 0x7DF9FF, transparent: true, opacity: 0.25, depthWrite: false }));
+  z.bubble.position.y = 1.1; z.bubble.visible = false; z.model.group.add(z.bubble);
+  if (z.swingT == null) z.swingT = 9;
+  const w = big ? 0 : ((z.weapon | 0) || 1);
+  z.weapon = w; z.slots = [w, w, KNIFE];
+  setWeapon(z, w);
+  if (big && z.model.guns) {
+    for (const g of z.model.guns) g.traverse((o) => {
+      if (!o.material || o.userData.isOutline) return;
+      for (const m of [].concat(o.material)) if (m.color) m.color.set('#d8261c');
+    });
+  }
+}
+function dressStoryExtra(z) {
+  const g = z.model.group;
+  const link = z.zt === 'sinuca' || z.zt === 'bonezinho' || z.zt === 'bossOclinhos';
+  if (link && !g.userData.link) {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: linkShirtMap(), depthWrite: false }));
+    spr.position.set(0, z.zt === 'bossOclinhos' ? 1.35 : 1.05, 0.46);
+    spr.scale.set(0.86, 0.32, 1);
+    g.add(spr);
+    const cue = new THREE.Mesh(new THREE.BoxGeometry(0.06, z.zt === 'bossOclinhos' ? 2.4 : 1.15, 0.06), new THREE.MeshBasicMaterial({ color: 0x8a5a28 }));
+    cue.position.set(0.42, 0.9, 0.15); cue.rotation.z = 0.7;
+    g.add(cue);
+    g.userData.link = 1;
+  }
+  if (z.zt === 'bossOclinhos' && !g.userData.specs) {
+    const specs = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.12, 0.06), new THREE.MeshBasicMaterial({ color: 0x111 }));
+    specs.position.set(0, 1.72, 0.42); g.add(specs); g.userData.specs = 1;
+  }
+  if (z.breadUntil > gameTime) {
+    if (!g.userData.bread) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry((z.size || 1) * 1.15, 12, 8), new THREE.MeshBasicMaterial({ color: 0xf2d27a, transparent: true, opacity: 0.38, depthWrite: false }));
+      s.position.y = 1.05; g.add(s); g.userData.bread = s;
+    }
+  } else if (g.userData.bread) { g.remove(g.userData.bread); g.userData.bread = null; }
+}
+const FIRE_SPOTS = [[-24, 7.2, 12], [24, 7.2, 12], [-22, 10, 40], [22, 10, 40], [0, 12, 28], [-8, 4.2, 22], [12, 6, 34], [20, 3, 8]];
+function ensureStoryFire() {
+  if (storyFire || !scene) return;
+  storyFire = new THREE.Group(); scene.add(storyFire);
+  for (const [x, y, z] of FIRE_SPOTS) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff6a1a, transparent: true, opacity: 0.9, depthWrite: false }));
+    s.position.set(x, y, z); s.scale.setScalar(1.6 + Math.random()); s.userData.base = s.scale.x;
+    storyFire.add(s);
+  }
+}
+function clearStoryFire() {
+  if (storyFire) { scene.remove(storyFire); storyFire = null; }
+  for (const b of storyBeams) if (b.mesh) scene.remove(b.mesh);
+  storyBeams = [];
+  if (eggSet) {
+    eggSet.userData.ruined = 0;
+    for (const c of [...eggSet.children]) if (c.name === 'patio') eggSet.remove(c);
+  }
+}
+function stepStoryFire() {
+  if (!storyFire) return;
+  let i = 0;
+  for (const s of storyFire.children) { s.scale.setScalar(s.userData.base * (0.75 + 0.35 * Math.abs(Math.sin(gameTime * 7 + i)))); i++; }
+}
+function storyRuin() {
+  ensureStoryFire();
+  if (!eggSet || eggSet.userData.ruined) return;
+  eggSet.userData.ruined = true;
+  if (storyFire) storyFire.visible = false;
+  const patio = new THREE.Mesh(new THREE.BoxGeometry(52, 0.08, 36), new THREE.MeshBasicMaterial({ color: 0x3a2a22 }));
+  patio.name = 'patio'; patio.position.set(0, 0.05, 28); eggSet.add(patio);
+  const grass = new THREE.Mesh(new THREE.BoxGeometry(18, 0.04, 10), new THREE.MeshBasicMaterial({ color: 0x2f6b32 }));
+  grass.name = 'patio'; grass.position.set(0, 0.1, 24); eggSet.add(grass);
+  flashMsg('O bloco 1 da Cheers virou pátio da HOTMILK');
+}
+function stepStoryBeams() {
+  const keep = [];
+  for (const b of storyBeams) {
+    if (b.until <= gameTime) { if (b.mesh) scene.remove(b.mesh); continue; }
+    if (!b.mesh) {
+      const len = 22;
+      b.mesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, len), new THREE.MeshBasicMaterial({ color: 0xF7A531 }));
+      b.mesh.position.set(b.x + b.fx * len * 0.5, b.y, b.z + b.fz * len * 0.5);
+      b.mesh.rotation.y = Math.atan2(b.fx, b.fz);
+      scene.add(b.mesh);
+    }
+    keep.push(b);
+  }
+  storyBeams = keep;
+}
+function ensureStoryCut() {
+  let el = $('storyCut');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'storyCut';
+  el.style.cssText = 'position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(12,6,4,0.92);color:#ffe7b0;font:700 28px sans-serif;text-align:center;padding:48px;letter-spacing:0.3px';
+  document.body.appendChild(el);
+  return el;
+}
+function startStoryCut() {
+  if (storyCut) return;
+  storyCut = { t0: gameTime };
+  const el = ensureStoryCut();
+  el.style.display = 'flex';
+  try { document.exitPointerLock(); } catch (e) { /* a câmera solta quando o navegador deixa */ }
+}
+function stopStoryCut() {
+  storyCut = null;
+  const el = $('storyCut'); if (el) el.style.display = 'none';
+}
+function stepStoryCut() {
+  if (!storyCut) return;
+  const el = ensureStoryCut();
+  const lines = [
+    'A HOTMILK ainda queima, mas a horda parou.',
+    'O Big da Cheers estava corrompido.',
+    'Vocês não vieram para matar. Vieram libertar.',
+    'O bloco 1 virou pátio. O C da camisa volta a brilhar.',
+    'O Big abre os olhos. Está livre.',
+    'A história da HOTMILK continua.',
+  ];
+  const i = Math.min(lines.length - 1, Math.floor((gameTime - storyCut.t0) / 2.2));
+  el.textContent = lines[i];
 }
 function stepHistoriaWorld(dt) {
   if (!isHistoria(mode)) {

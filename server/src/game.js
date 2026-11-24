@@ -11,6 +11,7 @@ import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with {
 setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE, normInvDiff } from '../../shared/invasion.js';
 import { passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto } from '../../shared/historia-pass.js';
+import { breadBlocks } from '../../shared/historia-finale.js';
 import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
@@ -1417,6 +1418,7 @@ startMsg() {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb) || gunfightFrozen(this.gf)) return false; // sem fogo amigo; Bomba e Gunfight: ninguém leva dano na preparação
     if (t.eggHideUntil > this.T) return false; // pulou o muro
     if (t.egg === 'lanche' && !isKnife(w) && w !== W_FALL) return false; // Lancheiro da tarde: só a faca
+    if (breadBlocks(t, w, this.T)) return false; // pãozinho do Oclinhos: segura tiro por 3 s
     if (t.zt && t.phaseUntil > this.T) return false; // Docão Fantasma faseado: imune
     if (t.zt) amount = zombieTaken(t, amount, w === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
     if (this.compMode) amount = mitigate(t, amount, head);

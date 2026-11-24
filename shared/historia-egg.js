@@ -109,12 +109,18 @@ export function notePool(book, p, wave) {
   return rec.n >= 3 ? 'snack' : rec.n;
 }
 
+export function claimMuro(book) {
+  if (!book || book.muroTaken || book.steps.muro) return false;
+  book.muroTaken = true;
+  return true;
+}
+
 export function eggPrompt(p, egg) {
   if (!p || !p.pos || !egg || !p.alive) return null;
   if (!egg.steps.cria && !egg.criaLeft && nearestUrinal(p.pos)) return { id: 'urina', text: 'Agache 3 vezes, dance com N e vire de costas' };
   if (!egg.steps.lanche && nearSpot(p.pos, EGG_SPOTS.pool, 2.3)) return { id: 'pool', text: 'E · encaçapar a bola (2 s)' };
   if (egg.fridge && !egg.drunk[p.id] && nearSpot(p.pos, EGG_SPOTS.fridge, 1.8)) return { id: 'fridge', text: 'E · beber o refrigerante da promo' };
-  if (!egg.steps.muro && !p.eggShockNext && !p.eggShock) {
+  if (!egg.muroTaken && !egg.steps.muro && !p.eggShockNext && !p.eggShock) {
     for (const w of EGG_SPOTS.walls) if (nearSpot(p.pos, w, 1.8)) return { id: w.id, text: 'E · pular o muro' };
   }
   return null;

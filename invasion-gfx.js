@@ -37,6 +37,13 @@ const ZCOL = {
   bat: { suit: '#3a2848', suit2: '#241830', snout: '#5a4068', eye: '#ff4a6a', metal: '#3a3040', hat: null },
   cry: { suit: '#6a8ec8', suit2: '#4a6a98', snout: '#8aa8d8', eye: '#9ad0ff', metal: '#4a5a70', hat: null },
   bossHosp: { suit: '#d8d2c6', suit2: '#b7aea0', snout: '#c8a898', eye: '#ff2020', metal: '#6a645c', hat: null },
+  filho: { suit: '#c45a28', suit2: '#8a3414', snout: '#e8a070', eye: '#ffe14a', metal: '#4a4038', hat: null },
+  sinuca: { suit: '#141414', suit2: '#2a2a2a', snout: '#c8a090', eye: '#7DF9FF', metal: '#6b3a1c', hat: null },
+  bonezinho: { suit: '#f4efe4', suit2: '#d8d0c4', snout: '#e8d8c8', eye: '#ff3030', metal: '#8a8078', hat: null },
+  bossMini: { suit: '#a82818', suit2: '#6c140e', snout: '#c85848', eye: '#ffd24a', metal: '#3a2c28', hat: null },
+  bossOclinhos: { suit: '#101010', suit2: '#2c2418', snout: '#d8b89a', eye: '#f7f7f7', metal: '#c8a050', hat: null },
+  bossBig: { suit: '#1a1a1a', suit2: '#d8261c', snout: '#e8c8a8', eye: '#F7A531', metal: '#3a3a3a', hat: '#111' },
+  corrupt: { suit: '#3a1848', suit2: '#140810', snout: '#c87898', eye: '#ff20a0', metal: '#2a1a30', hat: null },
 };
 let headGeo = null, torsoGeo = null;
 function getHeadGeo() {
@@ -480,6 +487,29 @@ export function makeSpitMesh(style) {
   if (style === 2) {
     const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#d4c84a')); m.scale.setScalar(0.2); g.add(m);
     const gl = glowSprite('#c8b830', 1.0); g.add(gl); return g;
+  }
+  if (style === 4) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#f2f2f2')); m.scale.setScalar(0.22); g.add(m);
+    const band = new THREE.Mesh(G.sph, glowMat('#d8261c')); band.scale.set(0.08, 0.22, 0.22); g.add(band); return g;
+  }
+  if (style === 5) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#111111')); m.scale.setScalar(0.28); g.add(m);
+    const spot = new THREE.Mesh(G.sph, glowMat('#f7f7f7')); spot.scale.setScalar(0.1); spot.position.z = 0.2; g.add(spot); return g;
+  }
+  if (style === 6) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.08, 12), glowMat('#e2b15a')); m.rotation.x = Math.PI / 2; g.add(m);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 12), glowMat('#d8261c')); top.rotation.x = Math.PI / 2; top.position.z = 0.04; g.add(top); return g;
+  }
+  if (style === 7) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(G.box, glowMat('#8a7560')); m.scale.set(0.55, 0.28, 0.4); g.add(m); return g;
+  }
+  if (style === 8) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(G.box, glowMat('#1c6b3a')); m.scale.set(2.1, 0.28, 1.15); g.add(m);
+    const felt = new THREE.Mesh(G.box, glowMat('#2f9e57')); felt.scale.set(1.7, 0.08, 0.85); felt.position.y = 0.16; g.add(felt); return g;
+  }
+  if (style === 9) {
+    const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#F7A531')); m.scale.setScalar(0.12); g.add(m);
+    g.add(glowSprite('#d8261c', 0.7)); return g;
   }
   const g = new THREE.Group(); const m = new THREE.Mesh(G.sph, glowMat('#8aff4a')); m.scale.setScalar(0.17); g.add(m); const gl = glowSprite('#7dff4a', 0.9); g.add(gl); return g;
 }
