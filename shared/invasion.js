@@ -6,6 +6,8 @@
 //  • 20 waves, cada uma mais difícil (mais zumbis, mais vida, mais rápidos). Da wave 13 em diante parte da
 //    horda nasce feroz: 1,5× o zumbi normal da wave, mais esperta e com um golpe a mais do próprio tipo.
 //    Às vezes a wave vira temática: a horda puxa para um grupo de zumbis que já entrou na rotação.
+//    Da wave 10 em diante, 1% dos zumbis comuns nasce Docão Mutação Macabra: dois tipos no mesmo corpo, com o poder dos dois.
+//    Com mais de um jogador, um Docão Shapeshifter (nunca dois ao mesmo tempo) nasce escondido, fora da visão: copia a pele e a arma de alguém e, se chegarem perto, suga a alma.
 //    Chefão a cada 5 waves (Abóbora, Barriguinha, Fantasma, Múmia, Lobisomem, Louco ou Hospício).
 //    Pausa de ~15 s entre as waves. Wave 20 = vitória.
 //  • 2 vidas por jogador: morreu com vida sobrando, renasce normal; sem vidas, fica assistindo.
@@ -76,8 +78,8 @@ export function shuffleBosses(rnd = Math.random) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-export const ZPOSE = ['', 'wind', 'sling', 'cry', 'frenzy', 'rage'];
-export const ZTYPES = ['walker', 'runner', 'tank', 'spitter', 'sling', 'bat', 'cry', ...BOSS_TYPES];
+export const ZPOSE = ['', 'wind', 'sling', 'cry', 'frenzy', 'rage', 'suck'];
+export const ZTYPES = ['walker', 'runner', 'tank', 'spitter', 'sling', 'bat', 'cry', ...BOSS_TYPES, 'shape'];
 export const ZOMBIES = {
   walker: { name: 'Docão Podre', hp: 110, speed: 4.4, dmg: 14, rate: 1.0, reach: 1.75, size: 1, drop: 0.06, weight: 1 },
   runner: { name: 'Esqueleto Corredor', hp: 55, speed: 6.6, dmg: 8, rate: 0.7, reach: 1.55, size: 0.95, drop: 0.05, weight: 0.7 },
@@ -90,6 +92,8 @@ export const ZOMBIES = {
   // Sentada chorando (apanha menos). Perto, corre. Um minuto sem levar tiro, corre também.
   // Só tiro, sem chegar perto: aos 25% fica ainda mais rápida.
   cry: { name: 'Docão Chorona', hp: 190, speed: 4.6, dmg: 14, rate: 0.85, reach: 1.6, size: 0.98, drop: 0.1, weight: 2.6, cry: { resist: 0.4, wake: 4.2, frenzy: 1.85, rage: 2.7, rageAt: 0.25, alone: 60 } },
+  // Copia pele e arma de um jogador. Não morde: anda como gente e, se alguém chega perto, suga a alma.
+  shape: { name: 'Docão Shapeshifter', hp: 240, speed: 5.6, dmg: 0, rate: 9, reach: 0, size: 1, drop: 0.08, weight: 1, shape: { near: 2.35, suck: 1 } },
   // Docão Abóbora: abóbora explosiva, ou estoura o chão em volta. Na hora de atacar, sorteia um.
   boss: { name: 'Docão Abóbora', hp: 2600, speed: 4.4, dmg: 36, rate: 1.3, reach: 2.7, size: 1.7, drop: 1, spit: { range: 34, keep: 0, every: 4.2, speed: 17, dmg: 26, radius: 3.6, big: 1 }, moves: [
     { kind: 'spit' },
@@ -162,11 +166,51 @@ export const zombieWeight = (type) => {
   const w = st && st.weight > 0 ? st.weight : 1;
   return feral ? w * FERAL : w;
 };
+// Docão Mutação Macabra: a partir da wave 10, 1% dos zumbis comuns nasce no lugar de outro.
+// Junta o tipo que ia nascer com um segundo tipo da horda e fica com o poder dos dois.
+export const MUTANT_FROM = 10;
+export const MUTANT_P = 0.01;
+export const MUTANT_NAME = 'Docão Mutação Macabra';
+const MUTANT_POOL = ['walker', 'runner', 'tank', 'spitter', 'sling', 'bat', 'cry'];
+export function rollMutantParts(type, rnd = Math.random) {
+  const pool = MUTANT_POOL.filter((k) => k !== type && ZOMBIES[k]);
+  if (!pool.length) return null;
+  const other = pool[Math.floor(rnd() * pool.length) % pool.length];
+  return [type, other];
+}
+export function mutantProfile(a, b) {
+  const A = ZOMBIES[a], B = ZOMBIES[b];
+  if (!A || !B) return null;
+  const st = {
+    name: MUTANT_NAME,
+    hp: Math.max(A.hp, B.hp),
+    speed: Math.max(A.speed, B.speed),
+    dmg: Math.max(A.dmg, B.dmg),
+    rate: Math.min(A.rate, B.rate),
+    reach: Math.max(A.reach, B.reach),
+    size: Math.max(A.size, B.size),
+    drop: Math.max(A.drop, B.drop),
+    weight: Math.max(A.weight, B.weight),
+    parts: [a, b],
+  };
+  if (A.boom || B.boom) st.boom = A.boom || B.boom;
+  if (A.spit || B.spit) st.spit = { ...(A.spit || B.spit) };
+  if (A.sling || B.sling) st.sling = A.sling || B.sling;
+  if (A.fly || B.fly) st.fly = Math.max(A.fly || 0, B.fly || 0);
+  if (A.cry || B.cry) st.cry = A.cry || B.cry;
+  return st;
+}
+export function zombieProfile(z) {
+  if (!z) return null;
+  if (z.zt === 'mutant' && z.parts && z.parts.length === 2) return mutantProfile(z.parts[0], z.parts[1]);
+  return ZOMBIES[z.zt] || null;
+}
+const partOf = (z, k) => !!(z && (z.zt === k || (z.parts && z.parts.includes(k))));
 // Chorona chorando toma menos dano. Cada tiro (queda do mapa não conta) reinicia o minuto.
 // Aos 25% da vida, sem ter acordado, entra no frenesi extremo.
 export function zombieTaken(z, amount, fall = false) {
   if (!z || !(amount > 0) || fall) return amount;
-  const st = ZOMBIES[z.zt];
+  const st = zombieProfile(z);
   if (!st || !st.cry) return amount;
   z.shots = (z.shots || 0) + 1;
   if (z.mood === 'frenzy' || z.mood === 'rage') return amount;
@@ -225,7 +269,7 @@ export function waveSpec(w, n = 1) {
 // Waves temáticas. from = primeira wave em que todo tipo do tema já entrou na rotação normal.
 // O mix substitui o da wave: o orçamento continua o mesmo, mas a horda puxa para o tema.
 // THEME_P é a chance de a wave ser temática, entre as que já podem acontecer.
-export const THEME_P = 0.4;
+export const THEME_P = 0.2;
 export const WAVE_THEMES = [
   { id: 'aereo', name: 'Ataque Aéreo', from: 5, blurb: 'O céu fechou de morcego.', mix: { bat: 7, walker: 0.4 } },
   { id: 'esqueleto', name: 'Corrida de Esqueleto', from: 2, blurb: 'Os esqueletos saíram na frente.', mix: { runner: 6, walker: 0.4 } },
@@ -279,6 +323,12 @@ export function waveQueue(spec, rnd = Math.random) {
     if (wgt > budget + 1e-6) { k = light; feral = false; wgt = zombieWeight(k); }
     q.push(feral ? 'f:' + k : k);
     budget -= wgt;
+  }
+  if ((spec.n | 0) > 1 && q.length) {
+    const walkers = [];
+    q.forEach((t, idx) => { if (spawnKind(t).type === 'walker') walkers.push(idx); });
+    const pool = walkers.length ? walkers : q.map((_, idx) => idx);
+    q[pool[Math.floor(rnd() * pool.length) % pool.length]] = 'shape';
   }
   return q;
 }
@@ -364,7 +414,7 @@ export class InvasionCore {
     this.stepDrops(T);
     this.stepCrosses(dt);
     for (const z of this.zombies.filter((x) => !x.alive && T >= x.removeAt)) { this.zombies = this.zombies.filter((x) => x !== z); this.A.removeZombie(z); }
-    if (this.phase === 'wave' && !this.queue.length && !this.bossPending && !this.liveZombies().length) this.endWave();
+    if (this.phase === 'wave' && !this.queue.length && !this.bossPending && !this.liveZombies().length) { this.shapeWant = false; this.endWave(); }
     const H = this.A.players();
     if (H.length && H.every((p) => !p.alive && p.out)) { if (!this.overAt) this.overAt = T + 1.2; else if (T >= this.overAt) this.finish(false); }
     else this.overAt = 0;
@@ -425,11 +475,52 @@ export class InvasionCore {
   stepSpawns(T) {
     const S = this.spec;
     if (this.bossPending && T >= this.bossAt) { const kind = (this.spec && this.spec.bossKind) || bossOfWave(this.wave); const z = this.spawn(kind); if (z) { this.bossPending = false; this.bossId = z.id; } }
-    if (!this.queue.length || T < this.nextSpawn) return;
-    if (this.liveZombies().length >= S.maxAlive) { this.nextSpawn = T + 0.4; return; }
-    const burst = Math.min(S.batch || 1, S.maxAlive - this.liveZombies().length); // lote (sem passar do teto)
-    for (let i = 0; i < burst && this.queue.length; i++) if (this.spawn(this.queue[0])) this.queue.shift();
-    this.nextSpawn = T + S.spawnEvery * (0.6 + this.rnd() * 0.8);
+    if (this.queue.length) {
+      const rest = [];
+      let want = false;
+      for (const t of this.queue) {
+        if (spawnKind(t).type === 'shape') want = true;
+        else rest.push(t);
+      }
+      if (want) { this.queue = rest; if (!this.zombies.some((z) => z.alive && z.zt === 'shape')) this.shapeWant = true; }
+    }
+    if (this.queue.length && T >= this.nextSpawn) {
+      if (this.liveZombies().length >= S.maxAlive) this.nextSpawn = T + 0.4;
+      else {
+        const burst = Math.min(S.batch || 1, S.maxAlive - this.liveZombies().length); // lote (sem passar do teto)
+        for (let i = 0; i < burst && this.queue.length; i++) if (this.spawn(this.queue[0])) this.queue.shift();
+        this.nextSpawn = T + S.spawnEvery * (0.6 + this.rnd() * 0.8);
+      }
+    }
+    this.tryShape(T);
+  }
+  // Só um no mapa. Nasce num ponto andável que nenhum jogador vivo enxerga, para não verem o surgimento.
+  tryShape(T) {
+    if (!this.shapeWant) return;
+    if (this.zombies.some((z) => z.alive && z.zt === 'shape')) { this.shapeWant = false; return; }
+    if (T < (this.nextShape || 0)) return;
+    const pos = this.shapePos();
+    if (!pos || !this.spawn('shape', pos)) { this.nextShape = T + 0.5; return; }
+    this.shapeWant = false;
+  }
+  shapePos() {
+    const custom = this.A.spawnPoints ? this.A.spawnPoints() : null;
+    const good = (custom && custom.length ? custom : ((this.A.nav && this.A.nav.good) || []));
+    if (!good.length) return null;
+    const H = this.A.players().filter((p) => this.visible(p)), P = this.A.P;
+    const hidden = (nd) => {
+      for (const p of H) {
+        if (d3(nd, p.pos) < 6) return false;
+        if (P && P.losClear && P.losClear({ x: p.pos.x, y: p.pos.y + 1.6, z: p.pos.z }, { x: nd.x, y: (nd.y || 0) + 1.2, z: nd.z })) return false;
+      }
+      return true;
+    };
+    const tries = Math.min(good.length, 80);
+    for (let i = 0; i < tries; i++) {
+      const nd = good[Math.floor(this.rnd() * good.length) % good.length];
+      if (hidden(nd)) return { x: nd.x, y: nd.y, z: nd.z };
+    }
+    return null;
   }
   // onde nasce um zumbi: ponto ALEATÓRIO andável do mapa inteiro (nav.good = chão alcançável, fora de parede),
   // a pelo menos SPAWN_MIN m de todo jogador vivo e, se der, fora da linha de visão deles (sem susto à queima-roupa)
@@ -452,19 +543,29 @@ export class InvasionCore {
     }
     return best ? { x: best.x, y: best.y, z: best.z } : null;
   }
-  spawn(token) {
+  spawn(token, at) {
     const { type, feral } = spawnKind(token);
-    const pos = this.spawnPos(); if (!pos) return null;
-    const st = ZOMBIES[type]; if (!st) return null;
+    if (type === 'shape' && this.zombies.some((z) => z.alive && z.zt === 'shape')) return null;
+    const pos = at || (type === 'shape' ? this.shapePos() : this.spawnPos()); if (!pos) return null;
+    const waveN = Math.max(this.wave | 0, (this.spec && this.spec.w) | 0);
+    let zt = type, parts = null;
+    if (type !== 'shape' && !isBoss(type) && waveN >= MUTANT_FROM && this.rnd() < MUTANT_P) {
+      parts = rollMutantParts(type, this.rnd);
+      if (parts) zt = 'mutant';
+    }
+    const st = zt === 'mutant' ? mutantProfile(parts[0], parts[1]) : ZOMBIES[type];
+    if (!st) return null;
+    const face = type === 'shape' ? this.copyFace() : null;
     const S = this.spec || waveSpec(1, 1);
-    const z = this.A.spawnZombie(type, pos); if (!z) return null;
+    const z = this.A.spawnZombie(zt, pos, parts, face); if (!z) return null;
     const waveMul = S.bossHp > 0 ? S.bossHp / ZOMBIES.boss.hp : (S.bossHpMul > 0 ? S.bossHpMul : 1);
     const fierce = feral ? FERAL : 1;
     const hp = (isBoss(type) ? st.hp * waveMul : st.hp * S.hpMul) * fierce;
-    Object.assign(z, { zt: type, zi: ZTYPES.indexOf(type), hp, maxHp: hp, alive: true, spd: st.speed * S.spdMul * (0.92 + this.rnd() * 0.16) * fierce, dmgMul: (S.dmgMul || 1) * fierce, size: st.size, feral,
+    Object.assign(z, { zt, parts, zi: ZTYPES.indexOf(zt), hp, maxHp: hp, alive: true, spd: st.speed * S.spdMul * (0.92 + this.rnd() * 0.16) * fierce, dmgMul: (S.dmgMul || 1) * fierce, size: st.size, feral,
       nextAtk: this.T + 0.6, nextSpit: this.T + 1 + this.rnd() * st.rate, nextHowl: this.T + 2 + this.rnd() * 2, nextPhase: this.T + 3 + this.rnd() * 2, nextFeral: this.T + 0.8 + this.rnd() * 1.4, phaseUntil: 0, stunUntil: 0, target: null, retarget: 0, node: null, nodeAt: -9, stuck: 0, removeAt: Infinity, lastLos: false, losAt: -9,
       mood: st.cry ? 'cry' : '', pose: st.cry ? 'cry' : '', fly: !!st.fly, slingWind: 0, slingFly: 0, nextSling: this.T + 0.6, surge: false, quietAt: st.cry ? this.T : 0, shots: 0, shotsSeen: 0, rushUntil: 0, leapUntil: 0, diveUntil: 0 });
-    if (feral) z.name = `${st.name} Feroz`;
+    if (face) { z.face = face; z.skin = face.skin; z.weapon = face.w | 0; z.primary = z.weapon; z.name = face.name; }
+    else z.name = feral ? `${st.name} Feroz` : st.name;
     z.vel.x = z.vel.y = z.vel.z = 0; z.onGround = true; z.crouch = 0;
     this.zombies.push(z); if (this.A.spawned) this.A.spawned(z); return z;
   }
@@ -581,14 +682,15 @@ export class InvasionCore {
   }
   // Elástico arma e se joga (alcance limitado). Chorona senta até acordar.
   trick(z, st, t, dh, dx, dz, dy, T) {
+    let cryOut = null;
     if (st.cry) {
       this.cryClock(z, st, T);
       if (z.mood !== 'rage' && dh < st.cry.wake && Math.abs(dy) < 2.4) z.mood = 'frenzy';
       if (z.mood !== 'frenzy' && z.mood !== 'rage') return { override: true, hold: true, noBite: true, pose: 'cry' };
-      return { spMul: z.mood === 'rage' ? st.cry.rage : st.cry.frenzy, pose: z.mood };
+      cryOut = { spMul: z.mood === 'rage' ? st.cry.rage : st.cry.frenzy, pose: z.mood };
     }
     const sling = z.slingSpec || st.sling;
-    if (!sling) return null;
+    if (!sling) return cryOut;
     if (z.slingFly > T && z.slingDir) return { override: true, mx: z.slingDir.x, mz: z.slingDir.z, sp: sling.speed, pose: 'sling' };
     if (z.slingWind && T >= z.slingWind && z.slingArm) {
       const arm = z.slingArm;
@@ -600,7 +702,7 @@ export class InvasionCore {
       return { override: true, mx: arm.x, mz: arm.z, sp: sling.speed, pose: 'sling' };
     }
     if (z.slingWind > T) return { override: true, hold: true, pose: 'wind' };
-    if (st.moves) return null;
+    if (st.moves) return cryOut;
     if (z.lastLos && T >= (z.nextSling || 0) && dh > 3.2 && dh <= sling.range) {
       z.slingWind = T + sling.wind;
       z.nextSling = T + sling.cd;
@@ -608,32 +710,111 @@ export class InvasionCore {
       if (z.feral) { z.slingHit = st.dmg * 0.85; z.slingStun = 0.5; }
       return { override: true, hold: true, pose: 'wind' };
     }
-    return null;
+    return cryOut;
   }
   // Golpe extra do feroz. O normal continua valendo; isto só acrescenta um.
   feralAct(z, st, t, dh, dx, dz, dy, T, trick) {
-    if (T < (z.nextFeral || 0)) return;
+    if (!z.feral || T < (z.nextFeral || 0)) return;
+    const types = z.parts && z.parts.length ? z.parts : [z.zt];
+    const last = z.feralKind;
+    const ordered = last && types.includes(last) ? types.filter((k) => k !== last).concat(last) : types;
     const held = !!(trick && trick.hold);
-    if (z.zt === 'walker' && !held && z.lastLos && dh > 2.6 && dh < 9) {
-      z.nextFeral = T + 3.6; z.rushUntil = T + 0.48; z.rushDir = { x: dx / dh, z: dz / dh };
-    } else if (z.zt === 'runner' && !held && z.lastLos && dh > 3.4 && dh < 12 && !(z.leapUntil > T)) {
-      z.nextFeral = T + 2.6; z.leapUntil = T + 0.42; z.leapDir = { x: dx / dh, z: dz / dh };
-      z.vel.y = Math.max(z.vel.y, 6.4); z.onGround = false;
-    } else if (z.zt === 'tank' && dh < 4.8 && Math.abs(dy) < 2.2) {
-      z.nextFeral = T + 4.6;
-      this.bossNova(z, { dmg: 14, radius: 3.2, knock: 5.5, style: 1 });
-    } else if (z.zt === 'spitter' && z.lastLos && st.spit && dh > 4 && dh < st.spit.range + 2) {
-      z.nextFeral = T + 5.4;
-      this.spit(z, t, 0, { ...st.spit, pee: 1, slow: 1.8, dmg: 9, radius: 2.2, speed: st.spit.speed * 0.9 });
-    } else if (z.zt === 'bat' && dh < 9 && z.pos.y > t.pos.y + 1.3) {
-      z.nextFeral = T + 3.2; z.diveUntil = T + 0.65;
-    } else if (z.zt === 'cry' && z.mood !== 'frenzy' && z.mood !== 'rage' && dh < 7.2) {
-      z.nextFeral = T + 4.5;
-      this.bossHowl(z, { radius: 6.2, stun: 0.8, dmg: 5 }, 0);
+    for (const kind of ordered) {
+      if (kind === 'walker' && !held && z.lastLos && dh > 2.6 && dh < 9) {
+        z.nextFeral = T + 3.6; z.feralKind = kind; z.rushUntil = T + 0.48; z.rushDir = { x: dx / dh, z: dz / dh }; return;
+      } else if (kind === 'runner' && !held && z.lastLos && dh > 3.4 && dh < 12 && !(z.leapUntil > T)) {
+        z.nextFeral = T + 2.6; z.feralKind = kind; z.leapUntil = T + 0.42; z.leapDir = { x: dx / dh, z: dz / dh };
+        z.vel.y = Math.max(z.vel.y, 6.4); z.onGround = false; return;
+      } else if (kind === 'tank' && dh < 4.8 && Math.abs(dy) < 2.2) {
+        z.nextFeral = T + 4.6; z.feralKind = kind;
+        this.bossNova(z, { dmg: 14, radius: 3.2, knock: 5.5, style: 1 }); return;
+      } else if (kind === 'spitter' && z.lastLos && st.spit && dh > 4 && dh < st.spit.range + 2) {
+        z.nextFeral = T + 5.4; z.feralKind = kind;
+        this.spit(z, t, 0, { ...st.spit, pee: 1, slow: 1.8, dmg: 9, radius: 2.2, speed: st.spit.speed * 0.9 }); return;
+      } else if (kind === 'bat' && dh < 9 && z.pos.y > t.pos.y + 1.3) {
+        z.nextFeral = T + 3.2; z.feralKind = kind; z.diveUntil = T + 0.65; return;
+      } else if (kind === 'cry' && z.mood !== 'frenzy' && z.mood !== 'rage' && dh < 7.2) {
+        z.nextFeral = T + 4.5; z.feralKind = kind;
+        this.bossHowl(z, { radius: 6.2, stun: 0.8, dmg: 5 }, 0); return;
+      }
     }
   }
+  copyFace() {
+    const all = this.A.players().filter((p) => p && !p.zt);
+    const live = all.filter((p) => p.alive);
+    const pool = live.length ? live : all;
+    const who = pool.length ? pool[Math.floor(this.rnd() * pool.length) % pool.length] : null;
+    if (!who) return { skin: '', w: 0, name: ZOMBIES.shape.name };
+    const w = who.weapon != null ? who.weapon : (who.primary != null ? who.primary : 0);
+    return { skin: who.skin || who.skinId || '', w: w | 0, name: who.name || ZOMBIES.shape.name };
+  }
+  curse(p, z) {
+    if (!p || p.zt || !p.alive) return;
+    p.soul = z.id;
+    this.A.emit(['soul', p.id, z.id]);
+  }
+  cure(p) {
+    if (!p || !p.soul) return;
+    p.soul = 0;
+    this.A.emit(['soul', p.id, 0]);
+  }
+  cureBy(id) { for (const p of this.A.players()) if (p && p.soul === id) this.cure(p); }
+  stepShape(z, dt, T) {
+    const P = this.A.P, nav = this.A.nav, spec = ZOMBIES.shape.shape || {};
+    const near = spec.near || 2.35, suckT = spec.suck || 1;
+    const find = (id) => this.A.players().find((p) => p && p.id === id);
+    const pose = (name) => { const i = ZPOSE.indexOf(name); if (z.pose === name) return; z.pose = name; this.A.emit(['zp', z.id, i < 0 ? 0 : i]); };
+    if (z.suck) {
+      const p = find(z.suck.id);
+      if (!p || !p.alive || p.zt) { z.suck = null; pose(''); }
+      else {
+        const dx = p.pos.x - z.pos.x, dz = p.pos.z - z.pos.z, d = Math.hypot(dx, dz) || 1;
+        z.yaw = Math.atan2(dx, dz);
+        z.vel.x = (dx / d) * 9; z.vel.z = (dz / d) * 9;
+        if (!z.suck.hopped) { z.vel.y = 7; z.suck.hopped = true; }
+        pose('suck');
+        if (P && P.moveEntity) P.moveEntity(z, dt, nav, { step: 0.42, h: 1.7 });
+        if (T >= z.suck.until) {
+          if (p.alive && !p.zt) this.curse(p, z);
+          z.suck = null; pose(''); z.nextSuck = T + 3;
+        }
+        return;
+      }
+    }
+    let prey = null, bd = near;
+    const H = this.A.players().filter((p) => this.visible(p) && !p.zt);
+    for (const p of H) {
+      if (Math.abs(p.pos.y - z.pos.y) > 2.2) continue;
+      const d = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
+      if (d < bd && !(z.nextSuck > T)) { bd = d; prey = p; }
+    }
+    if (prey) {
+      z.suck = { id: prey.id, until: T + suckT, hopped: false };
+      pose('suck');
+      return;
+    }
+    if (!z.goal || z.goalT < T || z.stuck > 2.5) {
+      const spot = nav && typeof nav.good === 'function' ? nav.good(this.rnd) : (nav && nav.good && nav.good.length ? nav.good[Math.floor(this.rnd() * nav.good.length)] : null);
+      z.goal = spot ? { x: spot.x, y: spot.y, z: spot.z } : { x: (this.A.fog && this.A.fog.cx) || 0, y: z.pos.y, z: (this.A.fog && this.A.fog.cz) || 0 };
+      z.goalT = T + 4 + this.rnd() * 3;
+      z.stuck = 0;
+    }
+    const dx = z.goal.x - z.pos.x, dz = z.goal.z - z.pos.z, d = Math.hypot(dx, dz);
+    if (d < 1.2) { z.vel.x = z.vel.z = 0; z.goalT = 0; }
+    else {
+      z.yaw = Math.atan2(dx, dz);
+      z.vel.x = (dx / d) * z.spd; z.vel.z = (dz / d) * z.spd;
+      const moved = Math.hypot(z.pos.x - (z.px || z.pos.x), z.pos.z - (z.pz || z.pos.z));
+      z.stuck = moved < 0.04 ? z.stuck + dt : 0;
+    }
+    z.px = z.pos.x; z.pz = z.pos.z;
+    if (z.pose) pose('');
+    if (P && P.moveEntity) P.moveEntity(z, dt, nav, { step: 0.42, h: 1.7 });
+  }
   stepZombie(z, dt, T) {
-    const st = ZOMBIES[z.zt], P = this.A.P, tune0 = zombieTune(this.A.botDiff), tune = z.feral ? feralTune(tune0) : tune0;
+    if (z.zt === 'shape') { this.stepShape(z, dt, T); return; }
+    const st = zombieProfile(z), P = this.A.P, tune0 = zombieTune(this.A.botDiff), tune = z.feral ? feralTune(tune0) : tune0;
+    if (!st) return;
     if (st.cry) this.cryClock(z, st, T);
     if (st.phaseEvery && T >= z.nextPhase) { // Docão Fantasma: some por alguns segundos (imune)
       z.phaseUntil = T + st.phaseDur; z.nextPhase = T + st.phaseEvery * (0.85 + this.rnd() * 0.3);
@@ -660,10 +841,11 @@ export class InvasionCore {
         for (let i = 0; i < n; i++) this.spit(z, t, i * 0.08);
       }
       const reach = st.reach * Math.max(1, z.size * 0.85);
-      if (st.fly) { mx = dx / dh; mz = dz / dh; z.aiState = 'fly'; }
-      else if (trick && trick.override) {
+      const runnerSide = partOf(z, 'runner') ? 1.35 : 1;
+      if (trick && trick.override) {
         mx = trick.hold ? 0 : (trick.mx || 0); mz = trick.hold ? 0 : (trick.mz || 0);
-      } else if (this.A.survival) {
+      } else if (st.fly) { mx = dx / dh; mz = dz / dh; z.aiState = 'fly'; }
+      else if (this.A.survival) {
         const nav = this.A.nav;
         const straight = !!(z.lastLos && nav && dh < 16 && Math.abs(dy) < 1.35 && dh > reach * 0.55 && nav.walk(z.pos, t.pos) >= 0);
         if (straight) { mx = dx / dh; mz = dz / dh; z.aiState = 'direct'; z.route = null; }
@@ -673,7 +855,7 @@ export class InvasionCore {
           else { z.aiState = 'hold'; }
         } else z.aiState = 'seek';
         if ((mx || mz) && tune.flank > 0 && dh > reach * 2) {
-          const side = (z.id % 2 ? 1 : -1) * (z.zt === 'runner' ? 1.35 : 1);
+          const side = (z.id % 2 ? 1 : -1) * runnerSide;
           mx += (-dz / dh) * tune.flank * 0.05 * side; mz += (dx / dh) * tune.flank * 0.05 * side;
         }
         if (mx || mz) {
@@ -689,7 +871,7 @@ export class InvasionCore {
         else if (goDirect) { if (dh > st.reach * 0.6) { mx = dx / dh; mz = dz / dh; } }
         else { const s = this.flowDir(z, T); if (s) { mx = s.x; mz = s.z; } else { mx = dx / dh; mz = dz / dh; } }
         // cerco: cada zumbi puxa um pouco pro lado (par/ímpar) pra não empilhar na mesma porta. 0 no Leitão e na Ceva.
-        if (tune.flank > 0 && dh > st.reach * 2) { const side = (z.id % 2 ? 1 : -1) * (z.zt === 'runner' ? 1.35 : 1); mx += (-dz / dh) * tune.flank * 0.08 * side; mz += (dx / dh) * tune.flank * 0.08 * side; }
+        if (tune.flank > 0 && dh > st.reach * 2) { const side = (z.id % 2 ? 1 : -1) * runnerSide; mx += (-dz / dh) * tune.flank * 0.08 * side; mz += (dx / dh) * tune.flank * 0.08 * side; }
       }
       if (z.feral) this.feralAct(z, st, t, dh, dx, dz, dy, T, trick);
       if (z.rushUntil > T && z.rushDir && !(trick && trick.override)) { mx = z.rushDir.x; mz = z.rushDir.z; }
@@ -734,7 +916,7 @@ export class InvasionCore {
       const L = hyp(trick.mx || 0, trick.mz || 0) || 1;
       z.vel.x = (trick.mx || 0) / L * trick.sp; z.vel.z = (trick.mz || 0) / L * trick.sp;
     }
-    if (st.fly && P && P.groundAt) {
+    if (st.fly && P && P.groundAt && !(trick && trick.hold)) {
       const floor = P.groundAt(z.pos.x, z.pos.z, z.pos.y + 0.15);
       const diving = !!(t && z.diveUntil > T);
       const aim = diving ? t.pos.y + 0.35 : (t ? t.pos.y + 1.15 : floor + st.fly);
@@ -999,8 +1181,9 @@ export class InvasionCore {
   // zumbi morreu (o host chama depois de tirar ele do jogo): drop de poder e explosão do Barrigão
   onZombieDeath(z, killer) {
     z.alive = false; z.removeAt = this.T + INV.ZOMBIE_LINGER; this.kills++;
-    const st = ZOMBIES[z.zt];
-    if (st.boom) {
+    if (z.zt === 'shape') this.cureBy(z.id);
+    const st = zombieProfile(z);
+    if (st && st.boom) {
       const c = { x: z.pos.x, y: z.pos.y + 1, z: z.pos.z }; this.A.emit(['zb', z.id, [r2(c.x), r2(c.y), r2(c.z)]]);
       for (const p of this.A.players()) {
         if (!p.alive) continue; const d = d3({ x: p.pos.x, y: p.pos.y + 1, z: p.pos.z }, c); if (d > st.boom.radius) continue;
@@ -1010,8 +1193,9 @@ export class InvasionCore {
       }
     }
     if (z.id === this.bossId) { for (let i = 0; i < 2; i++) this.drop(z.pos, i === 0); this.dropAmmo(z.pos, 1.4); this.dropAmmo(z.pos, 1.4); return; }
-    if (this.rnd() < st.drop) this.drop(z.pos, false);
-    if (this.rnd() < (INV_AMMO.zdrop[z.zt] || 0)) this.dropAmmo(z.pos, 0.6);
+    if (st && this.rnd() < st.drop) this.drop(z.pos, false);
+    const ammoP = z.parts && z.parts.length ? Math.max(...z.parts.map((k) => INV_AMMO.zdrop[k] || 0)) : (INV_AMMO.zdrop[z.zt] || 0);
+    if (this.rnd() < ammoP) this.dropAmmo(z.pos, 0.6);
   }
   dropAmmo(pos, off) { // caixa de munição (não ocupa slot de poder): quem precisa de munição e pisa ganha
     const a = this.rnd() * Math.PI * 2, x = clamp(pos.x + Math.cos(a) * off, -this.hx + 1, this.hx - 1), z = clamp(pos.z + Math.sin(a) * off, -this.hz + 1, this.hz - 1);
@@ -1164,7 +1348,7 @@ export class InvasionCore {
     }
   }
   spit(z, t, delay = 0, spec = null) {
-    const S = spec || ZOMBIES[z.zt].spit; if (!S) return;
+    const S = spec || (zombieProfile(z) || {}).spit; if (!S) return;
     const o = { x: z.pos.x + Math.sin(z.yaw) * 0.5 * z.size, y: z.pos.y + 1.45 * z.size, z: z.pos.z + Math.cos(z.yaw) * 0.5 * z.size };
     const tune = zombieTune(this.A.botDiff), lead = tune.spitLead + delay, err = tune.spitErr + (delay ? 0.6 : 0);
     const to = { x: t.pos.x + (t.vel ? t.vel.x : 0) * lead + (this.rnd() - 0.5) * 2 * err, y: t.pos.y + 0.9, z: t.pos.z + (t.vel ? t.vel.z : 0) * lead + (this.rnd() - 0.5) * 2 * err };

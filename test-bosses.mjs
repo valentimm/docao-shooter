@@ -1,5 +1,5 @@
 // Chefões da Invasão: rotação, peso da horda e os zumbis novos. Uso: node test-bosses.mjs
-import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore, coreView, FERAL, FERAL_ACT, FERAL_FROM, feralChance, feralTune, spawnKind, THEME_P, WAVE_THEMES, themesForWave, rollTheme, applyTheme, themeIndex, INV_CROSS } from './shared/invasion.js';
+import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore, coreView, FERAL, FERAL_ACT, FERAL_FROM, feralChance, feralTune, spawnKind, THEME_P, WAVE_THEMES, themesForWave, rollTheme, applyTheme, themeIndex, INV_CROSS, MUTANT_FROM, MUTANT_P, MUTANT_NAME, mutantProfile, rollMutantParts } from './shared/invasion.js';
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
@@ -313,6 +313,64 @@ ok(seen.size >= 8, 'o sorteio alcança temas diferentes');
   ok(themed.spec.theme && themed.spec.theme !== 'aereo', 'a wave seguinte não repete o mesmo tema');
 }
 
+// ---------- Docão Mutação Macabra ----------
+{
+  const mix = mutantProfile('tank', 'spitter');
+  ok(MUTANT_FROM === 10 && MUTANT_P === 0.01 && mix && mix.name === MUTANT_NAME && mix.boom && mix.spit && mix.hp === ZOMBIES.tank.hp && mix.speed === Math.max(ZOMBIES.tank.speed, ZOMBIES.spitter.speed), 'mutação junta a vida do mais forte com o poder dos dois');
+  const crying = { zt: 'mutant', parts: ['walker', 'cry'], hp: 190, maxHp: 190, mood: 'cry' };
+  ok(Math.abs(zombieTaken(crying, 10) - 4) < 1e-6, 'mutação com chorona apanha menos enquanto chora');
+  ok(rollMutantParts('walker', () => 0)[1] === 'runner', 'o segundo tipo sai da horda comum');
+  function hatch(wave, rnd) {
+    const core = new InvasionCore({
+      size: [30, 30], T: () => 10, rnd, nav: { good: [{ x: 20, y: 0, z: 0, id: 0 }] },
+      players: () => [{ id: 1, alive: true, pos: { x: 0, y: 0, z: 0 }, ghostUntil: 0 }],
+      P: { groundAt: () => 0, collides: () => false, losClear: () => false },
+      spawnZombie(type, pos, parts) { return { id: 1, zt: type, parts: parts || null, name: '', pos: { ...pos }, vel: { x: 0, y: 0, z: 0 } }; },
+      emit() {},
+    });
+    core.wave = wave;
+    core.spec = { ...waveSpec(wave, 1), hpMul: 1, spdMul: 1, dmgMul: 1, bossHp: 0 };
+    return core.spawn('walker');
+  }
+  const early = hatch(9, () => 0);
+  ok(early && early.zt === 'walker' && !early.parts, 'antes da wave 10 o zumbi continua normal');
+  const born = hatch(10, () => 0);
+  ok(born && born.zt === 'mutant' && born.parts[0] === 'walker' && born.parts[1] === 'runner' && born.name === MUTANT_NAME && born.hp === ZOMBIES.walker.hp, 'na wave 10, 1% troca o zumbi por uma mutação');
+  ok(hatch(10, () => 0.5).zt === 'walker', 'acima de 1% a wave 10 continua a horda normal');
+  const bossCore = new InvasionCore({
+    size: [30, 30], T: () => 10, rnd: () => 0, nav: { good: [{ x: 20, y: 0, z: 0, id: 0 }] },
+    players: () => [{ id: 1, alive: true, pos: { x: 0, y: 0, z: 0 }, ghostUntil: 0 }],
+    P: { groundAt: () => 0, collides: () => false, losClear: () => false },
+    spawnZombie(type, pos) { return { id: 2, zt: type, name: '', pos: { ...pos }, vel: { x: 0, y: 0, z: 0 } }; },
+    emit() {},
+  });
+  bossCore.wave = 10;
+  bossCore.spec = { ...waveSpec(10, 1), hpMul: 1, spdMul: 1, dmgMul: 1, bossHp: ZOMBIES.boss.hp };
+  const boss = bossCore.spawn('boss');
+  ok(boss && boss.zt === 'boss' && !boss.parts, 'chefão não vira mutação');
+  let T = 8;
+  const player = { id: 1, alive: true, pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, ghostUntil: 0, stunUntil: 0 };
+  const events = [];
+  const hurts = [];
+  const live = new InvasionCore({
+    T: () => T, size: [40, 40], botDiff: 'ceva', rnd: () => 0.2, nav: null,
+    players: () => [player],
+    P: { groundAt: () => 0, losClear: () => true, collides: () => false, moveEntity() { return false; } },
+    emit(ev) { events.push(ev[0]); }, hurtPlayer(p, d) { hurts.push(d); }, knock() {},
+  });
+  const z = {
+    id: 4, zt: 'mutant', parts: ['spitter', 'tank'], hp: 520, maxHp: 520, alive: true, name: MUTANT_NAME,
+    pos: { x: 8, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, yaw: Math.PI, size: 1.3, spd: 4, dmgMul: 1, feral: false,
+    nextAtk: 99, nextSpit: 0, nextHowl: 99, nextPhase: 99, nextFeral: 99, phaseUntil: 0, stunUntil: 0,
+    target: player, retarget: 99, lastLos: true, losAt: T, mood: '', pose: '', fly: false, slingWind: 0, slingFly: 0, nextSling: 99, onGround: true,
+  };
+  live.stepZombie(z, 0.05, T);
+  ok(events.includes('zs'), 'mutação com cuspidor cospe');
+  z.pos = { x: 1, y: 0, z: 0 };
+  live.onZombieDeath(z);
+  ok(hurts.length > 0, 'mutação com barrigão explode ao morrer');
+}
+
 // ---------- cruz (Normal): desenterrar quem perdeu a última vida ----------
 {
   ok(INV_CROSS.hold === 5 && INV_CROSS.key === 'KeyE', 'desenterrar leva 5 s na tecla de desarmar');
@@ -359,6 +417,60 @@ ok(seen.size >= 8, 'o sorteio alcança temas diferentes');
   const snap = coreView(core);
   ok(snap.crosses.length === 1 && snap.crosses[0].id === 1 && snap.crosses[0].x === 4 && Math.abs(snap.crosses[0].prog - 2) < 0.02 && snap.crosses[0].by === 2, 'o estado leva a cruz e a barra pro HUD');
   ok(view && view.phase === 'break', 'a cruz não mexe na fase da wave');
+}
+
+// ---------- Docão Shapeshifter ----------
+{
+  const solo = waveQueue(waveSpec(1, 1), () => 0.5);
+  ok(!solo.includes('shape'), 'sozinho a horda não tem shapeshifter');
+  const duo = waveQueue(waveSpec(1, 2), () => 0.5);
+  ok(duo.filter((t) => t === 'shape').length === 1, 'com dois jogadores um zumbi da fila vira shapeshifter');
+  const ev = [];
+  const ana = { id: 1, name: 'Ana', skin: 'rosa', weapon: 4, alive: true, hp: 80, pos: { x: 1.2, y: 0, z: 0 }, inv: [] };
+  const beto = { id: 2, name: 'Beto', skin: 'azul', weapon: 2, alive: true, hp: 90, pos: { x: 28, y: 0, z: 0 }, inv: [] };
+  const cris = { id: 3, name: 'Cris', alive: true, hp: 100, soul: 99, pos: { x: 20, y: 0, z: 20 }, inv: [] };
+  const core = new InvasionCore({
+    size: [80, 80], T: () => 5, rnd: () => 0,
+    nav: { good: [{ x: 40, y: 0, z: 0, id: 0 }] },
+    players: () => [ana, beto, cris],
+    P: { groundAt: () => 0, collides: () => false, losClear: () => false, moveEntity(e, dt) { e.pos.x += (e.vel.x || 0) * dt; e.pos.y += (e.vel.y || 0) * dt; e.pos.z += (e.vel.z || 0) * dt; } },
+    spawnZombie(type, pos, parts, face) { return { id: 9, zt: type, parts: parts || null, face, pos: { ...pos }, vel: { x: 0, y: 0, z: 0 } }; },
+    emit(evn) { ev.push(evn); },
+  });
+  core.wave = 10;
+  core.spec = { ...waveSpec(10, 2), hpMul: 1, spdMul: 1, dmgMul: 1, bossHp: 0 };
+  const z = core.spawn('shape');
+  ok(z && z.zt === 'shape' && !z.parts && z.name === 'Ana' && z.skin === 'rosa' && z.weapon === 4 && z.pos.x === 40, 'shapeshifter copia pele, arma e nome e nasce no ponto escondido');
+  ok(!core.spawn('shape') && core.zombies.filter((x) => x.alive && x.zt === 'shape').length === 1, 'enquanto um está vivo, outro não nasce');
+  core.queue = ['walker', 'shape']; core.nextSpawn = 0; core.wave = 1; core.spec.w = 1; core.spec.maxAlive = 20; core.spec.batch = 4; core.spec.spawnEvery = 1;
+  core.stepSpawns(5);
+  ok(core.zombies.filter((x) => x.alive && x.zt === 'shape').length === 1 && !core.queue.includes('shape') && core.zombies.some((x) => x.zt === 'walker'), 'a fila tira o segundo shapeshifter e o resto da horda nasce');
+  z.pos = { x: 0, y: 0, z: 0 };
+  core.stepShape(z, 0.05, 0);
+  ok(z.suck && z.suck.id === ana.id && !ana.soul && z.pose === 'suck', 'se chega perto ele pula, e a alma ainda está no lugar');
+  core.stepShape(z, 0.05, 1);
+  ok(ana.soul === z.id && !beto.soul && cris.soul === 99 && ev.some((e) => e[0] === 'soul' && e[1] === ana.id && e[2] === z.id), 'um segundo de sucção vira zumbi só quem estava perto');
+  ok(!ev.some((e) => e[0] === 'za'), 'shapeshifter não morde nem atira');
+  core.cure(ana);
+  ok(!ana.soul && ev.some((e) => e[0] === 'soul' && e[1] === ana.id && e[2] === 0), 'pegar vida ou ser curado devolve a alma');
+  core.curse(ana, z);
+  core.onZombieDeath(z);
+  ok(!ana.soul && cris.soul === 99 && !z.alive, 'se o shapeshifter que sugou morre, só a alma dele volta');
+}
+{
+  const eye = { id: 1, alive: true, pos: { x: 0, y: 0, z: 0 }, ghostUntil: 0 };
+  const mk = (los) => new InvasionCore({
+    size: [40, 40], T: () => 0, rnd: () => 0,
+    nav: { good: [{ x: 10, y: 0, z: 0 }] },
+    players: () => [eye],
+    P: { groundAt: () => 0, collides: () => false, losClear: () => los },
+    spawnZombie: (type, pos) => ({ id: 4, zt: type, pos: { ...pos }, vel: { x: 0, y: 0, z: 0 } }),
+    emit() {},
+  });
+  const open = mk(true);
+  ok(!open.shapePos() && !open.spawn('shape'), 'à vista dos jogadores o shapeshifter não aparece');
+  const hid = mk(false).shapePos();
+  ok(hid && hid.x === 10 && hid.z === 0, 'sem linha de visão ele nasce direto nesse ponto');
 }
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK');
