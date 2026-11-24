@@ -35,6 +35,7 @@ import { HUPS, historiaSpot } from './shared/historia-ups.js';
 import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, platePoints } from './shared/historia-pass.js';
 import { createEgg, eggPrompt, eggCap, EGG_SPOTS } from './shared/historia-egg.js';
 import { breadBlocks } from './shared/historia-finale.js';
+import { ULTS, frenzyTaken } from './shared/historia-ult.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
@@ -2358,6 +2359,11 @@ function rocketSmoke(r, R) {
 // ---------------- Combate ----------------
 // Mapas de caixas usam a penetração do servidor. O Breeze usa a malha visual para parar a bala.
 function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
+  if (isHistoria(mode) && shooter && !shooter.zt && shooter.ultForm === 'frenesi' && shooter.ultUntil > gameTime) {
+    if (shooter.isPlayer && online) netEv(['qe', 'arm']);
+    else if (!online && inv) inv.frenzyArm(shooter);
+    return { hit: false, kill: false, kills: 0, wall: false };
+  }
   if (isHistoria(mode) && shooter && !shooter.zt && shooter.eggHideUntil > gameTime) return { hit: false, kill: false, kills: 0, wall: false };
   if (isHistoria(mode) && shooter && shooter.eggShock && !shooter.zt) { storyShockPulse(shooter); return { hit: false, kill: false, kills: 0, wall: false }; }
   if (!online && shooter) hearGunshot(entities, origin, shooter, gameTime); // bots surdos (Leitão/Ceva) ignoram; os outros vão investigar, sem atirar no som
@@ -2424,6 +2430,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (!online && t.eggHideUntil > gameTime) return false;
   if (!online && t.zt && t.egg === 'lanche' && !isKnife(wIdx) && wIdx !== W_FALL) return false; // Lancheiro da tarde: só a faca
   if (!online && breadBlocks(t, wIdx, gameTime)) return false; // pãozinho do Oclinhos: segura tiro por 3 s
+  if (!online && t.friendly && attacker && !attacker.zt) return false; // Docão amigo: o tiro do player não pega nele
   if (t.zt && t.phaseUntil > gameTime) return false; // Docão Fantasma faseado: imune
   if (t.zt) amount = zombieTaken(t, amount, wIdx === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
   if (!online && !t.zt && t.hImmuneUntil > gameTime) return false;
@@ -2435,6 +2442,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (!online && compOn()) amount = mitigate(t, amount, head);
   if (!online) amount = subidoTaken(t, amount);
   if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
+  if (!online) amount = frenzyTaken(amount, t, gameTime);
   t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); if (!online && attacker && attacker !== t && attacker.fun) notePodiumHurt(attacker.fun, amount); // regen só com dano de outro
   if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
   if (t.isPlayer) { hurtFlash(); noteHit(origin); if (attacker && attacker !== t) noteFlinch(amount); sfx.oink(0.8, 1.15); }
@@ -5864,7 +5872,11 @@ function updatePlayer(dt) {
   }
   // mira com zoom: segura o botão direito (Shift agacha; com a faca o botão direito é a estocada). No ferrolho da sniper a luneta desce pra mão aparecer.
   const guiding = !!predator || !!gunner || !!ac130;
-  stepCrouch(p, (p.down || p.tank || p.big) ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
+  const ultOn = isHistoria(mode) && p.ultForm && p.ultUntil > gameTime;
+  if (isHistoria(mode) && p.ultForm && !ultOn) { if (p.ultForm === 'vampiro') p.fly = 0; p.ultForm = ''; }
+  const vamp = ultOn && p.ultForm === 'vampiro';
+  const bebado = ultOn && p.ultForm === 'bebado';
+  stepCrouch(p, (p.down || p.tank || p.big || vamp) ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
   const bolting = fp.actionT > 0 && WEAPONS[p.weapon].bolt;
   updateAds(dt, !p.utilSel && !p.down && !guiding && !bolting && !emote.on && !isKnife(p.weapon) && !isSaber(p.weapon) && !WEAPONS[p.weapon].noAds && rightDown && p.reloadEnd <= gameTime && p.switchEnd <= gameTime); // minigun sem zoom: o botão direito só embala. Caído não mira. Granada na mão: o direito joga na força mínima.
   if (p.weapon !== MINIGUN && p.mgHeat) { p.mgHeat = Math.max(0, p.mgHeat - WEAPONS[MINIGUN].spin.cool * dt); if (p.mgHeat <= 0) p.mgHot = false; } // guardada também esfria
@@ -5879,6 +5891,7 @@ function updatePlayer(dt) {
   p.graveHold = !!(graveSpot && p.useHold); // Invasão Normal: cavando a cruz (mesmo E do useHold)
   if (p.graveHold) { wish.set(0, 0, 0); const dx = graveSpot.grave.x - p.pos.x, dz = graveSpot.grave.z - p.pos.z; if (dx * dx + dz * dz > 0.04) p.yaw = Math.atan2(-dx, -dz); } // cavando: olha pra cruz e não anda
   if (p.hRootUntil > gameTime) wish.set(0, 0, 0); // Pelo bem da Cheers: parado
+  if (bebado) wish.set(0, 0, 0);
   if (p.eggHideUntil > gameTime) { wish.set(0, 0, 0); p.vel.x = p.vel.z = 0; } // pulou o muro: some por 10 s
   if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * (p.down ? DOWNED.speed : 1) * (p.hSpeedUntil > gameTime ? 1.5 : 1) * (isHistoria(mode) ? passoMul(p) : 1) * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime && !(p.flashUntil > gameTime) ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // caído rasteja. Em pé: faca corre; sabre anda normal; agachado anda mais devagar. Flashbang não deixa lento. Passinho do Hotmilk soma em cima.
   if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(p.propLock ? 0 : HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
@@ -5888,9 +5901,24 @@ function updatePlayer(dt) {
   if (p.shieldDashUntil > gameTime && !bombLock(p)) wish.copy(fwd).multiplyScalar(SHIELD.charge.speed); // investida curta, na direção da mira
   const acc = p.onGround ? 14 : 4;
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
+  if (bebado && p.ultAnchor) {
+    p.ultAng = (p.ultAng || 0) + dt * 2.1;
+    const nx = p.ultAnchor.x + Math.cos(p.ultAng) * 3.2, nz = p.ultAnchor.z + Math.sin(p.ultAng) * 3.2;
+    p.vel.x = clamp((nx - p.pos.x) / Math.max(dt, 0.016), -8, 8);
+    p.vel.z = clamp((nz - p.pos.z) / Math.max(dt, 0.016), -8, 8);
+    p.vel.y = 0; p.yaw += dt * 2.4;
+  }
   jetVertical(p, !!(spaceHold && !chatTyping() && !guiding && !bombLock(p) && !gfLock(p)), dt);
-  if (!p.fly && !p.down && !p.tank && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !p.graveHold && !(hideS && p.propLock) && !(p.hRootUntil > gameTime) && !(p.eggHideUntil > gameTime)) { p.vel.y = JUMP * (isHistoria(mode) ? molaMul(p) : 1); p.onGround = false; sfx.jump(); }
+  if (vamp) {
+    const up = !!(spaceHold && !chatTyping() && !guiding);
+    const down = !!(keys.ShiftLeft || keys.ShiftRight);
+    const target = up ? 7 : down ? -6.5 : 0;
+    p.vel.y += (target - p.vel.y) * Math.min(1, 6 * dt);
+    p.fly = 1;
+  }
+  if (!p.fly && !vamp && !bebado && !p.down && !p.tank && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !p.graveHold && !(hideS && p.propLock) && !(p.hRootUntil > gameTime) && !(p.eggHideUntil > gameTime)) { p.vel.y = JUMP * (isHistoria(mode) ? molaMul(p) : 1); p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
+  p.hPhase = !!(isHistoria(mode) && p.hPhaseUntil > gameTime);
   moveEntity(p, dt);
   checkFall(p); if (!p.alive) return;
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
@@ -5922,6 +5950,7 @@ function updatePlayer(dt) {
   if (p.tank) { fireTank(p); return; }
   if (p.graveHold) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; return; } // pá na mão: sem tiro até soltar
   if (p.soul) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; return; } // alma sugada: zumbi não atira nem golpeia
+  if (bebado) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; camera.rotation.z += Math.sin(gameTime * 8) * 0.28; return; }
   if (emote.on) { // dança: anda e olha, mas a arma não dispara até a animação acabar
     if (gameTime >= emote.until) stopEmote();
     else {
@@ -5940,6 +5969,13 @@ function updatePlayer(dt) {
   const canFire = p.reloadEnd <= gameTime || (w.shellReload && p.mag[p.weapon] > 0);
   if (survOn() && p.papUntil > gameTime && p.papGun === p.weapon) return; // a Papada está com a arma
   const latched = !mouseDown && clickLatch && performance.now() - clickLatch < (w.burst ? 450 : 250); // FAMAS: clique na pausa entre rajadas fica guardado pra próxima
+  if (ultOn && p.ultForm === 'frenesi') {
+    if ((mouseDown || latched) && p.stunUntil <= gameTime && gameTime >= p.nextFire && p.switchEnd <= gameTime) {
+      firedThisPress = true; clickLatch = 0; p.nextFire = gameTime + 0.48;
+      if (online) netEv(['qe', 'arm']); else if (inv) inv.frenzyArm(p);
+    }
+    return;
+  }
   if (w.shield) { // clique = porrada; botão direito = investida (não é granada nem a tecla F)
     const rLatched = !rightDown && rightLatch && performance.now() - rightLatch < 250;
     if (!p.charging && p.stunUntil <= gameTime && p.switchEnd <= gameTime) {
@@ -10996,7 +11032,13 @@ function storyEggEvent(ev) {
   if (kind === 'cap') { storyCapN = ev[2] | 0; return; }
   if (kind === 'step' && book) { book.steps[ev[2]] = true; return; }
   if (kind === 'fridge' && book) { book.fridge = true; return; }
-  if (kind === 'z') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z) { z.egg = ev[3]; if (ev[4]) z.name = ev[4]; if (ev[5] > 0) z.hp = z.maxHp = ev[5]; if (ev[6] > 0) z.size = ev[6]; } return; }
+  if (kind === 'z') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z) { z.egg = ev[3]; if (ev[3] === 'ally') z.friendly = true; if (ev[4]) z.name = ev[4]; if (ev[5] > 0) z.hp = z.maxHp = ev[5]; if (ev[6] > 0) z.size = ev[6]; } return; }
+  if (kind === 'ult') { const e = storyWho(ev[2]); const u = ULTS[ev[3]]; if (e && u) { e.hUlt = ev[3]; e.hSel = ev[3]; if (historiaMe(ev[2])) flashMsg(`${u.icon} ${u.name}`); } return; }
+  if (kind === 'form') { const e = storyWho(ev[2]); if (e) { e.ultForm = ev[3]; e.ultUntil = gameTime + (+ev[4] || 0); } return; }
+  if (kind === 'ally') { redressUltAlly(ev[2], ev[3], +ev[4] || 0); return; }
+  if (kind === 'line') { storyBeams.push({ x: ev[2], y: ev[3], z: ev[4], fx: ev[5], fz: ev[6], len: 78, color: 0xf4f1ea, until: gameTime + 0.38, mesh: null }); return; }
+  if (kind === 'pud') { storyPuddle(ev[2], ev[3], ev[4], ev[5], ev[6]); return; }
+  if (kind === 'arm') { const e = storyWho(ev[2]); if (e && e.pos) { puff(center(e, 1.4), 0x7dff4a); historiaRing(e.pos, '#b6ff3b', 3.2); } return; }
   if (kind === 'pee') { eggPee.push({ x: ev[2], y: ev[4] || 0.04, z: ev[3], until: gameTime + 5.5, mesh: null }); return; }
   if (kind === 'zap') { historiaRing({ x: ev[3], y: ev[4], z: ev[5] }, '#7DF9FF', 6.5); tone('square', 180, 90, 0.12, 0.22); return; }
   if (kind === 'anim') { const e = storyWho(ev[2]); if (e) { e.hAnim = 'joelhos'; e.hAnimUntil = gameTime + (ev[3] === 'wall' ? 0.8 : 2); if (ev[3] === 'wall' && historiaMe(ev[2])) { e.vel.y = 8; e.onGround = false; } } return; }
@@ -11061,10 +11103,15 @@ function stepEggLooks() {
     if (p.model && p.model.group) {
       if (hidden) { if (p._eggVis == null) p._eggVis = p.model.group.visible; p.model.group.visible = false; }
       else if (p._eggVis != null) { p.model.group.visible = p._eggVis; p._eggVis = null; }
+      const big = !hidden && p.ultForm === 'frenesi' && p.ultUntil > gameTime;
+      const s = big ? 1.85 : 1;
+      if (p.model.group.userData.ultScale !== s) { p.model.group.scale.setScalar(s); p.model.group.userData.ultScale = s; }
     }
     if (historiaMe(p.id) && fp && fp.root) {
       if (hidden) { if (p._eggFp == null) p._eggFp = fp.root.visible; fp.root.visible = false; }
       else if (p._eggFp != null) { fp.root.visible = p._eggFp; p._eggFp = null; }
+      const big = !hidden && p.ultForm === 'frenesi' && p.ultUntil > gameTime;
+      fp.root.scale.setScalar(big ? 1.65 : 1);
     }
     if (p.eggSuit && p.model && p.model.group && !p.model.group.userData.suit) {
       const vest = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.55, 0.42), new THREE.MeshBasicMaterial({ color: 0x1f6b45 }));
@@ -11079,6 +11126,10 @@ function stepEggLooks() {
     if (s && !z.model.group.userData.eggFit) { z.model.group.scale.multiplyScalar(s); z.model.group.userData.eggFit = s; }
     if (z.egg === 'refri' && z.alive && Math.random() < 0.08) puff(center(z, (z.size || 1) * 1.2), 0xb7f3ff);
     if (z.egg === 'lanche' && z.alive) z.model.group.position.y = (z.pos.y || 0) + Math.sin(gameTime * 4) * 0.04;
+    if (z.friendly && z.alive && !z.model.group.userData.ally) {
+      const mark = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0x3ecf6e }));
+      mark.position.y = 2.05; z.model.group.add(mark); z.model.group.userData.ally = 1;
+    }
   }
   const keep = [];
   for (const g of eggPee) {
@@ -11087,11 +11138,34 @@ function stepEggLooks() {
     keep.push(g);
   }
   eggPee = keep;
+  for (let i = ultPuddles.length - 1; i >= 0; i--) {
+    if (ultPuddles[i].until > gameTime) continue;
+    scene.remove(ultPuddles[i].mesh);
+    ultPuddles.splice(i, 1);
+  }
   stepStoryFire();
   stepStoryBeams();
   stepStoryCut();
 }
-let storyFire = null, storyBeams = [], storyCut = null, linkShirtTex = null;
+let storyFire = null, storyBeams = [], storyCut = null, linkShirtTex = null, ultPuddles = [];
+function storyPuddle(x, z, y, r, dur) {
+  if (!scene) return;
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(Math.max(1, +r || 7), 22), new THREE.MeshBasicMaterial({ color: 0xd6e24a, transparent: true, opacity: 0.42, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, (y || 0) + 0.06, z); scene.add(mesh);
+  ultPuddles.push({ mesh, until: gameTime + (+dur || 8) });
+}
+function redressUltAlly(id, zt, size) {
+  const z = online ? entOf(id) : (inv && inv.zombies.find((x) => x.id === id));
+  if (!z) return;
+  z.zt = zt || z.zt; z.friendly = true; z.egg = 'ally';
+  if (size > 0) z.size = size;
+  if (!z.model || !z.model.group || !scene) return;
+  scene.remove(z.model.group);
+  z.model = makeZombie(z.zt);
+  z.model.group.userData.size = z.size || 1;
+  if (z.pos) z.model.group.position.copy(z.pos);
+  scene.add(z.model.group);
+}
 function linkShirtMap() {
   if (linkShirtTex) return linkShirtTex;
   const c = document.createElement('canvas'); c.width = 256; c.height = 96;
@@ -11195,8 +11269,8 @@ function stepStoryBeams() {
   for (const b of storyBeams) {
     if (b.until <= gameTime) { if (b.mesh) scene.remove(b.mesh); continue; }
     if (!b.mesh) {
-      const len = 22;
-      b.mesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, len), new THREE.MeshBasicMaterial({ color: 0xF7A531 }));
+      const len = b.len || 22;
+      b.mesh = new THREE.Mesh(new THREE.BoxGeometry(b.len ? 0.28 : 0.16, b.len ? 0.28 : 0.16, len), new THREE.MeshBasicMaterial({ color: b.color || 0xF7A531 }));
       b.mesh.position.set(b.x + b.fx * len * 0.5, b.y, b.z + b.fz * len * 0.5);
       b.mesh.rotation.y = Math.atan2(b.fx, b.fz);
       scene.add(b.mesh);
@@ -11292,9 +11366,10 @@ function historiaActor(pid) {
   return online ? entOf(pid) : null;
 }
 function historiaWhy(id) {
-  const u = HUPS[id];
+  const u = HUPS[id] || ULTS[id];
   if (!player || !u) return 'Agora não';
-  if (!(player.hUps || []).includes(id)) return 'Você ainda não tem esse upgrade';
+  if (ULTS[id]) { if (player.hUlt !== id) return 'Esse ultimate não é seu'; }
+  else if (!(player.hUps || []).includes(id)) return 'Você ainda não tem esse upgrade';
   if (!player.alive || player.down) return 'Só de pé';
   if (player.hRootUntil > gameTime) return 'Você está parado';
   const left = player.hCd && player.hCd[id] > gameTime ? Math.ceil(player.hCd[id] - gameTime) : 0;
@@ -11339,6 +11414,20 @@ function historiaUse(id, extra) {
   if (id === 'grok' && !aimed) { openHMap(); return; }
   if (online) {
     let x = player.pos.x, z = player.pos.z;
+    const ult = ULTS[id];
+    if (ult) {
+      const T = gameTime;
+      if (!player.hCd) player.hCd = {};
+      player.hPend = id; player.hCd[id] = T + ult.cd;
+      if (ult.dur > 0) { player.ultForm = id; player.ultUntil = T + ult.dur; }
+      if (id === 'ceo') player.hPhaseUntil = T + ult.dur;
+      else if (id === 'vampiro') { player.fly = 1; player.hHopUntil = T + ult.dur; }
+      else if (id === 'bebado') { player.hImmuneUntil = T + ult.dur; player.ultAnchor = { x: player.pos.x, z: player.pos.z }; player.ultAng = 0; }
+      else if (id === 'vendedor') player.hImmuneUntil = T + ult.dur;
+      const d = historiaAim();
+      netEv(['hu', id, x, z, d.x, d.y, d.z]);
+      return;
+    }
     if (id === 'cafe') {
       const yaw = player.yaw || 0;
       player.vel.x += -Math.sin(yaw) * 13;
@@ -11366,9 +11455,10 @@ function historiaUseSelected() {
   if (!historiaLive() || !player.alive || player.down) return;
   if (player.hRootUntil > gameTime) { flashMsg('Você está parado'); return; }
   const ups = player.hUps || [];
-  const ready = (id) => !!(id && ups.includes(id) && !(player.hCd && player.hCd[id] > gameTime));
-  const id = ready(player.hSel) ? player.hSel : ups.find(ready);
-  if (!id) { flashMsg(ups.length ? 'Upgrade em recarga' : 'Nenhum upgrade ainda'); return; }
+  const ult = player.hUlt;
+  const ready = (id) => !!(id && (id === ult || ups.includes(id)) && !(player.hCd && player.hCd[id] > gameTime));
+  const id = ready(player.hSel) ? player.hSel : (ready(ult) ? ult : ups.find(ready));
+  if (!id) { flashMsg(ups.length || ult ? 'Upgrade em recarga' : 'Nenhum upgrade ainda'); return; }
   player.hSel = id;
   historiaUse(id);
 }
@@ -11458,9 +11548,19 @@ function onHMapClick(ev) {
   historiaUse('grok', { x: spot.x, z: spot.z });
 }
 function historiaCastFx(ev) {
-  const id = ev[2], u = HUPS[id]; if (!u || !isHistoria(mode)) return;
+  const id = ev[2], u = HUPS[id] || ULTS[id]; if (!u || !isHistoria(mode)) return;
   const e = historiaActor(ev[1]); if (!e || !e.pos) return;
   e.hAnim = id; e.hAnimUntil = gameTime + (u.anim || 0.8);
+  if (ULTS[id]) {
+    if (e === player) {
+      if (player.hPend === id) player.hPend = null;
+      if (!player.hCd) player.hCd = {};
+      player.hCd[id] = gameTime + u.cd;
+      if (u.dur > 0) { player.ultForm = id; player.ultUntil = gameTime + u.dur; }
+      flashMsg(`${u.icon} ${u.name}`);
+    }
+    return;
+  }
   const fx = HCAST[id];
   if (fx) {
     invRing(e.pos, fx[0], 0.25, fx[1], id === 'cheers' ? 0.55 : 0.4, id === 'cheers' || id === 'barriga' || id === 'bencao' ? 0.2 : 0.12);
@@ -11496,7 +11596,8 @@ function paintHistoriaBar() {
     const sh = $('hShield'); if (sh) sh.classList.add('hidden');
     return;
   }
-  const ups = player.hUps || [];
+  const ups = (player.hUps || []).slice();
+  if (player.hUlt && ULTS[player.hUlt] && !ups.includes(player.hUlt)) ups.unshift(player.hUlt);
   const owned = player.hPass || {};
   const passIds = Object.keys(owned).filter((id) => HPASS[id] && owned[id] > 0);
   if (bar) bar.classList.toggle('hidden', ups.length === 0 && passIds.length === 0);
@@ -11505,7 +11606,7 @@ function paintHistoriaBar() {
     if (slots.dataset.ups !== sig) {
       slots.dataset.ups = sig; slots.innerHTML = '';
       for (const id of ups) {
-        const u = HUPS[id]; if (!u) continue;
+        const u = HUPS[id] || ULTS[id]; if (!u) continue;
         const b = document.createElement('button');
         b.type = 'button'; b.dataset.id = id;
         b.onclick = () => { player.hSel = id; historiaUse(id); };
@@ -11513,7 +11614,7 @@ function paintHistoriaBar() {
       }
     }
     for (const b of slots.querySelectorAll('button')) {
-      const id = b.dataset.id, u = HUPS[id]; if (!u) continue;
+      const id = b.dataset.id, u = HUPS[id] || ULTS[id]; if (!u) continue;
       const left = player.hCd && player.hCd[id] > gameTime ? Math.ceil(player.hCd[id] - gameTime) : 0;
       b.classList.toggle('on', id === player.hSel);
       b.classList.toggle('cd', left > 0);

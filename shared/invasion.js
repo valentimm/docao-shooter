@@ -28,6 +28,7 @@ import { HUPS, rollOffer, takeOffer, hReady, historiaSpot } from './historia-ups
 import { rollPass, takePass, enqueueHistoria, nextHistoria, passLv, passHp, brasaStats, plateBlocks, coveiroScale } from './historia-pass.js';
 import { createEgg, stepRitual, notePool, eggAfterWave, claimMuro, EGG_SPOTS, nearSpot } from './historia-egg.js';
 import { storyPlan, STORY_ZTS, praisesTable } from './historia-finale.js';
+import { ULTS, rollUltimate } from './historia-ult.js';
 export const INV = {
   mode: 'inv', WAVES: 20, PREP: 12, BREAK: 15, LIVES: 2, INV_MAX: 3,
   DROP_LIFE: 35, PICK_R: 1.5, BOSS_EVERY: 5, RES_PER_BLOCK: 4, BLOCK: 5,
@@ -429,6 +430,7 @@ export class InvasionCore {
     this.stepPassives(dt, T);
     this.stepEggs(dt, T);
     this.stepFinale(dt, T);
+    this.stepUltimates(dt, T);
     this.stepLanterns(dt, T);
     this.stepDrops(T);
     this.stepCrosses(dt);
@@ -467,6 +469,8 @@ export class InvasionCore {
     this.phase = 'break'; this.phaseEnd = this.T + (this.spec && this.spec.gap > 0 ? this.spec.gap : INV.BREAK);
     this.A.emit(['wv', 2, this.wave, r2(this.phaseEnd)]);
     if (!bossWave) this.offerPassivas();
+    if (this.egg && this.wave === 20) this.grantUltimates();
+    if (this.egg && this.wave >= 20) this.openStoryFog();
   }
   finish(won) {
     if (this.phase === 'over') return;
@@ -474,7 +478,12 @@ export class InvasionCore {
     this.A.over(won, this.wave);
   }
   // ---------- névoa ----------
+  openStoryFog() {
+    const R = Math.hypot(this.hx, this.hz) + 24, F = this.fog;
+    Object.assign(F, { fx: F.cx, fz: F.cz, fr: F.r, tx: 0, tz: 0, tr: R, t0: this.T, t1: this.T + 1.6 });
+  }
   planFog(w) {
+    if (this.egg && w >= 21) { this.openStoryFog(); return; }
     const F = this.fog, tr = fogRadius(w, this.hx, this.hz);
     const room = Math.max(0, Math.min(F.r, F.fr === F.tr ? F.r : F.r) - tr);
     let best = null, bs = -1e9; const good = (this.A.nav && this.A.nav.good) || [];
@@ -862,6 +871,8 @@ export class InvasionCore {
   }
   stepZombie(z, dt, T) {
     if (z.zt === 'shape') { this.stepShape(z, dt, T); return; }
+    if (z.friendly) { this.stepAlly(z, dt, T); return; }
+    if (z.fightUntil > T) { this.stepTurned(z, dt, T); return; }
     if (z.egg === 'lanche') { this.stepLanche(z, T); return; }
     if (z.campUntil > T) { z.vel.x = z.vel.z = 0; return; }
     if (praisesTable(z, EGG_SPOTS.pool)) {
@@ -881,6 +892,14 @@ export class InvasionCore {
     if (T >= z.retarget) { z.target = this.pickTarget(z); z.retarget = T + tune.retarget[0] + this.rnd() * (tune.retarget[1] - tune.retarget[0]); }
     let t = z.target; if (t && !this.zombieWants(t)) { t = z.target = null; }
     if (z.egg === 'refri') { z.spd = Math.min(z.spd || 2, 2.3); if (t && hyp(t.pos.x - z.pos.x, t.pos.z - z.pos.z) > 5.2) t = z.target = null; }
+    if (z.lureUntil > T && !this.ultProtected(z)) {
+      const who = this.A.players().find((p) => p && p.id === z.lureId && p.alive);
+      if (who) {
+        const ld = hyp(who.pos.x - z.pos.x, who.pos.z - z.pos.z);
+        if (ld < 1.4) { z.fightUntil = z.lureUntil; z.lureUntil = 0; this.stepTurned(z, dt, T); return; }
+        z.target = t = who;
+      }
+    }
     let mx = 0, mz = 0, trick = null; const stunned = z.stunUntil > T;
     if (st.fly) z.fly = true;
     if (st.surgeAt && z.hp <= z.maxHp * st.surgeAt) z.surge = true;
@@ -985,6 +1004,7 @@ export class InvasionCore {
       z.vel.y = clamp((want - z.pos.y) * (diving ? 10 : 5), diving ? -10 : -4.5, diving ? 2 : 6.5);
       z.onGround = false;
     }
+    if (z.slowUntil > T) { z.vel.x *= 0.42; z.vel.z *= 0.42; }
     const blocked = P.moveEntity(z, dt);
     if (this.fellOffMap(z)) { this.killFallen(z); return; }
     if (this.A.survival) this.afterMoveSurvival(z, blocked, dt, T, t);
@@ -1293,6 +1313,12 @@ export class InvasionCore {
   }
   // zumbi morreu (o host chama depois de tirar ele do jogo): drop de poder e explosão do Barrigão
   onZombieDeath(z, killer) {
+    if (z.friendly) {
+      z.alive = false; z.removeAt = this.T + 1.2;
+      this.allyWait = this.allyWait || [];
+      this.allyWait.push({ ownerId: z.ownerId, at: this.T + 10 });
+      return;
+    }
     z.alive = false; z.removeAt = this.T + INV.ZOMBIE_LINGER; this.kills++;
     if (z.zt === 'shape') this.cureBy(z.id);
     const st = zombieProfile(z);
@@ -1307,7 +1333,7 @@ export class InvasionCore {
     }
     if (z.zt === 'bossOclinhos' || z.zt === 'bossBig') this.vanishCrew(z.id);
     if (z.egg) { this.noteEggDeath(z); return; }
-    if (z.id === this.bossId) { for (let i = 0; i < 2; i++) this.drop(z.pos, i === 0); this.dropAmmo(z.pos, 1.4); this.dropAmmo(z.pos, 1.4); this.offerHistoria(); return; }
+    if (z.id === this.bossId) { for (let i = 0; i < 2; i++) this.drop(z.pos, i === 0); this.dropAmmo(z.pos, 1.4); this.dropAmmo(z.pos, 1.4); if (!(this.egg && this.wave === 20)) this.offerHistoria(); return; }
     if (st && this.rnd() < st.drop) this.drop(z.pos, false);
     const ammoP = z.parts && z.parts.length ? Math.max(...z.parts.map((k) => INV_AMMO.zdrop[k] || 0)) : (INV_AMMO.zdrop[z.zt] || 0);
     if (this.rnd() < ammoP) this.dropAmmo(z.pos, 0.6);
@@ -1648,6 +1674,7 @@ export class InvasionCore {
     }
   }
   useHistoria(p, id, extra = {}) {
+    if (ULTS[id]) return this.useUltimate(p, id);
     if (!this.A.story || !this.A.story() || !hReady(p, id, this.T)) return null;
     const u = HUPS[id], T = this.T, A = this.A;
     if (id === 'grok') {
@@ -1768,6 +1795,7 @@ export class InvasionCore {
   // morreu: gasta uma vida. Devolve true se ainda renasce.
   onPlayerDeath(p) {
     this.ensure(p); p.lives = Math.max(0, p.lives - 1); p.ghostUntil = 0;
+    p.ultForm = ''; p.ultUntil = 0; p.fly = false; p.hPhaseUntil = 0;
     this.lanterns = this.lanterns.filter((l) => l.owner !== p);
     if (p.lives <= 0) { p.out = true; this.placeCross(p); return false; }
     return true;
@@ -1990,6 +2018,206 @@ export class InvasionCore {
       if (!p || !p.alive || !p.pos || p.eggHideUntil > T) continue;
       if (Math.hypot(p.pos.x - g.x, p.pos.z - g.z) <= 1.15 && Math.abs((p.pos.y || 0) - g.y) < 1.4) this.A.hurtPlayer(p, 14 * dt, null);
     }
+  }
+  grantUltimates() {
+    const taken = new Set();
+    for (const p of this.A.players()) {
+      if (!p || p.bot || p.zt || p.hUlt) continue;
+      const id = rollUltimate(taken, this.rnd);
+      taken.add(id);
+      p.hUlt = id;
+      p.hSel = id;
+      this.A.emit(['qe', 'ult', p.id, id]);
+      if (id === 'rei') this.ensureAlly(p);
+    }
+  }
+  useUltimate(p, id) {
+    const u = ULTS[id];
+    if (!this.A.story || !this.A.story() || !u || !p || !p.alive || p.down) return null;
+    if (p.hUlt !== id) return null;
+    if (p.hRootUntil > this.T) return null;
+    if (p.hCd && p.hCd[id] > this.T) return null;
+    if (!p.hCd) p.hCd = {};
+    p.hCd[id] = this.T + u.cd;
+    p.hAnim = id; p.hAnimUntil = this.T + (u.anim || 0.6);
+    const T = this.T;
+    if (u.dur > 0) { p.ultForm = id; p.ultUntil = T + u.dur; }
+    if (id === 'frenesi') this.A.emit(['qe', 'form', p.id, 'frenesi', u.dur]);
+    else if (id === 'sinuca') this.cueSmash(p);
+    else if (id === 'vendedor') { p.hImmuneUntil = T + u.dur; this.lureNear(p, u.dur); }
+    else if (id === 'rei') { this.ensureAlly(p); const z = this.livingAlly(p); if (z) this.bossAlly(z, u.dur); }
+    else if (id === 'vampiro') { p.fly = true; p.hHopUntil = T + u.dur; }
+    else if (id === 'bebado') { p.hImmuneUntil = T + u.dur; p.hSpeedUntil = T + u.dur; p.ultAnchor = { x: p.pos.x, z: p.pos.z }; p.ultAng = 0; }
+    else if (id === 'discipulo') this.dropPuddle(p, u.dur);
+    else if (id === 'ceo') { p.hPhaseUntil = T + u.dur; p.ultForm = 'ceo'; p.ultUntil = T + u.dur; }
+    this.A.emit(['hcast', p.id, id, Math.round(p.hp || 0), 0]);
+    return id;
+  }
+  ultProtected(z) { return !z || z.friendly || isBoss(z.zt) || z.zt === 'bonezinho' || z.zt === 'corrupt'; }
+  livingAlly(p) { return this.zombies.find((z) => z && z.alive && z.friendly && z.ownerId === p.id); }
+  ensureAlly(p) {
+    if (!p || this.livingAlly(p)) return;
+    if ((this.allyWait || []).some((a) => a.ownerId === p.id)) return;
+    const at = { x: p.pos.x + 1.6, y: p.pos.y || 0, z: p.pos.z + 0.4 };
+    this._noMutant = true;
+    const z = this.spawn('walker', at);
+    this._noMutant = false;
+    if (!z) return;
+    z.friendly = true; z.egg = 'ally'; z.ownerId = p.id; z.name = 'Docão Amigo';
+    z.hp = z.maxHp = 180; z.spd = 3.4;
+    this.A.emit(['qe', 'z', z.id, 'ally', z.name, z.hp, z.size || 1]);
+  }
+  bossAlly(z, dur) {
+    const kind = BOSS_TYPES[Math.floor(this.rnd() * BOSS_TYPES.length)];
+    const st = ZOMBIES[kind] || ZOMBIES.walker;
+    z.bossForm = kind; z.zt = kind; z.formUntil = this.T + dur;
+    z.hp = z.maxHp = Math.max(220, Math.round(st.hp * 0.28));
+    z.size = (st.size || 1.4) * 0.72; z.spd = 4.1;
+    this.A.emit(['qe', 'ally', z.id, kind, r2(z.size)]);
+  }
+  calmAlly(z) {
+    z.bossForm = ''; z.formUntil = 0; z.zt = 'walker'; z.size = 1; z.spd = 3.4;
+    z.hp = Math.min(z.hp || 180, 180); z.maxHp = 180;
+    this.A.emit(['qe', 'ally', z.id, 'walker', 1]);
+  }
+  stepAlly(z, dt, T) {
+    if (z.bossForm && z.formUntil && T >= z.formUntil) this.calmAlly(z);
+    const owner = this.A.players().find((p) => p && p.id === z.ownerId);
+    let foe = null, bd = 16;
+    for (const o of this.zombies) {
+      if (!o.alive || o === z || o.friendly) continue;
+      const d = hyp(o.pos.x - z.pos.x, o.pos.z - z.pos.z);
+      if (d < bd) { bd = d; foe = o; }
+    }
+    const goal = foe || (owner && owner.alive ? owner : null);
+    if (!goal) { z.vel.x = z.vel.z = 0; return; }
+    const dx = goal.pos.x - z.pos.x, dz = goal.pos.z - z.pos.z, d = hyp(dx, dz) || 1;
+    z.yaw = Math.atan2(dx, dz);
+    const spd = z.bossForm ? 4.2 : 3.4;
+    if (!foe && d < 2.3) z.vel.x = z.vel.z = 0;
+    else { z.vel.x = dx / d * spd; z.vel.z = dz / d * spd; }
+    if (foe && d < 1.55 && T >= (z.nextAtk || 0)) {
+      z.nextAtk = T + (z.bossForm ? 0.65 : 1.05);
+      this.A.hurtZombie(foe, z.bossForm ? 46 : 16, owner && !owner.zt ? owner : null, 'ally');
+      this.A.emit(['za', z.id]);
+    }
+    const P = this.A.P;
+    if (P && P.moveEntity) P.moveEntity(z, dt);
+  }
+  stepTurned(z, dt, T) {
+    let foe = null, bd = 12;
+    for (const o of this.zombies) {
+      if (!o.alive || o === z || o.friendly || o.fightUntil > T) continue;
+      const d = hyp(o.pos.x - z.pos.x, o.pos.z - z.pos.z);
+      if (d < bd) { bd = d; foe = o; }
+    }
+    if (!foe) { z.vel.x = z.vel.z = 0; return; }
+    const dx = foe.pos.x - z.pos.x, dz = foe.pos.z - z.pos.z, d = hyp(dx, dz) || 1;
+    z.yaw = Math.atan2(dx, dz);
+    z.vel.x = dx / d * 3.6; z.vel.z = dz / d * 3.6;
+    if (d < 1.45 && T >= (z.nextAtk || 0)) {
+      z.nextAtk = T + 0.7;
+      this.A.hurtZombie(foe, 22, null, 'cheers');
+      this.A.emit(['za', z.id]);
+    }
+    const P = this.A.P;
+    if (P && P.moveEntity) P.moveEntity(z, dt);
+  }
+  lureNear(p, dur) {
+    for (const z of this.zombies) {
+      if (!z.alive || this.ultProtected(z)) continue;
+      const d = hyp(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+      if (d > 18 || Math.abs((z.pos.y || 0) - (p.pos.y || 0)) > 4) continue;
+      z.lureId = p.id; z.lureUntil = this.T + dur;
+    }
+  }
+  cueSmash(p) {
+    const yaw = p.yaw || 0, fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const reach = Math.hypot(this.hx, this.hz) * 2.2;
+    this.A.emit(['qe', 'line', r2(p.pos.x), r2((p.pos.y || 0) + 1.1), r2(p.pos.z), r2(fx), r2(fz)]);
+    for (const z of this.zombies) {
+      if (!z.alive || z.friendly) continue;
+      const dx = z.pos.x - p.pos.x, dz = z.pos.z - p.pos.z;
+      const along = dx * fx + dz * fz;
+      if (along < 0.3 || along > reach) continue;
+      if (Math.abs(dx * fz - dz * fx) > 1.35) continue;
+      this.A.hurtZombie(z, isBoss(z.zt) ? 170 : 460, p, 'sinuca');
+    }
+  }
+  frenzyArm(p) {
+    if (!p || p.ultForm !== 'frenesi' || !(p.ultUntil > this.T)) return false;
+    if (p.ultSwingAt > this.T) return false;
+    p.ultSwingAt = this.T + 0.48;
+    for (const z of this.zombies) {
+      if (!z.alive || z.friendly) continue;
+      const d = hyp(z.pos.x - p.pos.x, z.pos.z - p.pos.z);
+      if (d > 3.5 || Math.abs((z.pos.y || 0) - (p.pos.y || 0)) > 2.4) continue;
+      const k = 1 - d / 3.5;
+      if (!isBoss(z.zt)) this.A.knock(z, { x: (z.pos.x - p.pos.x) / (d || 1) * 7 * k, y: 3 * k, z: (z.pos.z - p.pos.z) / (d || 1) * 7 * k });
+      this.A.hurtZombie(z, 86 * (0.6 + 0.4 * k), p, 'frenesi');
+    }
+    this.A.emit(['qe', 'arm', p.id]);
+    return true;
+  }
+  dropPuddle(p, dur) {
+    this.ultPuddles = this.ultPuddles || [];
+    const g = { x: p.pos.x, z: p.pos.z, y: p.pos.y || 0, r: 7, until: this.T + dur, dps: 26, owner: p };
+    this.ultPuddles.push(g);
+    this.A.emit(['qe', 'pud', r2(g.x), r2(g.z), r2(g.y), g.r, dur]);
+  }
+  stepUltimates(dt, T) {
+    if (!this.egg) return;
+    for (const p of this.A.players()) {
+      if (!p) continue;
+      if (p.ultForm && !(p.ultUntil > T)) {
+        if (p.ultForm === 'vampiro') p.fly = false;
+        p.ultForm = '';
+      }
+      if (p.ultForm === 'vampiro' && p.alive) {
+        p._vampAcc = (p._vampAcc || 0) + dt;
+        if (p._vampAcc >= 0.2) {
+          const tick = p._vampAcc; p._vampAcc = 0; let heal = 0;
+          for (const z of this.zombies) {
+            if (!z.alive || z.friendly) continue;
+            if (hyp(z.pos.x - p.pos.x, z.pos.z - p.pos.z) > 6.5) continue;
+            if (Math.abs((z.pos.y || 0) - (p.pos.y || 0)) > 3.2) continue;
+            this.A.hurtZombie(z, 34 * tick, p, 'vampiro');
+            heal += 16 * tick;
+          }
+          if (heal > 0) this.A.heal(p, heal);
+        }
+      }
+      if (p.ultForm === 'bebado' && p.alive && p.ultAnchor) {
+        p._bebAcc = (p._bebAcc || 0) + dt;
+        if (p._bebAcc >= 0.2) {
+          const tick = p._bebAcc; p._bebAcc = 0;
+          for (const z of this.zombies) {
+            if (!z.alive || z.friendly) continue;
+            if (hyp(z.pos.x - p.ultAnchor.x, z.pos.z - p.ultAnchor.z) > 5.2) continue;
+            this.A.hurtZombie(z, 38 * tick, p, 'bebado');
+          }
+        }
+      }
+    }
+    this.ultPuddles = (this.ultPuddles || []).filter((g) => g.until > T);
+    for (const g of this.ultPuddles) {
+      g.acc = (g.acc || 0) + dt;
+      if (g.acc < 0.2) continue;
+      const tick = g.acc; g.acc = 0;
+      for (const z of this.zombies) {
+        if (!z.alive || z.friendly) continue;
+        if (hyp(z.pos.x - g.x, z.pos.z - g.z) > g.r) continue;
+        if (Math.abs((z.pos.y || 0) - g.y) > 2.2) continue;
+        z.slowUntil = T + 0.35;
+        this.A.hurtZombie(z, g.dps * tick, g.owner, 'discipulo');
+      }
+    }
+    this.allyWait = (this.allyWait || []).filter((a) => {
+      if (a.at > T) return true;
+      const owner = this.A.players().find((p) => p && p.id === a.ownerId && p.hUlt === 'rei');
+      if (owner) this.ensureAlly(owner);
+      return false;
+    });
   }
   applyStoryPlan(plan) {
     this.spec.theme = null;

@@ -12,6 +12,7 @@ setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão 
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE, normInvDiff } from '../../shared/invasion.js';
 import { passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto } from '../../shared/historia-pass.js';
 import { breadBlocks } from '../../shared/historia-finale.js';
+import { frenzyTaken } from '../../shared/historia-ult.js';
 import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
@@ -678,13 +679,14 @@ startMsg() {
         const inXZ = Math.abs(p.x) <= hx && Math.abs(p.z) <= hz;
         const hBody = e.bodyH > 0 ? e.bodyH : stanceHeight(e), rBody = e.bodyR > 0 ? e.bodyR : undefined;
         const yCap = (e.jet || e.jetGlide) ? 16 : (e.hHopUntil > this.T ? 16 : (knocked ? 12 : 3.2 * (isHistoria(this.cfg.mode) ? molaMul(e) : 1)));
-        const inside = inXZ && p.y >= acceptFloorY(this.fall, this.map) && p.y < (e.jet || e.jetGlide ? 80 : 45);
+        const inside = inXZ && p.y >= acceptFloorY(this.fall, this.map) && p.y < (e.jet || e.jetGlide || e.hHopUntil > this.T ? 80 : 45);
         const falling = e.alive && inXZ && fellOff(this.fall, p.y, this.map);
+        const phasing = e.hPhaseUntil > this.T;
         if (this.test && m.tp) { e.pos = p; e.lastKnock = this.T; }
         else if (falling) {
           e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) };
           this.kill(e, null, W_FALL, false); // queda do mapa mata, mesmo no Survival (não cai caído no abismo)
-        } else if (hopped || horiz > maxH || (rooted && p.y - e.pos.y > 0.2) || !inside || this.P.overlapping(p.x, p.y, p.z, 0.03, hBody, rBody) || (p.y - e.pos.y > yCap * Math.max(dt, 0.25) + 1)) {
+        } else if (hopped || horiz > maxH || (rooted && p.y - e.pos.y > 0.2) || !inside || (!phasing && this.P.overlapping(p.x, p.y, p.z, 0.03, hBody, rBody)) || (p.y - e.pos.y > yCap * Math.max(dt, 0.25) + 1)) {
           e.badMoves = (e.badMoves || 0) + 1; this.toMe(e, ['pos', arr3(e.pos)]); // anti-cheat: devolve pra última posição válida
         } else { e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) }; }
         if (e.digLock && m.bk && e.alive) { e.pos.x = digX; e.pos.z = digZ; e.vel.x = 0; e.vel.z = 0; } // cavando a cruz: parado até soltar
@@ -765,7 +767,7 @@ startMsg() {
     if (k === 'pw' && this.inv) { const o = obj3(ev[2]), d = obj3(ev[3]); if (this.inv.usePower(e, ev[1] | 0, this.eyeOk(e, o) && d && vlen(d) > 0.5 ? { o, d: norm(d) } : null) === 'revive') this.cq(e, 'rev'); return; } // poder da Invasão (slot, olho, direção)
     if (k === 'hp' && this.inv) { this.inv.pickHistoria(e, ev[1]); return; }
     if (k === 'hs' && this.inv) { this.inv.pickPassiva(e, ev[1]); return; }
-    if (k === 'qe' && this.inv) { if (ev[1] === 'd') e.eggDanceUntil = this.T + 3.2; else if (ev[1] === 'u') this.inv.eggUse(e, ev[2]); else if (ev[1] === 's') this.inv.eggShock(e); return; }
+    if (k === 'qe' && this.inv) { if (ev[1] === 'd') e.eggDanceUntil = this.T + 3.2; else if (ev[1] === 'u') this.inv.eggUse(e, ev[2]); else if (ev[1] === 's') this.inv.eggShock(e); else if (ev[1] === 'arm') this.inv.frenzyArm(e); return; }
     if (k === 'hu') return; // já aplicado antes do anti-cheat, no mesmo pacote da posição
     if (k === 'sv') return this.onSurvival(e, ev);
     if (k === 'gf') return this.gunnerFire(e, ev[1], ev[2]);
@@ -1419,6 +1421,7 @@ startMsg() {
     if (t.eggHideUntil > this.T) return false; // pulou o muro
     if (t.egg === 'lanche' && !isKnife(w) && w !== W_FALL) return false; // Lancheiro da tarde: só a faca
     if (breadBlocks(t, w, this.T)) return false; // pãozinho do Oclinhos: segura tiro por 3 s
+    if (t.friendly && a && !a.zt) return false; // Docão amigo: o tiro do player não pega nele
     if (t.zt && t.phaseUntil > this.T) return false; // Docão Fantasma faseado: imune
     if (t.zt) amount = zombieTaken(t, amount, w === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
     if (this.compMode) amount = mitigate(t, amount, head);
@@ -1432,6 +1435,7 @@ startMsg() {
       if (amount <= 0) return false;
     }
     amount = subidoTaken(t, amount); // SUBIDO: 25% menos dano, nesta vida
+    amount = frenzyTaken(amount, t, this.T);
     t.hp -= amount; t.lastAttacker = a ? a.id : 0; noteHurt(t, a, this.T); if (a && a !== t && a.fun) notePodiumHurt(a.fun, amount); // regen só com dano de outro
     if (isHistoria(this.cfg.mode) && !t.zt && a && a.alive && a.zt && a.zt !== 'fog' && !a.fog && amount > 0) {
       const back = pimentaDmg(t);
