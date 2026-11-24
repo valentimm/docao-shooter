@@ -176,6 +176,21 @@ export function createPhysics(solids, size, fall = null) {
   function moveEntity(e, dt) {
     const height = e.bodyH > 0 ? e.bodyH : stanceHeight(e);
     const radius = e.bodyR > 0 ? e.bodyR : RADIUS;
+    if (e.hPhase) {
+      e.pos.x = clamp(e.pos.x + e.vel.x * dt, -hx + radius, hx - radius);
+      e.pos.z = clamp(e.pos.z + e.vel.z * dt, -hz + radius, hz - radius);
+      if (!e.fly) e.vel.y += GRAV * dt;
+      const ny = e.pos.y + e.vel.y * dt;
+      if (collides(e.pos.x, e.pos.y, e.pos.z, height, radius)) {
+        e.onGround = false;
+        if (e.vel.y > 0) e.pos.y = ny; else e.vel.y = 0;
+      } else {
+        const g = groundAt(e.pos.x, e.pos.z, e.pos.y, radius);
+        if (ny <= g) { e.pos.y = g; e.vel.y = 0; e.onGround = true; }
+        else { e.pos.y = ny; e.onGround = false; }
+      }
+      return false;
+    }
     let blocked = false;
     const free = depenetrate(e);
     const dx = e.vel.x * dt, dz = e.vel.z * dt, n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / 0.25));

@@ -9,7 +9,10 @@ import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getM
 import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
 import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
 setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE, normInvDiff } from '../../shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE, normInvDiff } from '../../shared/invasion.js';
+import { passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto } from '../../shared/historia-pass.js';
+import { breadBlocks } from '../../shared/historia-finale.js';
+import { frenzyTaken } from '../../shared/historia-ult.js';
 import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
@@ -54,7 +57,19 @@ import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, c
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, pickBotSecondary, akimboReady, ammoLow } from '../../shared/revolver.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc } from '../../shared/saber.js';
 const CHAL_WEAPONS = { shotgun: 'w_shot', semi: 'w_shot', sniper: 'w_snip', canhao: 'w_snip', carabina: 'w_snip', besta: 'w_bow', arco: 'w_bow', estilingue: 'w_bow', sabre: 'w_saber', sabre2: 'w_saber', bazooka: 'w_boom', milho: 'w_boom', saco: 'w_boom' }; // grupos de armas dos desafios
-const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || isTraining(m) || isInvasion(m) || m === 'survival' || isX1(m) || m === GF_MODE ? m : 'dm');
+const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || isTraining(m) || isInvasion(m) || isHistoria(m) || m === 'survival' || isX1(m) || m === GF_MODE ? m : 'dm');
+function applyHistoriaLock(cfg) {
+  if (!cfg) return;
+  if (isHistoria(cfg.mode)) {
+    cfg.map = HISTORIA.map;
+    cfg.invDiff = HISTORIA.diff;
+    cfg.variant = 'survival';
+    cfg.surv = 'survival';
+    return;
+  }
+  // Sair do Modo história não pode deixar a sala presa na variante Survival.
+  if (cfg.variant === 'survival' && cfg.mode !== 'survival' && !isSurvival(cfg.surv)) cfg.variant = '';
+}
 
 export const MAX_PLAYERS = 30;
 const RS_SAFETY = 60; // s: cliente antigo que nunca manda 'rs' renasce sozinho depois disso
@@ -81,6 +96,7 @@ export class Game {
     this.test = !!cfg.test; // só no `wrangler dev` com ALLOW_TEST=1: aceita teleporte (testes automatizados)
     const variant = cfg.variant === 'survival' || cfg.mode === 'survival' || cfg.survival === true || cfg.survival === 1 || isSurvival(cfg.surv) ? 'survival' : '';
     this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), side: normSide(cfg.side), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers), elo: cfg.elo === true, invDiff: normInvDiff(cfg.invDiff) };
+    applyHistoriaLock(this.cfg);
     if (this.cfg.mode === COMP.mode) { this.cfg.side = normSide(cfg.side); this.cfg.max = this.cfg.side * 2; this.cfg.fillBots = false; if (!BOMB_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = 'rodizio'; }
     this.lockElo();
     if (isX1(this.cfg.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; }
@@ -118,6 +134,7 @@ export class Game {
       const L = ids.map((id) => getMap(id)).filter(Boolean);
       if (L.length) return L;
     }
+    if (isHistoria(this.cfg.mode)) { const one = getMap(HISTORIA.map); return one ? [one] : []; }
     return this.x1Mode ? X1_MAPS : this.bombMode ? BOMB_MAPS : this.survival ? SURVIVAL_PLAY_MAPS : this.invasion ? INV_MAPS : PLAY_MAPS;
   } // Survival: mapas da Invasão e a HOTMILK à Noite. Bomba: sites feitos à mão. X1: currais. Gunfight: pool do formato.
   nextMapId() { const L = this.mapList.filter((m) => !m.heavy || m.id === this.mapId); if (!L.length) return this.mapId; return L[(L.findIndex((m) => m.id === this.mapId) + 1) % L.length].id; } // mapa pesado (GLB) só entra quando alguém escolhe
@@ -235,7 +252,7 @@ export class Game {
   entInfo(e) { const o = { id: e.id, name: e.name, skin: e.skin, bot: e.bot, tag: e.tag, kills: e.kills, deaths: e.deaths, alive: e.alive, primary: e.primary, w: e.weapon, team: e.team, caps: e.caps, pend: e.pendingTeam ? 1 : 0, kn: e.knife || undefined, sn: e.sniper || undefined, gn: e.guns && Object.keys(e.guns).length ? e.guns : undefined };
     if (this.armsMode) { o.arms = [e.armsStage, e.armsKills]; }
     if (this.compMode) o.gr = [e.cash | 0, e.armor | 0, e.helmet ? 1 : 0, (e.slots && e.slots[0]) ?? e.primary, (e.slots && e.slots[1]) ?? PISTOL, (e.slots && e.slots[2]) ?? KNIFE, e.weapon, e.nades | 0, e.smokeNades | 0, e.flashNades | 0];
-    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); if (e.feral) o.fr = 1; if (e.parts && e.parts.length) o.mu = e.parts; }
+    if (e.zt) { o.zt = e.zt; o.hp = Math.round(e.hp); o.mx = Math.round(e.maxHp || 100); if (e.pose) o.zp = Math.max(0, ZPOSE.indexOf(e.pose)); if (e.feral) o.fr = 1; if (e.parts && e.parts.length) o.mu = e.parts; if (e.egg) o.eg = e.egg; }
     if (e.soul) o.soul = e.soul;
     if (this.survival && !e.zt) { o.pts = (e.pts != null ? e.pts : e.points) | 0; o.pn = e.purseN | 0; o.pap = e.pap || {}; o.slotOn = e.slotOn || [1, 1, 1]; o.slots = e.slots; }
     return o; }
@@ -312,11 +329,12 @@ export class Game {
   // ---------- partida ----------
   startMatch(mapId) {
     if (this.cfg.mode === GF_MODE && !GF_LIVE) { this.cfg.gfFormat = normFormat(this.cfg.gfFormat); this.cfg.gfStub = true; this.cfg.mode = 'dm'; } // regras ainda não rodam nesta sala: a partida cai no Mata-mata
+    if (isHistoria(this.cfg.mode)) mapId = HISTORIA.map;
     const LIST = this.mapList;
     const x1Pool = X1_MAPS.filter((m) => m.id !== this.mapId);
     const x1Asked = this.mapId && X1_MAPS.some((m) => m.id === mapId) && mapId !== this.mapId; // "próximo mapa" respeita o curral seguinte; a primeira e o "de novo" sorteiam
     const survPool = SURVIVAL_PLAY_MAPS.filter((m) => !m.heavy || m.id === mapId);
-    let id = this.survival ? (mapId === 'random' ? pick(survPool.length ? survPool : SURVIVAL_PLAY_MAPS).id : (SURVIVAL_PLAY_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP)) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId && !m.heavy)).id) : mapId;
+    let id = isHistoria(this.cfg.mode) ? HISTORIA.map : this.survival ? (mapId === 'random' ? pick(survPool.length ? survPool : SURVIVAL_PLAY_MAPS).id : (SURVIVAL_PLAY_MAPS.some((m) => m.id === mapId) ? mapId : SURVIVAL.DEFAULT_MAP)) : this.x1Mode ? (x1Asked ? mapId : pick((x1Pool.length ? x1Pool : X1_MAPS)).id) : this.training ? TRAIN.map : mapId === 'random' || !LIST.some((m) => m.id === mapId) ? (this.invasion && mapId !== 'random' ? INV.DEFAULT_MAP : pick(LIST.filter((m) => m.id !== this.mapId && !m.heavy)).id) : mapId;
     if (this.invasion) for (const b of [...this.ents.values()]) if (b.bot) { this.ents.delete(b.id); } // começa sem zumbi velho/bot
     const map = getMap(id); this.mapId = id; this.map = map;
     this.surv = this.survival ? createMatchSurvival(map) : null;
@@ -340,6 +358,8 @@ export class Game {
       // (lastShot/lastCt/lastMelee no futuro) fazem o servidor rejeitar todo tiro no "Próximo mapa"/"Jogar de novo" (sem dano)
       e.lastShot = WEAPONS.map(() => -9); e.lastShotL = WEAPONS.map(() => -9); e.lastCt = []; e.lastCtL = []; e.maxOff = undefined; e.lastMeleeCt = undefined; e.lastMeleeT = undefined; e.lastMeleeRate = 0; e.lastKnock = -9; e.mg = null; e.shotBud = [];
       e.pap = {}; e.hitFarm = {}; e.slotOn = null; e.papUntil = 0; e.papGun = -1;
+      e.hUps = []; e.hCd = {}; e.hOffer = null; e.hPOffer = null; e.hPass = {}; e.hQueue = []; e.hShield = 0; e.hpCap = 0;
+      e.hSpeedUntil = e.hShieldUntil = e.hDmgUntil = e.hImmuneUntil = e.hAimUntil = e.hReflectUntil = e.hRootUntil = e.hDashUntil = e.hHopUntil = e.hAnimUntil = 0;
       e.cash = 0; e.armor = 0; e.helmet = false; e.loss = 0; e.keepKit = false; e.pistolLock = false;
       clearDownFlags(e);
       this.resetStreak(e); e.pokeballs = 0; e.rejectedShots = 0; e.rejectedMelee = 0; e.reload = null; e.hist = []; e.nextFire = 0; e.reloadEnd = 0; e.knifeRoll = 0; e.knifeMode = false;
@@ -510,12 +530,12 @@ startMsg() {
          if (SKINS.some((s) => s.id === m.skin)) e.skin = m.skin; if (typeof m.dance === 'string' && danceId(m.dance)) e.dance = danceId(m.dance); this.applyLoadout(e, m.primary, m.secondary, m.melee, this.state === 'lobby', m.kit); this.sendLobby(); break;
       case 'cfg': if (!isHost) return;
         {
-          const modeOk = (m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode) || m.mode === GF_MODE) && this.state !== 'playing';
+          const modeOk = (m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || isHistoria(m.mode) || m.mode === 'survival' || isX1(m.mode) || m.mode === GF_MODE) && this.state !== 'playing';
           if (modeOk && isX1(m.mode) && !this.x1Mode && this.humans().length > X1.MAX) { this.io.send(id, { t: 'hostMsg', msg: `X1 é duelo: só cabem ${X1.MAX} jogadores. Tem ${this.humans().length} na sala.` }); this.sendLobby(); break; } // não chuta ninguém: a troca nem entra
           if (modeOk && isX1(m.mode) && !this.x1Mode) this.x1Hold = this.cfg.max;
         }
         if (m.map === 'random' || MAPS.some((x) => x.id === m.map)) this.cfg.map = m.map;
-        if ((isInvasion(m.mode) || m.mode === 'survival' || m.variant === 'survival' || m.survival === true) && m.max) m.max = Math.min(m.max | 0, INV.MAX_PLAYERS);
+        if ((isInvasion(m.mode) || isHistoria(m.mode) || m.mode === 'survival' || m.variant === 'survival' || m.survival === true) && m.max) m.max = Math.min(m.max | 0, INV.MAX_PLAYERS);
         if (m.max) this.cfg.max = clamp(m.max | 0, Math.max(2, this.humans().length), MAX_PLAYERS);
         if (typeof m.fillBots === 'boolean') this.cfg.fillBots = m.fillBots;
         if (typeof m.elo === 'boolean' && this.state !== 'playing') this.cfg.elo = m.elo;
@@ -523,7 +543,7 @@ startMsg() {
         if (m.surv !== undefined && this.state !== 'playing') this.cfg.surv = normSurv(m.surv);
         if (m.invDiff !== undefined && this.state !== 'playing') this.cfg.invDiff = normInvDiff(m.invDiff); // Invasão: Normal (cruz) ou Hardcore (sem Ressurreição)
         if (m.time !== undefined) this.cfg.time = normTime(m.time);
-          if ((m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode) || m.mode === GF_MODE) && this.state !== 'playing') { const leaving = this.x1Mode && !isX1(m.mode); const wasGf = this.cfg.mode === GF_MODE; this.cfg.mode = m.mode; if (m.mode === GF_MODE) { this.cfg.gfFormat = normFormat(m.format ?? m.gfFormat ?? this.cfg.gfFormat); this.cfg.gfStub = !GF_LIVE; if (!GF_LIVE && !wasGf) this.io.send(id, { t: 'hostMsg', msg: 'Gunfight em breve — quando a partida começar, esta sala cai no Mata-mata.' }); } else this.cfg.gfStub = false; if (isX1(m.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; } if (leaving) { const back = this.x1Hold >= 2 ? this.x1Hold : 6; this.x1Hold = 0; this.cfg.max = clamp(back, Math.max(2, this.humans().length), MAX_PLAYERS); } for (const h of this.humans()) { if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode)) this.chooseTeam(h, h.teamPref); else { h.team = -1; if (h.voice === 'team') h.voice = 'all'; } } }
+          if ((m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || isHistoria(m.mode) || m.mode === 'survival' || isX1(m.mode) || m.mode === GF_MODE) && this.state !== 'playing') { const leaving = this.x1Mode && !isX1(m.mode); const wasGf = this.cfg.mode === GF_MODE; this.cfg.mode = m.mode; if (m.mode === GF_MODE) { this.cfg.gfFormat = normFormat(m.format ?? m.gfFormat ?? this.cfg.gfFormat); this.cfg.gfStub = !GF_LIVE; if (!GF_LIVE && !wasGf) this.io.send(id, { t: 'hostMsg', msg: 'Gunfight em breve — quando a partida começar, esta sala cai no Mata-mata.' }); } else this.cfg.gfStub = false; if (isX1(m.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; } if (isHistoria(m.mode)) { this.cfg.map = HISTORIA.map; this.cfg.invDiff = HISTORIA.diff; } if (leaving) { const back = this.x1Hold >= 2 ? this.x1Hold : 6; this.x1Hold = 0; this.cfg.max = clamp(back, Math.max(2, this.humans().length), MAX_PLAYERS); } for (const h of this.humans()) { if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode)) this.chooseTeam(h, h.teamPref); else { h.team = -1; if (h.voice === 'team') h.voice = 'all'; } } }
         if (this.cfg.mode === COMP.mode && this.state !== 'playing') {
           const side = normSide(m.side != null ? m.side : this.cfg.side);
           const need = side * 2;
@@ -536,6 +556,7 @@ startMsg() {
         if (m.variant === 'survival' || m.variant === 'padrao' || m.variant === 'standard' || m.variant === '') this.cfg.variant = m.variant === 'survival' ? 'survival' : '';
         if (typeof m.survival === 'boolean') this.cfg.variant = m.survival ? 'survival' : (this.cfg.mode === 'survival' ? 'survival' : '');
         if (this.survival && this.cfg.map !== 'random' && !SURVIVAL_PLAY_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = SURVIVAL.DEFAULT_MAP;
+        applyHistoriaLock(this.cfg);
         if (typeof m.chat === 'boolean') this.cfg.chat = m.chat;
         if (m.weapons !== undefined || m.powers !== undefined) {
           if (m.weapons !== undefined) this.cfg.weapons = normWeapons(m.weapons);
@@ -629,7 +650,11 @@ startMsg() {
   onUpdate(e, m) {
     if (this.state !== 'playing') return;
     const t = this.now(); if (Number.isFinite(m.pg)) e.ping = clamp(m.pg | 0, 0, 2000);
-    if (Array.isArray(m.ev)) for (const ev of m.ev) if (ev && ev[0] === 'sd') this.saberDash(e, ev); // a investida vale já neste pacote, senão o anti-cheat devolve o passo
+    if (Array.isArray(m.ev)) for (const ev of m.ev) { // investida do sabre e upgrade da história valem já neste pacote, senão o anti-cheat devolve o passo
+      if (!ev) continue;
+      if (ev[0] === 'sd') this.saberDash(e, ev);
+      else if (ev[0] === 'hu' && this.inv) this.inv.useHistoria(e, ev[1], { x: +ev[2], z: +ev[3], dx: +ev[4], dy: +ev[5], dz: +ev[6] });
+    }
     if (m.sq === e.sq && e.alive) {
       const p = obj3(m.p), v = obj3(m.v);
         if (p && gunfightFrozen(this.gf) && !(this.test && m.tp)) { e.vel.x = 0; e.vel.z = 0; this.toMe(e, ['pos', arr3(e.pos)]); e.lastUpd = t; }
@@ -644,21 +669,24 @@ startMsg() {
         const dash = !e.down && e.saber && e.saber.dashUntil > this.T ? e.saber : null;
         const dashRate = dash ? (dash.dashDist || 0) / Math.max(0.05, dash.dashDur || 0.16) : 0;
         const dashExtra = dash ? Math.min((dash.dashDist || 0) + 0.5, dashRate * dt + 0.5) : 0;
+        const storyDash = !e.down && e.hDashUntil > this.T ? 8 * dt + 1.1 : 0;
+        const rooted = e.hRootUntil > this.T;
         // Caído: teto de rastejo e sem pulo. Em pé, a folga da investida do sabre continua igual.
         const moveCap = e.down ? SPEED * DOWN.speed : SPEED;
-        const maxH = (moveCap * 1.35 * (e.ghostUntil > this.T ? 1.4 : 1) + (knocked ? 22 : 0)) * dt + (e.down ? 0.35 : 0.6) + dashExtra;
+        const maxH = rooted ? 0.25 : (moveCap * 1.35 * (e.ghostUntil > this.T ? 1.4 : 1) * (e.hSpeedUntil > this.T ? 1.5 : 1) * (isHistoria(this.cfg.mode) ? passoMul(e) : 1) + (knocked ? 22 : 0)) * dt + (e.down ? 0.35 : 0.6) + dashExtra + storyDash;
         const hopped = e.down && !knocked && p.y - e.pos.y > 0.45;
         const [hx, hz] = this.map.size;
         const inXZ = Math.abs(p.x) <= hx && Math.abs(p.z) <= hz;
         const hBody = e.bodyH > 0 ? e.bodyH : stanceHeight(e), rBody = e.bodyR > 0 ? e.bodyR : undefined;
-        const yCap = (e.jet || e.jetGlide) ? 16 : (knocked ? 12 : 3.2);
-        const inside = inXZ && p.y >= acceptFloorY(this.fall, this.map) && p.y < (e.jet || e.jetGlide ? 80 : 45);
+        const yCap = (e.jet || e.jetGlide) ? 16 : (e.hHopUntil > this.T ? 16 : (knocked ? 12 : 3.2 * (isHistoria(this.cfg.mode) ? molaMul(e) : 1)));
+        const inside = inXZ && p.y >= acceptFloorY(this.fall, this.map) && p.y < (e.jet || e.jetGlide || e.hHopUntil > this.T ? 80 : 45);
         const falling = e.alive && inXZ && fellOff(this.fall, p.y, this.map);
+        const phasing = e.hPhaseUntil > this.T;
         if (this.test && m.tp) { e.pos = p; e.lastKnock = this.T; }
         else if (falling) {
           e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) };
           this.kill(e, null, W_FALL, false); // queda do mapa mata, mesmo no Survival (não cai caído no abismo)
-        } else if (hopped || horiz > maxH || !inside || this.P.overlapping(p.x, p.y, p.z, 0.03, hBody, rBody) || (p.y - e.pos.y > yCap * Math.max(dt, 0.25) + 1)) {
+        } else if (hopped || horiz > maxH || (rooted && p.y - e.pos.y > 0.2) || !inside || (!phasing && this.P.overlapping(p.x, p.y, p.z, 0.03, hBody, rBody)) || (p.y - e.pos.y > yCap * Math.max(dt, 0.25) + 1)) {
           e.badMoves = (e.badMoves || 0) + 1; this.toMe(e, ['pos', arr3(e.pos)]); // anti-cheat: devolve pra última posição válida
         } else { e.pos = p; if (v) e.vel = { x: clamp(v.x, -40, 40), y: clamp(v.y, -60, 40), z: clamp(v.z, -40, 40) }; }
         if (e.digLock && m.bk && e.alive) { e.pos.x = digX; e.pos.z = digZ; e.vel.x = 0; e.vel.z = 0; } // cavando a cruz: parado até soltar
@@ -737,6 +765,10 @@ startMsg() {
     if (k === 'ks') return this.useStreak(e, ev[1], ev[2]);
     if (k === 'ms') return this.missileImpact(e, ev[1]);
     if (k === 'pw' && this.inv) { const o = obj3(ev[2]), d = obj3(ev[3]); if (this.inv.usePower(e, ev[1] | 0, this.eyeOk(e, o) && d && vlen(d) > 0.5 ? { o, d: norm(d) } : null) === 'revive') this.cq(e, 'rev'); return; } // poder da Invasão (slot, olho, direção)
+    if (k === 'hp' && this.inv) { this.inv.pickHistoria(e, ev[1]); return; }
+    if (k === 'hs' && this.inv) { this.inv.pickPassiva(e, ev[1]); return; }
+    if (k === 'qe' && this.inv) { if (ev[1] === 'd') e.eggDanceUntil = this.T + 3.2; else if (ev[1] === 'u') this.inv.eggUse(e, ev[2]); else if (ev[1] === 's') this.inv.eggShock(e); else if (ev[1] === 'arm') this.inv.frenzyArm(e); return; }
+    if (k === 'hu') return; // já aplicado antes do anti-cheat, no mesmo pacote da posição
     if (k === 'sv') return this.onSurvival(e, ev);
     if (k === 'gf') return this.gunnerFire(e, ev[1], ev[2]);
     if (k === 'af') return this.ac130Fire(e, ev[1], ev[2]);
@@ -1326,7 +1358,8 @@ startMsg() {
     const targets = [...this.ents.values()].filter((t) => t !== shooter && t.alive && (t.bot || t.connected) && !this.friends(t, shooter)).map((t) => ({ e: t, p: rewindT < this.T ? this.posAt(t, rewindT) : t.pos, crouch: this.crouchAt(t, rewindT), size: t.zt ? t.size : 1, prone: !!t.down, yaw: this.yawAt(t, rewindT), spheres: t.hitSpheres || null })); // agachado achata; caído usa a hitbox deitada; BIG/tanque mandam as esferas já escaladas
     const helis = []; for (const hl of this.helis) if (hl.alive && this.heliFoe(hl, shooter)) helis.push({ h: hl, c: this.heliAt(hl, heliT), r: this.heliR(hl) }, { h: hl, c: this.heliAt(hl, rewindT), r: this.heliR(hl) }); // o cliente desenha o Gavião sem atraso: vale o ping ou o rewind
     for (const hl of this.gunships) if (hl.alive && this.heliFoe(hl, shooter)) helis.push({ h: hl, c: this.heliAt(hl, heliT), r: AC130.hit }, { h: hl, c: this.heliAt(hl, rewindT), r: AC130.hit }); // Grelha: mesma esfera do helicóptero, raio do avião
-    const shotW = this.inv ? { ...W, pierce: 8, pierceMul: 0.82 } : W; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
+    const shotBase = this.inv ? { ...W, pierce: 8, pierceMul: 0.82 } : W; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
+    const shotW = isHistoria(this.cfg.mode) ? withEspeto(shotBase, shooter) : shotBase;
     const lids = new Map(), raw = new Map(), gasAcc = new Map();
     for (const d of dirs) {
       const tr = traceShot(this.P, o, d, shotW, targets, helis, scale);
@@ -1362,21 +1395,53 @@ startMsg() {
       if (!t.alive || t.dummy || !hurt.has(t)) continue; const v = shotKnock(W, o, t.pos, h.dmg, t.zt); if (!v) continue; t.lastKnock = this.T;
       if (t.bot) { t.vel.x += v.x; t.vel.z += v.z; t.vel.y = Math.max(t.vel.y, v.y); t.onGround = false; } else this.toMe(t, ['kn', arr3(v)]);
     }
+    if (isHistoria(this.cfg.mode)) this.storyEstalo(shooter, hurt);
     if (kills >= 2) { this.events.push(['mk', shooter.id, kills]); if (!this.inv) this.cq(shooter, 'col'); } // collateral: várias mortes num tiro só
     for (const [c, dmg] of gasAcc) this.hurtGas(c, dmg, shooter);
     return hits;
+  }
+  storyEstalo(shooter, hurt) {
+    const dmg = estaloRoll(passLv(shooter, 'estalo'), Math.random);
+    if (!(dmg > 0) || !hurt) return;
+    let at = null;
+    for (const t of hurt) if (t && t.zt && t.pos) { at = t.pos; break; }
+    if (!at) return;
+    this.events.push(['hest', r2(at.x), r2(at.y), r2(at.z)]);
+    for (const t of this.ents.values()) {
+      if (!t || !t.zt || !t.alive || hurt.has(t) || !t.pos) continue;
+      const d = Math.hypot(t.pos.x - at.x, t.pos.z - at.z);
+      if (d > ESTALO_R || Math.abs((t.pos.y || 0) - at.y) > 2.2) continue;
+      this.damage(t, dmg * (0.45 + 0.55 * (1 - d / ESTALO_R)), shooter, W_NADE, false);
+    }
   }
   spawnShielded(e) { return !!(e && e.alive && this.T < Math.min(e.invulnUntil || 0, e.spawnLock || 0)); } // escudo de nascimento: não leva dano e não ataca (testGod não trava)
   friends(a, b) { if (this.invasion) return !!(a && b && a !== b && !a.zt === !b.zt); return this.teamMode && a && b && a !== b && a.team === b.team && a.team >= 0; }
   damage(t, amount, a, w, head, back = false, ks = null, fx = 0, origin = a && a !== t && !a.fog ? a.pos : null) {
     if (!t.alive || this.T < t.invulnUntil || this.friends(t, a) || bombFrozen(this.bomb) || gunfightFrozen(this.gf)) return false; // sem fogo amigo; Bomba e Gunfight: ninguém leva dano na preparação
+    if (t.eggHideUntil > this.T) return false; // pulou o muro
+    if (t.egg === 'lanche' && !isKnife(w) && w !== W_FALL) return false; // Lancheiro da tarde: só a faca
+    if (breadBlocks(t, w, this.T)) return false; // pãozinho do Oclinhos: segura tiro por 3 s
+    if (t.friendly && a && !a.zt) return false; // Docão amigo: o tiro do player não pega nele
     if (t.zt && t.phaseUntil > this.T) return false; // Docão Fantasma faseado: imune
     if (t.zt) amount = zombieTaken(t, amount, w === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
     if (this.compMode) amount = mitigate(t, amount, head);
     if (t.down && !t.zt) return false; // já está caído: o sangramento finaliza, dano extra não cria outra morte
     if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
+    if (!t.zt && t.hImmuneUntil > this.T) return false; // Modo história: Cachaçado
+    if (a && a.hDmgUntil > this.T && t.zt) amount *= 1.25; // Benção do Docão
+    if (!t.zt && t.hShieldUntil > this.T && t.hShield > 0) {
+      const use = Math.min(t.hShield, amount); t.hShield -= use; amount -= use;
+      this.events.push(['hsh', t.id, Math.round(t.hShield)]);
+      if (amount <= 0) return false;
+    }
     amount = subidoTaken(t, amount); // SUBIDO: 25% menos dano, nesta vida
+    amount = frenzyTaken(amount, t, this.T);
     t.hp -= amount; t.lastAttacker = a ? a.id : 0; noteHurt(t, a, this.T); if (a && a !== t && a.fun) notePodiumHurt(a.fun, amount); // regen só com dano de outro
+    if (isHistoria(this.cfg.mode) && !t.zt && a && a.alive && a.zt && a.zt !== 'fog' && !a.fog && amount > 0) {
+      const back = pimentaDmg(t);
+      if (back > 0) { this.events.push(['hpi', a.id]); this.damage(a, back, t, W_NADE, false); }
+      if (t.alive && t.hp > 0) { const skin = cascaTime(t); if (skin > 0) { t.hImmuneUntil = Math.max(t.hImmuneUntil || 0, this.T + skin); this.events.push(['hcas', t.id, r2(skin)]); } }
+    }
     const falling = t.hp <= 0 && this.wantDown(t);
     if (falling) t.hp = 1;
     if (this.survival && t.zt && a && !a.bot && !a.zt && t.hp > 0) { const add = grantHit(a, t.id); if (add) this.events.push(['spts', a.id, a.pts | 0, add, a.purseN | 0]); }
@@ -1408,7 +1473,7 @@ startMsg() {
   stepDown(dt) {
     if (!this.survival || !this.inv || this.state !== 'playing') return;
     const humans = this.humans().filter((e) => e.connected);
-    const res = stepDowned(humans, dt, this.T, (a, b) => this.P.losClear(a, b), this.downMem || (this.downMem = { allDownAt: 0 }));
+    const res = stepDowned(humans, dt, this.T, (a, b) => this.P.losClear(a, b), this.downMem || (this.downMem = { allDownAt: 0 }), (h) => DOWN.hold * (isHistoria(this.cfg.mode) ? coveiroScale(h) : 1));
     for (const t of res.up) this.completeRevive(t);
     for (const t of res.bleed) this.bleedOut(t);
   }
@@ -1761,7 +1826,10 @@ startMsg() {
   }
   spawn(e, silent = false) {
     clearCheats(e);
-    const s = this.pickSpawn(e); e.pos = { ...s }; e.vel = { x: 0, y: 0, z: 0 }; e.crouch = 0; e.hp = 100; e.alive = true; resetRegen(e); e.needRs = false; e.rsReq = false; e.invulnUntil = e.spawnLock = this.T + INVULN; e.sq++;
+    const storyHp = isHistoria(this.cfg.mode) ? passHp(passLv(e, 'porcao')) : 100;
+    if (storyHp > 100) e.hpCap = storyHp;
+    const s = this.pickSpawn(e); e.pos = { ...s }; e.vel = { x: 0, y: 0, z: 0 }; e.crouch = 0; e.hp = storyHp > 100 ? storyHp : 100; e.alive = true; resetRegen(e); e.needRs = false; e.rsReq = false; e.invulnUntil = e.spawnLock = this.T + INVULN; e.sq++;
+    if (isHistoria(this.cfg.mode)) { const porta = portaTime(e); if (porta > 0) { e.hImmuneUntil = this.T + porta; this.events.push(['hcas', e.id, r2(porta)]); } }
     if (this.armsMode) this.equipArms(e);
     else if (this.x1Mode) this.equipX1(e);
     else if (this.gfMode && this.gf) {
@@ -1869,7 +1937,7 @@ startMsg() {
       }
     }
     this.updatePickups(); this.updateBacons();
-    { const rt = clamp(this.T - (this.lastRegenT ?? this.T), 0, 0.25); this.lastRegenT = this.T; if (!this.x1Mode && !this.compMode && !this.gfMode) for (const e of this.ents.values()) if (!e.zt) regenStep(e, this.T, rt); }
+    { const rt = clamp(this.T - (this.lastRegenT ?? this.T), 0, 0.25); this.lastRegenT = this.T; if (!this.x1Mode && !this.compMode && !this.gfMode) for (const e of this.ents.values()) if (!e.zt) regenStep(e, this.T, rt, isHistoria(this.cfg.mode) ? caldoTune(e) : null); }
     if (this.zone) this.updateZone(TICK_DT(this));
     if (this.bomb) this.updateBomb(clamp(this.T - (this.lastBombT ?? this.T), 0, 0.25)); this.lastBombT = this.T;
     if (this.gf) this.updateGf(clamp(this.T - (this.lastGfT ?? this.T), 0, 0.25)); this.lastGfT = this.T;
@@ -2039,6 +2107,8 @@ startMsg() {
     return new InvasionCore({
       T: () => g.T, P: g.P, nav: g.nav, size: g.map.size, fall: () => g.fall, botDiff: () => g.cfg.botDiff,
       survival: !!g.survival,
+      story: () => isHistoria(g.cfg.mode),
+      deny: (p, msg) => g.toMe(p, ['hno', msg]),
       hard: () => normInvDiff(g.cfg.invDiff) === 'hard', // Hardcore: sem cruz e sem Ressurreição (servidor manda)
       specFor: g.survival ? (w, n) => getSurvivalWaveTuning(w, n) : null,
       players: () => g.humans(),
@@ -2055,7 +2125,7 @@ startMsg() {
       hurtPlayer(p, dmg, src) { g.damage(p, dmg, src || { fog: true, id: 0, zt: 'fog' }, src ? KNIFE : W_NADE, false, false, src ? null : 'fog'); },
       hurtZombie(z, dmg, by, kind) { g.damage(z, dmg, by, kind === 'fall' ? W_FALL : W_NADE, false, false, kind === 'fall' ? null : 'i' + POWER_KEYS.indexOf(kind)); },
       knock(e, v) { e.lastKnock = g.T; if (e.bot) { e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; } else g.toMe(e, ['kn', arr3(v)]); },
-      heal(p, hp) { p.hp = Math.min(100, p.hp + hp); g.toMe(p, ['heal', Math.round(p.hp)]); if (p.soul && g.inv) g.inv.cure(p); },
+      heal(p, hp) { const cap = isHistoria(g.cfg.mode) && passLv(p, 'porcao') ? passHp(passLv(p, 'porcao')) : 100; p.hp = Math.min(cap, p.hp + hp); g.toMe(p, ['heal', Math.round(p.hp)]); if (p.soul && g.inv) g.inv.cure(p); },
       revive(p, at, o) { p.needRs = false; p.rsReq = false; p.respawnAt = g.T + 0.4; p.reviveAt = at; p.reviveExact = !!(o && o.exact); p.reviveHp = (o && o.hp) || 0; }, // cruz: volta no lugar dela com meia vida
       invChanged(p) { const n = p.inv.length; if (n > (p.invSeen | 0)) g.cq(p, 'pw', n - (p.invSeen | 0)); p.invSeen = n; g.toMe(p, ['inv', p.inv.map((k) => POWER_KEYS.indexOf(k))]); },
       giveAmmo(p) { return g.refillAmmo(p); }, // caixa que o zumbi solta: o cliente espelha no 'dg'

@@ -14,10 +14,12 @@ export const normTime = (v) => { const n = Number(v); return TIME_OPTIONS.includ
 export const REGEN_DELAY = 5, REGEN_RATE = 10;
 export function noteHurt(e, attacker, now) { e.lastHurt = now; e.regenOk = !!attacker && attacker !== e; }
 export function resetRegen(e) { e.lastHurt = -1e9; e.regenOk = false; e.regenOn = false; }
-export function regenStep(e, now, dt) {
+export function regenStep(e, now, dt, tune = null) {
   const cap = e && e.hpCap > 0 ? e.hpCap : 100; // tanque (CJ05) regenera até 1000; o resto continua em 100
-  e.regenOn = !!(e.alive && e.regenOk && e.hp > 0 && e.hp < cap && now - e.lastHurt >= REGEN_DELAY);
-  if (e.regenOn) e.hp = Math.min(cap, e.hp + REGEN_RATE * dt);
+  const delay = tune && tune.delay > 0 ? tune.delay : REGEN_DELAY;
+  const rate = tune && tune.rate > 0 ? tune.rate : REGEN_RATE;
+  e.regenOn = !!(e.alive && e.regenOk && e.hp > 0 && e.hp < cap && now - e.lastHurt >= delay);
+  if (e.regenOn) e.hp = Math.min(cap, e.hp + rate * dt);
   return e.regenOn;
 }
 // Bacon que cura: quem pisa no bacon de um Docão morto (menos o próprio morto) ganha +10 de vida e o bacon some.

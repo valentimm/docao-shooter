@@ -730,6 +730,54 @@ export function clearDigPose(model) {
   }
 }
 
+// Pose curta do upgrade do Modo história. k vai de 0 a 1. O caller zera no fim.
+export function poseHistoria(model, id, k) {
+  if (!model) return;
+  const s = Math.sin(Math.max(0, Math.min(1, k)) * Math.PI);
+  const arms = model.arms || [], legs = model.legs || [], head = model.head, g = model.group;
+  const arm = (i, x, y, z) => { if (arms[i]) arms[i].rotation.set(x, y, z); };
+  if (id === 'grok') { arm(0, -0.35, 0.5, -0.4); arm(1, -0.2, -0.9, 1.15 * s); if (head) head.rotation.x = 0.45 * s; }
+  else if (id === 'monster') { arm(0, -1.7 * s, 0.45, -0.25); if (head) head.rotation.x = -0.55 * s; }
+  else if (id === 'torta') { arm(0, -0.45, 0.7, -0.9 * s); arm(1, -0.45, -0.7, 0.9 * s); }
+  else if (id === 'tosse') { if (head) head.rotation.x = 0.7 * s; if (g) g.rotation.x = 0.18 * s; arm(0, -0.4, 0.2, -0.3); }
+  else if (id === 'barriga') {
+    if (g) g.rotation.x = 0.4 * s;
+    if (legs[0]) legs[0].rotation.z = 0.55 * s;
+    if (legs[1]) legs[1].rotation.z = -0.55 * s;
+    arm(0, 0.25, 0.3, -1.5 * s); arm(1, 0.25, -0.3, 1.5 * s);
+  } else if (id === 'bencao') { arm(0, -2.7 * s, 0.25, -0.35); arm(1, -2.7 * s, -0.25, 0.35); if (head) head.rotation.x = -0.35 * s; }
+  else if (id === 'cachaca') { arm(0, -1.5 * s, 0.55, -0.3); if (head) head.rotation.z = 0.35 * s; }
+  else if (id === 'grokbot') { arm(0, -0.4, 0.2, -0.35); if (head) head.rotation.y = Math.sin(k * 18) * 0.28; }
+  else if (id === 'integra') { arm(0, -1.15, 1.0 * s, -0.2); arm(1, -1.15, -1.0 * s, 0.2); }
+  else if (id === 'cheers') { arm(0, -2.3 * s, 0.35, -0.7); arm(1, -2.3 * s, -0.35, 0.7); if (g) g.position.y += 0.4 * s; }
+  else if (id === 'joelhos') {
+    if (legs[0]) legs[0].rotation.x = -0.9 * s;
+    if (legs[1]) legs[1].rotation.x = 0.45 * s;
+    if (g) g.position.y += 0.18 * s;
+  } else if (id === 'cafe') { arm(0, -1.35 * s, 0.4, -0.25); if (head) head.rotation.x = 0.3 * s; }
+}
+export function clearHistoriaPose(model) {
+  if (!model) return;
+  if (model.group) { model.group.rotation.x = 0; model.group.rotation.z = 0; }
+  if (model.head) model.head.rotation.set(0, 0, 0);
+  for (const leg of model.legs || []) leg.rotation.z = 0;
+}
+export function fpHistoriaPose(id, k) {
+  const s = Math.sin(Math.max(0, Math.min(1, k)) * Math.PI);
+  const z = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+  if (id === 'monster' || id === 'cachaca' || id === 'cafe') { z.x = 0.14; z.y = 0.08 * s; z.rx = -0.75 * s; z.ry = -0.35; }
+  else if (id === 'torta') { z.y = 0.14 * s; z.rx = -0.45 * s; z.x = 0.06; }
+  else if (id === 'tosse') { z.z = 0.22 * s; z.rx = 0.5 * s; z.y = -0.06; }
+  else if (id === 'barriga') { z.y = -0.2 * s; z.rx = 0.55 * s; z.rz = 0.25 * s; }
+  else if (id === 'bencao') { z.y = 0.24 * s; z.rx = -1.0 * s; }
+  else if (id === 'grok') { z.x = 0.18 * s; z.rx = 0.4 * s; z.y = -0.04; }
+  else if (id === 'grokbot') { z.ry = Math.sin((k || 0) * 16) * 0.1; z.rx = -0.12; }
+  else if (id === 'integra') { z.z = -0.14 * s; z.rx = -0.35 * s; }
+  else if (id === 'cheers') { z.y = 0.28 * s; z.rx = -1.15 * s; z.z = -0.22 * s; }
+  else if (id === 'joelhos') { z.y = 0.22 * s; z.rx = 0.3 * s; }
+  return z;
+}
+
 export function setPose(model, pose) {
   model.arms.forEach((a, i) => {
     const s = i === 0 ? -1 : 1;

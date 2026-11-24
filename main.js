@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, poseDig, clearDigPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
+import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, poseDig, clearDigPose, poseHistoria, clearHistoriaPose, fpHistoriaPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
 import { emptyFun, notePodiumKill, notePodiumHurt, notePodiumDeath, awardPodium } from './shared/podium.js';
@@ -30,7 +30,12 @@ import { makeTablet, poseTablet, makeLaptop, poseLaptop, makeRadio, poseRadio } 
 import { SKINS, getSkin, DEFAULT_SKIN, skinOk } from './skins.js';
 import './costumes.js';
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap, BOMB_MAP } from './maps.js';
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES, WAVE_THEMES, normInvDiff, INV_DIFF_LABEL, INV_CROSS, mutantProfile } from './shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES, WAVE_THEMES, normInvDiff, INV_DIFF_LABEL, INV_CROSS, mutantProfile } from './shared/invasion.js';
+import { HUPS, historiaSpot } from './shared/historia-ups.js';
+import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, platePoints } from './shared/historia-pass.js';
+import { createEgg, eggPrompt, eggCap, EGG_SPOTS } from './shared/historia-egg.js';
+import { breadBlocks } from './shared/historia-finale.js';
+import { ULTS, frenzyTaken } from './shared/historia-ult.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
@@ -802,7 +807,7 @@ let mode = 'dm', teamScore = [0, 0], zone = null, zoneT = 0; // modo de jogo: 'd
 let botDiff = 'ceva'; // dificuldade dos bots (shared/bot-difficulty.js); a preferência entra mais abaixo, quando o menu existe
 let hideS = null, hideBlindEl = null; // Docão Escondido (shared/hide.js): estado da rodada · tela preta dos Caçadores na preparação
 let bombS = null, bombL = null; // Modo Bomba: estado da rodada (shared/bomb.js) e layout do mapa (sites A/B, lados)
-const MODE_OK = (m) => (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'survival' || isX1(m) || m === GF_MODE ? m : 'dm');
+const MODE_OK = (m) => (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || m === 'explore' || m === TRAIN.mode || m === INV.mode || isHistoria(m) || m === 'survival' || isX1(m) || m === GF_MODE ? m : 'dm');
 const armsMode = () => isArmsRace(mode);
 const respawnDelay = () => armsMode() ? ARMS_RACE.respawnTime : RESPAWN_TIME;
 let armsWinner = null;
@@ -942,7 +947,10 @@ function gunOf(e, idx) {
 }
 function respawn(e) {
   clearCheats(e);
-  e.pos.copy(pickSpawn(e)); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = 100; e.alive = true; e.invulnUntil = e.spawnLock = gameTime + INVULN; resetRegen(e);
+  const storyHp = isHistoria(mode) ? passHp(passLv(e, 'porcao')) : 100;
+  if (storyHp > 100) e.hpCap = storyHp;
+  e.pos.copy(pickSpawn(e)); e.vel.set(0, 0, 0); e.crouch = 0; e.hp = storyHp > 100 ? storyHp : 100; e.alive = true; e.invulnUntil = e.spawnLock = gameTime + INVULN; resetRegen(e);
+  if (isHistoria(mode)) { const porta = portaTime(e); if (porta > 0) { e.hImmuneUntil = gameTime + porta; if (!online) historiaRing(e.pos, '#ffe7c2', 1.6); } }
   if (e.isPlayer) keys.Space = false;
   if (!compOn()) {
   if (!e.isPlayer && !e.dummy && botWantsShield(e.id) && weaponAllowed(TAMPA)) e.nextPrimary = TAMPA; // o mesmo bot nasce com a Tampa do Tacho
@@ -1251,6 +1259,7 @@ function clearMatchEnding() {
 }
 function beginMatchEnding() {
   state = 'over'; mouseDown = false; rightDown = false; clickLatch = 0;
+  paintHistoriaBar();
   matchEnding = { elapsed: 0, visualTime: gameTime, offset: camera.position.clone().sub(player.pos), firstPerson: !!(player.alive && !deathCamState.on),
     duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : END_SLOWMO, revealed: false, dance: false };
   for (const k of Object.keys(keys)) keys[k] = false;
@@ -1333,7 +1342,7 @@ function frameVictoryCam() {
 // Dança no meio da partida (B, quando a tecla está livre). O Docão aparece em 3ª pessoa e a arma não dispara até o tempo acabar.
 const emote = { on: false, until: 0, clock: 0, model: null };
 function startEmote() {
-  if (chatTyping() || state !== 'playing' || !player || !player.alive || emote.on || invMode() || invPick) return; // nada de dança na Invasão, com o painel de armas aberto ou digitando no chat
+  if (chatTyping() || state !== 'playing' || !player || !player.alive || emote.on || (invMode() && !isHistoria(mode)) || invPick) return; // nada de dança na Invasão clássica. No Modo história a tecla é N.
   if (gunner || predator || nukeAt || radioCall) return;
   const model = ensureGhost(player.skinId).model;
   hideVictoryGuns(model);
@@ -1343,6 +1352,8 @@ function startEmote() {
   arcLine.visible = arcMark.visible = false; clickLatch = 0; rightLatch = 0;
   ads = 0; if (camera.fov !== BASE_FOV) { camera.fov = BASE_FOV; camera.updateProjectionMatrix(); }
   emote.on = true; emote.until = gameTime + DANCE_TIME; emote.clock = 0; emote.model = model;
+  player.eggDanceUntil = gameTime + DANCE_TIME;
+  if (online && isHistoria(mode)) netEv(['qe', 'd']);
 }
 function stopEmote() {
   if (emote.model) resetVictoryPose(emote.model);
@@ -2348,6 +2359,13 @@ function rocketSmoke(r, R) {
 // ---------------- Combate ----------------
 // Mapas de caixas usam a penetração do servidor. O Breeze usa a malha visual para parar a bala.
 function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
+  if (isHistoria(mode) && shooter && !shooter.zt && shooter.ultForm === 'frenesi' && shooter.ultUntil > gameTime) {
+    if (shooter.isPlayer && online) netEv(['qe', 'arm']);
+    else if (!online && inv) inv.frenzyArm(shooter);
+    return { hit: false, kill: false, kills: 0, wall: false };
+  }
+  if (isHistoria(mode) && shooter && !shooter.zt && shooter.eggHideUntil > gameTime) return { hit: false, kill: false, kills: 0, wall: false };
+  if (isHistoria(mode) && shooter && shooter.eggShock && !shooter.zt) { storyShockPulse(shooter); return { hit: false, kill: false, kills: 0, wall: false }; }
   if (!online && shooter) hearGunshot(entities, origin, shooter, gameTime); // bots surdos (Leitão/Ceva) ignoram; os outros vão investigar, sem atirar no som
   const w = shooter && shooter.isPlayer ? gunOf(shooter, wIdx) : WEAPONS[wIdx]; const res = { hit: false, kill: false, kills: 0, wall: false };
   if (shooter && shooter.model) setExpression(shooter.model, 'angry', 0.5); // cara de brava ao atirar
@@ -2355,7 +2373,7 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
   const hitsBy = new Map(), lids = new Map(), bags = new Map(), dirs = [], heliDmg = new Map(), gasAcc = new Map(), skies = shooter === player ? [] : [...skyHelis(), ...gunshipList().filter((h) => h.owner !== shooter)];
   const targets = entities.filter((e) => e !== shooter && e.alive && !friends(e, shooter)).map((e) => ({ e, p: e.pos, crouch: e.crouch || 0, size: e.zt ? e.size : 1, prone: !!e.down, yaw: e.yaw || 0, spheres: e.hitSpheres || null })); // zumbi grande: hitbox escalada; caído fica deitado; BIG e tanque mandam esferas próprias
   const helis = skies.map((sh) => ({ h: sh, c: sh.pos, r: heliR(sh) }));
-  const shotW = invMode() ? { ...w, pierce: 8, pierceMul: 0.82 } : w; // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Fora dela, o pierce da arma.
+  const shotW = isHistoria(mode) ? withEspeto(invMode() ? { ...w, pierce: 8, pierceMul: 0.82 } : w, shooter) : (invMode() ? { ...w, pierce: 8, pierceMul: 0.82 } : w); // Invasão: a bala segue na fila de zumbis (8 corpos, ×0,82 de dano). Espeto Furante soma só no Modo história.
   const shotWorld = currentMap && currentMap.glb ? importedShotWorld : PHYS;
   for (let p = 0; p < w.pellets; p++) {
     const d = dir.clone(); d.x += (Math.random() - 0.5) * 2 * spread; d.y += (Math.random() - 0.5) * 2 * spread; d.z += (Math.random() - 0.5) * 2 * spread; d.normalize(); dirs.push(d);
@@ -2399,6 +2417,7 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
     }
   }
   const hurt = new Set(); for (const [e, h] of hitsBy) { if (h.dmg <= 0) continue; res.hit = true; res.wall = res.wall || !!(h.fx & 1); const hp0 = e.hp; if (damage(e, h.dmg, shooter, wIdx, h.head, false, h.fx)) { res.kill = true; res.kills++; } if (e.hp < hp0) hurt.add(e); }
+  if (!online && isHistoria(mode)) storyEstalo(shooter, hurt);
   if (w.knock) for (const [e, h] of hitsBy) { if (!e.alive || e.dummy || !hurt.has(e)) continue; const v = shotKnock(w, origin, e.pos, h.dmg, e.zt); if (!v) continue; e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; if (e.isPlayer) lastKnock = gameTime; } // Calibre 12: empurrão (mesma conta do servidor)
   if (shooter.isPlayer && res.kills >= 2) feedbackMedal('Collateral', `${res.kills} de uma bala só`);
   if (!online) for (const [c, dmg] of gasAcc) if (noteGasHit(c, dmg, shooter)) res.hit = true;
@@ -2408,15 +2427,31 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
 function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = attacker && attacker !== t && !attacker.fog ? attacker.pos : null) { // origin: de onde veio o golpe (explosão: o centro dela)
   if (state === 'over') return false; // resultado fechado
   if (!t.alive || gameTime < t.invulnUntil || friends(t, attacker) || bombFrozen(bombS) || (gfLive() && gunfightFrozen(gfS))) return false; // sem fogo amigo; Bomba e Gunfight: sem dano na preparação
+  if (!online && t.eggHideUntil > gameTime) return false;
+  if (!online && t.zt && t.egg === 'lanche' && !isKnife(wIdx) && wIdx !== W_FALL) return false; // Lancheiro da tarde: só a faca
+  if (!online && breadBlocks(t, wIdx, gameTime)) return false; // pãozinho do Oclinhos: segura tiro por 3 s
+  if (!online && t.friendly && attacker && !attacker.zt) return false; // Docão amigo: o tiro do player não pega nele
   if (t.zt && t.phaseUntil > gameTime) return false; // Docão Fantasma faseado: imune
   if (t.zt) amount = zombieTaken(t, amount, wIdx === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
+  if (!online && !t.zt && t.hImmuneUntil > gameTime) return false;
+  if (!online && attacker && attacker.hDmgUntil > gameTime && t.zt) amount *= 1.25;
+  if (!online && !t.zt && t.hShieldUntil > gameTime && t.hShield > 0) {
+    const use = Math.min(t.hShield, amount); t.hShield -= use; amount -= use;
+    if (amount <= 0) { if (t.isPlayer) hurtFlash(); return false; }
+  }
   if (!online && compOn()) amount = mitigate(t, amount, head);
   if (!online) amount = subidoTaken(t, amount);
   if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
+  if (!online) amount = frenzyTaken(amount, t, gameTime);
   t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); if (!online && attacker && attacker !== t && attacker.fun) notePodiumHurt(attacker.fun, amount); // regen só com dano de outro
   if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
   if (t.isPlayer) { hurtFlash(); noteHit(origin); if (attacker && attacker !== t) noteFlinch(amount); sfx.oink(0.8, 1.15); }
   else { if (attacker && attacker !== t && !t.target) { t.target = attacker; t.aim = t.reaction * 0.5; } if (Math.random() < 0.3) sfx.oink(distVol(t.pos) * 0.6, 1.3); }
+  if (!online && isHistoria(mode) && !t.zt && attacker && attacker.alive && attacker.zt && attacker.zt !== 'fog' && !attacker.fog && amount > 0) {
+    const back = pimentaDmg(t);
+    if (back > 0) { puff(center(attacker, attacker.size || 1), 0xff4a1a); damage(attacker, back, t, W_NADE, false); }
+    if (t.alive && t.hp > 0) { const skin = cascaTime(t); if (skin > 0) { t.hImmuneUntil = Math.max(t.hImmuneUntil || 0, gameTime + skin); historiaRing(t.pos, '#f4f7ff', 1.15); } }
+  }
   if (attacker && attacker.isPlayer && attacker !== t) { if (t.hp > 0 && !(survOn() && t.zt)) feedbackHit({ head, wall: !!(fx & 1) }); sfx.hit(); if (training()) dmgPopup(t, amount, head); }
   if (t.hp <= 0) { kill(t, attacker, wIdx, head, back, false, null, fx); return true; }
   return false;
@@ -4831,6 +4866,7 @@ function applyPersonality(p, w, dt, moving, inspectK) {
     fp.rare.t += dt; const dur = fp.rare.egg ? 1.45 : 1.05;
     if (fp.rare.t < dur) addPose(rareFlair(fp.rare.key, fp.rare.t / dur, fp.rare.egg)); else fp.rare = null;
   }
+  if (p.hAnimUntil > gameTime && p.hAnim && HUPS[p.hAnim]) addPose(fpHistoriaPose(p.hAnim, 1 - (p.hAnimUntil - gameTime) / HUPS[p.hAnim].anim));
   if (fp.killT > 0) {
     if (mouseDown || rightDown || p.reloadEnd > gameTime || p.switchEnd > gameTime || ads > 0.35 || p.charging) fp.killT = 0;
     else { fp.killT -= dt; if (fp.killT > 0) addPose(killFlair(fp.killKey || key, 1 - fp.killT / KILL_TIME)); }
@@ -5766,7 +5802,7 @@ function stepDownOffline(dt) {
   if (online || !survOn() || state !== 'playing') return;
   const humans = entities.filter((e) => e.isPlayer && !e.zt);
   for (const h of humans) h.revHold = !!(keys[DOWNED.key] && h.alive && !h.down);
-  const res = stepDowned(humans, dt, gameTime, (a, b) => losClear(new V3(a.x, a.y, a.z), new V3(b.x, b.y, b.z)), downMem);
+  const res = stepDowned(humans, dt, gameTime, (a, b) => losClear(new V3(a.x, a.y, a.z), new V3(b.x, b.y, b.z)), downMem, (h) => DOWNED.hold * (isHistoria(mode) ? coveiroScale(h) : 1));
   for (const t of res.up) standUpLocal(t);
   for (const t of res.bleed) { t.downFinal = true; t.down = false; t.hp = 0; kill(t, t.lastAttacker, t.weapon, false); }
 }
@@ -5786,6 +5822,28 @@ function downShoot(p) {
     fp.kick = Math.min(0.14, fp.kick + w.recoil * 2.5);
     window.__lastShot = { dir: dir.toArray(), origin: origin.toArray(), spread: w.spread, w: DOWNED.pistol, down: true };
   }
+}
+function steerHistoriaAim(p, dt) {
+  let best = null, bestScore = 1e9;
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+  for (const e of entities) {
+    if (!e.zt || !e.alive) continue;
+    const dx = e.pos.x - p.pos.x, dy = (e.pos.y + 1.55 * (e.size || 1)) - (p.pos.y + 1.6), dz = e.pos.z - p.pos.z;
+    const dist = Math.hypot(dx, dy, dz);
+    if (dist < 0.6 || dist > 42) continue;
+    const flat = Math.hypot(dx, dz) || 1;
+    const ang = Math.acos(Math.max(-1, Math.min(1, (dx * fx + dz * fz) / flat)));
+    if (ang > 0.85) continue;
+    const score = ang * 10 + dist * 0.03;
+    if (score < bestScore) { bestScore = score; best = { dx, dy, dz, dist }; }
+  }
+  if (!best) return;
+  const yaw = Math.atan2(-best.dx, -best.dz);
+  const pitch = Math.atan2(best.dy, Math.hypot(best.dx, best.dz));
+  const dyaw = Math.atan2(Math.sin(yaw - p.yaw), Math.cos(yaw - p.yaw));
+  const k = Math.min(1, dt * 14);
+  p.yaw += dyaw * k;
+  p.pitch = clamp(p.pitch + (pitch - p.pitch) * k, -1.2, 1.2);
 }
 function updatePlayer(dt) {
   const p = player;
@@ -5814,7 +5872,11 @@ function updatePlayer(dt) {
   }
   // mira com zoom: segura o botão direito (Shift agacha; com a faca o botão direito é a estocada). No ferrolho da sniper a luneta desce pra mão aparecer.
   const guiding = !!predator || !!gunner || !!ac130;
-  stepCrouch(p, (p.down || p.tank || p.big) ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
+  const ultOn = isHistoria(mode) && p.ultForm && p.ultUntil > gameTime;
+  if (isHistoria(mode) && p.ultForm && !ultOn) { if (p.ultForm === 'vampiro') p.fly = 0; p.ultForm = ''; }
+  const vamp = ultOn && p.ultForm === 'vampiro';
+  const bebado = ultOn && p.ultForm === 'bebado';
+  stepCrouch(p, (p.down || p.tank || p.big || vamp) ? 0 : (!guiding && !chatTyping() && (keys.ShiftLeft || keys.ShiftRight) ? 1 : 0), dt, PHYS);
   const bolting = fp.actionT > 0 && WEAPONS[p.weapon].bolt;
   updateAds(dt, !p.utilSel && !p.down && !guiding && !bolting && !emote.on && !isKnife(p.weapon) && !isSaber(p.weapon) && !WEAPONS[p.weapon].noAds && rightDown && p.reloadEnd <= gameTime && p.switchEnd <= gameTime); // minigun sem zoom: o botão direito só embala. Caído não mira. Granada na mão: o direito joga na força mínima.
   if (p.weapon !== MINIGUN && p.mgHeat) { p.mgHeat = Math.max(0, p.mgHeat - WEAPONS[MINIGUN].spin.cool * dt); if (p.mgHeat <= 0) p.mgHot = false; } // guardada também esfria
@@ -5828,7 +5890,10 @@ function updatePlayer(dt) {
   const graveSpot = invMode() && !survOn() && p.alive && !p.down ? nearestGrave(p) : null;
   p.graveHold = !!(graveSpot && p.useHold); // Invasão Normal: cavando a cruz (mesmo E do useHold)
   if (p.graveHold) { wish.set(0, 0, 0); const dx = graveSpot.grave.x - p.pos.x, dz = graveSpot.grave.z - p.pos.z; if (dx * dx + dz * dz > 0.04) p.yaw = Math.atan2(-dx, -dz); } // cavando: olha pra cruz e não anda
-  if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * (p.down ? DOWNED.speed : 1) * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime && !(p.flashUntil > gameTime) ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // caído rasteja. Em pé: faca corre; sabre anda normal; agachado anda mais devagar. Flashbang não deixa lento.
+  if (p.hRootUntil > gameTime) wish.set(0, 0, 0); // Pelo bem da Cheers: parado
+  if (bebado) wish.set(0, 0, 0);
+  if (p.eggHideUntil > gameTime) { wish.set(0, 0, 0); p.vel.x = p.vel.z = 0; } // pulou o muro: some por 10 s
+  if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * (p.down ? DOWNED.speed : 1) * (p.hSpeedUntil > gameTime ? 1.5 : 1) * (isHistoria(mode) ? passoMul(p) : 1) * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime && !(p.flashUntil > gameTime) ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // caído rasteja. Em pé: faca corre; sabre anda normal; agachado anda mais devagar. Flashbang não deixa lento. Passinho do Hotmilk soma em cima.
   if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(p.propLock ? 0 : HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
   if (!online) { const wasJet = !!p.jet, wasBig = !!p.big; stepCheats(p, gameTime, p.onGround); if (wasJet && !p.jet) flashMsg(p.jetGlide ? 'Jetpack acabou · descendo devagar' : 'Jetpack acabou'); if (wasBig && !p.big) flashMsg('Voltou ao tamanho normal'); }
   if (p.tank && wish.lengthSq()) wish.multiplyScalar(TANK.speed / SPEED);
@@ -5836,14 +5901,30 @@ function updatePlayer(dt) {
   if (p.shieldDashUntil > gameTime && !bombLock(p)) wish.copy(fwd).multiplyScalar(SHIELD.charge.speed); // investida curta, na direção da mira
   const acc = p.onGround ? 14 : 4;
   p.vel.x += (wish.x - p.vel.x) * Math.min(1, acc * dt); p.vel.z += (wish.z - p.vel.z) * Math.min(1, acc * dt);
+  if (bebado && p.ultAnchor) {
+    p.ultAng = (p.ultAng || 0) + dt * 2.1;
+    const nx = p.ultAnchor.x + Math.cos(p.ultAng) * 3.2, nz = p.ultAnchor.z + Math.sin(p.ultAng) * 3.2;
+    p.vel.x = clamp((nx - p.pos.x) / Math.max(dt, 0.016), -8, 8);
+    p.vel.z = clamp((nz - p.pos.z) / Math.max(dt, 0.016), -8, 8);
+    p.vel.y = 0; p.yaw += dt * 2.4;
+  }
   jetVertical(p, !!(spaceHold && !chatTyping() && !guiding && !bombLock(p) && !gfLock(p)), dt);
-  if (!p.fly && !p.down && !p.tank && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !p.graveHold && !(hideS && p.propLock)) { p.vel.y = JUMP; p.onGround = false; sfx.jump(); }
+  if (vamp) {
+    const up = !!(spaceHold && !chatTyping() && !guiding);
+    const down = !!(keys.ShiftLeft || keys.ShiftRight);
+    const target = up ? 7 : down ? -6.5 : 0;
+    p.vel.y += (target - p.vel.y) * Math.min(1, 6 * dt);
+    p.fly = 1;
+  }
+  if (!p.fly && !vamp && !bebado && !p.down && !p.tank && !guiding && jumpPressed && p.onGround && !bombLock(p) && !gfLock(p) && !p.graveHold && !(hideS && p.propLock) && !(p.hRootUntil > gameTime) && !(p.eggHideUntil > gameTime)) { p.vel.y = JUMP * (isHistoria(mode) ? molaMul(p) : 1); p.onGround = false; sfx.jump(); }
   saberPreMove(p, dt);
+  p.hPhase = !!(isHistoria(mode) && p.hPhaseUntil > gameTime);
   moveEntity(p, dt);
   checkFall(p); if (!p.alive) return;
   const bob = p.onGround ? Math.abs(Math.sin(fp.bob)) * 0.05 * stanceScale(p.crouch) : 0;
   stepRecoil(p, dt, gameTime);
   stepFlinch(dt);
+  if (p.hAimUntil > gameTime) steerHistoriaAim(p, dt);
   camera.position.set(p.pos.x, p.pos.y + (p.down ? DOWNED.eye : (p.tank || p.big) ? cheatEye(p) : eyeHeight(p)) + (p.down || p.tank ? 0 : bob), p.pos.z); camera.rotation.set(p.pitch, p.yaw, 0);
   if (gfLock(p)) return;
   if (p.down) { downShoot(p); return; }
@@ -5869,6 +5950,7 @@ function updatePlayer(dt) {
   if (p.tank) { fireTank(p); return; }
   if (p.graveHold) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; return; } // pá na mão: sem tiro até soltar
   if (p.soul) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; return; } // alma sugada: zumbi não atira nem golpeia
+  if (bebado) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; camera.rotation.z += Math.sin(gameTime * 8) * 0.28; return; }
   if (emote.on) { // dança: anda e olha, mas a arma não dispara até a animação acabar
     if (gameTime >= emote.until) stopEmote();
     else {
@@ -5887,6 +5969,13 @@ function updatePlayer(dt) {
   const canFire = p.reloadEnd <= gameTime || (w.shellReload && p.mag[p.weapon] > 0);
   if (survOn() && p.papUntil > gameTime && p.papGun === p.weapon) return; // a Papada está com a arma
   const latched = !mouseDown && clickLatch && performance.now() - clickLatch < (w.burst ? 450 : 250); // FAMAS: clique na pausa entre rajadas fica guardado pra próxima
+  if (ultOn && p.ultForm === 'frenesi') {
+    if ((mouseDown || latched) && p.stunUntil <= gameTime && gameTime >= p.nextFire && p.switchEnd <= gameTime) {
+      firedThisPress = true; clickLatch = 0; p.nextFire = gameTime + 0.48;
+      if (online) netEv(['qe', 'arm']); else if (inv) inv.frenzyArm(p);
+    }
+    return;
+  }
   if (w.shield) { // clique = porrada; botão direito = investida (não é granada nem a tecla F)
     const rLatched = !rightDown && rightLatch && performance.now() - rightLatch < 250;
     if (!p.charging && p.stunUntil <= gameTime && p.switchEnd <= gameTime) {
@@ -6262,6 +6351,10 @@ function animateBot(b, dt) { // visual: andar, flutuar, piscar ao levar dano, bo
     }
     m.guns.forEach((g) => { g.visible = false; if (g.userData.twin) g.userData.twin.visible = false; if (g.userData.extra) g.userData.extra.visible = false; });
   } else if (b.throwPose) { b.throwPose = false; b.wasPose = ''; setWeapon(b, b.weapon); }
+  if (b.hAnimUntil > gameTime && b.hAnim && HUPS[b.hAnim]) {
+    poseHistoria(m, b.hAnim, 1 - (b.hAnimUntil - gameTime) / HUPS[b.hAnim].anim);
+    b.wasHAnim = true;
+  } else if (b.wasHAnim) { clearHistoriaPose(m); b.wasHAnim = false; b.wasPose = ''; }
 }
 
 const magGeo = new THREE.BoxGeometry(0.1, 0.24, 0.13);
@@ -7312,6 +7405,7 @@ function tickNight(dt) {
 }
 // seletor: mapa salvo no navegador ('random' = aleatório a cada partida)
 const invMenu = () => $('modeSel').value === INV.mode; // Invasão tem lista de mapas própria (Rodízio + Fazenda + os normais)
+const historiaMenu = () => isHistoria($('modeSel').value);
 const bombMenu = () => $('modeSel').value === 'bomb';
 const compMenu = () => $('modeSel').value === COMP.mode;
 const menuSurvival = () => invMenu() && isSurvival($('survSel') && $('survSel').value); // Survival é variante da Invasão, não um modo solto
@@ -7321,6 +7415,7 @@ const menuPool = (md, surv = false) => {
     const L = MAPS.filter((m) => ids.includes(m.id));
     if (L.length) return L;
   }
+  if (isHistoria(md)) { const one = getMap(HISTORIA.map); return one ? [one] : []; }
   return (surv || isSurvivalMode(md)) ? SURVIVAL_PLAY_MAPS : isX1(md) ? X1_MAPS : (md === 'bomb' || md === COMP.mode) ? BOMB_MAPS : isInvasion(md) ? INV_MAPS : PLAY_MAPS;
 }; // Survival: mapas da Invasão e a HOTMILK à Noite. Bomba e Competitivo: sites feitos à mão. X1: currais. Gunfight: pool do formato.
 const mapKey = () => (bombMenu() || compMenu() ? 'docao.bombMap' : invMenu() ? 'docao.invMap' : x1Menu() ? 'docao.x1Map' : 'docao.map');
@@ -7341,6 +7436,13 @@ function fetchMap(id, onReady) {
 function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } return v === 'random' || mapPool().some((m) => m.id === v) ? v : (bombMenu() || compMenu()) ? BOMB_MAP : isSurvivalMode($('modeSel').value) ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : MAPS[0].id; }
 let selectedMap = storedMap();
 function syncMapForMode() {
+  if (historiaMenu()) {
+    selectedMap = HISTORIA.map;
+    if (!currentMap || currentMap.id !== selectedMap) loadMap(selectedMap, true);
+    $('mapModal').classList.add('hidden');
+    buildMapGrid();
+    return;
+  }
   if (menuSurvival()) {
     if (!mapPool().some((m) => m.id === selectedMap)) selectedMap = mapPool().some((m) => m.id === INV.DEFAULT_MAP) ? INV.DEFAULT_MAP : SURVIVAL.DEFAULT_MAP;
     if (!currentMap || currentMap.id !== selectedMap) loadMap(selectedMap, true);
@@ -7362,8 +7464,10 @@ function mapCard(id) {
 }
 function refreshMapUI() {
   const card = $('mapBtn');
-  card.classList.remove('locked'); card.title = 'Escolher mapa';
-  const ch = card.querySelector('.mchange'); if (ch && ch.textContent !== 'TROCAR') ch.textContent = 'TROCAR';
+  const story = historiaMenu();
+  card.classList.remove('locked'); card.title = story ? 'HOTMILK à Noite, mapa fixo do Modo história' : 'Escolher mapa';
+  card.disabled = story;
+  const ch = card.querySelector('.mchange'); if (ch) ch.textContent = story ? 'FIXO' : '↻ TROCAR';
   if (x1Menu()) {
     $('mapName').textContent = 'Sortido'; $('mapDesc').textContent = 'Um curral pequeno, sorteado. Cada um nasce de um lado.';
     const th = $('mapBtn').querySelector('.thumb'); th.textContent = '?'; th.style.backgroundImage = ''; th.classList.add('rnd');
@@ -7372,7 +7476,7 @@ function refreshMapUI() {
   }
   const m = selectedMap === 'random' ? null : menuMap(selectedMap);
   $('mapName').textContent = m ? m.name : 'Aleatório';
-  $('mapDesc').textContent = m && m.glb && breezeStatus ? breezeStatus : m ? m.desc : 'Um mapa diferente sorteado a cada partida.';
+  $('mapDesc').textContent = story ? 'Campus da HOTMILK à noite, com Papada, barraca, parede e portas. Sempre este mapa.' : m && m.glb && breezeStatus ? breezeStatus : m ? m.desc : 'Um mapa diferente sorteado a cada partida.';
   const th = $('mapBtn').querySelector('.thumb'); th.textContent = m ? '' : '?'; th.style.backgroundImage = m && thumbs[m.id] ? `url(${thumbs[m.id]})` : '';
   th.classList.toggle('rnd', !m);
   document.querySelectorAll('#mapGrid .mapcard').forEach((c) => c.classList.toggle('active', c.dataset.map === selectedMap));
@@ -7384,6 +7488,7 @@ function previewSelectedMap() {
   fetchMap(id, () => { if (selectedMap === id && state === 'menu') loadMap(id); });
 }
 function selectMap(id) {
+  if (historiaMenu()) return;
   if (x1Menu()) { if (id !== 'random') loadMap(id); refreshMapUI(); return; } // no X1 o mapa da partida é sorteado; o clique só mostra o curral
   selectedMap = id; try { localStorage.setItem(mapKey(), id); } catch (e) { /* sem storage */ }
   previewSelectedMap();
@@ -7395,7 +7500,7 @@ function invThumbs() { // Rodízio/Fazenda: renderiza a miniatura só quando o m
   const next = () => { const m = todo.shift(); if (!m) { invThumbsBusy = false; buildMapGrid(); return; } try { thumbs[m.id] = renderThumb(m); } catch (e) { console.warn('miniatura', m.id, e); } refreshMapUI(); requestAnimationFrame(next); };
   requestAnimationFrame(next);
 }
-function buildMapGrid() { if (invMenu()) invThumbs(); const g = $('mapGrid'); g.innerHTML = ''; for (const m of mapPool()) g.appendChild(mapCard(m.id)); g.appendChild(mapCard('random')); refreshMapUI(); }
+function buildMapGrid() { if (invMenu()) invThumbs(); const g = $('mapGrid'); g.innerHTML = ''; for (const m of mapPool()) g.appendChild(mapCard(m.id)); if (!historiaMenu()) g.appendChild(mapCard('random')); refreshMapUI(); }
 function makeThumbs() { // miniaturas renderizadas da vista aérea, uma por quadro pra não travar o menu
   const L = MAPS.filter((m) => !m.survivalOnly && !m.thumbUrl && (PLAY_MAPS.includes(m) || !INV_MAPS.includes(m))); // mapa GLB usa a foto (thumbUrl). HOTMILK à Noite e os mapas só da Invasão: miniatura sob demanda
   let i = 0; const next = () => {
@@ -7405,6 +7510,7 @@ function makeThumbs() { // miniaturas renderizadas da vista aérea, uma por quad
   }; requestAnimationFrame(next);
 }
 function nextOfflineMap() {
+  if (isHistoria(mode) || historiaMenu()) return HISTORIA.map;
   if (x1Mode() || x1Menu()) { const i = X1_MAPS.findIndex((m) => currentMap && m.id === currentMap.id); return X1_MAPS[(i + 1) % X1_MAPS.length].id; }
   const P = gfLive() ? mapPool() : plantOn() ? BOMB_MAPS : survivalMode() ? SURVIVAL_PLAY_MAPS : invMode() ? INV_MAPS : MAPS.filter((x) => PLAY_MAPS.includes(x) || !INV_MAPS.includes(x)); const Q = P.filter((x) => !x.heavy || x === currentMap); return Q[(Math.max(0, Q.indexOf(currentMap)) + 1) % Q.length].id; // mapa pesado (GLB) não entra no rodízio
 } // Bomba: só mapas com sites. X1: o próximo curral.
@@ -7414,11 +7520,12 @@ function resolveX1Map(mapId) {
   return (pool.length ? pool : X1_MAPS)[Math.floor(Math.random() * (pool.length || X1_MAPS.length))].id;
 }
 function pickMapForMatch() {
+  if (historiaMenu()) return HISTORIA.map;
   if (selectedMap !== 'random' && mapPool().some((m) => m.id === selectedMap)) return selectedMap;
   if (selectedMap !== 'random') return (bombMenu() || compMenu()) ? BOMB_MAP : invMenu() ? INV.DEFAULT_MAP : $('modeSel').value === GF_MODE ? (mapPool()[0] ? mapPool()[0].id : 'galpao-assalto') : PLAY_MAPS[0].id; // Bomba e Competitivo: mapa sem sites → Rodízio. Gunfight: primeiro do pool.
   const pool = mapPool().filter((m) => !m.heavy && (!currentMap || m.id !== currentMap.id)); return pool[Math.floor(Math.random() * pool.length)].id;
 }
-$('mapBtn').onclick = () => { buildMapGrid(); $('mapModal').classList.remove('hidden'); };
+$('mapBtn').onclick = () => { if (historiaMenu()) return; buildMapGrid(); $('mapModal').classList.remove('hidden'); };
 $('mapClose').onclick = () => $('mapModal').classList.add('hidden');
 loadMap(selectedMap === 'random' || !mapReady(selectedMap) ? MAPS[0].id : selectedMap); if (selectedMap !== 'random' && !mapReady(selectedMap)) previewSelectedMap(); buildMapGrid(); makeThumbs();
 
@@ -7453,8 +7560,8 @@ function startGame(mapId) {
   const pickedRaw = $('modeSel').value;
   const gfNotice = pickedRaw === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : '';
   const picked = gfNotice ? 'dm' : pickedRaw;
-  const wantSurv = menuSurvival();
-  const id = picked === TRAIN.mode ? TRAIN.map : picked === HIDE.mode ? HIDE.MAP : picked === X1.mode ? resolveX1Map(mapId) : (typeof mapId === 'string' ? mapId : pickMapForMatch());
+  const wantSurv = menuSurvival() || isHistoria(picked);
+  const id = isHistoria(picked) ? HISTORIA.map : picked === TRAIN.mode ? TRAIN.map : picked === HIDE.mode ? HIDE.MAP : picked === X1.mode ? resolveX1Map(mapId) : (typeof mapId === 'string' ? mapId : pickMapForMatch());
   if (!mapReady(id)) { // Breeze: baixa e começa sozinho quando terminar (se ainda estiver no menu)
     if (startGame.waiting) return; startGame.waiting = true;
     fetchMap(id, () => { startGame.waiting = false; if (state === 'menu') startGame(id); });
@@ -7554,6 +7661,7 @@ function hidePodium() {
   if (podiumStage) { podiumStage.dispose(); podiumStage = null; }
 }
 function endGame() {
+  stopStoryCut();
   stopInspect(true); stopEmote(); // fim no meio da inspeção ou da dança (a mira com zoom continua na câmera lenta)
   if (state === 'over' || !player) return;
   const boom = nukeWin; nukeWin = false; // Fim da chapa: o dono (ou o time dele) vence, mesmo atrás no placar
@@ -7692,7 +7800,7 @@ function fillPauseBrief() {
 function pause() { if (state !== 'playing') return; softPauseOn = false; state = 'paused'; releaseLook(); closePauseClass(); tuckDeathMenu(); if (player && player.alive) document.body.classList.remove('dead', 'deadgray', 'cls-on', 'killcam'); $('pauseInvite').classList.toggle('hidden', !online); $('pauseVoice').classList.toggle('hidden', !online); const note = $('pauseClassNote'); if (note) note.textContent = x1Mode() ? 'No X1 a arma é sortida e igual pra todo mundo. Não dá pra trocar.' : survOn() ? 'No Survival a arma se compra na partida, na loja.' : invMode() ? 'Na Invasão a classe entra no painel B, entre as waves.' : training() ? 'No estande a classe entra agora e o pente não enche sozinho.' : 'A classe escolhida entra na próxima vida. Não derruba.'; const swap = $('pauseClassBtn'); if (swap) swap.classList.add('hidden'); const classBox = $('pauseClasses'); if (classBox) classBox.classList.toggle('hidden', !pauseClassesAllowed()); buildPauseGuns(); $('pauseDance').classList.toggle('hidden', invMode()); fillPauseBrief(); showPauseLoadout(false); pauseFocus = 0; paintPauseFocus(); const opt = $('pauseOptions'); if (opt) opt.classList.remove('is-hot'); $('pause').classList.remove('hidden'); showPauseLoadout(false); if (document.pointerLockElement) document.exitPointerLock(); }
 // ` solta o mouse como o Esc, sem a pausa na chapa: o HUD fica como estava. Clique ou ` de novo volta a mirar.
 function softPause() { if (state !== 'playing') return; state = 'paused'; softPauseOn = true; releaseLook(); if (document.pointerLockElement) document.exitPointerLock(); }
-function resume() { closePauseClass(); showPauseLoadout(false); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); lockPointer(); }
+function resume() { closePauseClass(); showPauseLoadout(false); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); const storyMouse = isHistoria(mode) && (($('hOffer') && !$('hOffer').classList.contains('hidden')) || ($('hMap') && !$('hMap').classList.contains('hidden'))); if (!storyMouse) lockPointer(); }
 function updateDeathSkinFx(dt) { deathSkinFx.update(dt); }
 function toMenu() {
   clearMatchEnding(); deathSkinFx.clear();
@@ -7702,6 +7810,7 @@ function toMenu() {
   state = 'menu'; rulesLive = false; survLive = false; matchVariant = ''; surv = null; survClear(); nightAmb.stop(); clearBots(); inv = null; invNet = null; noclipOn = false; paintNoclip(); if (selectedMap !== 'random') loadMap(selectedMap); invApplyLook(false); showcase.visible = true; pickups.forEach((p) => (p.mesh.visible = false)); camera.clearViewOffset(); refreshSurvPts();
   closePauseClass(); ['pause', 'pauseClass', 'gameover', 'hud'].forEach((id) => { const el = $(id); if (el) el.classList.add('hidden'); }); document.body.classList.remove('cls-on', 'dead', 'killcam'); $('menu').classList.remove('hidden');
   if (document.pointerLockElement) document.exitPointerLock();
+  paintHistoriaBar();
 }
 // pede o pointer lock DENTRO do gesto do usuário (clique/tecla). Se o navegador recusar, mostra o aviso e o próximo clique no jogo tenta de novo.
 const RELOCK_MSG = 'Clique pra voltar a mirar';
@@ -7832,6 +7941,7 @@ document.addEventListener('keydown', (e) => {
   const tag = e.target && e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if (chatTyping()) { if (e.code === 'Escape') { e.preventDefault(); closeChat(true); } return; }
+  if (state === 'playing' && player && historiaKey(e)) { e.preventDefault(); return; } // oferta 1/2/3, L e o mapa do Grok antes do painel de classe
   if (benchKey(e)) { e.preventDefault(); return; }
   if (killcamGunKey(e)) { e.preventDefault(); return; }
   if (classMenuKey(e)) { e.preventDefault(); return; }
@@ -7853,8 +7963,12 @@ document.addEventListener('keydown', (e) => {
   if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   if (e.code !== 'Space' || !e.repeat) keys[e.code] = true;
   if (e.code === 'Space') spaceHold = true;
+  if (state === 'playing' && isHistoria(mode) && e.code === 'KeyE' && !e.repeat && player && player.alive) {
+    const hit = eggPrompt(player, eggBook());
+    if (hit && hit.id !== 'urina' && !(surv && nearestClosedDoor(currentMap, surv, player.pos))) { e.preventDefault(); if (online) netEv(['qe', 'u', hit.id]); else if (inv) inv.eggUse(player, hit.id); return; }
+  }
   if (state === 'playing' && survivalMode() && e.code === 'KeyE' && !e.repeat && player && player.alive && !nearestGrave(player)) { e.preventDefault(); tryBuyDoor(); return; }
-  if (state === 'playing' && player && invKey(e)) { e.preventDefault(); return; } // Invasão: G poder · X troca · B painel de armas na pausa
+  if (state === 'playing' && player && (historiaKey(e) || invKey(e))) { e.preventDefault(); return; } // Invasão: G poder · X troca · B painel. História: L upgrade
   if (state === 'playing' && player && gunner) { // no Chopper: 1/2 trocam a arma dele, F sai
     if (e.code === 'Digit1') setGunnerMode('mini');
     if (e.code === 'Digit2') setGunnerMode('sniper');
@@ -7895,6 +8009,7 @@ document.addEventListener('keydown', (e) => {
       if (!emote.on && e.code === 'KeyF' && player.alive && !e.repeat && !invMode()) useStreak();
       if (training() && player.alive && !emote.on && !e.repeat && (e.code === 'KeyB' || e.code === 'KeyN' || e.code === 'KeyM')) trainSwap(e.code);
       else if (e.code === 'KeyB' && !e.repeat && player.alive && !invMode() && !invPick) startEmote(); // Invasão: B é só o painel de armas (invKey), nunca dança
+      else if (e.code === 'KeyN' && !e.repeat && player.alive && isHistoria(mode) && !invPick && !player.down) startEmote(); // Modo história: N dança (o ritual do mictório)
       if (exploreMode() && player.alive && !emote.on && !e.repeat && (e.code === 'Comma' || e.code === 'Period' || e.code === 'BracketLeft' || e.code === 'BracketRight')) cycleExplorePrimary(e.code === 'Period' || e.code === 'BracketRight' ? 1 : -1);
     }
     if (!emote.on && !gfLive() && e.code === 'KeyQ' && !e.repeat && !(player && player.down)) { if (player.pokeballs > 0) { cancelUtilPress(); player.utilSel = ''; startCharge(); } else selectUtil('nade'); }
@@ -7931,8 +8046,8 @@ function loop() {
     updateFootsteps(dt);
     if (gasSim && !online) stepGasLocal();
     if (gasView) gasView.update(dt, gameTime, player ? player.pos : null);
-    updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateGifts(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateDeathSkinFx(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode() && !compOn() && !gfLive()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
-    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateGfOffline(dt); stepGroundGuns(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintDownHud(); updateGraveView();
+    updatePickups(dt); updateGrenades(dt); updateTacticals(dt); updateShocks(dt); updateRockets(dt); updateDiscs(dt); updateRays(dt); updateCorn(dt); updateGifts(dt); updateEggs(dt); updatePokeFx(dt); stepLocalSabers(dt); updateStrikes(dt); updateParticles(dt); updateDeathSkinFx(dt); updateBacon(dt); updateBaconPickups(); if (training()) { trainRefill(); updateDmgPops(dt); } if (!online && !x1Mode() && !compOn() && !gfLive()) for (const e of entities) if (!e.zt) regenStep(e, gameTime, dt, isHistoria(mode) ? caldoTune(e) : null); stepHistoriaWorld(dt); stepEggLooks(dt); updateFP(dt); updateEffects(dt); updateShafts(dt); updateHud(dt); updateRewards(dt);
+    updateDomOffline(dt); updateZoneGfx(dt); invTick(dt); stepDownOffline(dt); updateBombOffline(dt); updateGfOffline(dt); stepGroundGuns(dt); updateBombGfx(dt); updateHideOffline(dt); tickNight(dt); if (survivalMode()) survivalPrompt(); paintEggPrompt(); paintDownHud(); updateGraveView();
     try { flushSleigh(); } catch (e) { /* trenó espera o contexto */ }
     if (nevascaShow) updateNevasca(nevascaShow, gameTime, dt, () => { flashMsg('O Docão tá passando! 🎅'); msgTimer = 2.4; queueSleigh(); });
     if (!online && !exploreMode() && !hideMode() && gameTime >= matchLimit()) endGame(); // Docão Escondido acaba pelo placar das rodadas
@@ -8154,6 +8269,7 @@ const MENU_RULES = {
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho, ray gun e saco de presentes. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. O esquerdo carrega a força. O direito joga na força mínima. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
+  historia: 'Modo história · a Invasão zumbi, sempre na HOTMILK à Noite e no Normal. Papada, barraca, parede e portas do mapa continuam valendo. Dá pra jogar solo ou em sala.',
   survival: 'Survival, dentro da Invasão: a Papada aparece em todos os mapas. Nasce de pistola e faca. Na HOTMILK à Noite, F também usa a barraca e a parede, e E compra a porta. A Ray Gun só sai na barraca.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. N liga o noclip: voa na direção da mira, atravessa parede, Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Munição não acaba e a partida não termina.',
   hide: `🫥 COMO JOGAR · Docão Escondido (protótipo, estilo Prop Hunt)\n🙈 Escondidos: você vira um objeto do mapa. ${HIDE.KEY_LABEL} troca o objeto (só os que existem no mapa), ${HIDE.ROT_LABEL} gira, ${HIDE.LOCK_LABEL} trava a posição (só a câmera mexe). Mapa: Rodízio do Docão. Fique parado e sobreviva até o tempo acabar.\n🔫 Caçadores: ${HIDE.PREP} s presos e cegos no spawn, depois ${Math.round(HIDE.ROUND / 60 * 10) / 10} min pra achar e abater todos os objetos-Docão.\n🔁 Os papéis trocam toda rodada · primeiro time a ${HIDE.WIN} vence.`,
@@ -8791,15 +8907,16 @@ function paintLobbyLoadout() {
 function syncLoadoutUi() { paintLoadoutDock(); paintLobbyLoadout(); buildDeathPrimaries(); buildDeathSec(); buildDeathMelee(); }
 function refreshMenuMode() {
   if ($('modeSel').value === 'survival') { $('modeSel').value = INV.mode; if ($('survSel')) $('survSel').value = 'survival'; }
-  const v = [HIDE.mode, 'dom', ARMS_RACE.mode, 'bomb', COMP.mode, 'explore', TRAIN.mode, INV.mode, X1.mode, GF_MODE].includes($('modeSel').value) ? $('modeSel').value : 'dm';
+  const v = [HIDE.mode, 'dom', ARMS_RACE.mode, 'bomb', COMP.mode, 'explore', TRAIN.mode, INV.mode, HISTORIA.mode, X1.mode, GF_MODE].includes($('modeSel').value) ? $('modeSel').value : 'dm';
   const inv = v === INV.mode;
+  const story = isHistoria(v);
   const surv = inv && isSurvival($('survSel') && $('survSel').value);
   const comp = v === COMP.mode;
   $('menuTrain').classList.toggle('hidden', v !== TRAIN.mode);
   $('menuTeam').classList.toggle('hidden', v !== 'dom' && !isArmsRace(v) && v !== 'bomb' && v !== COMP.mode && v !== HIDE.mode && v !== GF_MODE);
   const box = (id) => { const el = $(id); return el ? el.closest('label') : null; };
-  if (box('botCount')) box('botCount').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || inv || v === X1.mode || comp);
-  if (box('timeSel')) box('timeSel').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || inv || isArmsRace(v) || v === HIDE.mode || comp);
+  if (box('botCount')) box('botCount').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || inv || story || v === X1.mode || comp);
+  if (box('timeSel')) box('timeSel').classList.toggle('hidden', v === 'explore' || v === TRAIN.mode || inv || story || isArmsRace(v) || v === HIDE.mode || comp);
   if ($('compSideLabel')) $('compSideLabel').classList.toggle('hidden', !comp);
   syncGfPick();
   const showDiff = v !== 'explore' && v !== TRAIN.mode;
@@ -8818,16 +8935,16 @@ function refreshMenuMode() {
   if ($('survNote')) $('survNote').classList.toggle('hidden', !inv);
   if (showDiff) paintDiffNote();
   if (inv) paintSurvNote();
-  const playTitle = inv ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
-  const playHint = surv ? 'PAPADA EM TODOS OS MAPAS' : inv ? 'CLÁSSICA · 20 WAVES' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : comp ? 'BOTIJÃO · ECONOMIA · PRIMEIRO A 13' : v === GF_MODE ? (GF_LIVE ? 'ROUNDS · PRIMEIRO A 6' : 'EM BREVE · CAI NO MATA-MATA') : 'SOLO · CONTRA BOTS';
+  const playTitle = story ? 'HISTÓRIA' : inv ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
+  const playHint = story ? 'HOTMILK · NORMAL · ZUMBIS' : surv ? 'PAPADA EM TODOS OS MAPAS' : inv ? 'CLÁSSICA · 20 WAVES' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : comp ? 'BOTIJÃO · ECONOMIA · PRIMEIRO A 13' : v === GF_MODE ? (GF_LIVE ? 'ROUNDS · PRIMEIRO A 6' : 'EM BREVE · CAI NO MATA-MATA') : 'SOLO · CONTRA BOTS';
   $('playBtn').innerHTML = `<span class="play-title">${playTitle}</span><small>${playHint}</small>`;
-  $('menuRules').textContent = inv ? (surv ? 'Survival · a Papada fica em todos os mapas. A loja completa e as portas continuam na HOTMILK à Noite.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada. Algumas waves vêm com tema. Da wave 10 em diante, 1% da horda pode ser o Docão Mutação Macabra. Com dois ou mais jogadores, um Shapeshifter (só um) nasce fora da visão, copia alguém e suga a alma de quem chega perto. Nas últimas entram zumbis ferozes. Sem vidas, a cruz fica no chão: segure E para desenterrar.') : MENU_RULES[v];
+  $('menuRules').textContent = story ? MENU_RULES.historia : inv ? (surv ? 'Survival · a Papada fica em todos os mapas. A loja completa e as portas continuam na HOTMILK à Noite.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada. Algumas waves vêm com tema. Da wave 10 em diante, 1% da horda pode ser o Docão Mutação Macabra. Com dois ou mais jogadores, um Shapeshifter (só um) nasce fora da visão, copia alguém e suga a alma de quem chega perto. Nas últimas entram zumbis ferozes. Sem vidas, a cruz fica no chão: segure E para desenterrar.') : MENU_RULES[v];
   teamButtons($('menuTeamBtns'), menuTeam, (t) => { menuTeam = t; refreshMenuMode(); });
   syncLoadoutUi();
 }
 function paintDiffNote() {
   const meta = botDiffMeta($('botDiff').value);
-  const inv = $('modeSel').value === INV.mode;
+  const inv = $('modeSel').value === INV.mode || isHistoria($('modeSel').value);
   $('botDiffNote').textContent = inv
     ? `${meta.label} · ${meta.tier}: a horda muda o cuspe, o cerco e a reação. A vida das waves continua igual. ${meta.hint}`
     : `${meta.label} · ${meta.tier}: ${meta.hint}`;
@@ -8851,10 +8968,10 @@ $('botDiff').onchange = () => saveBotDiff($('botDiff').value);
 $('roomDiff').onchange = () => saveBotDiff($('roomDiff').value);
 try { const d = localStorage.getItem('docao.botDiff'); if (d) saveBotDiff(d); } catch (e) { /* */ }
 $('modeSel').onchange = () => { try { localStorage.setItem('docao.mode', $('modeSel').value); } catch (e) { /* */ } refreshMenuMode(); syncMapForMode(); };
-try { const m = localStorage.getItem('docao.mode'); if (m === 'survival') { $('modeSel').value = INV.mode; $('survSel').value = 'survival'; } else if (m !== COMP.mode && (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'dm' || m === 'explore' || m === TRAIN.mode || m === INV.mode || m === 'bomb' || m === X1.mode || m === GF_MODE)) $('modeSel').value = m; } catch (e) { /* */ }
+try { const m = localStorage.getItem('docao.mode'); if (m === 'survival') { $('modeSel').value = INV.mode; $('survSel').value = 'survival'; } else if (m !== COMP.mode && (isHide(m) || m === 'dom' || isArmsRace(m) || m === 'dm' || m === 'explore' || m === TRAIN.mode || m === INV.mode || isHistoria(m) || m === 'bomb' || m === X1.mode || m === GF_MODE)) $('modeSel').value = m; } catch (e) { /* */ }
 try { const f = localStorage.getItem('docao.gfFormat'); if (f) applyGfFormat(f); } catch (e) { /* */ }
 for (const id of ['gfSide', 'roomGf', 'lobbyGf']) { const el = $(id); if (el) el.onchange = () => { applyGfFormat(el.value); const n = normFormat(el.value); if ($('roomMode') && $('roomMode').value === GF_MODE && $('roomMax')) $('roomMax').value = String(n * 2); if ($('roomMap') && $('roomMode') && $('roomMode').value === GF_MODE) fillMapSelect($('roomMap'), $('roomMap').value, GF_MODE); if ($('lobbyGf') && id === 'lobbyGf') sendCfg(); if (id === 'gfSide' && $('modeSel') && $('modeSel').value === GF_MODE) refreshMapUI(); }; }
-if (invMenu() || bombMenu() || compMenu() || x1Menu() || $('modeSel').value === 'explore') syncMapForMode();
+if (invMenu() || historiaMenu() || bombMenu() || compMenu() || x1Menu() || $('modeSel').value === 'explore') syncMapForMode();
 $('timeSel').onchange = () => { try { localStorage.setItem('docao.time', $('timeSel').value); } catch (e) { /* */ } };
 try { $('timeSel').value = String(normTime(localStorage.getItem('docao.time'))); } catch (e) { /* */ }
 let modeBeforeComp = 'dm';
@@ -9108,10 +9225,12 @@ function fillMapSelect(sel, value, md, surv = false) { // Invasão: lista própr
     if (sel.dataset.pool !== 'x1') { sel.innerHTML = ''; sel.dataset.pool = 'x1'; sel.add(new Option('Sortido · curral pequeno', 'random')); }
     sel.value = 'random'; return;
   }
-  const iv = isInvasion(md), sv = !!(surv || isSurvivalMode(md)), plant = md === 'bomb' || md === COMP.mode, gf = md === GF_MODE && GF_LIVE, L = menuPool(md, sv), key = gf ? `gf${normFormat(gfFormatValue())}` : plant ? 'bomb' : sv ? 'surv' : iv ? 'inv' : 'play';
-  if (!sel.options.length || sel.dataset.pool !== key) { sel.innerHTML = ''; sel.dataset.pool = key; for (const m of L) sel.add(new Option(m.name, m.id)); if (!sv && !plant) sel.add(new Option('Aleatório', 'random')); }
-  if (value && [...sel.options].some((o) => o.value === value)) sel.value = value; else if (value) sel.value = plant ? BOMB_MAP : sv ? SURVIVAL.DEFAULT_MAP : iv ? INV.DEFAULT_MAP : L[0].id;
+  const iv = isInvasion(md), story = isHistoria(md), sv = !!(surv || isSurvivalMode(md)), plant = md === 'bomb' || md === COMP.mode, gf = md === GF_MODE && GF_LIVE, L = menuPool(md, sv), key = gf ? `gf${normFormat(gfFormatValue())}` : plant ? 'bomb' : story ? 'historia' : sv ? 'surv' : iv ? 'inv' : 'play';
+  if (!sel.options.length || sel.dataset.pool !== key) { sel.innerHTML = ''; sel.dataset.pool = key; for (const m of L) sel.add(new Option(m.name, m.id)); if (!sv && !plant && !story) sel.add(new Option('Aleatório', 'random')); }
+  if (story) sel.value = HISTORIA.map;
+  else if (value && [...sel.options].some((o) => o.value === value)) sel.value = value; else if (value) sel.value = plant ? BOMB_MAP : sv ? SURVIVAL.DEFAULT_MAP : iv ? INV.DEFAULT_MAP : L[0].id;
   if (plant && (value === 'random' || sel.value === 'random')) sel.value = BOMB_MAP;
+  sel.disabled = story;
 }
 function renderLobby() {
   const o = online, L = o.lobby; if (!L) return;
@@ -9125,7 +9244,7 @@ function renderLobby() {
   const counts = [0, 0]; for (const p of rows) if (p.team === 0 || p.team === 1) counts[p.team]++;
   $('lobbyTeam').classList.toggle('hidden', !dom);
   if (dom) { const me = rows.find((p) => p.id === o.myId); teamButtons($('lobbyTeamBtns'), me ? me.pref : -1, (t) => o.net.send({ t: 'team', team: t }), counts); }
-  $('lobbyInfo').textContent = (isArmsRace(cfg.mode) ? 'CORRIDA ARMADA · ' : isComp(cfg.mode) ? 'COMPETITIVO · ' : cfg.mode === 'bomb' ? 'BOMBA (protótipo) · ' : cfg.mode === GF_MODE ? `GUNFIGHT ${normFormat(cfg.gfFormat)}v${normFormat(cfg.gfFormat)} · ` : isInvasion(cfg.mode) ? 'INVASÃO 🎃 (co-op) · ' : isX1(cfg.mode) ? 'X1 · ' : dom ? 'DOMINAÇÃO · ' : isTraining(cfg.mode) ? 'TREINO (Estande do Docão) · ' : 'MATA-MATA · ') + $('lobbyInfo').textContent;
+  $('lobbyInfo').textContent = (isArmsRace(cfg.mode) ? 'CORRIDA ARMADA · ' : isComp(cfg.mode) ? 'COMPETITIVO · ' : cfg.mode === 'bomb' ? 'BOMBA (protótipo) · ' : cfg.mode === GF_MODE ? `GUNFIGHT ${normFormat(cfg.gfFormat)}v${normFormat(cfg.gfFormat)} · ` : isHistoria(cfg.mode) ? 'MODO HISTÓRIA · ' : isInvasion(cfg.mode) ? 'INVASÃO 🎃 (co-op) · ' : isX1(cfg.mode) ? 'X1 · ' : dom ? 'DOMINAÇÃO · ' : isTraining(cfg.mode) ? 'TREINO (Estande do Docão) · ' : 'MATA-MATA · ') + $('lobbyInfo').textContent;
   if (cfg.elo) $('lobbyInfo').textContent += ' · VALENDO ELO';
   $('lobbyPlayers').innerHTML = `<table><tr><th style="text-align:left">Jogadores (${rows.length}/${cfg.max})</th><th>Ping</th></tr>${rows.map((p) =>
     `<tr data-pid="${p.bot ? '' : p.id}" class="${p.id === o.myId ? 'me' : ''}${!p.bot && voiceTalking(p.id) ? ' talking' : ''}${!p.bot && voiceMuted(p.id) ? ' vmuted' : ''}"><td style="text-align:left"><span class="dot" style="background:${(getSkin(p.skin).shirt || {}).color || '#d8261c'}"></span>${escapeHtml(p.name)}${p.id === L.hostId ? '<span class="host">★ anfitrião</span>' : ''}${dom && p.team >= 0 ? `<span class="tm${p.team}">${TEAM_NAMES[p.team]}${p.pref < 0 ? ' (auto)' : ''}</span>` : ''}</td><td>${p.id === o.myId ? o.net.ping : p.ping} ms</td></tr>`).join('')}</table>`;
@@ -9142,7 +9261,8 @@ function renderLobby() {
   if ($('lobbySideLabel')) $('lobbySideLabel').classList.toggle('hidden', lobbyMode !== COMP.mode);
   if ($('lobbyGfLabel')) $('lobbyGfLabel').classList.toggle('hidden', lobbyMode !== GF_MODE);
   if ($('lobbyMax')) $('lobbyMax').closest('label').classList.toggle('hidden', lobbyMode === COMP.mode);
-  if (lobbyMode === INV.mode) $('lobbyInfo').textContent += (lobbyVariant ? ' · SURVIVAL · HOTMILK À NOITE' : ' · CLÁSSICA') + ' · ' + INV_DIFF_LABEL[normInvDiff(cfg.invDiff)].toUpperCase();
+  if (isHistoria(cfg.mode)) $('lobbyInfo').textContent += ' · HOTMILK À NOITE · NORMAL';
+  else if (lobbyMode === INV.mode) $('lobbyInfo').textContent += (lobbyVariant ? ' · SURVIVAL · HOTMILK À NOITE' : ' · CLÁSSICA') + ' · ' + INV_DIFF_LABEL[normInvDiff(cfg.invDiff)].toUpperCase();
   if ((lobbyMode === GF_MODE || cfg.gfStub) && !GF_LIVE) $('lobbyInfo').textContent += ' · GUNFIGHT EM BREVE · a partida cai no Mata-mata';
   if ($('lobbyGf') && cfg.gfFormat) $('lobbyGf').value = String(normFormat(cfg.gfFormat));
   syncGfPick();
@@ -9199,7 +9319,8 @@ const sendCfg = (lim) => {
   if (!online) return; const mode = $('lobbyMode').value, L = lim || limitsFor(mode);
   if (mode === GF_MODE && !GF_LIVE && $('lobbyStatus')) $('lobbyStatus').textContent = GF_STUB_NOTICE;
   const elo = mode === COMP.mode || (eloOptMode(mode) && $('lobbyElo') && $('lobbyElo').checked);
-  online.net.send({ t: 'cfg', map: $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: elo ? false : $('lobbyBots').value === '1', elo, botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: $('lobbySurv').value, invDiff: $('lobbyInvDiff') ? normInvDiff($('lobbyInvDiff').value) : undefined });
+  const story = isHistoria(mode);
+  online.net.send({ t: 'cfg', map: story ? HISTORIA.map : $('lobbyMap').value, max: mode === COMP.mode ? normSide(+$('lobbySide').value) * 2 : mode === GF_MODE ? normFormat(+$('lobbyGf').value) * 2 : +$('lobbyMax').value, side: mode === COMP.mode ? normSide(+$('lobbySide').value) : undefined, fillBots: elo ? false : $('lobbyBots').value === '1', elo, botDiff: normBotDiff($('lobbyDiff').value), mode, format: mode === GF_MODE ? normFormat(+$('lobbyGf').value) : undefined, time: +$('lobbyTime').value, chat: $('lobbyChatOn').value === '1', weapons: L.weapons, powers: L.powers, surv: story ? 'survival' : $('lobbySurv').value, variant: story ? 'survival' : undefined, invDiff: story ? 'normal' : ($('lobbyInvDiff') ? normInvDiff($('lobbyInvDiff').value) : undefined) });
 };
 ['lobbyMap', 'lobbyMax', 'lobbyBots', 'lobbyTime', 'lobbyChatOn', 'lobbySide'].forEach((id) => { if ($(id)) $(id).onchange = sendCfg; });
 $('lobbyDiff').onchange = () => { saveBotDiff($('lobbyDiff').value); sendCfg(); };
@@ -9218,8 +9339,9 @@ $('lobbyMode').onchange = () => {
   if ($('lobbyGfLabel')) $('lobbyGfLabel').classList.toggle('hidden', mode !== GF_MODE);
   if (mode === GF_MODE && !GF_LIVE) $('lobbyStatus').textContent = GF_STUB_NOTICE;
   if ($('lobbyMax')) $('lobbyMax').closest('label').classList.toggle('hidden', mode === COMP.mode);
-  if (mode === INV.mode && isSurvival($('lobbySurv').value)) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('lobbyMap').value = ex; }
-  fillMapSelect($('lobbyMap'), $('lobbyMode').value === 'bomb' || $('lobbyMode').value === COMP.mode ? BOMB_MAP : $('lobbyMap').value, mode, mode === INV.mode && isSurvival($('lobbySurv').value)); paintEloPick(); sendCfg(limitsFor(mode)); paintCompSetup();
+  if (isHistoria(mode)) $('lobbyMap').value = HISTORIA.map;
+  else if (mode === INV.mode && isSurvival($('lobbySurv').value)) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('lobbyMap').value = ex; }
+  fillMapSelect($('lobbyMap'), isHistoria(mode) ? HISTORIA.map : $('lobbyMode').value === 'bomb' || $('lobbyMode').value === COMP.mode ? BOMB_MAP : $('lobbyMap').value, mode, mode === INV.mode && isSurvival($('lobbySurv').value)); paintEloPick(); sendCfg(limitsFor(mode)); paintCompSetup();
 };
 $('startOnline').onclick = () => {
   if (!online) return; const humans = online.lobby ? online.lobby.players.filter((p) => !p.bot).length : 0;
@@ -9230,16 +9352,16 @@ $('startOnline').onclick = () => {
 $('leaveLobby').onclick = () => leaveOnline();
 // ---------- menu online ----------
 function onlineTab(create) { $('tabCreate').classList.toggle('active', create); $('tabJoin').classList.toggle('active', !create); $('paneCreate').classList.toggle('hidden', !create); $('paneJoin').classList.toggle('hidden', create); }
-$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomInvDiffLabel')) $('roomInvDiffLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); };
+$('roomMode').onchange = () => { if ($('roomMode').value === X1.mode) $('roomMax').value = '2'; const inv = $('roomMode').value === INV.mode; const story = isHistoria($('roomMode').value); const comp = $('roomMode').value === COMP.mode; $('roomSurvLabel').classList.toggle('hidden', !inv); if ($('roomInvDiffLabel')) $('roomInvDiffLabel').classList.toggle('hidden', !inv); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !comp); syncGfPick(); if ($('roomMode').value === GF_MODE && !GF_LIVE) $('onlineErr').textContent = GF_STUB_NOTICE; $('roomMax').closest('label').classList.toggle('hidden', comp); const surv = inv && isSurvival($('roomSurv').value); if (story) $('roomMap').value = HISTORIA.map; else if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), story ? HISTORIA.map : $('roomMode').value === 'bomb' || comp ? BOMB_MAP : $('roomMap').value, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); };
 if ($('roomElo')) $('roomElo').onchange = paintEloPick;
 if ($('lobbyElo')) $('lobbyElo').onchange = () => { paintEloPick(); sendCfg(); };
 $('roomSurv').onchange = () => { const surv = isSurvival($('roomSurv').value); if (surv) { const ex = exclusiveSurvivalMap(MAPS.map((m) => m.id)); if (ex) $('roomMap').value = ex; } fillMapSelect($('roomMap'), $('roomMap').value, $('roomMode').value, surv); };
-$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomInvDiffLabel')) $('roomInvDiffLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); fillMapSelect($('roomMap'), selectedMap, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
+$('onlineBtn').onclick = () => { commitMenuSkin(); const surv = menuSurvival(); if (historiaMenu()) { $('roomMode').value = HISTORIA.mode; } else if (invMenu()) { $('roomMode').value = INV.mode; $('roomSurv').value = surv ? 'survival' : 'padrao'; } else if (bombMenu()) $('roomMode').value = 'bomb'; else if (compMenu()) { $('roomMode').value = COMP.mode; if ($('roomSide') && $('compSide')) $('roomSide').value = $('compSide').value; } else if ($('modeSel').value === GF_MODE) { $('roomMode').value = GF_MODE; if ($('roomGf') && $('gfSide')) $('roomGf').value = $('gfSide').value; } if ($('roomSurvLabel')) $('roomSurvLabel').classList.toggle('hidden', !invMenu()); if ($('roomInvDiffLabel')) $('roomInvDiffLabel').classList.toggle('hidden', !invMenu()); if ($('roomSideLabel')) $('roomSideLabel').classList.toggle('hidden', !compMenu()); syncGfPick(); $('roomMax').closest('label').classList.toggle('hidden', compMenu()); fillMapSelect($('roomMap'), historiaMenu() ? HISTORIA.map : selectedMap, $('roomMode').value, surv); syncRoomLimits(); paintCompSetup(); paintEloPick(); $('onlineErr').textContent = $('roomMode').value === GF_MODE && !GF_LIVE ? GF_STUB_NOTICE : ''; $('menu').classList.add('hidden'); $('onlineModal').classList.remove('hidden'); };
 $('onlineClose').onclick = () => { $('onlineModal').classList.add('hidden'); $('menu').classList.remove('hidden'); };
 $('tabCreate').onclick = () => onlineTab(true); $('tabJoin').onclick = () => { onlineTab(false); $('joinCode').focus(); };
 $('createBtn').onclick = async () => {
   const b = $('createBtn'); b.disabled = true; $('onlineErr').textContent = 'Criando sala…';
-  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const elo = comp || (eloOptMode($('roomMode').value) && $('roomElo') && $('roomElo').checked); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: elo ? false : $('roomBots').value === '1', elo, botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: $('roomSurv').value, invDiff: $('roomInvDiff') ? normInvDiff($('roomInvDiff').value) : 'normal' }); $('onlineErr').textContent = ''; joinRoom(code); }
+  try { const lim = limitsFor($('roomMode').value); saveBotDiff($('roomDiff').value); const comp = $('roomMode').value === COMP.mode; const story = isHistoria($('roomMode').value); const side = comp ? normSide(+$('roomSide').value) : 0; const gfRoom = $('roomMode').value === GF_MODE; const elo = comp || (eloOptMode($('roomMode').value) && $('roomElo') && $('roomElo').checked); const code = await createRoom({ map: $('roomMode').value === X1.mode ? 'random' : story ? HISTORIA.map : $('roomMap').value, max: $('roomMode').value === X1.mode ? 2 : comp ? side * 2 : gfRoom ? normFormat(+$('roomGf').value) * 2 : +$('roomMax').value, side: comp ? side : undefined, fillBots: elo ? false : $('roomBots').value === '1', elo, botDiff, mode: $('roomMode').value, format: gfRoom ? normFormat(+$('roomGf').value) : undefined, time: +$('roomTime').value, weapons: lim.weapons, powers: lim.powers, surv: story ? 'survival' : $('roomSurv').value, variant: story ? 'survival' : undefined, invDiff: story ? 'normal' : ($('roomInvDiff') ? normInvDiff($('roomInvDiff').value) : 'normal') }); $('onlineErr').textContent = ''; joinRoom(code); }
   catch (e) { $('onlineErr').textContent = 'Não deu pra criar a sala: ' + (e.message || 'servidor fora do ar'); }
   b.disabled = false;
 };
@@ -9261,7 +9383,7 @@ function remoteEnt(info) {
   const o = online; if (info.id === o.myId || o.ents.has(info.id)) return o.ents.get(info.id);
   if (info.zt) { // Invasão: zumbi do servidor
     const z = info.zt === 'shape' ? makeShapeEnt({ skin: info.skin, w: info.w, name: info.name }) : makeZombieEnt(info.zt, info.name, info.mu);
-    Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0, pose: ZPOSE[info.zp] || '', feral: !!info.fr, parts: info.mu || null });
+    Object.assign(z, { id: info.id, remote: true, netId: info.id, bot: true, buf: [], alive: false, hp: info.hp ?? z.hp, maxHp: info.mx || z.maxHp, ping: 0, pose: ZPOSE[info.zp] || '', feral: !!info.fr, parts: info.mu || null, egg: info.eg || '', skin: info.skin || '', weapon: info.w | 0 });
     z.model.group.visible = false; o.ents.set(info.id, z); entities.push(z); return z;
   }
   const e = makeEntity(info.name, false, info.skin, info.tag || '#ffffff');
@@ -9619,6 +9741,8 @@ function personalEvent(ev) {
     return;
   }
   if (ev[0] === 'doorNo') { const msg = DOOR_FAIL[ev[1]]; if (msg) flashMsg(msg); return; }
+  if (ev[0] === 'hno') { flashMsg(ev[1] || 'Não deu.'); if (player && player.hPend && player.hCd) delete player.hCd[player.hPend]; if (player) player.hPend = null; return; }
+  if (ev[0] === 'heal') { p.hp = ev[1]; return; }
   if (ev[0] === 'pos') { p.pos.set(ev[1][0], ev[1][1], ev[1][2]); p.vel.set(0, 0, 0); }
   else if (ev[0] === 'pxw') { pauseSwapLast = performance.now() - (PX_COOLDOWN - (ev[1] | 0)) * 1000; flashMsg(`Espera ${ev[1]} s pra trocar de arma de novo`); } // servidor recusou a troca que derruba
   else if (ev[0] === 'inv') invSetInv(ev[1] || []); // Invasão: inventário de poderes
@@ -9855,8 +9979,8 @@ function makeZombieEnt(type, name, parts) {
 // zumbi: só visual (offline o core move; online vem do servidor)
 function updateZombie(z, dt) {
   const m = z.model;
-  if (!z.alive) { if (m && dieZombie(m, z, gameTime)) m.group.visible = false; if (z.soulMesh) z.soulMesh.group.visible = false; return; }
-  if (z.zt === 'shape' && m && m.legs) {
+  if (!z.alive) { if (m && m.group && m.group.userData.cast) { m.group.visible = false; return; } if (m && dieZombie(m, z, gameTime)) m.group.visible = false; if (z.soulMesh) z.soulMesh.group.visible = false; return; }
+  if ((z.zt === 'shape' || (m.group && m.group.userData.cast)) && m && m.legs) {
     if (z.remote) interpRemote(z);
     m.group.visible = true; animateBot(z, dt);
     if (z.pose === 'suck') m.group.rotation.x = 0.85;
@@ -9897,6 +10021,8 @@ function startInvasionOffline() {
   inv = new InvasionCore({
     T: () => gameTime, P: PHYS, nav, size: currentMap.size, fall: () => currentMap && currentMap.fall, botDiff: () => botDiff,
     survival: survOn(),
+    story: () => isHistoria(mode),
+    deny: (_p, msg) => flashMsg(msg),
     specFor: survOn() ? (w, n) => getSurvivalWaveTuning(w, n) : null,
     players: () => entities.filter((e) => e.isPlayer),
     spawnZombie(type, pos, parts, face) { const z = type === 'shape' ? makeShapeEnt(face) : makeZombieEnt(type, null, parts); z.id = invZid++; z.pos.set(pos.x, pos.y, pos.z); z.yaw = Math.atan2(-pos.x, -pos.z); entities.push(z); return z; },
@@ -9913,37 +10039,61 @@ function startInvasionOffline() {
     hurtPlayer(p, dmg, src) { if (!src) fogSrc.pos.set(inv.fog.cx, p.pos.y, inv.fog.cz); damage(p, dmg, src || fogSrc, src ? KNIFE : W_NADE, false); },
     hurtZombie(z, dmg, by, kind) { damage(z, dmg, by, kind === 'fall' ? W_FALL : W_NADE, false); },
     knock(e, v) { e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; if (e.isPlayer) lastKnock = gameTime; },
-    heal(p, hp) { p.hp = Math.min(100, p.hp + hp); if (p.soul) inv.cure(p); },
+    heal(p, hp) { const cap = isHistoria(mode) && passLv(p, 'porcao') ? passHp(passLv(p, 'porcao')) : 100; p.hp = Math.min(cap, p.hp + hp); if (p.soul) inv.cure(p); },
     revive(p, at, o) { p.reviveAt = at; p.reviveExact = !!(o && o.exact); p.respawnAt = gameTime; if (p.isPlayer && !p.alive) { respawn(p); if (o && o.hp) p.hp = Math.min(p.hp, o.hp); if (state === 'playing') lockPointer(); } },
     invChanged(p) { if (p.isPlayer) invSetInv(p.inv.map((k) => POWER_KEYS.indexOf(k))); },
     giveAmmo(p) { return !!p.isPlayer && refillAmmo(p); }, // caixa que o zumbi solta
     emit(ev) { invEvent(ev); },
     aimOf(p) { const d = new V3(); camera.getWorldDirection(d); return { o: camera.position.clone(), d }; },
-    over(won, wave) { setTimeout(() => endGame(), 1800); },
+    over(won) { const finale = !!(won && isHistoria(mode) && storyWaveCap() >= 30); if (finale) startStoryCut(); setTimeout(() => endGame(), finale ? 14000 : 1800); },
   });
   inv.start();
 }
 // ---------- eventos (core offline chama direto; online chegam no snapshot) ----------
-const INV_EVENTS = new Set(['wv', 'za', 'zs', 'zx', 'zb', 'dp', 'dg', 'pw', 'pb', 'zh', 'zf', 'zp', 'cxr', 'soul']);
+const INV_EVENTS = new Set(['wv', 'za', 'zs', 'zx', 'zb', 'dp', 'dg', 'pw', 'pb', 'zh', 'zf', 'zp', 'cxr', 'soul', 'hoffer', 'hgot', 'hcast', 'hbuff', 'hsh', 'hpoffer', 'hpgot', 'hem', 'hbk', 'hest', 'hpi', 'hcas', 'qe']);
 function invEvent(ev) {
   const k = ev[0], ent = (id) => (online ? entOf(id) : inv ? inv.zombies.find((z) => z.id === id) : null);
   const isMe = (id) => (online ? id === online.myId : !!player && id === player.id);
   if (k === 'wv') {
     const [, ph, w, x] = ev;
-    if (ph === 0) invBanner('🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'troque de arma no painel (B)'}`);
+    if (ph === 0) { if (isHistoria(mode)) { storyCapN = 0; storyEggMirror = null; for (const g of eggPee) if (g.mesh) scene.remove(g.mesh); eggPee = []; clearStoryFire(); } invBanner(isHistoria(mode) ? 'HOTMILK À NOITE' : '🎃 INVASÃO', `Prepare-se! A wave 1 começa em ${survOn() ? getSurvivalWaveTuning(1).prep : INV.PREP} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'troque de arma no painel (B)'}`); }
     else if (ph === 1) {
       const bossName = x > 0 && ZOMBIES[BOSS_TYPES[x - 1]] ? ZOMBIES[BOSS_TYPES[x - 1]].name : '';
       const theme = ev[6] > 0 ? WAVE_THEMES[ev[6] - 1] : null;
       const late = w >= 13 && !bossName && !theme;
-      const title = theme ? theme.name : `WAVE ${w}/${INV.WAVES}`;
+      const title = theme ? theme.name : `WAVE ${w}/${storyWaveCap()}`;
       const sub = theme ? (bossName ? `🎃 ${bossName} chegou · ${theme.blurb}` : theme.blurb) : bossName ? `🎃 ${bossName} chegou!` : w === 1 ? 'Os zumbis estão vindo da névoa!' : late ? 'Zumbis ferozes saíram da névoa.' : 'A névoa está fechando…';
       invBanner(title, sub, !!(bossName || theme)); sfx.incoming(0.9); invClosePick();
     }
     else if (ph === 2) { invBanner(`WAVE ${w} LIMPA!`, `Pausa de ${survOn() ? getSurvivalWaveTuning(w).gap : INV.BREAK} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}`); sfx.pickup(); if (player && player.alive) invOpenPick(); }
-    else if (ph === 3) invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${INV.WAVES} waves` : `Sobreviveu até a wave ${w}`, true);
+    else if (ph === 3) { invBanner(x ? 'VOCÊS SOBREVIVERAM! 🎃' : 'A HORDA VENCEU', x ? `Sobreviveram às ${storyWaveCap()} waves` : `Sobreviveu até a wave ${w}`, true); if (x && isHistoria(mode) && storyWaveCap() >= 30) startStoryCut(); }
   } else if (k === 'za') { const z = ent(ev[1]); if (z) { z.atkT = gameTime; z.voiceAt = gameTime + 0.7; if (player && z.pos.distanceTo(player.pos) < 25) invasionSfx.voice(z.zt, distVol(z.pos) * 0.9, 'bite'); } }
-  else if (k === 'zs') { const [, id, style, p, v] = ev; const m = makeSpitMesh(style | 0); m.position.set(...p); scene.add(m); invGfx.projs.set(id, { m, pos: a3v(p), vel: a3v(v), born: gameTime, spit: true }); if (player) tone('sawtooth', style === 1 ? 160 : style === 2 ? 120 : 320, style === 1 ? 90 : 140, 0.18, 0.12 * distVol(a3v(p))); }
-  else if (k === 'zx') { const [, id, c, style] = ev; invKillProj(id); const at = a3v(c); const st = style | 0; invRing(at, st === 1 ? '#ff8a1a' : st === 2 ? '#c8b830' : '#7dff4a', 0.2, st === 1 ? 3.6 : st === 2 ? 3.0 : 1.8, 0.4); if (st === 1) blastFx(at, 3.6); else { puff(at, st === 2 ? 0xc8b830 : 0x7dff4a); noise(0.2, st === 2 ? 500 : 900, 0.3 * distVol(at), 'bandpass'); } }
+  else if (k === 'zs') { const [, id, style, p, v] = ev; const st = style | 0; const grav = st === 3 ? 0.35 : st === 4 ? 0.35 : st === 5 ? 0.12 : st === 8 ? 0.04 : st === 9 ? 0.12 : 1; const m = makeSpitMesh(st); m.position.set(...p); scene.add(m); invGfx.projs.set(id, { m, pos: a3v(p), vel: a3v(v), born: gameTime, spit: true, grav, home: st === 5, life: st === 8 ? 8 : st === 5 ? 4.5 : 4 }); if (player) tone('sawtooth', st === 3 ? 90 : st === 1 ? 160 : st === 2 ? 120 : 320, st === 3 ? 40 : st === 1 ? 90 : 140, 0.18, 0.12 * distVol(a3v(p))); }
+  else if (k === 'zx') { const [, id, c, style] = ev; invKillProj(id); const at = a3v(c); const st = style | 0; invRing(at, st === 3 ? '#d6ff6a' : st === 1 ? '#ff8a1a' : st === 2 ? '#c8b830' : '#7dff4a', 0.2, st === 3 ? 3.8 : st === 1 ? 3.6 : st === 2 ? 3.0 : 1.8, 0.4); if (st === 1 || st === 3) blastFx(at, st === 3 ? 3.8 : 3.6); else { puff(at, st === 2 ? 0xc8b830 : 0x7dff4a); noise(0.2, st === 2 ? 500 : 900, 0.3 * distVol(at), 'bandpass'); } }
+  else if (k === 'hoffer') { if (isMe(ev[1])) { player.hOffer = ev.slice(2); player.hPOffer = null; openHOffer(player.hOffer, 'up'); } }
+  else if (k === 'hgot') {
+    const e = isMe(ev[1]) ? player : (online ? entOf(ev[1]) : null);
+    if (e) { if (!e.hUps) e.hUps = []; if (!e.hUps.includes(ev[2])) e.hUps.push(ev[2]); if (!e.hSel) e.hSel = ev[2]; }
+    if (isMe(ev[1])) { player.hOffer = null; closeHOffer(); const u = HUPS[ev[2]]; flashMsg(u ? `${u.icon} ${u.name} ficou com você` : 'Upgrade'); if (state === 'playing' && player.alive) lockPointer(); }
+  }
+  else if (k === 'hpoffer') { if (isMe(ev[1])) { player.hPOffer = ev.slice(2); player.hOffer = null; openHOffer(player.hPOffer, 'pass'); } }
+  else if (k === 'hpgot') {
+    const e = isMe(ev[1]) ? player : (online ? entOf(ev[1]) : null);
+    if (e) { if (!e.hPass) e.hPass = {}; e.hPass[ev[2]] = ev[3] | 0; if ((ev[5] | 0) > 100) e.hpCap = ev[5] | 0; if ((ev[4] | 0) > 0) e.hp = ev[4] | 0; e.hAnim = (HPASS[ev[2]] && HPASS[ev[2]].pose) || ''; e.hAnimUntil = gameTime + 0.75; }
+    if (isMe(ev[1])) { player.hPOffer = null; closeHOffer(); const u = HPASS[ev[2]]; flashMsg(u ? `${u.icon} ${u.name} · ${RANKS[ev[3] | 0] || ''}` : 'Passiva'); historiaRing(player.pos, '#F7A531', 1.8); if (state === 'playing' && player.alive) lockPointer(); }
+  }
+  else if (k === 'hem') spawnHEmber(ev[1], ev[3], ev[2], ev[4], ev[5]);
+  else if (k === 'hbk') { tone('triangle', 880, 1320, 0.08, 0.16); }
+  else if (k === 'hest') { const at = a3v(ev.slice(1)); historiaRing(at, '#ffb347', ESTALO_R); puff(at, 0xffb347); }
+  else if (k === 'hpi') { const z = ent(ev[1]); if (z && z.pos) puff(center(z, z.size || 1), 0xff4a1a); }
+  else if (k === 'hcas') { const e = isMe(ev[1]) ? player : (online ? entOf(ev[1]) : null); if (e) { e.hImmuneUntil = gameTime + (+ev[2] || 0.45); historiaRing(e.pos, '#f4f7ff', 1.15); } }
+  else if (k === 'qe') storyEggEvent(ev);
+  else if (k === 'hcast') { historiaCastFx(ev); }
+  else if (k === 'hbuff') {
+    const e = isMe(ev[1]) ? player : (online ? entOf(ev[1]) : null);
+    if (e && ev[2] === 'dmg') { e.hDmgUntil = gameTime + HUPS.bencao.dur; invRing(e.pos, '#ffe38a', 0.3, 2.4, 0.4); }
+  }
+  else if (k === 'hsh') { const e = isMe(ev[1]) ? player : (online ? entOf(ev[1]) : null); if (e) e.hShield = ev[2] | 0; }
   else if (k === 'zh') {
     const z = ent(ev[1]); const at = a3v(ev[2]); const rad = ev[3] > 0 ? +ev[3] : 11; const style = ev[4] | 0;
     const col = ['#a8c8ff', '#ff8a1a', '#c8b830', '#ff4ad0'][style] || '#a8c8ff';
@@ -10082,8 +10232,14 @@ function invTick(dt) {
   invSyncCrosses(v);
   for (const [id, p] of invGfx.projs) {
     if (p.nade) { for (let s = 0; s < 2; s++) PHYS.stepNade(p.pos, p.vel, dt / 2); p.m.rotation.x += dt * 6; }
-    else { p.vel.y -= SPIT_GRAV * dt; p.pos.addScaledVector(p.vel, dt); }
-    p.m.position.copy(p.pos); if (gameTime - p.born > 4.5) invKillProj(id);
+    else {
+      if (p.home && player && player.alive) {
+        const dx = player.pos.x - p.pos.x, dy = player.pos.y + 1 - p.pos.y, dz = player.pos.z - p.pos.z, L = Math.hypot(dx, dy, dz) || 1, sp = 6.5;
+        p.vel.x += (dx / L * sp - p.vel.x) * 0.18; p.vel.y += (dy / L * sp - p.vel.y) * 0.18; p.vel.z += (dz / L * sp - p.vel.z) * 0.18;
+      }
+      p.vel.y -= SPIT_GRAV * (p.grav != null ? p.grav : 1) * dt; p.pos.addScaledVector(p.vel, dt);
+    }
+    p.m.position.copy(p.pos); if (gameTime - p.born > (p.life || 4.5)) invKillProj(id);
   }
   for (let i = invGfx.rings.length - 1; i >= 0; i--) if (tickRing(invGfx.rings[i], dt)) { scene.remove(invGfx.rings[i]); invGfx.rings.splice(i, 1); }
   // lanterna: cone na frente de quem usou
@@ -10127,7 +10283,7 @@ function invBanner(title, sub, big = false) { const b = $('invBanner'); b.innerH
 function invHud(v, me, dt) {
   if (invBannerT > 0) { invBannerT -= dt; if (invBannerT <= 0) $('invBanner').classList.add('hidden'); }
   const ph = v.phase;
-  $('invWaveN').textContent = ph === 'prep' ? 'PREPARAÇÃO' : `WAVE ${Math.max(1, v.wave)}/${INV.WAVES}`;
+  $('invWaveN').textContent = ph === 'prep' ? 'PREPARAÇÃO' : `WAVE ${Math.max(1, v.wave)}/${storyWaveCap()}`;
   const theme = ph === 'wave' && v.theme ? WAVE_THEMES[v.theme - 1] : null;
   $('invWaveSub').textContent = ph === 'wave' ? `${theme ? theme.name + ' · ' : ''}🧟 ${v.remaining} zumbi${v.remaining === 1 ? '' : 's'} restando` : ph === 'break' || ph === 'prep' ? `Próxima wave em ${Math.ceil(v.left)} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}` : ph === 'over' ? 'Fim' : '';
   $('timer').textContent = ph === 'wave' ? `🧟 ${v.remaining}` : ph === 'over' ? '—' : `${Math.ceil(v.left)} s`;
@@ -10154,6 +10310,7 @@ function invHud(v, me, dt) {
   } else $('invFogArrow').classList.add('hidden');
   $('fogVeil').style.opacity = outside ? (0.55 + Math.sin(gameTime * 4) * 0.1).toFixed(2) : '0';
   if (invPick) invUpdatePick(v);
+  paintHistoriaBar();
 }
 function gfFormatValue() {
   const el = $('gfSide') || $('roomGf') || $('lobbyGf');
@@ -10816,6 +10973,683 @@ function survTick(dt) {
   survPaintHeld();
   if (player && player.papUntil && gameTime >= player.papUntil && player.papGun === player.weapon) { player.papUntil = 0; survPaintHeld(); }
 }
+// ---------- Modo história: oferta, barra, mapa do Grok e cast. A invasão clássica não entra aqui. ----------
+const HCAST = {
+  grok: ['#7DF9FF', 2.4, 'sine', 420, 880],
+  monster: ['#b6ff3a', 1.7, 'square', 160, 520],
+  torta: ['#ffd0e4', 2.2, 'sine', 520, 1040],
+  tosse: ['#d6ff6a', 1.2, 'sawtooth', 180, 90],
+  barriga: ['#9ad7ff', 8, 'triangle', 240, 80],
+  bencao: ['#ffe38a', 8, 'sine', 660, 990],
+  cachaca: ['#ffb347', 1.8, 'sawtooth', 140, 70],
+  grokbot: ['#7DF9FF', 1.5, 'square', 880, 440],
+  integra: ['#f4f7ff', 2.1, 'triangle', 700, 1400],
+  cheers: ['#ff4a2a', 8.5, 'sawtooth', 90, 40],
+  joelhos: ['#d7c4ff', 1.3, 'sine', 280, 640],
+  cafe: ['#c47a3a', 1.6, 'sine', 420, 760],
+};
+function historiaRing(at, color, to) { if (!at) return; invRing(at, color, 0.2, to || 1.4, 0.4, 0.15); }
+function storyEstalo(shooter, hurt) {
+  if (!shooter || !hurt) return;
+  const dmg = estaloRoll(passLv(shooter, 'estalo'), Math.random);
+  if (!(dmg > 0)) return;
+  let at = null;
+  for (const e of hurt) if (e && e.zt && e.pos) { at = e.pos; break; }
+  if (!at) return;
+  historiaRing(at, '#ffb347', ESTALO_R); puff(at, 0xffb347);
+  for (const z of entities) {
+    if (!z || !z.zt || !z.alive || hurt.has(z) || !z.pos) continue;
+    const d = Math.hypot(z.pos.x - at.x, z.pos.z - at.z);
+    if (d > ESTALO_R || Math.abs(z.pos.y - at.y) > 2.2) continue;
+    damage(z, dmg * (0.45 + 0.55 * (1 - d / ESTALO_R)), shooter, W_NADE, false);
+  }
+}
+const hEmbers = [];
+const hPlateMeshes = new Map();
+function spawnHEmber(x, y, z, r, life) {
+  if (!isHistoria(mode)) return;
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.4, r || 1), 12), new THREE.MeshBasicMaterial({ color: 0xff5a1a, transparent: true, opacity: 0.72, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(x, (y || 0) + 0.06, z);
+  scene.add(mesh);
+  hEmbers.push({ mesh, until: gameTime + (life > 0 ? life : 2.2) });
+}
+let storyCapN = 0, storyEggMirror = null, eggSet = null, eggPee = [];
+function storyWaveCap() { return isHistoria(mode) ? ((!online && inv && inv.egg) ? eggCap(inv.egg) : (storyCapN || INV.WAVES)) : INV.WAVES; }
+function eggBook() { if (!isHistoria(mode)) return null; if (!online && inv && inv.egg) return inv.egg; return storyEggMirror || (storyEggMirror = createEgg(() => 0)); }
+function historiaMe(id) { return online ? id === online.myId : !!player && id === player.id; }
+function storyWho(id) { return historiaMe(id) ? player : (online ? entOf(id) : null); }
+function storyShockPulse(p) {
+  if (!p || p.eggShockAt > gameTime) return;
+  p.eggShockAt = gameTime + 1.15;
+  historiaRing(p.pos, '#7DF9FF', 6.5);
+  if (online) { netEv(['qe', 's']); return; }
+  if (inv) inv.eggShock(p);
+}
+function storyEggEvent(ev) {
+  const book = eggBook(), kind = ev[1];
+  if (kind === 'msg') { flashMsg(ev[2]); msgTimer = 4.2; return; }
+  if (kind === 'cap') { storyCapN = ev[2] | 0; return; }
+  if (kind === 'step' && book) { book.steps[ev[2]] = true; return; }
+  if (kind === 'fridge' && book) { book.fridge = true; return; }
+  if (kind === 'z') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z) { z.egg = ev[3]; if (ev[3] === 'ally') z.friendly = true; if (ev[4]) z.name = ev[4]; if (ev[5] > 0) z.hp = z.maxHp = ev[5]; if (ev[6] > 0) z.size = ev[6]; } return; }
+  if (kind === 'ult') { const e = storyWho(ev[2]); const u = ULTS[ev[3]]; if (e && u) { e.hUlt = ev[3]; e.hSel = ev[3]; if (historiaMe(ev[2])) flashMsg(`${u.icon} ${u.name}`); } return; }
+  if (kind === 'form') { const e = storyWho(ev[2]); if (e) { e.ultForm = ev[3]; e.ultUntil = gameTime + (+ev[4] || 0); } return; }
+  if (kind === 'ally') { redressUltAlly(ev[2], ev[3], +ev[4] || 0); return; }
+  if (kind === 'line') { storyBeams.push({ x: ev[2], y: ev[3], z: ev[4], fx: ev[5], fz: ev[6], len: 78, color: 0xf4f1ea, until: gameTime + 0.38, mesh: null }); return; }
+  if (kind === 'pud') { storyPuddle(ev[2], ev[3], ev[4], ev[5], ev[6]); return; }
+  if (kind === 'arm') { const e = storyWho(ev[2]); if (e && e.pos) { puff(center(e, 1.4), 0x7dff4a); historiaRing(e.pos, '#b6ff3b', 3.2); } return; }
+  if (kind === 'pee') { eggPee.push({ x: ev[2], y: ev[4] || 0.04, z: ev[3], until: gameTime + 5.5, mesh: null }); return; }
+  if (kind === 'zap') { historiaRing({ x: ev[3], y: ev[4], z: ev[5] }, '#7DF9FF', 6.5); tone('square', 180, 90, 0.12, 0.22); return; }
+  if (kind === 'anim') { const e = storyWho(ev[2]); if (e) { e.hAnim = 'joelhos'; e.hAnimUntil = gameTime + (ev[3] === 'wall' ? 0.8 : 2); if (ev[3] === 'wall' && historiaMe(ev[2])) { e.vel.y = 8; e.onGround = false; } } return; }
+  if (kind === 'hide') { const e = storyWho(ev[2]); if (e) e.eggHideUntil = gameTime + (+ev[3] || 10); return; }
+  if (kind === 'suit') { const e = storyWho(ev[2]); if (e) e.eggSuit = true; return; }
+  if (kind === 'shock') { const e = storyWho(ev[2]); if (e) { e.eggShock = true; e.eggShockNext = false; if (historiaMe(ev[2])) flashMsg('Controle da cancela · atire para dar choque'); } return; }
+  if (kind === 'boost') { const e = storyWho(ev[2]); if (e) { e.hp = ev[3] | 0; e.hpCap = ev[4] | 0; } if (book && historiaMe(ev[2])) book.drunk[ev[2]] = 1; return; }
+  if (kind === 'hp') { const e = storyWho(ev[2]); if (e) { e.hp = ev[3] | 0; e.hpCap = ev[4] | 0; e.eggShock = false; } return; }
+  if (kind === 'muro' && book) { book.muroTaken = true; return; }
+  if (kind === 'wv') { invBanner(ev[2], ev[3] || '', true); return; }
+  if (kind === 'fire') { ensureStoryFire(); return; }
+  if (kind === 'warn' && historiaMe(ev[2])) { flashMsg(ev[3]); msgTimer = 2.4; return; }
+  if (kind === 'bread') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z) z.breadUntil = gameTime + (+ev[3] || 3); return; }
+  if (kind === 'laser') { storyBeams.push({ x: ev[2], y: ev[3], z: ev[4], fx: ev[5], fz: ev[6], until: gameTime + 0.32, mesh: null }); return; }
+  if (kind === 'camp') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z && z.pos) { z.pos.set(ev[3], ev[4], ev[5]); if (z.vel) z.vel.set(0, 0, 0); } return; }
+  if (kind === 'ruin') { storyRuin(); return; }
+}
+function paintEggPrompt() {
+  if (!isHistoria(mode) || state !== 'playing' || !player || !player.alive) return;
+  const el = $('bPrompt'); if (!el) return;
+  if (surv && nearestClosedDoor(currentMap, surv, player.pos)) return;
+  const hit = eggPrompt(player, eggBook());
+  if (!hit) return;
+  el.classList.remove('hidden'); el.className = 'hot';
+  const a = el.querySelector('.bp1'), b = el.querySelector('.bp2');
+  if (a) a.textContent = hit.text; if (b) b.textContent = '';
+}
+function buildEggSet() {
+  if (eggSet || !scene) return;
+  eggSet = new THREE.Group(); scene.add(eggSet);
+  const white = new THREE.MeshBasicMaterial({ color: 0xf4f1ea }), bowl = new THREE.MeshBasicMaterial({ color: 0xd7e4ee });
+  for (const u of EGG_SPOTS.urinals) {
+    const g = new THREE.Group(); g.position.set(u.x, 0.85, u.z);
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.9, 0.28), white));
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.22), bowl); b.position.set(0, -0.28, -0.16); g.add(b);
+    eggSet.add(g);
+  }
+  const pool = new THREE.Group(); pool.position.set(EGG_SPOTS.pool.x, EGG_SPOTS.pool.y + 0.78, EGG_SPOTS.pool.z);
+  pool.add(new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.16, 1.15), new THREE.MeshBasicMaterial({ color: 0x1c6b3a })));
+  const felt = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.04, 0.9), new THREE.MeshBasicMaterial({ color: 0x2f9e57 })); felt.position.y = 0.1; pool.add(felt);
+  for (const c of [[-1, 0], [1, 0], [0, -0.5], [0, 0.5]]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.78, 0.08), new THREE.MeshBasicMaterial({ color: 0x6b3a1c })); leg.position.set(c[0], -0.42, c[1]); pool.add(leg); }
+  eggSet.add(pool);
+  const fridge = new THREE.Group(); fridge.position.set(EGG_SPOTS.fridge.x, 0.9, EGG_SPOTS.fridge.z); fridge.visible = false; fridge.name = 'promo';
+  fridge.add(new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.7, 0.7), new THREE.MeshBasicMaterial({ color: 0xe8eef2 })));
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.72, 1.15, 0.06), new THREE.MeshBasicMaterial({ color: 0xb9d7ee })); door.position.set(0, 0.15, 0.36); fridge.add(door);
+  eggSet.add(fridge);
+  for (const w of EGG_SPOTS.walls) {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.28, 0.08), new THREE.MeshBasicMaterial({ color: 0xF7A531 }));
+    sign.position.set(w.x, 1.35, w.z); eggSet.add(sign);
+  }
+}
+function stepEggLooks() {
+  const on = isHistoria(mode) && state === 'playing';
+  if (!on) { if (eggSet) eggSet.visible = false; return; }
+  buildEggSet(); eggSet.visible = true;
+  const book = eggBook();
+  const fridge = eggSet.children.find((c) => c.name === 'promo');
+  if (fridge) fridge.visible = !!(book && book.fridge);
+  for (const p of entities) {
+    if (!p || p.zt) continue;
+    const hidden = p.eggHideUntil > gameTime;
+    if (p.model && p.model.group) {
+      if (hidden) { if (p._eggVis == null) p._eggVis = p.model.group.visible; p.model.group.visible = false; }
+      else if (p._eggVis != null) { p.model.group.visible = p._eggVis; p._eggVis = null; }
+      const big = !hidden && p.ultForm === 'frenesi' && p.ultUntil > gameTime;
+      const s = big ? 1.85 : 1;
+      if (p.model.group.userData.ultScale !== s) { p.model.group.scale.setScalar(s); p.model.group.userData.ultScale = s; }
+    }
+    if (historiaMe(p.id) && fp && fp.root) {
+      if (hidden) { if (p._eggFp == null) p._eggFp = fp.root.visible; fp.root.visible = false; }
+      else if (p._eggFp != null) { fp.root.visible = p._eggFp; p._eggFp = null; }
+      const big = !hidden && p.ultForm === 'frenesi' && p.ultUntil > gameTime;
+      fp.root.scale.setScalar(big ? 1.65 : 1);
+    }
+    if (p.eggSuit && p.model && p.model.group && !p.model.group.userData.suit) {
+      const vest = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.55, 0.42), new THREE.MeshBasicMaterial({ color: 0x1f6b45 }));
+      vest.position.y = 1.15; p.model.group.add(vest); p.model.group.userData.suit = vest;
+    }
+  }
+  for (const z of entities) {
+    if (!z || !z.zt || !z.model || !z.model.group) continue;
+    if ((z.zt === 'corrupt' || z.zt === 'bossBig') && z.skin) dressCast(z);
+    dressStoryExtra(z);
+    const s = z.egg === 'refri' ? 1.28 : z.egg === 'cria' ? 0.72 : z.egg === 'lanche' ? 1.05 : 0;
+    if (s && !z.model.group.userData.eggFit) { z.model.group.scale.multiplyScalar(s); z.model.group.userData.eggFit = s; }
+    if (z.egg === 'refri' && z.alive && Math.random() < 0.08) puff(center(z, (z.size || 1) * 1.2), 0xb7f3ff);
+    if (z.egg === 'lanche' && z.alive) z.model.group.position.y = (z.pos.y || 0) + Math.sin(gameTime * 4) * 0.04;
+    if (z.friendly && z.alive && !z.model.group.userData.ally) {
+      const mark = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0x3ecf6e }));
+      mark.position.y = 2.05; z.model.group.add(mark); z.model.group.userData.ally = 1;
+    }
+  }
+  const keep = [];
+  for (const g of eggPee) {
+    if (g.until <= gameTime) { if (g.mesh) scene.remove(g.mesh); continue; }
+    if (!g.mesh) { g.mesh = new THREE.Mesh(new THREE.CircleGeometry(1.15, 12), new THREE.MeshBasicMaterial({ color: 0xd6e24a, transparent: true, opacity: 0.55, depthWrite: false })); g.mesh.rotation.x = -Math.PI / 2; g.mesh.position.set(g.x, (g.y || 0) + 0.05, g.z); scene.add(g.mesh); }
+    keep.push(g);
+  }
+  eggPee = keep;
+  for (let i = ultPuddles.length - 1; i >= 0; i--) {
+    if (ultPuddles[i].until > gameTime) continue;
+    scene.remove(ultPuddles[i].mesh);
+    ultPuddles.splice(i, 1);
+  }
+  stepStoryFire();
+  stepStoryBeams();
+  stepStoryCut();
+}
+let storyFire = null, storyBeams = [], storyCut = null, linkShirtTex = null, ultPuddles = [];
+function storyPuddle(x, z, y, r, dur) {
+  if (!scene) return;
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(Math.max(1, +r || 7), 22), new THREE.MeshBasicMaterial({ color: 0xd6e24a, transparent: true, opacity: 0.42, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, (y || 0) + 0.06, z); scene.add(mesh);
+  ultPuddles.push({ mesh, until: gameTime + (+dur || 8) });
+}
+function redressUltAlly(id, zt, size) {
+  const z = online ? entOf(id) : (inv && inv.zombies.find((x) => x.id === id));
+  if (!z) return;
+  z.zt = zt || z.zt; z.friendly = true; z.egg = 'ally';
+  if (size > 0) z.size = size;
+  if (!z.model || !z.model.group || !scene) return;
+  scene.remove(z.model.group);
+  z.model = makeZombie(z.zt);
+  z.model.group.userData.size = z.size || 1;
+  if (z.pos) z.model.group.position.copy(z.pos);
+  scene.add(z.model.group);
+}
+function linkShirtMap() {
+  if (linkShirtTex) return linkShirtTex;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = '#111'; x.fillRect(0, 0, 256, 96);
+  x.font = 'bold 42px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#F7A531';
+  x.fillText('LINK NELES', 128, 50);
+  linkShirtTex = new THREE.CanvasTexture(c); linkShirtTex.colorSpace = THREE.SRGBColorSpace;
+  return linkShirtTex;
+}
+function bigSkin() {
+  const item = itemById('c20');
+  if (item && item.costume) return Object.assign({ id: 'c20', name: 'Él Big' }, item.costume);
+  return getSkin('classico');
+}
+function dressCast(z) {
+  if (!z.model || !z.model.group || z.model.group.userData.cast) return;
+  const big = z.zt === 'bossBig';
+  scene.remove(z.model.group);
+  z.model = makeDocao(big ? bigSkin() : getSkin(z.skin || 'classico'));
+  if (z.pos) z.model.group.position.copy(z.pos);
+  z.model.group.rotation.y = z.yaw || 0;
+  z.model.group.userData.cast = 1;
+  z.model.group.userData.size = z.size || (big ? 2.15 : 1);
+  if (big) z.model.group.scale.setScalar(2.15);
+  scene.add(z.model.group);
+  z.bubble = new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 10), new THREE.MeshBasicMaterial({ color: 0x7DF9FF, transparent: true, opacity: 0.25, depthWrite: false }));
+  z.bubble.position.y = 1.1; z.bubble.visible = false; z.model.group.add(z.bubble);
+  if (z.swingT == null) z.swingT = 9;
+  const w = big ? 0 : ((z.weapon | 0) || 1);
+  z.weapon = w; z.slots = [w, w, KNIFE];
+  setWeapon(z, w);
+  if (big && z.model.guns) {
+    for (const g of z.model.guns) g.traverse((o) => {
+      if (!o.material || o.userData.isOutline) return;
+      for (const m of [].concat(o.material)) if (m.color) m.color.set('#d8261c');
+    });
+  }
+}
+function dressStoryExtra(z) {
+  const g = z.model.group;
+  const link = z.zt === 'sinuca' || z.zt === 'bonezinho' || z.zt === 'bossOclinhos';
+  if (link && !g.userData.link) {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: linkShirtMap(), depthWrite: false }));
+    spr.position.set(0, z.zt === 'bossOclinhos' ? 1.35 : 1.05, 0.46);
+    spr.scale.set(0.86, 0.32, 1);
+    g.add(spr);
+    const cue = new THREE.Mesh(new THREE.BoxGeometry(0.06, z.zt === 'bossOclinhos' ? 2.4 : 1.15, 0.06), new THREE.MeshBasicMaterial({ color: 0x8a5a28 }));
+    cue.position.set(0.42, 0.9, 0.15); cue.rotation.z = 0.7;
+    g.add(cue);
+    g.userData.link = 1;
+  }
+  if (z.zt === 'bossOclinhos' && !g.userData.specs) {
+    const specs = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.12, 0.06), new THREE.MeshBasicMaterial({ color: 0x111 }));
+    specs.position.set(0, 1.72, 0.42); g.add(specs); g.userData.specs = 1;
+  }
+  if (z.breadUntil > gameTime) {
+    if (!g.userData.bread) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry((z.size || 1) * 1.15, 12, 8), new THREE.MeshBasicMaterial({ color: 0xf2d27a, transparent: true, opacity: 0.38, depthWrite: false }));
+      s.position.y = 1.05; g.add(s); g.userData.bread = s;
+    }
+  } else if (g.userData.bread) { g.remove(g.userData.bread); g.userData.bread = null; }
+}
+const FIRE_SPOTS = [[-24, 7.2, 12], [24, 7.2, 12], [-22, 10, 40], [22, 10, 40], [0, 12, 28], [-8, 4.2, 22], [12, 6, 34], [20, 3, 8]];
+function ensureStoryFire() {
+  if (storyFire || !scene) return;
+  storyFire = new THREE.Group(); scene.add(storyFire);
+  for (const [x, y, z] of FIRE_SPOTS) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff6a1a, transparent: true, opacity: 0.9, depthWrite: false }));
+    s.position.set(x, y, z); s.scale.setScalar(1.6 + Math.random()); s.userData.base = s.scale.x;
+    storyFire.add(s);
+  }
+}
+function clearStoryFire() {
+  if (storyFire) { scene.remove(storyFire); storyFire = null; }
+  for (const b of storyBeams) if (b.mesh) scene.remove(b.mesh);
+  storyBeams = [];
+  if (eggSet) {
+    eggSet.userData.ruined = 0;
+    for (const c of [...eggSet.children]) if (c.name === 'patio') eggSet.remove(c);
+  }
+}
+function stepStoryFire() {
+  if (!storyFire) return;
+  let i = 0;
+  for (const s of storyFire.children) { s.scale.setScalar(s.userData.base * (0.75 + 0.35 * Math.abs(Math.sin(gameTime * 7 + i)))); i++; }
+}
+function storyRuin() {
+  ensureStoryFire();
+  if (!eggSet || eggSet.userData.ruined) return;
+  eggSet.userData.ruined = true;
+  if (storyFire) storyFire.visible = false;
+  const patio = new THREE.Mesh(new THREE.BoxGeometry(52, 0.08, 36), new THREE.MeshBasicMaterial({ color: 0x3a2a22 }));
+  patio.name = 'patio'; patio.position.set(0, 0.05, 28); eggSet.add(patio);
+  const grass = new THREE.Mesh(new THREE.BoxGeometry(18, 0.04, 10), new THREE.MeshBasicMaterial({ color: 0x2f6b32 }));
+  grass.name = 'patio'; grass.position.set(0, 0.1, 24); eggSet.add(grass);
+  flashMsg('O bloco 1 da Cheers virou pátio da HOTMILK');
+}
+function stepStoryBeams() {
+  const keep = [];
+  for (const b of storyBeams) {
+    if (b.until <= gameTime) { if (b.mesh) scene.remove(b.mesh); continue; }
+    if (!b.mesh) {
+      const len = b.len || 22;
+      b.mesh = new THREE.Mesh(new THREE.BoxGeometry(b.len ? 0.28 : 0.16, b.len ? 0.28 : 0.16, len), new THREE.MeshBasicMaterial({ color: b.color || 0xF7A531 }));
+      b.mesh.position.set(b.x + b.fx * len * 0.5, b.y, b.z + b.fz * len * 0.5);
+      b.mesh.rotation.y = Math.atan2(b.fx, b.fz);
+      scene.add(b.mesh);
+    }
+    keep.push(b);
+  }
+  storyBeams = keep;
+}
+function ensureStoryCut() {
+  let el = $('storyCut');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'storyCut';
+  el.style.cssText = 'position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(12,6,4,0.92);color:#ffe7b0;font:700 28px sans-serif;text-align:center;padding:48px;letter-spacing:0.3px';
+  document.body.appendChild(el);
+  return el;
+}
+function startStoryCut() {
+  if (storyCut) return;
+  storyCut = { t0: gameTime };
+  const el = ensureStoryCut();
+  el.style.display = 'flex';
+  try { document.exitPointerLock(); } catch (e) { /* a câmera solta quando o navegador deixa */ }
+}
+function stopStoryCut() {
+  storyCut = null;
+  const el = $('storyCut'); if (el) el.style.display = 'none';
+}
+function stepStoryCut() {
+  if (!storyCut) return;
+  const el = ensureStoryCut();
+  const lines = [
+    'A HOTMILK ainda queima, mas a horda parou.',
+    'O Big da Cheers estava corrompido.',
+    'Vocês não vieram para matar. Vieram libertar.',
+    'O bloco 1 virou pátio. O C da camisa volta a brilhar.',
+    'O Big abre os olhos. Está livre.',
+    'A história da HOTMILK continua.',
+  ];
+  const i = Math.min(lines.length - 1, Math.floor((gameTime - storyCut.t0) / 2.2));
+  el.textContent = lines[i];
+}
+function stepHistoriaWorld(dt) {
+  if (!isHistoria(mode)) {
+    if (hEmbers.length || hPlateMeshes.size) clearHistoriaWorld();
+    return;
+  }
+  for (let i = hEmbers.length - 1; i >= 0; i--) {
+    const em = hEmbers[i];
+    const left = em.until - gameTime;
+    if (left <= 0) { scene.remove(em.mesh); em.mesh.geometry.dispose(); hEmbers.splice(i, 1); continue; }
+    em.mesh.material.opacity = Math.max(0.08, Math.min(0.72, left / 2.2));
+  }
+  const seen = new Set();
+  for (const e of entities) {
+    if (!e || !e.alive || !e.pos || e.zt) continue;
+    const n = passLv(e, 'pratos');
+    if (!n) continue;
+    seen.add(e.id);
+    let group = hPlateMeshes.get(e.id);
+    if (!group || group.userData.n !== n) {
+      if (group) { scene.remove(group); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+      group = new THREE.Group(); group.userData.n = n;
+      const color = n >= 3 ? 0xf7a531 : n === 2 ? 0xd5dbe3 : 0xcd7f32;
+      for (let i = 0; i < n; i++) group.add(new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.07, 8, 16), new THREE.MeshBasicMaterial({ color })));
+      scene.add(group); hPlateMeshes.set(e.id, group);
+    }
+    const pts = platePoints(e, gameTime);
+    group.children.forEach((m, i) => { const q = pts[i]; if (q) m.position.set(q.x, q.y, q.z); m.rotation.y += dt * 3; });
+  }
+  for (const [id, group] of hPlateMeshes) if (!seen.has(id)) { scene.remove(group); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); hPlateMeshes.delete(id); }
+}
+function clearHistoriaWorld() {
+  for (const em of hEmbers) { scene.remove(em.mesh); if (em.mesh.geometry) em.mesh.geometry.dispose(); }
+  hEmbers.length = 0;
+  for (const group of hPlateMeshes.values()) { scene.remove(group); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+  hPlateMeshes.clear();
+}
+function historiaLive() { return isHistoria(mode) && state === 'playing' && !!player; }
+function historiaDigit(code) {
+  if (code === 'Digit1' || code === 'Numpad1') return 0;
+  if (code === 'Digit2' || code === 'Numpad2') return 1;
+  if (code === 'Digit3' || code === 'Numpad3') return 2;
+  return -1;
+}
+function historiaFreeMouse() {
+  deathUnlock = true;
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+function hMapOpen() { const el = $('hMap'); return !!(el && !el.classList.contains('hidden')); }
+function historiaActor(pid) {
+  if (player && (pid === player.id || (online && pid === online.myId))) return player;
+  return online ? entOf(pid) : null;
+}
+function historiaWhy(id) {
+  const u = HUPS[id] || ULTS[id];
+  if (!player || !u) return 'Agora não';
+  if (ULTS[id]) { if (player.hUlt !== id) return 'Esse ultimate não é seu'; }
+  else if (!(player.hUps || []).includes(id)) return 'Você ainda não tem esse upgrade';
+  if (!player.alive || player.down) return 'Só de pé';
+  if (player.hRootUntil > gameTime) return 'Você está parado';
+  const left = player.hCd && player.hCd[id] > gameTime ? Math.ceil(player.hCd[id] - gameTime) : 0;
+  if (left > 0) return `${u.icon} ${u.name} · ${left} s`;
+  return '';
+}
+function historiaOfferIds() {
+  if (player && player.hOffer && player.hOffer.length) return player.hOffer;
+  if (player && player.hPOffer && player.hPOffer.length) return player.hPOffer;
+  return null;
+}
+function storyReviveNear() {
+  if (!player || !player.alive || player.down || !survOn()) return false;
+  for (const e of entities) {
+    if (!e || e === player || !e.alive || !e.down || !e.pos) continue;
+    if (Math.hypot(e.pos.x - player.pos.x, e.pos.z - player.pos.z) <= DOWNED.range + 0.35 && Math.abs(e.pos.y - player.pos.y) <= DOWNED.reachY) return true;
+  }
+  return false;
+}
+function historiaKey(e) { // true = a tecla fica no Modo história
+  if (!isHistoria(mode) || state !== 'playing' || !player) return false;
+  const offer = historiaOfferIds();
+  const n = offer ? historiaDigit(e.code) : -1;
+  if (n >= 0) { if (!e.repeat && offer[n]) historiaPick(offer[n]); return true; }
+  if (e.code === 'KeyL') { if (storyReviveNear()) return false; if (!e.repeat && player.alive && !player.down) historiaUseSelected(); return true; }
+  if (e.code === 'Escape' && hMapOpen()) { if (!e.repeat) closeHMap(); return true; }
+  return false;
+}
+function historiaPick(id) {
+  if (!isHistoria(mode) || !player || !id) return;
+  const pass = player.hPOffer && player.hPOffer.includes(id) && !(player.hOffer && player.hOffer.includes(id));
+  if (pass) { if (online) netEv(['hs', id]); else if (inv) inv.pickPassiva(player, id); return; }
+  if (online) netEv(['hp', id]);
+  else if (inv) inv.pickHistoria(player, id);
+}
+function historiaAim() { const d = new V3(); camera.getWorldDirection(d); return d; }
+function historiaUse(id, extra) {
+  if (!isHistoria(mode) || !player) return;
+  const why = historiaWhy(id);
+  if (why) { flashMsg(why); return; }
+  const aimed = extra && Number.isFinite(+extra.x) && Number.isFinite(+extra.z);
+  if (id === 'grok' && !aimed) { openHMap(); return; }
+  if (online) {
+    let x = player.pos.x, z = player.pos.z;
+    const ult = ULTS[id];
+    if (ult) {
+      const T = gameTime;
+      if (!player.hCd) player.hCd = {};
+      player.hPend = id; player.hCd[id] = T + ult.cd;
+      if (ult.dur > 0) { player.ultForm = id; player.ultUntil = T + ult.dur; }
+      if (id === 'ceo') player.hPhaseUntil = T + ult.dur;
+      else if (id === 'vampiro') { player.fly = 1; player.hHopUntil = T + ult.dur; }
+      else if (id === 'bebado') { player.hImmuneUntil = T + ult.dur; player.ultAnchor = { x: player.pos.x, z: player.pos.z }; player.ultAng = 0; }
+      else if (id === 'vendedor') player.hImmuneUntil = T + ult.dur;
+      const d = historiaAim();
+      netEv(['hu', id, x, z, d.x, d.y, d.z]);
+      return;
+    }
+    if (id === 'cafe') {
+      const yaw = player.yaw || 0;
+      player.vel.x += -Math.sin(yaw) * 13;
+      player.vel.z += -Math.cos(yaw) * 13;
+    } else if (id === 'joelhos') {
+      player.vel.y = 20; player.onGround = false;
+    } else if (id === 'grok') {
+      const spot = historiaSpot(PHYS, currentMap.size, extra.x, extra.z);
+      if (!spot) { flashMsg('O PC do Grok não achou chão aí'); return; }
+      player.pos.set(spot.x, spot.y, spot.z); player.vel.set(0, 0, 0); player.onGround = true;
+      x = spot.x; z = spot.z;
+    }
+    const d = historiaAim();
+    if (!player.hCd) player.hCd = {};
+    player.hPend = id; player.hCd[id] = gameTime + HUPS[id].cd;
+    netEv(['hu', id, x, z, d.x, d.y, d.z]);
+    if (id === 'grok') closeHMap();
+    return;
+  }
+  if (!inv) return;
+  const got = inv.useHistoria(player, id, aimed ? { x: +extra.x, z: +extra.z } : {});
+  if (id === 'grok' && got) closeHMap();
+}
+function historiaUseSelected() {
+  if (!historiaLive() || !player.alive || player.down) return;
+  if (player.hRootUntil > gameTime) { flashMsg('Você está parado'); return; }
+  const ups = player.hUps || [];
+  const ult = player.hUlt;
+  const ready = (id) => !!(id && (id === ult || ups.includes(id)) && !(player.hCd && player.hCd[id] > gameTime));
+  const id = ready(player.hSel) ? player.hSel : (ready(ult) ? ult : ups.find(ready));
+  if (!id) { flashMsg(ups.length || ult ? 'Upgrade em recarga' : 'Nenhum upgrade ainda'); return; }
+  player.hSel = id;
+  historiaUse(id);
+}
+function openHOffer(ids, kind) {
+  const box = $('hOfferCards'), el = $('hOffer');
+  if (!box || !el || !isHistoria(mode)) return;
+  const pass = kind === 'pass' || (kind !== 'up' && player && player.hPOffer && player.hPOffer.length && !(player.hOffer && player.hOffer.length));
+  const title = el.querySelector('h3'), blurb = el.querySelector('p');
+  if (title) title.textContent = pass ? 'Wave limpa' : 'O chefão caiu';
+  if (blurb) blurb.textContent = pass ? 'Escolhe 1 passiva. Ela sobe de bronze até ouro e, no ouro, não volta mais.' : 'Escolhe 1 upgrade. Ele fica com você até o fim da partida.';
+  box.innerHTML = '';
+  (ids || []).forEach((id, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    if (pass) {
+      const u = HPASS[id]; if (!u) return;
+      const have = player && player.hPass ? (player.hPass[id] | 0) : 0;
+      const next = Math.min(3, have + 1);
+      b.innerHTML = `<i>${i + 1}</i> ${u.icon} ${escapeHtml(u.name)}<span>${escapeHtml(u.line(next))}</span><small class="rank-${next}">${RANKS[next]}</small>`;
+    } else {
+      const u = HUPS[id]; if (!u) return;
+      b.innerHTML = `<i>${i + 1}</i> ${u.icon} ${escapeHtml(u.name)}<span>${escapeHtml(u.desc)}</span><small>recarga ${u.cd} s</small>`;
+    }
+    b.onclick = () => historiaPick(id);
+    box.appendChild(b);
+  });
+  el.classList.remove('hidden');
+  historiaFreeMouse();
+}
+function closeHOffer() {
+  const el = $('hOffer'); if (el) el.classList.add('hidden');
+  const box = $('hOfferCards'); if (box) box.innerHTML = '';
+}
+function openHMap() {
+  const el = $('hMap'); if (!el || !historiaLive()) return;
+  el.classList.remove('hidden');
+  historiaFreeMouse();
+  paintHMap();
+}
+function closeHMap() {
+  const el = $('hMap'); if (el) el.classList.add('hidden');
+  const offer = $('hOffer');
+  if (offer && !offer.classList.contains('hidden')) return;
+  if (state === 'playing' && player && player.alive) lockPointer();
+}
+function hMapPoint(ev) {
+  const cvs = $('hMapCvs'), rect = cvs.getBoundingClientRect(), [hx, hz] = currentMap.size;
+  const u = (ev.clientX - rect.left) / Math.max(1, rect.width);
+  const v = (ev.clientY - rect.top) / Math.max(1, rect.height);
+  return { x: (u * 2 - 1) * hx, z: (v * 2 - 1) * hz };
+}
+function paintHMap() {
+  const cvs = $('hMapCvs'); if (!cvs || !hMapOpen() || !currentMap) return;
+  const ctx = cvs.getContext('2d'), w = cvs.width, h = cvs.height, [hx, hz] = currentMap.size;
+  if (!(hx > 0) || !(hz > 0)) return;
+  const X = (x) => (x / hx + 1) * 0.5 * w, Z = (z) => (z / hz + 1) * 0.5 * h;
+  ctx.fillStyle = '#1a120c'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#3ecf6e';
+  for (const n of (nav && nav.nodes) || []) {
+    if (n.ok === false) continue;
+    ctx.fillRect(X(n.x) - 1.6, Z(n.z) - 1.6, 3.2, 3.2);
+  }
+  ctx.fillStyle = '#ff3b3b';
+  for (const z of entities) {
+    if (!z || !z.zt || !z.alive || !z.pos) continue;
+    ctx.beginPath(); ctx.arc(X(z.pos.x), Z(z.pos.z), 3.4, 0, Math.PI * 2); ctx.fill();
+  }
+  if (player && player.pos) {
+    ctx.fillStyle = '#7DF9FF';
+    ctx.beginPath(); ctx.arc(X(player.pos.x), Z(player.pos.z), 4.6, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function onHMapClick(ev) {
+  if (!hMapOpen() || !player || !currentMap) return;
+  const p = hMapPoint(ev);
+  let spot = historiaSpot(PHYS, currentMap.size, p.x, p.z);
+  if (!spot && nav && nav.nodes) {
+    let best = null, bd = 2.6;
+    for (const n of nav.nodes) {
+      if (n.ok === false) continue;
+      const d = Math.hypot(n.x - p.x, n.z - p.z);
+      if (d < bd) { bd = d; best = n; }
+    }
+    if (best) spot = historiaSpot(PHYS, currentMap.size, best.x, best.z);
+  }
+  if (!spot) { flashMsg('O PC do Grok não achou chão aí'); return; }
+  historiaUse('grok', { x: spot.x, z: spot.z });
+}
+function historiaCastFx(ev) {
+  const id = ev[2], u = HUPS[id] || ULTS[id]; if (!u || !isHistoria(mode)) return;
+  const e = historiaActor(ev[1]); if (!e || !e.pos) return;
+  e.hAnim = id; e.hAnimUntil = gameTime + (u.anim || 0.8);
+  if (ULTS[id]) {
+    if (e === player) {
+      if (player.hPend === id) player.hPend = null;
+      if (!player.hCd) player.hCd = {};
+      player.hCd[id] = gameTime + u.cd;
+      if (u.dur > 0) { player.ultForm = id; player.ultUntil = gameTime + u.dur; }
+      flashMsg(`${u.icon} ${u.name}`);
+    }
+    return;
+  }
+  const fx = HCAST[id];
+  if (fx) {
+    invRing(e.pos, fx[0], 0.25, fx[1], id === 'cheers' ? 0.55 : 0.4, id === 'cheers' || id === 'barriga' || id === 'bencao' ? 0.2 : 0.12);
+    const vol = e === player ? 0.34 : 0.28 * distVol(e.pos);
+    if (id === 'cheers') blastFx(e.pos, 8.5);
+    else tone(fx[2], fx[3], fx[4], id === 'barriga' ? 0.34 : 0.18, vol);
+  }
+  if (e !== player) return;
+  if (player.hPend === id) player.hPend = null;
+  if (!player.hCd) player.hCd = {};
+  player.hCd[id] = gameTime + u.cd;
+  if (Number.isFinite(+ev[3])) player.hp = +ev[3];
+  player.hShield = ev[4] | 0;
+  const T = gameTime;
+  if (id === 'monster') player.hSpeedUntil = T + u.dur;
+  else if (id === 'torta') player.hShieldUntil = T + u.dur;
+  else if (id === 'bencao') player.hDmgUntil = T + u.dur;
+  else if (id === 'cachaca') player.hImmuneUntil = T + u.dur;
+  else if (id === 'grokbot') player.hAimUntil = T + u.dur;
+  else if (id === 'integra') player.hReflectUntil = T + u.dur;
+  else if (id === 'cheers') { player.hRootUntil = T + 3; player.hShieldUntil = 0; }
+  flashMsg(`${u.icon} ${u.name}`);
+  if (id === 'grok') closeHMap();
+}
+function paintHistoriaBar() {
+  const bar = $('hBar'), offer = $('hOffer'), map = $('hMap'), slots = $('hSlots');
+  const inMatch = isHistoria(mode) && !!player && (state === 'playing' || state === 'paused');
+  if (!inMatch) {
+    if (bar) bar.classList.add('hidden');
+    if (slots) { slots.innerHTML = ''; delete slots.dataset.ups; }
+    if (offer) offer.classList.add('hidden');
+    if (map) map.classList.add('hidden');
+    const sh = $('hShield'); if (sh) sh.classList.add('hidden');
+    return;
+  }
+  const ups = (player.hUps || []).slice();
+  if (player.hUlt && ULTS[player.hUlt] && !ups.includes(player.hUlt)) ups.unshift(player.hUlt);
+  const owned = player.hPass || {};
+  const passIds = Object.keys(owned).filter((id) => HPASS[id] && owned[id] > 0);
+  if (bar) bar.classList.toggle('hidden', ups.length === 0 && passIds.length === 0);
+  if (slots) {
+    const sig = ups.join(',');
+    if (slots.dataset.ups !== sig) {
+      slots.dataset.ups = sig; slots.innerHTML = '';
+      for (const id of ups) {
+        const u = HUPS[id] || ULTS[id]; if (!u) continue;
+        const b = document.createElement('button');
+        b.type = 'button'; b.dataset.id = id;
+        b.onclick = () => { player.hSel = id; historiaUse(id); };
+        slots.appendChild(b);
+      }
+    }
+    for (const b of slots.querySelectorAll('button')) {
+      const id = b.dataset.id, u = HUPS[id] || ULTS[id]; if (!u) continue;
+      const left = player.hCd && player.hCd[id] > gameTime ? Math.ceil(player.hCd[id] - gameTime) : 0;
+      b.classList.toggle('on', id === player.hSel);
+      b.classList.toggle('cd', left > 0);
+      b.innerHTML = `<b>${u.icon} ${escapeHtml(u.name)}</b><small>${left > 0 ? `${left} s` : 'pronto'}</small>`;
+    }
+  }
+  const sh = $('hShield');
+  if (sh) {
+    const n = player.hShield > 0 && player.hShieldUntil > gameTime ? player.hShield | 0 : 0;
+    sh.classList.toggle('hidden', n <= 0);
+    if (n > 0) sh.textContent = `🍰 ${n}`;
+  }
+  const pips = $('hPips');
+  if (pips) {
+    const sig = passIds.map((id) => `${id}${owned[id]}`).join(',');
+    if (pips.dataset.pass !== sig) {
+      pips.dataset.pass = sig; pips.innerHTML = '';
+      for (const id of passIds) {
+        const u = HPASS[id], lv = owned[id] | 0;
+        const s = document.createElement('span');
+        s.className = `rank-${lv}`;
+        s.title = `${u.name} · ${RANKS[lv]}`;
+        s.textContent = `${u.icon} ${RANKS[lv]}`;
+        pips.appendChild(s);
+      }
+    }
+    pips.classList.toggle('hidden', passIds.length === 0);
+  }
+  if (player.hOffer && player.hOffer.length) { if (offer && offer.classList.contains('hidden')) openHOffer(player.hOffer, 'up'); }
+  else if (player.hPOffer && player.hPOffer.length) { if (offer && offer.classList.contains('hidden')) openHOffer(player.hPOffer, 'pass'); }
+  else if (offer && !offer.classList.contains('hidden')) closeHOffer();
+  if (hMapOpen()) paintHMap();
+}
+if ($('hMapClose')) $('hMapClose').onclick = () => closeHMap();
+if ($('hMapCvs')) $('hMapCvs').addEventListener('click', onHMapClick);
 function invKey(e) { // teclas da Invasão; true = consumiu
   if (!invMode() || state !== 'playing' || !player || e.repeat || player.down) return false;
   if (e.code === KEYS.use && !invPick) { if (!emote.on) invUsePower(); return true; }
@@ -10828,7 +11662,7 @@ function invKey(e) { // teclas da Invasão; true = consumiu
 function invEndText() {
   const v = invView(), won = online ? !!(online.endMsg && online.endMsg.inv && online.endMsg.inv.won) : !!(inv && inv.won);
   const w = online ? (online.endMsg && online.endMsg.inv ? online.endMsg.inv.wave : v ? v.wave : 0) : inv ? inv.wave : 0;
-  return won ? `Vocês sobreviveram às ${INV.WAVES} waves! 🎃🏆` : `Sobreviveu até a wave ${w} 🧟`;
+  return won ? `Vocês sobreviveram às ${storyWaveCap()} waves! 🎃🏆` : `Sobreviveu até a wave ${w} 🧟`;
 }
 
 // ganchos para testes automatizados
