@@ -439,3 +439,27 @@ export function setGhostLook(model, on) {
   model.group.traverse((o) => { if (!o.material || o.userData.isOutline) { if (o.userData.isOutline) o.visible = !on; return; } for (const mat of [].concat(o.material)) { if (mat.userData.keepSolid) continue; if (mat.userData.ghostBase === undefined) mat.userData.ghostBase = { t: mat.transparent, o: mat.opacity }; mat.transparent = on ? true : mat.userData.ghostBase.t; mat.opacity = on ? 0.28 : mat.userData.ghostBase.o; } });
 }
 export { POWER_KEYS };
+// ---------------- cruz (Invasão Normal) ----------------
+// quem ficou sem vidas vira uma cruz de madeira no chão: monte de terra, plaquinha com o nome e um brilho dourado
+// que pulsa. O anel no chão enche enquanto um aliado segura E (setCrossProgress).
+function nameTex(name) {
+  return canvasTex(256, 64, (x, w, h) => { x.fillStyle = 'rgba(20,10,6,0.78)'; x.fillRect(0, 0, w, h); x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#ffe6a0'; x.fillText(String(name || '').slice(0, 16), w / 2, h / 2 + 2); });
+}
+export function makeCrossMesh(name) {
+  const g = new THREE.Group(), wood = toon('#7a4a24'), wood2 = toon('#5c3518'), dirt = toon('#3a2a1c');
+  const mound = new THREE.Mesh(G.sph, dirt); mound.scale.set(0.55, 0.16, 0.42); mound.position.y = 0.02; g.add(mound);
+  const tilt = new THREE.Group(); tilt.rotation.z = 0.08; g.add(tilt);
+  const post = new THREE.Mesh(G.box, wood); post.scale.set(0.14, 1.25, 0.12); post.position.y = 0.62; outline(post, 0.02); post.castShadow = true; tilt.add(post);
+  const arm = new THREE.Mesh(G.box, wood2); arm.scale.set(0.72, 0.13, 0.12); arm.position.y = 0.92; outline(arm, 0.02); arm.castShadow = true; tilt.add(arm);
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTex(name), depthWrite: false, transparent: true, fog: false })); tag.scale.set(1.3, 0.33, 1); tag.position.y = 1.65; g.add(tag);
+  const glow = glowSprite('#ffd24a', 1.6); glow.position.y = 0.8; g.add(glow);
+  const ringBg = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.1, 48), addMat('#ffd24a', 0.25)); ringBg.rotation.x = -Math.PI / 2; ringBg.position.y = 0.06; g.add(ringBg);
+  const fill = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.1, 48, 1, 0, 0.0001), addMat('#fff3a0', 0.9)); fill.rotation.x = -Math.PI / 2; fill.position.y = 0.07; g.add(fill);
+  g.userData = { glow, fill, prog: -1 };
+  return g;
+}
+export function setCrossProgress(g, k) {
+  const u = g.userData; k = Math.max(0, Math.min(1, k || 0)); if (Math.abs(k - u.prog) < 0.005) return; u.prog = k;
+  u.fill.geometry.dispose(); u.fill.geometry = new THREE.RingGeometry(0.95, 1.1, 48, 1, Math.PI / 2, Math.max(0.0001, k * Math.PI * 2));
+}
+export function tickCross(g, T) { g.userData.glow.material.opacity = 0.55 + Math.sin(T * 3) * 0.25; }

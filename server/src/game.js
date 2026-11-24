@@ -9,7 +9,7 @@ import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getM
 import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
 import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
 setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
-import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE } from '../../shared/invasion.js';
+import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE, normInvDiff } from '../../shared/invasion.js';
 import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
 import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
@@ -80,7 +80,7 @@ export class Game {
   constructor(cfg, io) {
     this.test = !!cfg.test; // só no `wrangler dev` com ALLOW_TEST=1: aceita teleporte (testes automatizados)
     const variant = cfg.variant === 'survival' || cfg.mode === 'survival' || cfg.survival === true || cfg.survival === 1 || isSurvival(cfg.surv) ? 'survival' : '';
-    this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), side: normSide(cfg.side), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers), elo: cfg.elo === true };
+    this.cfg = { code: cfg.code, map: cfg.map || 'arena', max: clamp(cfg.max | 0 || 6, 2, MAX_PLAYERS), fillBots: cfg.fillBots !== false, botDiff: normBotDiff(cfg.botDiff), mode: MODE_OK(cfg.mode), side: normSide(cfg.side), variant, surv: variant === 'survival' ? 'survival' : normSurv(cfg.surv), time: normTime(cfg.time), chat: cfg.chat !== false, weapons: normWeapons(cfg.weapons), powers: normPowers(cfg.powers), elo: cfg.elo === true, invDiff: normInvDiff(cfg.invDiff) };
     if (this.cfg.mode === COMP.mode) { this.cfg.side = normSide(cfg.side); this.cfg.max = this.cfg.side * 2; this.cfg.fillBots = false; if (!BOMB_MAPS.some((x) => x.id === this.cfg.map)) this.cfg.map = 'rodizio'; }
     this.lockElo();
     if (isX1(this.cfg.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; }
@@ -520,6 +520,7 @@ startMsg() {
         if (typeof m.elo === 'boolean' && this.state !== 'playing') this.cfg.elo = m.elo;
         if (typeof m.botDiff === 'string') { const next = normBotDiff(m.botDiff); if (next !== this.cfg.botDiff) { this.cfg.botDiff = next; for (const b of this.ents.values()) if (b.bot && !b.zt && !b.dummy) applyBotDiff(b, next); } else this.cfg.botDiff = next; }
         if (m.surv !== undefined && this.state !== 'playing') this.cfg.surv = normSurv(m.surv);
+        if (m.invDiff !== undefined && this.state !== 'playing') this.cfg.invDiff = normInvDiff(m.invDiff); // Invasão: Normal (cruz) ou Hardcore (sem Ressurreição)
         if (m.time !== undefined) this.cfg.time = normTime(m.time);
           if ((m.mode === 'dm' || m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode) || isTraining(m.mode) || isInvasion(m.mode) || m.mode === 'survival' || isX1(m.mode) || m.mode === GF_MODE) && this.state !== 'playing') { const leaving = this.x1Mode && !isX1(m.mode); const wasGf = this.cfg.mode === GF_MODE; this.cfg.mode = m.mode; if (m.mode === GF_MODE) { this.cfg.gfFormat = normFormat(m.format ?? m.gfFormat ?? this.cfg.gfFormat); this.cfg.gfStub = !GF_LIVE; if (!GF_LIVE && !wasGf) this.io.send(id, { t: 'hostMsg', msg: 'Gunfight em breve — quando a partida começar, esta sala cai no Mata-mata.' }); } else this.cfg.gfStub = false; if (isX1(m.mode)) { this.cfg.max = X1.MAX; this.cfg.map = 'random'; } if (leaving) { const back = this.x1Hold >= 2 ? this.x1Hold : 6; this.x1Hold = 0; this.cfg.max = clamp(back, Math.max(2, this.humans().length), MAX_PLAYERS); } for (const h of this.humans()) { if (m.mode === 'dom' || isArmsRace(m.mode) || m.mode === 'bomb' || isComp(m.mode)) this.chooseTeam(h, h.teamPref); else { h.team = -1; if (h.voice === 'team') h.voice = 'all'; } } }
         if (this.cfg.mode === COMP.mode && this.state !== 'playing') {
@@ -666,7 +667,7 @@ startMsg() {
       if (!e.down && e.slots.includes(m.w) && m.w !== e.weapon && !(isShieldW(m.w) && e.shieldBroken)) { e.weapon = m.w; e.reload = null; if (m.w === EGG_W) e.eggAt = this.T; if (e.mg && e.mg.on) this.events.push(['mgs', e.id, 0]); e.mg = e.mg && { ...e.mg, on: false, v: 0, at: -1e9 }; } // tampa quebrada não volta pra mão até nascer de novo. Caído: a pistola temporária não troca o slot.
       this.pushHist(e);
     }
-    e.useHold = !!m.bk; // Modo Bomba: segurando E (plantar/desarmar)
+    e.useHold = !!m.bk; // Modo Bomba: segurando E (plantar/desarmar) · Invasão Normal: segurando E na cruz
     e.revHold = !!(m.rh && e.alive && !e.down); // Survival: segurando L para reviver quem está caído
     this.noteEmote(e, m.dn);
     if (Array.isArray(m.ev)) for (const ev of m.ev.slice(0, 24)) this.onEvent(e, ev);
@@ -1740,6 +1741,7 @@ startMsg() {
     }
     if (this.inv && !e.bot) { // Invasão: começa junto (spawns do mapa em ordem); renasce perto de um aliado, dentro da área segura
       if (e.firstSpawn != null) { const s = this.spawns[e.firstSpawn % this.spawns.length]; e.firstSpawn = null; return s; }
+      if (e.reviveExact && e.reviveAt) { const at = e.reviveAt; e.reviveExact = false; e.reviveAt = null; return { x: at.x, y: this.P.groundAt(at.x, at.z, at.y + 0.3), z: at.z }; } // cruz: levanta onde caiu
       const p = this.inv.spawnPoint(e, e.reviveAt || null); e.reviveAt = null; if (p) return { x: p.x, y: this.P.groundAt(p.x, p.z, p.y + 0.3), z: p.z };
     }
     const list = spawnList(this.bomb, this.bombL, e.team, this.spawns); // Bomba: spawn do lado do time
@@ -1783,6 +1785,7 @@ startMsg() {
     }
     e.yaw = Number.isFinite(s.yaw) ? s.yaw : Math.atan2(-s.x, -s.z); e.pitch = 0; // Gunfight: o yaw do spawn olha a zona. Os outros modos olham o centro.
     if (e.dummy) { this.placeDummy(e); e.invulnUntil = this.T; e.slots = [0, PISTOL, KNIFE]; }
+    if (e.reviveHp > 0) { e.hp = Math.min(e.hp, e.reviveHp); e.reviveHp = 0; } // revivido na cruz: meia vida
     e.hist = []; this.pushHist(e); e.lastUpd = this.now();
     if (e.bot) Object.assign(e, { target: null, wp: null, path: null, stuck: 0, reloadEnd: 0 });
     this.events.push(['sp', e.id, arr3(e.pos), r2(e.yaw), e.primary, e.sq]);
@@ -2030,6 +2033,7 @@ startMsg() {
     return new InvasionCore({
       T: () => g.T, P: g.P, nav: g.nav, size: g.map.size, fall: () => g.fall, botDiff: () => g.cfg.botDiff,
       survival: !!g.survival,
+      hard: () => normInvDiff(g.cfg.invDiff) === 'hard', // Hardcore: sem cruz e sem Ressurreição (servidor manda)
       specFor: g.survival ? (w, n) => getSurvivalWaveTuning(w, n) : null,
       players: () => g.humans(),
       spawnZombie(type, pos) {
@@ -2045,7 +2049,7 @@ startMsg() {
       hurtZombie(z, dmg, by, kind) { g.damage(z, dmg, by, kind === 'fall' ? W_FALL : W_NADE, false, false, kind === 'fall' ? null : 'i' + POWER_KEYS.indexOf(kind)); },
       knock(e, v) { e.lastKnock = g.T; if (e.bot) { e.vel.x += v.x; e.vel.z += v.z; e.vel.y = Math.max(e.vel.y, v.y); e.onGround = false; } else g.toMe(e, ['kn', arr3(v)]); },
       heal(p, hp) { p.hp = Math.min(100, p.hp + hp); g.toMe(p, ['heal', Math.round(p.hp)]); },
-      revive(p, at) { p.needRs = false; p.rsReq = false; p.respawnAt = g.T + 0.4; p.reviveAt = at; },
+      revive(p, at, o) { p.needRs = false; p.rsReq = false; p.respawnAt = g.T + 0.4; p.reviveAt = at; p.reviveExact = !!(o && o.exact); p.reviveHp = (o && o.hp) || 0; }, // cruz: volta no lugar dela com meia vida
       invChanged(p) { const n = p.inv.length; if (n > (p.invSeen | 0)) g.cq(p, 'pw', n - (p.invSeen | 0)); p.invSeen = n; g.toMe(p, ['inv', p.inv.map((k) => POWER_KEYS.indexOf(k))]); },
       giveAmmo(p) { return g.refillAmmo(p); }, // caixa que o zumbi solta: o cliente espelha no 'dg'
       emit(ev) { g.events.push(ev); },
