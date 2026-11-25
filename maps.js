@@ -1600,33 +1600,28 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
 
 // ---------- A Pocilga: pátio, fachada, sala, escada, passarela, pulo e chegada ao lado da largada. ----------
 {
-  const TONE = { concrete: '#8d8a82', metal: '#6d747c', bag: '#c6b48a', fence: '#3c434a', wood: '#9c6b3a', ramp: '#b5793e' };
+  const TONE = { concrete: '#8d8a82', metal: '#d5dee6', bag: '#c6b48a', fence: '#6a5648', wood: '#8d6240', ramp: '#b5793e', snow: '#f7fbff' };
   const boxes = pitPieces().map((p) => ({
     b: p.b,
-    c: p.ramp ? TONE.ramp : p.floor ? (p.tone === 'metal' ? '#8b939b' : p.tone === 'wood' ? '#c4a574' : '#9a958c') : (TONE[p.tone] || TONE.wood),
+    c: p.ramp ? TONE.ramp : p.floor ? (p.tone === 'metal' ? '#d5dee6' : p.tone === 'snow' ? TONE.snow : p.tone === 'wood' ? '#c4a574' : '#b7b3ac') : (TONE[p.tone] || TONE.wood),
     ramp: p.ramp,
   }));
   const props = [
     { t: 'car', x: 7.4, z: 18.4, c: '#6e3a2e', rot: 0 },
-    { t: 'hay', x: 5.4, z: -19.4 }, { t: 'keg', x: -6.2, z: -19.2 },
-    { t: 'tree', x: -20, z: 6 }, { t: 'tree', x: 22, z: -2 },
   ];
   MAPS.push({
     id: PIT.map, name: 'A Pocilga', course: true,
-    desc: 'Circuito solo: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada ao lado da largada.',
+    desc: 'Circuito solo de inverno: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada ao lado da largada.',
     size: [36, 56], wallH: 3.2, wallColor: ['#8d8a82', '#6d747c'],
     palette: DAY({
-      ground: '#c4a56e', tiles: ['#d2b27a', '#b59258', 48, 12],
-      fog: ['#d7e6f2', 140, 460],
-      lights: [
-        ['#ffe08a', 0, 3.2, 6, 6, 14],
-        ['#ffe08a', -8, 3.2, 27, 6, 14],
-        ['#ffe08a', -24.5, 3.6, 34, 5, 12],
-        ['#ffd27a', 3, PIT.deck + 1.6, 43.2, 5, 12],
-        ['#ffb020', 14.2, 3.2, 8, 5, 14],
-        ['#ffb020', 14.2, 3.2, -4, 5, 12],
-      ],
+      sky: '#24344d', fog: ['#3e5168', 55, 210],
+      hemi: ['#f2d2b0', '#1a3048', 0.72], sun: ['#ffc99a', 0.42],
+      ground: '#e7eef4', tiles: ['#f7fbff', '#d5dee8', 48, 8],
     }),
+    weather: {
+      kind: 'snow', n: 280, fall: 3.6, wind: [0.45, 0, 0.2], top: 16, color: 0xF7FBFF, size: 0.1,
+      roofs: [[-7.2, 15.2, 7.2, 17.3, 3.84], [-26.3, 41.6, 7.6, 44.9, 3.2]],
+    },
     ...fin(boxes), props,
     spawns: [[PIT.spawn[0], PIT.spawn[1]]],
     pickups: [],

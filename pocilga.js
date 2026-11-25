@@ -17,7 +17,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const starsTxt = (n) => '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
 const ease = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k * (3 - 2 * k); };
 
-let deps = null, root = null, boards = [], run = null, coach = null;
+let deps = null, root = null, boards = [], run = null, coach = null, natal = null;
 let bannerUntil = 0, bannerText = '', warned = false, gen = 0, lineAt = 0;
 let shout = '', shoutUntil = 0;
 
@@ -243,6 +243,19 @@ function placeCoach() {
   const yaw = Math.atan2(dx, dz);
   model.group.position.set(tw.x, tw.y, tw.z + 0.15);
   model.group.rotation.y = yaw;
+  const felt = new THREE.MeshBasicMaterial({ color: 0xc4364a });
+  const wool = new THREE.MeshBasicMaterial({ color: 0xf7f4ee });
+  const hat = new THREE.Group();
+  const cone = own(new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 8), felt));
+  cone.position.y = 0.2;
+  const brim = own(new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.045, 6, 12), wool));
+  brim.rotation.x = Math.PI / 2;
+  const pom = own(new THREE.Mesh(new THREE.SphereGeometry(0.065, 7, 6), wool));
+  pom.position.y = 0.4;
+  hat.add(cone, brim, pom);
+  hat.position.set(0.04, 2.0, 0.04);
+  hat.rotation.z = -0.4;
+  model.group.add(hat);
   root.add(model.group);
   const canvas = document.createElement('canvas');
   canvas.width = 640; canvas.height = 180;
@@ -254,6 +267,81 @@ function placeCoach() {
   bubble.rotation.y = yaw;
   root.add(bubble);
   coach = { model, bubble, canvas, ctx: canvas.getContext('2d'), tex };
+}
+
+function mountNatal() {
+  const bulbs = [];
+  const push = (pts, y) => {
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const n = Math.max(1, Math.round(len / 1.55));
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        bulbs.push([a[0] + (b[0] - a[0]) * t, y, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+  };
+  push([[-4.15, -21.4], [-4.15, -12.2]], 2.25);
+  push([[4.15, -21.4], [4.15, -12.2]], 2.25);
+  push([[-3.35, -8.5], [-3.35, 14.2]], 2.25);
+  push([[3.35, -8.5], [3.35, 14.2]], 2.25);
+  push([[-26.15, 32.5], [-26.15, 41.2]], 2.4);
+  push([[12.9, -6], [12.9, 14]], 2.35);
+  push([[15.55, -6], [15.55, 14]], 2.35);
+  bulbs.push([-3.55, 2.85, -16.7], [-1.85, 2.85, -16.7], [-2.9, 3.15, -15.35]);
+  const geo = new THREE.SphereGeometry(0.065, 6, 4);
+  const warm = new THREE.MeshBasicMaterial({ color: 0xffd27a });
+  const cool = new THREE.MeshBasicMaterial({ color: 0xb7dcff });
+  const even = own(new THREE.InstancedMesh(geo, warm, Math.ceil(bulbs.length / 2)));
+  const odd = own(new THREE.InstancedMesh(geo.clone(), cool, Math.floor(bulbs.length / 2)));
+  const matrix = new THREE.Matrix4();
+  let ie = 0, io = 0;
+  for (let i = 0; i < bulbs.length; i++) {
+    matrix.makeTranslation(bulbs[i][0], bulbs[i][1], bulbs[i][2]);
+    if (i % 2 === 0) even.setMatrixAt(ie++, matrix);
+    else odd.setMatrixAt(io++, matrix);
+  }
+  even.count = ie; odd.count = io;
+  even.instanceMatrix.needsUpdate = odd.instanceMatrix.needsUpdate = true;
+  const cream = new THREE.MeshBasicMaterial({ color: 0xf3e2b0 });
+  const gar = own(new THREE.InstancedMesh(new THREE.BoxGeometry(1.05, 0.06, 0.06), cream, bulbs.length));
+  for (let i = 0; i < bulbs.length; i++) {
+    matrix.makeTranslation(bulbs[i][0], bulbs[i][1] - 0.18, bulbs[i][2]);
+    gar.setMatrixAt(i, matrix);
+  }
+  gar.instanceMatrix.needsUpdate = true;
+  root.add(even, odd, gar);
+  const pine = new THREE.MeshBasicMaterial({ color: 0x234640 });
+  const snow = new THREE.MeshBasicMaterial({ color: 0xf7fbff });
+  const wood = new THREE.MeshBasicMaterial({ color: 0x6a4a32 });
+  const tree = new THREE.Group();
+  const trunk = own(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.16, 0.46, 6), wood));
+  trunk.position.y = 0.23; tree.add(trunk);
+  [[0.62, 0.62, 0.78], [0.44, 0.5, 1.28], [0.26, 0.38, 1.7]].forEach(([r, h, y]) => {
+    const cone = own(new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), pine));
+    cone.position.y = y; tree.add(cone);
+  });
+  const star = own(new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), new THREE.MeshBasicMaterial({ color: 0xffd56a })));
+  star.position.y = 1.95; tree.add(star);
+  tree.position.set(2.45, 0, -17.55);
+  root.add(tree);
+  const wraps = [0xf4efe4, 0xe6b325, 0x24344d, 0x6b3040];
+  [[3.15, -18.15, 0.28, 0.2], [1.7, -18.35, 0.22, 0.16], [3.2, -16.85, 0.32, 0.22], [-3.45, -20.2, 0.3, 0.2]].forEach(([x, z, w, h], i) => {
+    const box = own(new THREE.Mesh(new THREE.BoxGeometry(w, h, w * 0.82), new THREE.MeshBasicMaterial({ color: wraps[i] })));
+    box.position.set(x, h / 2, z); box.rotation.y = i * 0.4;
+    const ribbon = own(new THREE.Mesh(new THREE.BoxGeometry(0.045, h * 1.05, w * 0.84), snow));
+    ribbon.position.y = 0; box.add(ribbon);
+    root.add(box);
+  });
+  natal = { warm, cool };
+}
+
+function tickNatal(t) {
+  if (!natal) return;
+  const s = 0.5 + 0.5 * Math.sin(t * 2.6);
+  natal.warm.color.setRGB(1, 0.62 + 0.28 * s, 0.28 + 0.25 * s);
+  natal.cool.color.setRGB(0.55 + 0.25 * (1 - s), 0.78 + 0.1 * s, 1);
 }
 
 export function pitRay(ox, oy, oz, dx, dy, dz, maxT) {
@@ -449,6 +537,7 @@ function stepMovers(dt) {
 export function tickCourse(dt) {
   if (!run || !deps) return;
   lineAt += dt;
+  tickNatal(lineAt);
   stepMovers(dt);
   if (coach) coach.model.group.position.y = PIT.tower.y + Math.sin(lineAt * 1.7) * 0.04;
   for (const b of boards) {
@@ -503,6 +592,7 @@ export function beginCourse(next) {
   boards = pitTargets().map((t) => makeBoard(t, deps.groundAt(t.x, t.z, (t.y || 0) + 1)));
   for (const b of boards) pose(b);
   placeCoach();
+  mountNatal();
   run = { clock: 0, moverT: 0, started: false, done: false, events: [], pops: new Set(), said: new Set(), result: null };
   gen++;
   lineAt = 0;
@@ -533,6 +623,7 @@ export function clearCourse() {
   boards = [];
   run = null;
   coach = null;
+  natal = null;
   deps = null;
   hideBanner();
   shout = ''; shoutUntil = 0;

@@ -64,14 +64,25 @@ const boot = await page.evaluate(() => ({
 }));
 ok(boot.map === 'pocilga' && boot.w === 4 && boot.n === 29 && boot.coach && boot.ramps >= 1, `pistola, torre e escada (${JSON.stringify(boot)})`);
 ok(await page.evaluate(() => !window.__docao.map.props.some((p) => p.t === 'sign' || p.t === 'decal')), 'sem faixa no chão e sem placa de direção');
+const gpu = await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => {
+  const i = window.__docao.renderer.info.render;
+  res({ calls: i.calls, triangles: i.triangles });
+})));
+console.log('GPU', JSON.stringify(gpu));
 
-await page.evaluate(() => { window.__cam = { p: [6, 78, 34], t: [-8, 0, 8], fov: 52 }; });
+await page.evaluate(() => { window.__cam = { p: [2, 72, 30], t: [-6, 0, 6], fov: 50 }; });
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${SHOTS}/pocilga-planta.png` });
 
 const talk = await page.evaluate(() => window.__docao.pit.talk);
 ok(/[Bb]arriguinha|javali|civil|Pistolinha/.test(talk) && !(await page.locator('#pitTalk').evaluate((el) => el.classList.contains('hidden'))), `o Docão fala antes da largada (${talk})`);
-await page.evaluate(() => { window.__cam = { p: [-1.1, 3.55, -18.8], t: [-5.2, 4.0, -14.2], fov: 38 }; });
+await page.evaluate(() => {
+  document.getElementById('pitTalk').classList.add('hidden');
+  window.__cam = { p: [8.4, 6.4, -9.6], t: [0.2, 1.3, -18.4], fov: 58 };
+});
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${SHOTS}/pocilga-natal.png` });
+await page.evaluate(() => { window.__cam = { p: [-0.2, 2.5, -19.6], t: [-2.9, 3.6, -16.2], fov: 42 }; });
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${SHOTS}/pocilga-torre.png` });
 await page.evaluate(() => { window.__cam = null; });
@@ -117,6 +128,9 @@ await go(gate('start').x, gate('start').y, gate('start').z);
 await page.waitForTimeout(450);
 let s = await snap();
 ok(s.started && s.pops.includes('patio') && /INIMIGOS 0\/24/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
+await go(0, 0, -4, Math.PI, -0.05);
+await page.waitForTimeout(200);
+await page.screenshot({ path: `${SHOTS}/pocilga-bloqueio-patio.png` });
 let shot = await shoot(['e1', 'e2', 'e3']);
 for (const id of ['e1', 'e2', 'e3']) ok(shot[id].phase === 'fall', `${id} cai com a Pistolinha${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 

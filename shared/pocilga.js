@@ -39,8 +39,8 @@ export const PIT = {
   roof: ROOF,
   stair: { x: -24.5, z0: R0, z1: R1, y: DECK },
   spawn: [0, -18],
-  spawnYaw: Math.atan2(5.2, -3.8),
-  tower: { x: -5.2, z: -14.2, y: 2.7 },
+  spawnYaw: Math.atan2(3, -1.8),
+  tower: { x: -2.9, z: -16.3, y: 2.7 },
   path: [
     { x: 0, z: -18, y: 0 },
     { x: 0, z: -10.4, y: 0 },
@@ -54,9 +54,9 @@ export const PIT = {
     { x: 6, z: 43.2, y: DECK },
     { x: 10, z: 30, y: 0, drop: true },
     { x: 14.2, z: 16, y: 0 },
-    { x: 14.2, z: -12, y: 0, sprint: true },
-    { x: 9, z: -15.6, y: 0, sprint: true },
-    { x: 9, z: -17, y: 0, sprint: true },
+    { x: 14.2, z: -13.2, y: 0, sprint: true },
+    { x: 9.2, z: -13.2, y: 0, sprint: true },
+    { x: 9.2, z: -17, y: 0, sprint: true },
     { x: 4.8, z: -17, y: 0, sprint: true },
   ],
   gates: [
@@ -106,14 +106,14 @@ export const PIT = {
     { id: 'pulo', targets: [
       { id: 'e18', kind: 'enemy', name: 'Javali da queda', x: 11.05, z: 22.2, y: 0, face: 1 },
       { id: 'e19', kind: 'enemy', name: 'Javali do pátio baixo', x: 12.4, z: 19.4, y: 0, face: 1 },
-      { id: 'e20', kind: 'enemy', name: 'Javali da cerca baixa', x: 13.2, z: 16.6, y: 0, face: 1 },
+      { id: 'e20', kind: 'enemy', name: 'Javali da cerca baixa', x: 12.35, z: 18.4, y: 0, face: 1 },
       { id: 'c5', kind: 'civil', name: 'Vovó do carro', x: 12.15, z: 18.2, y: 0, face: 1 },
       { id: 'e21', kind: 'enemy', name: 'Javali do carro', x: 13.7, z: 13.2, y: 0, face: 1 },
       { id: 'e22', kind: 'enemy', name: 'Javali na frente do carro', x: 11.3, z: 21.2, y: 0, face: 1, move: { axis: 'x', min: 10.6, max: 12.0, speed: 1.05, phase: 1.1 } },
     ] },
     { id: 'reta', targets: [
-      { id: 'e23', kind: 'enemy', name: 'Javali do fim', x: 12.85, z: -7.4, y: 0, face: 1 },
-      { id: 'e24', kind: 'enemy', name: 'Javali da chegada', x: 15.45, z: -9.6, y: 0, face: 1 },
+      { id: 'e23', kind: 'enemy', name: 'Javali do fim', x: 13.65, z: -8.6, y: 0, face: 1 },
+      { id: 'e24', kind: 'enemy', name: 'Javali da chegada', x: 14.75, z: -11.1, y: 0, face: 1 },
     ] },
   ],
 };
@@ -339,15 +339,21 @@ export function pitPieces() {
   wall(-8.2, -22.3, -7.75, -10.5, 2.6, 0, 'concrete');
   wall(7.75, -22.3, 8.2, -18.7, 2.6, 0, 'concrete');
   wall(7.75, -15.3, 8.2, -10.5, 2.6, 0, 'concrete');
-  wall(-8.2, -11.45, -1.55, -10.9, 1.05, 0, 'bag');
-  wall(1.55, -11.45, 8.2, -10.9, 1.05, 0, 'bag');
-  add(-6.35, 0, -14.95, -5.95, 2.42, -14.5, { tone: 'wood' });
-  add(-4.45, 0, -14.95, -4.05, 2.42, -14.5, { tone: 'wood' });
-  slab(-6.4, -15.05, -4.0, -13.25, 2.7, 'wood', 0.28);
+  wall(-8.2, -11.45, -1.55, -10.9, 2.4, 0, 'bag');
+  wall(1.55, -11.45, 8.2, -10.9, 2.4, 0, 'bag');
+  add(-3.75, 0, -16.95, -3.35, 2.42, -16.5, { tone: 'wood' });
+  add(-2.05, 0, -16.95, -1.65, 2.42, -16.5, { tone: 'wood' });
+  slab(-3.8, -17.05, -1.6, -15.2, 2.7, 'wood', 0.28);
+  wall(-4.45, -22.2, -4.05, -17.95, 2.6, 0, 'fence');
+  wall(-4.45, -16.15, -4.05, -11.5, 2.6, 0, 'fence');
+  wall(4.05, -22.2, 4.45, -17.95, 2.6, 0, 'fence');
+  wall(4.05, -16.15, 4.45, -11.5, 2.6, 0, 'fence');
 
   // 2. Pátio longo e a fachada. O vão do meio é a porta.
   wall(-10.3, -10.6, -9.85, 15.3, 2.5, 0, 'concrete');
   wall(9.85, -10.6, 10.3, 15.3, 2.5, 0, 'concrete');
+  wall(-3.55, -10.55, -3.15, 15.15, 2.6, 0, 'fence');
+  wall(3.15, -10.55, 3.55, 15.15, 2.6, 0, 'fence');
   wall(-10.3, 15.35, -1.7, 15.85, 3.6, 0, 'concrete');
   wall(1.7, 15.35, 10.3, 15.85, 3.6, 0, 'concrete');
   slab(-7.2, 15.15, 7.2, 17.35, ROOF, 'concrete', 0.26);
@@ -358,6 +364,10 @@ export function pitPieces() {
   wall(-8.25, 29.5, -7.8, 32.1, H, 0, 'concrete');
   wall(7.8, 15.85, 8.25, 32.1, H, 0, 'concrete');
   wall(-8.25, 31.7, 8.25, 32.15, H, 0, 'concrete');
+  wall(2.15, 16.05, 2.55, 28.75, 2.6, 0, 'concrete');
+  wall(-2.55, 16.05, -2.15, 25.55, 2.6, 0, 'concrete');
+  wall(-8.3, 25.35, -2.15, 25.75, 2.6, 0, 'concrete');
+  wall(-2.1, 28.9, 8.25, 29.3, 2.6, 0, 'concrete');
   wall(-28.4, 24.55, -8.25, 25.05, H, 0, 'concrete');
   wall(-28.4, 24.55, -27.95, 30.6, H, 0, 'concrete');
   wall(-22.4, 29.35, -8.25, 29.85, H, 0, 'concrete');
@@ -366,26 +376,40 @@ export function pitPieces() {
   // 4. Escada longa. As placas ficam na frente, no próprio lance.
   ramp(-25.85, R0, -22.55, R1, 0, DECK, 'z', 1);
   wall(-26.45, R0, -25.95, 42.6, 4.4, 0, 'concrete');
+  wall(-22.4, R0, -21.95, 42.05, 4.4, 0, 'concrete');
 
   // 5. Passarela longa. A ponta leste fica aberta pro pulo.
   slab(-26.3, 42.45, -22.2, 44.85, DECK, 'metal');
   slab(-22.2, 41.65, 7.6, 44.85, DECK, 'metal');
-  wall(-21.5, 41.15, 2.4, 41.55, 1.05, DECK, 'metal');
-  wall(-26.3, 44.85, 7.2, 45.25, 1.05, DECK, 'metal');
+  wall(-21.5, 41.15, 5.05, 41.55, 2.3, DECK, 'metal');
+  wall(-26.3, 44.85, 7.2, 45.25, 2.3, DECK, 'metal');
   wall(7.2, 41.65, 7.65, 44.85, 1.05, DECK, 'metal');
   wall(-20, 33, 2, 41.2, 4.3, 0, 'concrete');
 
   // 6. Pátio de baixo, longo, fechado a oeste.
-  wall(4.15, 14.2, 4.6, 36, 2.6, 0, 'fence');
+  wall(4.15, 14.2, 4.6, 45.5, 2.6, 0, 'fence');
+  wall(15.75, 15.4, 16.2, 45.5, 2.6, 0, 'fence');
+  wall(4.6, 32.55, 6.5, 33.0, 2.6, 0, 'concrete');
+  wall(11.95, 32.55, 16.2, 33.0, 2.6, 0, 'concrete');
+  wall(4.55, 31.6, 6.6, 41.35, 2.6, 0, 'fence');
+  wall(11.45, 31.6, 16.25, 41.35, 2.6, 0, 'fence');
   wall(4.6, 14.85, 12.55, 15.3, 2.6, 0, 'concrete');
 
   // 7. Corredor de grades, longo, e a volta até a largada.
-  wall(12.65, -4.2, 13.1, 16.6, 2.9, 0, 'fence');
-  wall(15.35, -5.2, 15.8, 16.6, 2.9, 0, 'fence');
+  wall(12.65, -12.45, 13.1, 16.6, 2.9, 0, 'fence');
+  wall(15.35, -18.2, 15.8, 16.6, 2.9, 0, 'fence');
+  wall(8.3, -12.6, 12.7, -12.2, 2.6, 0, 'fence');
+  wall(9.7, -14.25, 15.9, -13.85, 2.6, 0, 'fence');
+  wall(8.2, -10.35, 12.75, -9.95, 2.6, 0, 'concrete');
+  wall(10.65, -18.6, 11.05, -14.15, 2.6, 0, 'concrete');
+  wall(8.25, -19.25, 16.6, -18.85, 2.6, 0, 'concrete');
+  wall(-29.2, -10.55, -8.2, -10.15, 2.6, 0, 'fence');
   wall(10.2, -16.35, 16.4, -15.9, 2.6, 0, 'fence');
-  wall(-28.8, 15, -28.35, 45.4, 2.8, 0, 'concrete');
-  wall(-28.8, 45.15, 18.2, 45.6, 2.8, 0, 'concrete');
-  wall(17.75, -20, 18.2, 45.6, 2.8, 0, 'concrete');
+  wall(-29.2, -22.5, 16.8, -22.1, 2.8, 0, 'fence');
+  wall(-29.2, -22.5, -28.8, 45.6, 2.8, 0, 'concrete');
+  wall(-28.8, 45.15, 16.9, 45.6, 2.8, 0, 'concrete');
+  wall(16.5, -22.5, 16.95, 45.6, 2.8, 0, 'concrete');
+  slab(-7.2, 15.2, 7.2, 17.3, 3.84, 'snow', 0.08);
 
   // 8. Portão de alambrado colado na largada.
   for (const z0 of [-18.55, -15.85]) wall(7.15, z0, 7.5, z0 + 0.42, 2.35, 0, 'fence');

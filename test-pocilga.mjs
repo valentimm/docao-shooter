@@ -79,6 +79,34 @@ for (const q of samplePath(0.35)) {
 }
 ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou em ${stuck.x.toFixed(1)},${stuck.z.toFixed(1)} y=${stuck.y.toFixed(2)} chão=${stuck.g.toFixed(2)} colide=${stuck.hit})` : ` (alto ${hi.toFixed(2)} m)`}`);
 ok(hi > 2.9 && lo < 0.2, `sobe e desce (${hi.toFixed(2)} → ${lo.toFixed(2)})`);
+{
+  const ref = [];
+  for (let i = 1; i < PIT.path.length; i++) {
+    const a = PIT.path[i - 1], b = PIT.path[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.6));
+    for (let k = 0; k <= n; k++) ref.push([a.x + (b.x - a.x) * k / n, a.z + (b.z - a.z) * k / n]);
+  }
+  const near = (x, z) => { let b = 99; for (const q of ref) b = Math.min(b, Math.hypot(q[0] - x, q[1] - z)); return b; };
+  const step = 0.9, seen = new Set(), qq = [[PIT.spawn[0], PIT.spawn[1], 0]];
+  const key = (a, b) => a + ',' + b;
+  seen.add(key(0, 0));
+  let worst = 0, guard = 0;
+  while (qq.length && guard < 20000) {
+    guard++;
+    const [x, z, y] = qq.pop();
+    worst = Math.max(worst, near(x, z));
+    for (const [dx, dz] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+      const nx = x + dx, nz = z + dz, k = key(Math.round(nx / step), Math.round(nz / step));
+      if (seen.has(k) || Math.abs(nx) > 33 || Math.abs(nz) > 52) continue;
+      const g = P.groundAt(nx, nz, y + 0.8);
+      if (P.collides(nx, g + 0.02, nz) || g > y + 0.5) continue;
+      const mx = (x + nx) / 2, mz = (z + nz) / 2, mg = P.groundAt(mx, mz, y + 0.8);
+      if (P.collides(mx, mg + 0.02, mz)) continue;
+      seen.add(k); qq.push([nx, nz, g]);
+    }
+  }
+  ok(worst <= 6.2, `sem atalho: o chão alcançável fica a até ${worst.toFixed(1)} m do eixo`);
+}
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK');
 process.exit(fails.length ? 1 : 0);
