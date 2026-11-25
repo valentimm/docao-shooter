@@ -10,7 +10,7 @@ import { grantPromo } from './server/src/shop.js';
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
-const INSIDE = Date.parse('2026-12-15T15:00:00.000Z'); // 12:00 BRT, no meio da janela
+const INSIDE = Date.parse('2026-11-27T15:00:00.000Z'); // 12:00 BRT, no meio da janela
 const OLD_PROMO_IDS = ['churrasco-relampago-2026-11', 'feriadao-relampago-2026-11-19', 'decimo-pingou-2026-11-19'];
 const grant = (env, id, t = INSIDE) => grantPromo(env, id, t);
 
@@ -18,18 +18,18 @@ ok(PROMO_ID === 'integra-2026-2027' && PROMO_NAME === 'INTEGRA', `promo ${PROMO_
 ok(PROMO_COINS === 500, `crédito é 500 Docoins (${PROMO_COINS})`);
 ok(PROMO_BOXES === 5, `crédito é 5 caixotes (${PROMO_BOXES})`);
 ok(PROMO_STARTS_AT === Date.parse('2026-11-25T03:00:00.000Z'), 'abre em 25/11/2026 00:00:00.000 BRT');
-ok(PROMO_EXPIRES_AT === Date.parse('2027-01-07T02:59:59.999Z'), 'fecha em 06/01/2027 23:59:59.999 BRT');
+ok(PROMO_EXPIRES_AT === Date.parse('2026-11-30T02:59:59.999Z'), 'fecha em 29/11/2026 23:59:59.999 BRT');
 ok(!promoActive(PROMO_STARTS_AT - 1) && promoActive(PROMO_STARTS_AT), 'ainda não vale no milissegundo anterior e abre no primeiro');
-ok(promoActive(INSIDE), 'vale no meio da janela (15/12 12:00 BRT)');
+ok(promoActive(INSIDE), 'vale no meio da janela (27/11 12:00 BRT)');
 ok(promoActive(PROMO_EXPIRES_AT) && !promoActive(PROMO_EXPIRES_AT + 1), 'ainda vale no último milissegundo e expira logo depois');
 ok(promoActive(Date.parse('2026-11-25T00:00:00.000-03:00')), 'em 25/11/2026 00:00 BRT já vale');
 ok(!promoActive(Date.parse('2026-11-24T23:59:59.999-03:00')), 'em 24/11/2026 23:59 BRT ainda não aparece nem credita');
-ok(promoActive(Date.parse('2027-01-06T23:59:59.999-03:00')), 'em 06/01/2027 23:59 BRT ainda vale');
-ok(!promoActive(Date.parse('2027-01-07T00:00:00.000-03:00')), 'em 07/01/2027 00:00 BRT já acabou');
+ok(promoActive(Date.parse('2026-11-29T23:59:59.999-03:00')), 'em 29/11/2026 23:59 BRT ainda vale');
+ok(!promoActive(Date.parse('2026-11-30T00:00:00.000-03:00')), 'em 30/11/2026 00:00 BRT já acabou');
 ok(promoActive(Date.now()), 'o relógio de agora está dentro da janela');
-ok(promoUntilLabel() === '6 de janeiro de 2027', `rótulo do prazo é 6 de janeiro de 2027 (${promoUntilLabel()})`);
-ok(promoCreditText().includes('500 Docoins') && promoCreditText().includes('5 caixotes') && promoCreditText().includes('Integra') && promoCreditText().includes('até 6 de janeiro de 2027'), 'texto do crédito cita 500 Docoins, 5 caixotes, o Integra e o prazo');
-ok(promoGuestText().includes('comanda') && promoGuestText().includes('500 Docoins') && promoGuestText().includes('5 caixotes') && promoGuestText().includes('Integra') && promoGuestText().includes('até 6 de janeiro de 2027'), 'texto do convidado pede login, cita o prêmio e o prazo');
+ok(promoUntilLabel() === '29 de novembro de 2026', `rótulo do prazo é 29 de novembro de 2026 (${promoUntilLabel()})`);
+ok(promoCreditText().includes('500 Docoins') && promoCreditText().includes('5 caixotes') && promoCreditText().includes('Integra') && promoCreditText().includes('até 29 de novembro de 2026'), 'texto do crédito cita 500 Docoins, 5 caixotes, o Integra e o prazo');
+ok(promoGuestText().includes('comanda') && promoGuestText().includes('500 Docoins') && promoGuestText().includes('5 caixotes') && promoGuestText().includes('Integra') && promoGuestText().includes('até 29 de novembro de 2026'), 'texto do convidado pede login, cita o prêmio e o prazo');
 
 const migs = readdirSync(new URL('./server/migrations/', import.meta.url)).filter((f) => f.endsWith('.sql')).sort();
 ok(migs.includes('0009_promo_claims.sql') && migs[migs.length - 1] === '0012_mode_elo.sql' && !migs.some((f) => /promo/i.test(f) && f !== '0009_promo_claims.sql'), `0009_promo_claims existe, a última migração é 0012 (${migs[migs.length - 1]}) e não há migração nova de promo`);

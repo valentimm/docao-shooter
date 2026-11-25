@@ -8,9 +8,9 @@ export const PROMO_ID = 'integra-2026-2027';
 export const PROMO_NAME = 'INTEGRA';
 export const PROMO_COINS = 500;
 export const PROMO_BOXES = 5;
-// 25/11/2026 00:00:00.000 a 06/01/2027 23:59:59.999 horário de Brasília (UTC-3)
+// 25/11/2026 00:00:00.000 a 29/11/2026 23:59:59.999 horário de Brasília (UTC-3)
 export const PROMO_STARTS_AT = Date.parse('2026-11-25T03:00:00.000Z');
-export const PROMO_EXPIRES_AT = Date.parse('2027-01-07T02:59:59.999Z');
+export const PROMO_EXPIRES_AT = Date.parse('2026-11-30T02:59:59.999Z');
 
 export const promoActive = (now = Date.now()) => now >= PROMO_STARTS_AT && now <= PROMO_EXPIRES_AT;
 
