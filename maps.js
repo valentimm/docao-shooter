@@ -1,4 +1,5 @@
 import { addHotmilkNoite } from './maps-hotmilk-noite.js';
+import { PIT, pitAabbs } from './shared/pocilga.js';
 import { morroLeitao } from './favela-map.js';
 import { breezeStandoff } from './breeze-data.js';
 import { DECK, ELEVATOR } from './shared/nevasca.js';
@@ -1597,6 +1598,34 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   });
 }
 
+// ---------- A Pocilga: circuito solo linear. Não entra no rodízio. ----------
+{
+  const wood = '#9c6b3a', wood2 = '#c4a574', red = '#c0392b', yel = '#e8c25a';
+  const boxes = pitAabbs().map(([x0, y0, z0, x1, y1, z1]) => ({ b: [x0, y0, z0, x1, y1, z1], c: y1 - y0 < 1.4 ? wood2 : wood }));
+  const props = [
+    { t: 'decal', x0: -4.8, z0: PIT.startZ - 0.16, x1: 4.8, z1: PIT.startZ + 0.16, y: 0.03, c: '#f2c94c' },
+    { t: 'decal', x0: -2.15, z0: PIT.finishZ - 0.16, x1: 2.15, z1: PIT.finishZ + 0.16, y: 0.03, c: '#e63946' },
+    { t: 'sign', x: 0, y: 2.55, z: -9.4, w: 6.4, h: 1.25, rot: Math.PI, text: 'A POCILGA', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: 0, y: 1.4, z: -9.4, w: 6.4, h: 0.72, rot: Math.PI, text: 'CRUZE A FAIXA · O RELÓGIO COMEÇA', bg: '#2a1410', fg: '#ffd27a' },
+    { t: 'sign', x: 0, y: 2.35, z: 37.2, w: 3.6, h: 0.78, rot: Math.PI, text: 'PISTOLINHA', bg: '#1d5f8a', fg: '#fff6e4' },
+    { t: 'sign', x: 0, y: 2.45, z: 57.4, w: 3.5, h: 0.85, rot: Math.PI, text: 'DISPARA!', bg: yel, fg: '#2a1410' },
+    { t: 'sign', x: 0, y: 2.5, z: 72.5, w: 3.6, h: 0.85, rot: Math.PI, text: 'CHEGADA', bg: red, fg: '#fff6e4' },
+    { t: 'hay', x: -4.15, z: -13.2 }, { t: 'hay', x: 4.15, z: -13.6 },
+    { t: 'hay', x: 5.15, z: 31.2 }, { t: 'keg', x: -5.15, z: 32.4 },
+    { t: 'tree', x: 12, z: -4 }, { t: 'tree', x: -12, z: 48 },
+  ];
+  MAPS.push({
+    id: PIT.map, name: 'A Pocilga', course: true,
+    desc: 'Circuito solo: largada, javalis de papelão, civis, Pistolinha no meio e disparada até a chegada.',
+    size: [16, 92], wallH: 3.2, wallColor: ['#c9844a', '#a56b32'],
+    palette: DAY({ ground: '#d7b56a', tiles: ['#e4c78a', '#c9a45c', 48, 12] }),
+    ...fin(boxes), props,
+    spawns: [[PIT.spawn[0], PIT.spawn[1]]],
+    pickups: [],
+    showcase: [0, 0, -12], view: [0, 2.4, -18, Math.PI, -0.18],
+  });
+}
+
 // ---------- 9) Morro do Leitão: gerado em favela-map.js (rodada 3) ----------
 MAPS.push(morroLeitao());
 
@@ -1608,7 +1637,7 @@ export const getMap = (id) => MAPS.find((m) => m.id === id) || MAPS[0];
 // Modo Invasão: o Rodízio do Docão e a Fazenda Mal-Assombrada só abrem na Invasão (os outros modos continuam com os mapas de sempre)
 // Survival: HOTMILK à Noite é survivalOnly — não entra no rodízio de nenhum outro modo (shared/survival.js)
 const INV_ONLY = new Set(['rodizio', 'fazenda-assombrada']);
-export const PLAY_MAPS = MAPS.filter((m) => !m.training && !m.invasionOnly && !m.survivalOnly && !m.x1 && !INV_ONLY.has(m.id));
+export const PLAY_MAPS = MAPS.filter((m) => !m.training && !m.course && !m.invasionOnly && !m.survivalOnly && !m.x1 && !INV_ONLY.has(m.id));
 export const X1_MAPS = MAPS.filter((m) => m.x1);
 // mapas da Invasão: os dois feitos pra ela primeiro, depois os de sempre (com decoração de Halloween só nesse modo)
 // mapas do Modo Bomba: só os com sites/spawns feitos à mão (o Rodízio, que na Invasão é exclusivo, vale aqui: foi feito pra Bomba); Pátio Ferrugem é pequeno demais e o Estande é do Treino

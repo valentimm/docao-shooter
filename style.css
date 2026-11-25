@@ -485,6 +485,24 @@ body.bombpick #bPrompt{display:none}
 #trainInfo{display:inline-block;margin-top:4px;background:rgba(20,10,8,.62);color:#fff;padding:4px 12px;border-radius:8px;font-size:14px;white-space:nowrap;pointer-events:none}
 #trainInfo b{color:#fff;font-size:16px}#trainInfo b.hd{color:#ffd23a}
 .trainnote{margin:6px 0;padding:6px 10px;border-radius:8px;background:rgba(242,201,76,.18);font-size:13px;line-height:1.35}
+#pitBanner{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:6;pointer-events:none;font:900 40px/1.1 Fredoka,sans-serif;color:#fff6e4;-webkit-text-stroke:2px #2a1410;text-align:center}
+#pitBanner.bad{color:#ffd0d0}
+#pitOver{z-index:30;background:rgba(41,30,24,.55)}
+.pit-card{width:min(520px,92vw);max-height:min(88dvh,760px);overflow:auto;background:#f6e4bd;color:#2a1410;border:3px solid #2a1410;border-radius:16px;box-shadow:0 10px 0 #2a1410;padding:16px 18px 14px}
+.pit-card h2{margin:0;font:900 48px/1 Fredoka,sans-serif;text-align:center}
+.pit-kicker{margin:0;text-align:center;font:800 13px/1 Fredoka,sans-serif;letter-spacing:.14em}
+.pit-stars{margin:4px 0;text-align:center;font-size:28px;letter-spacing:4px;color:#c0392b}
+.pit-split,.pit-sug,.pit-best,.pit-note{margin:4px 0;font:700 14px/1.35 Fredoka,sans-serif;text-align:center}
+.pit-card h3{margin:10px 0 4px;font:800 14px Fredoka,sans-serif}
+.pit-rank{list-style:none;margin:0;padding:0}
+.pit-rank li{display:flex;justify-content:space-between;gap:8px;padding:4px 8px;border-radius:8px;background:#fff6e4;margin:3px 0;font:700 13px Fredoka,sans-serif}
+.pit-rank li.me{outline:2px solid #c0392b}
+.pit-empty{margin:6px 0;text-align:center;font:700 13px Fredoka,sans-serif}
+.pit-actions{display:flex;gap:8px;margin-top:10px}
+.pit-actions button{flex:1;font:800 14px Fredoka,sans-serif;padding:8px;border-radius:10px;border:2px solid #2a1410;background:#e63946;color:#fff6e4;cursor:pointer}
+.pit-actions button.secondary{background:#fff6e4;color:#2a1410}
+#pitMenuRank{margin-top:6px}
+#menuPit .pit-rank li{background:#fff6e4cc}
 
 /* Bomba + chat fixo no canto (v1.8.2): chat mais estreito e baixo, placar/tempo da bomba centrado no espaço livre entre o placar da esquerda e o chat */
 body.bombmode #socialHud{width:min(300px,32vw)}

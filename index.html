@@ -35,6 +35,7 @@
     <div id="gtaHud" class="hidden"></div>
     <div id="trainInfo" class="hidden"></div>
   </div>
+  <div id="pitBanner" class="hidden"></div>
   <div id="tl"><div id="lb"></div><div id="netbar" class="hidden"><span id="netRoom"></span> · <span id="netPing">-- ms</span><span id="netStatus"></span></div></div>
   <div id="domhud" class="hidden"><div id="domScore"><span class="tr">VERMELHO <b id="ts0">0</b></span><span class="vs">×</span><span class="tb"><b id="ts1">0</b> AZUL</span></div>
     <div id="zoneBar"><div id="zoneFill"></div><span id="zoneText">Zona neutra</span></div><div id="myTeam"></div></div>
@@ -214,7 +215,7 @@
       <button id="mapBtn" class="mapcard current" title="Escolher mapa"><span class="thumb"></span><span class="mtxt"><b id="mapName">Arena da Fazendinha</b><small id="mapDesc"></small></span><span class="mchange">↻ TROCAR</span></button>
     </div>
     <div class="row match-options">
-      <label><span class="field-caption">Modo de jogo</span><select id="modeSel"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="gf">Gunfight · rounds</option><option value="dom">Dominação (times)</option><option value="explore">Exploração</option><option value="treino">Treino · Estande do Docão</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="historia">Modo história · HOTMILK</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="comp" hidden>Competitivo</option><option value="hide">Docão Escondido · estilo Prop Hunt (protótipo, offline)</option></select>      </label>
+      <label><span class="field-caption">Modo de jogo</span><select id="modeSel"><option value="arms">Corrida Armada (times)</option><option value="dm" selected>Mata-mata</option><option value="x1">X1 · duelo</option><option value="gf">Gunfight · rounds</option><option value="dom">Dominação (times)</option><option value="explore">Exploração</option><option value="treino">Treino · Estande do Docão</option><option value="pocilga">A Pocilga · circuito</option><option value="inv">Invasão 🎃 (co-op zumbi)</option><option value="historia">Modo história · HOTMILK</option><option value="bomb">Bomba · Planta o Botijão (protótipo)</option><option value="comp" hidden>Competitivo</option><option value="hide">Docão Escondido · estilo Prop Hunt (protótipo, offline)</option></select>      </label>
       <label id="gfSideLabel" class="hidden"><span class="field-caption">Formato</span>
         <select aria-label="Formato do Gunfight" id="gfSide"><option value="1">1v1</option><option value="2" selected>2v2</option><option value="3">3v3</option><option value="4">4v4</option></select>
       </label>
@@ -246,6 +247,7 @@
     <p id="botDiffNote" class="diffnote">Ceva: o Docão de sempre. A mira, a reação e o jeito de jogar mudam — a vida não.</p>
     <p id="survNote" class="diffnote hidden">Padrão: o loadout de sempre, sem loja na partida.</p>
     <div id="menuTrain" class="trainnote hidden">Treino: abre sempre no <b>Estande do Docão</b>. Os alvos não atacam e voltam em 2 s · B/N/M trocam a arma na hora · munição infinita · sem tempo.</div>
+    <div id="menuPit" class="trainnote hidden"><b>A Pocilga</b> abre sempre neste curral. Cruze a faixa amarela, derrube os javalis de papelão e não acerte o civil (+3 s e sem as 3 estrelas). No meio a Pistolinha entra na mão. A reta final dispara até a faixa vermelha. Javali esquecido trava a chegada. <b>R</b> na tela final tenta de novo.<div id="pitMenuRank"></div></div>
     <div id="menuTeam" class="teampick hidden"><div class="label2">Seu time</div><div class="teamrow" id="menuTeamBtns"></div></div>
         <section id="trucoPanel" hidden aria-label="Truco Paulista">
           <img class="truco-cover" src="./assets/menu/docao-truco-capa.jpg" alt="Docão Truco, truco paulista na fazendinha">
@@ -715,6 +717,10 @@
     <h2 id="resultTitle"></h2>
     <p id="resultDetail"></p>
   </div>
+</div>
+
+<div id="pitOver" class="overlay hidden">
+  <div id="pitCard" class="pit-card"></div>
 </div>
 
 <div id="gameover" class="overlay hidden">
