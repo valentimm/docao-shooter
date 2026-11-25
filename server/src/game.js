@@ -2209,6 +2209,19 @@ startMsg() {
     if (m.hurt) this.damage(e, m.hurt, null, 0, false);
     if (m.fog) Object.assign(I.fog, m.fog, { t0: 0, t1: 0 });
     if (m.hold) I.phaseEnd = this.T + 1e6; // segura a pausa/preparação (testes lentos)
+    // só testes: junta a horda viva num anel em volta de [x, z] pra medir/fotografar com todo mundo na tela
+    if (Array.isArray(m.crowd) && m.crowd.length >= 2) {
+      const cx = +m.crowd[0], cz = +m.crowd[1];
+      const alive = I.zombies.filter((z) => z.alive);
+      alive.forEach((z, i) => {
+        const a = (i / Math.max(1, alive.length)) * Math.PI * 2;
+        const rad = 4 + (i % 4) * 1.15;
+        const x = cx + Math.cos(a) * rad, zz = cz + Math.sin(a) * rad;
+        const y = this.P.groundAt(x, zz, 2);
+        z.pos = { x, y, z: zz }; z.vel = { x: 0, y: 0, z: 0 }; z.onGround = true;
+        z.yaw = Math.atan2(cx - x, cz - zz);
+      });
+    }
   }
   // ---------- bots (mesma lógica dos bots offline, sem Three.js) ----------
   randomWaypoint() { const n = this.nav.randomNode(); return n ? { x: n.x, y: n.y, z: n.z } : { x: rand(-10, 10), y: 0, z: rand(-10, 10) }; }

@@ -243,6 +243,7 @@ export function makeZombie(type) {
   // postura: corcunda (corredor bem inclinado pra frente)
   body.rotation.x = thin ? 0.38 : spit ? 0.22 : fat ? 0.08 : type === 'bossWolf' ? 0.36 : type === 'bossCrazy' ? 0.24 : 0.14;
   g.scale.setScalar(st.size); g.userData.size = st.size;
+  const blinks = []; g.traverse((o) => { if (o.userData.blink) blinks.push(o); }); g.userData.blinks = blinks;
   const flashMats = [suitM, suit2M, metalM, snoutM];
   return { group: g, body, legs, arms, head: headPivot, jaw: hg.userData.jaw || null, guns: [], flashMats, type, eyeM, boss };
 }
@@ -316,7 +317,8 @@ export function animateZombie(m, z, dt, T, flashing) {
   for (const mat of m.flashMats) mat.emissive.set(flashing ? 0x992222 : (z.feral ? (T % 0.4 < 0.08 ? 0x6a1010 : 0x2a0808) : 0x000000));
   if (z.feral && pose !== 'cry') { m.body.rotation.x += 0.14; m.arms[0].rotation.x -= 0.22; m.arms[1].rotation.x -= 0.22; }
   m.eyeM.color.set(T % (z.feral ? 0.45 : 0.9) < 0.06 ? '#ffffff' : eye); // pisca; feroz fica com o olho em brasa
-  m.group.traverse((o) => { if (o.userData.blink) o.visible = T % 0.6 < 0.3; });
+  const blinks = m.group.userData.blinks;
+  if (blinks) { const on = T % 0.6 < 0.3; for (let i = 0; i < blinks.length; i++) blinks[i].visible = on; }
 }
 // morte: desaba e afunda; devolve true quando já pode sumir
 export function dieZombie(m, z, T) {
