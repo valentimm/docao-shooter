@@ -70,7 +70,7 @@ const gpu = await page.evaluate(() => new Promise((res) => requestAnimationFrame
 })));
 console.log('GPU', JSON.stringify(gpu));
 
-await page.evaluate(() => { window.__cam = { p: [10, 86, 12], t: [8, 0, 16], fov: 48 }; });
+await page.evaluate(() => { window.__cam = { p: [12, 92, 18], t: [10, 0, 22], fov: 52 }; });
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${SHOTS}/pocilga-planta.png` });
 
@@ -125,16 +125,37 @@ await page.evaluate(() => { window.__cam = { p: [11.2, 3.4, -21.4], t: [13.6, 1.
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${SHOTS}/pocilga-1-largada.png` });
 await page.evaluate(() => { window.__cam = null; });
+await page.keyboard.press('Escape');
+await page.waitForTimeout(250);
+const pauseUi = await page.evaluate(() => {
+  const nav = [...document.querySelectorAll('#pauseNav [data-pause-act]')].filter((b) => !b.classList.contains('hidden')).map((b) => b.textContent.trim());
+  return { open: !document.getElementById('pause').classList.contains('hidden'), nav, state: window.__docao.state };
+});
+ok(pauseUi.open && pauseUi.state === 'paused' && pauseUi.nav[0] === 'Continuar' && pauseUi.nav[1] === 'Reiniciar' && pauseUi.nav[2] === 'Opções', `pausa com Reiniciar (${pauseUi.nav.join(' · ')})`);
+await page.screenshot({ path: `${SHOTS}/pocilga-pausa.png` });
+const locks = await page.evaluate(() => window.__lockCalls || 0);
+await page.click('#pauseRestartBtn');
+await page.waitForTimeout(300);
+const restarted = await page.evaluate(() => ({
+  state: window.__docao.state,
+  pause: document.getElementById('pause').classList.contains('hidden'),
+  x: window.__docao.player.pos.x,
+  z: window.__docao.player.pos.z,
+  down: window.__docao.pit.targets.every((t) => t.phase === 'down'),
+  started: window.__docao.pit.started,
+  locks: window.__lockCalls || 0,
+}));
+ok(restarted.state === 'playing' && restarted.pause && restarted.down && !restarted.started && Math.hypot(restarted.x - PIT.spawn[0], restarted.z - PIT.spawn[1]) < 0.4 && restarted.locks > locks, `Reiniciar volta pra largada e pede o ponteiro (${JSON.stringify(restarted)})`);
 
 await go(gate('start').x, gate('start').y, gate('start').z);
-await page.waitForTimeout(90);
+await page.waitForTimeout(250);
 let s = await snap();
 const patio = s.targets.filter((t) => ['e1', 'e2', 'e3', 'e4', 'e5', 'c1'].includes(t.id));
 ok(s.started && s.pops.includes('patio') && patio.every((t) => t.phase !== 'down') && new Set(patio.map((t) => t.phase)).size === 1, `o corredor sobe junto (${patio.map((t) => t.phase).join(',')})`);
 await page.waitForTimeout(360);
 s = await snap();
 ok(/INIMIGOS 0\/23/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
-await shotOf('pocilga-2-corredor', 14.2, 0, 2.2, Math.PI, -0.04);
+await shotOf('pocilga-2-corredor', 14.2, 0, -6.2, Math.PI, -0.02);
 const before = await page.evaluate(() => window.__docao.pit.targets.filter((t) => t.mover).map((t) => [t.id, t.x, t.z]));
 await page.waitForTimeout(900);
 const after = await page.evaluate(() => window.__docao.pit.targets.filter((t) => t.mover).map((t) => [t.id, t.x, t.z]));
@@ -157,9 +178,9 @@ await go(gate('escada').x, gate('escada').y, gate('escada').z, Math.PI, -0.2);
 await page.waitForTimeout(200);
 ok((await snap()).pops.includes('escada') && /Sobe a escada/.test((await snap()).banner + (await snap()).talk), 'sobe a escada');
 await shotOf('pocilga-4-rampa', 0, 0.9, 34.5, Math.PI, -0.32);
-await page.evaluate(() => { window.__cam = { p: [-1.2, 5.6, 43.4], t: [9, 3.3, 47.2], fov: 55 }; });
+await page.evaluate(() => { window.__cam = { p: [16, 8.2, 50.5], t: [28, 0.4, 50.5], fov: 58 }; });
 await page.waitForTimeout(250);
-await page.screenshot({ path: `${SHOTS}/pocilga-5-topo.png` });
+await page.screenshot({ path: `${SHOTS}/pocilga-pouso.png` });
 await page.evaluate(() => { window.__cam = null; });
 shot = await shoot(['e12', 'e13', 'e14']);
 for (const id of ['e12', 'e13', 'e14']) ok(shot[id].phase === 'fall', `${id} na rampa${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
@@ -167,7 +188,7 @@ for (const id of ['e12', 'e13', 'e14']) ok(shot[id].phase === 'fall', `${id} na 
 await go(gate('passa').x, gate('passa').y, gate('passa').z, -Math.PI / 2, -0.05);
 await page.waitForTimeout(200);
 ok((await snap()).pops.includes('passa'), 'passarela acorda');
-await shotOf('pocilga-6-passarela', 3.2, 3.15, 47.1, -Math.PI / 2, -0.05);
+await shotOf('pocilga-6-passarela', 6.2, 3.15, 50.5, -Math.PI / 2, -0.04);
 shot = await shoot(['e15', 'e16', 'e17', 'c3']);
 for (const id of ['e15', 'e16', 'e17', 'c3']) ok(shot[id].phase === 'fall', `${id} na passarela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 s = await snap();
@@ -182,6 +203,7 @@ ok((await snap()).pops.includes('pulo'), 'a disparada acorda');
 await go(gate('corre').x, gate('corre').y, gate('corre').z, 0, 0);
 await page.waitForTimeout(250);
 ok(/Corre/.test((await snap()).banner + (await snap()).talk), 'grita pra correr');
+await shotOf('pocilga-estreito-reta', 21.2, 0, 20, 0, 0.02);
 await shotOf('pocilga-7-final', 20.2, 0, -1.2, 0, -0.02);
 shot = await shoot(['e18', 'e19', 'e20', 'e21', 'e22', 'e23', 'e24']);
 for (const id of ['e18', 'e19', 'e20', 'e21', 'e22', 'e23', 'e24']) ok(shot[id].phase === 'fall', `${id} na reta${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);

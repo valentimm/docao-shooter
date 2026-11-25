@@ -1,7 +1,7 @@
 // Regras da Pocilga: oito etapas, só a Pistolinha, faca no javali perto, tempo mínimo.
 // Uso: node test-pocilga.mjs
 import { PIT, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt } from './shared/pocilga.js';
-import { KNIFE } from './shared/rules.js';
+import { KNIFE, RADIUS, SPEED, JUMP } from './shared/rules.js';
 import { getMap } from './maps.js';
 import { mapSolids, createPhysics } from './shared/physics.js';
 
@@ -23,7 +23,7 @@ const floor = minPlausible();
 ok(floor > 18 && floor + 18 < PIT.star3, `mínimo físico ${floor.toFixed(3)} s, folgado abaixo das 3 estrelas`);
 ok(starsOf(PIT.star3, 0, true) === 3 && starsOf(PIT.star3 + 0.01, 0, true) === 2 && starsOf(PIT.star2, 1, true) === 2 && starsOf(PIT.star2 + 0.01, 0, true) === 1, `faixas ${formatPit(PIT.star3)} e ${formatPit(PIT.star2)}`);
 ok(starsOf(32, 1, true) === 2 && suggestion(3).id === 'javali', 'civil tira a 3ª estrela; sugestão Javali');
-ok(formatPit(PIT.star3) === '0:45.00' && formatPit(PIT.star2) === '0:58.00', 'relógio');
+ok(formatPit(PIT.star3) === '0:47.00' && formatPit(PIT.star2) === '1:00.00', 'relógio');
 for (const g of PIT.gates) {
   if (!g.pop) continue;
   const far = Math.min(...pitTargets().filter((t) => t.bay === g.pop).map((t) => Math.hypot(t.x - g.x, t.z - g.z)));
@@ -35,8 +35,8 @@ for (const t of pitTargets()) {
   const gate = PIT.gates.find((g) => g.pop === t.bay);
   const dx = gate.x - t.x, dz = gate.z - t.z;
   const facing = t.face === -1 ? dz < -0.5 : t.face === 1 ? dz > 0.5 : t.face === 'x' ? dx > 0.5 : dx < -0.5;
-  const loose = !!(t.move || (t.y || 0) > 1.2);
-  ok((loose ? near <= 6.4 : near <= 1.9) && facing, `${t.id} na frente de quem corre (${near.toFixed(1)} m do eixo)`);
+  const high = (t.y || 0) > 1.2;
+  ok((high ? near <= 6.4 : near <= 4.6) && facing, `${t.id} na frente de quem corre (${near.toFixed(1)} m do eixo)`);
 }
 
 const clean = rankedRun(scriptRun({ finish: 32 }));
@@ -79,6 +79,115 @@ for (const q of samplePath(0.35)) {
   if (Math.abs(g - q.y) > 0.55 || P.collides(q.x, g + 0.02, q.z)) { stuck = { ...q, g, hit: P.collides(q.x, g + 0.02, q.z) }; break; }
 }
 ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou em ${stuck.x.toFixed(1)},${stuck.z.toFixed(1)} y=${stuck.y.toFixed(2)} chão=${stuck.g.toFixed(2)} colide=${stuck.hit})` : ` (alto ${hi.toFixed(2)} m)`}`);
+
+{
+  const samples = [];
+  let s = 0;
+  for (let i = 1; i < PIT.path.length; i++) {
+    const a = PIT.path[i - 1], b = PIT.path[i];
+    if (b.drop) { s += Math.hypot(b.x - a.x, b.z - a.z); continue; }
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const ux = (b.x - a.x) / len, uz = (b.z - a.z) / len;
+    const n = Math.max(1, Math.ceil(len / 0.5));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t, y = a.y + (b.y - a.y) * t;
+      let left = 12, right = 12;
+      for (let d = 0.2; d <= 12; d += 0.2) {
+        if (left === 12 && P.collides(x - uz * d, y + 0.05, z + ux * d)) left = d;
+        if (right === 12 && P.collides(x + uz * d, y + 0.05, z - ux * d)) right = d;
+        if (left < 12 && right < 12) break;
+      }
+      const clear = left + right + RADIUS * 2;
+      samples.push({ s: s + len * t, x, z, y, clear });
+    }
+    s += len;
+  }
+  const narrow = [];
+  let run = null;
+  for (const q of samples) {
+    if (q.clear < 5) {
+      if (!run) run = { s0: q.s, s1: q.s, clear: q.clear, x: q.x, z: q.z };
+      else { run.s1 = q.s; run.clear = Math.min(run.clear, q.clear); }
+    } else if (run) { narrow.push(run); run = null; }
+  }
+  if (run) narrow.push(run);
+  const bad = narrow.filter((r) => r.s1 - r.s0 > 2 || r.clear < 3);
+  const doors = narrow.filter((r) => !(r.s1 - r.s0 > 2 || r.clear < 3));
+  console.log('largura: trechos abaixo de 5 m:', narrow.map((r) => `${r.clear.toFixed(1)} m por ${(r.s1 - r.s0).toFixed(1)} m em (${r.x.toFixed(1)},${r.z.toFixed(1)})`).join(' | ') || 'nenhum');
+  ok(!bad.length, `largura útil ≥ 5 m, porta curta ≥ 3 m${bad.length ? ' · ' + bad.map((r) => `${r.clear.toFixed(1)} m / ${(r.s1 - r.s0).toFixed(1)} m`).join(', ') : ` (${doors.length} porta)`}`);
+  const patio = pitTargets().filter((t) => t.bay === 'patio');
+  const gate = PIT.gates.find((g) => g.pop === 'patio');
+  const dists = patio.map((t) => Math.hypot(t.x - gate.x, t.z - gate.z));
+  ok(Math.min(...dists) >= 8 && Math.max(...dists) <= 15, `alvos do primeiro corredor a ${Math.min(...dists).toFixed(1)}–${Math.max(...dists).toFixed(1)} m da porta`);
+  let blocked = null;
+  for (const t of pitTargets()) {
+    if ((t.y || 0) > 1.2) continue;
+    const spots = [t];
+    if (t.move) {
+      spots.push({ ...t, x: t.move.axis === 'x' ? t.move.min : t.x, z: t.move.axis === 'z' ? t.move.min : t.z });
+      spots.push({ ...t, x: t.move.axis === 'x' ? t.move.max : t.x, z: t.move.axis === 'z' ? t.move.max : t.z });
+    }
+    for (const spot of spots) {
+      let best = 99;
+      for (const q of samplePath(0.4)) best = Math.min(best, Math.hypot(q.x - spot.x, q.z - spot.z));
+      const half = (spot.face === 'x' || spot.face === '-x') ? 1.05 / 2 : 1.05 / 2;
+      if (best - half < 0.55) blocked = `${t.id} encosta no eixo (${(best - half).toFixed(2)} m)`;
+    }
+  }
+  ok(!blocked, blocked || 'nenhum alvo cobre o meio do caminho');
+  const g0 = PIT.gates.filter((g) => g.pop);
+  let closePop = null;
+  for (const g of g0) for (const t of pitTargets().filter((t) => t.bay === g.pop)) {
+    const d = Math.hypot(t.x - g.x, t.z - g.z);
+    if (d < 5) closePop = `${t.id} surge a ${d.toFixed(1)} m`;
+  }
+  ok(!closePop, closePop || 'nenhum alvo surge a menos de 5 m do gatilho');
+  const open = samples.filter((q) => q.clear >= 5).sort((a, b) => a.clear - b.clear);
+  console.log('trechos mais estreitos:', open.slice(0, 5).map((q) => `${q.clear.toFixed(1)} m em (${q.x.toFixed(1)}, ${q.z.toFixed(1)})`).join(' | '));
+}
+
+{
+  const inside = (x, y, z) => {
+    if (y > 2.2 && x > -7 && x < 20.6 && z > 44.4 && z < 55.2) return true;
+    if (y < 1.5 && x > 19.9 && x < 32.1 && z > 45.6 && z < 55.2) return true;
+    if (y < 1.5 && x > 17.4 && x < 27.3 && z > -19.7 && z < 46.2) return true;
+    let b = 99;
+    for (const q of samplePath(0.8)) b = Math.min(b, Math.hypot(q.x - x, q.z - z));
+    return b < 6.2 && y < 4.2;
+  };
+  const fly = (x, z, y, vx, vz, vy) => {
+    const e = { pos: { x, y, z }, vel: { x: vx, y: vy, z: vz }, onGround: false, bodyH: 2, bodyR: RADIUS };
+    let air = false;
+    for (let i = 0; i < 240; i++) {
+      P.moveEntity(e, 1 / 60);
+      if (e.pos.y > y + 0.2) air = true;
+      if (air && e.onGround) break;
+    }
+    return e.pos;
+  };
+  const lip = [];
+  for (const z of [46.4, 48.2, 50.5, 52.8, 54.4]) lip.push([19.6, z, PIT.deck]);
+  lip.push([12, 46.4, PIT.deck], [12, 54.4, PIT.deck], [8, 50.5, PIT.deck]);
+  let escaped = null, n = 0;
+  for (const [x, z, y] of lip) {
+    for (const speed of [0, SPEED, SPEED * PIT.sprint]) {
+      for (const deg of [0, 45, 90, 135, 180, 225, 270, 315]) {
+        for (const vy of [0, JUMP]) {
+          const a = deg * Math.PI / 180;
+          const pos = fly(x, z, y, Math.sin(a) * speed, Math.cos(a) * speed, vy);
+          n++;
+          if (!inside(pos.x, pos.y, pos.z)) { escaped = `saiu em (${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}) desde (${x},${z}) ${deg}° ${speed.toFixed(1)} m/s`; break; }
+        }
+        if (escaped) break;
+      }
+      if (escaped) break;
+    }
+    if (escaped) break;
+  }
+  ok(!escaped, escaped || `${n} pulos caem dentro do caminho`);
+  ok(P.collides(12, 0.02, 50.5), 'embaixo da passarela o volume é cheio, sem sala escondida');
+}
 ok(hi > 2.9 && lo < 0.2, `sobe e desce (${hi.toFixed(2)} → ${lo.toFixed(2)})`);
 {
   const ref = [];

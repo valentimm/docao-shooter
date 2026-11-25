@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { makeDocao, setPose } from './docao.js';
 import { lookToSkin } from './shared/closet.js';
-import { PIT, BOARD, pitTargets, boardAabb, rayAabb, inspectRun, formatPit, suggestion, moverAt, inGate, onSprint } from './shared/pocilga.js';
+import { PIT, BOARD, pitTargets, boardAabb, rayAabb, inspectRun, formatPit, suggestion, moverAt, inGate, onSprint, pitRescue } from './shared/pocilga.js';
 import { loadPitRank, submitPit, getAccount } from './account.js';
 
 const LOCAL_KEY = 'docao.pocilga.best';
@@ -11,7 +11,7 @@ const LINES = [
   'Barriguinha na torre. Escuta, leitão.',
   'Javali vermelho, de fuzil pra frente: derruba. Azul, sem arma, mão baixa: é civil.',
   'Só a Pistolinha o percurso inteiro. Vinte e três javalis, cinco civis.',
-  'Chega em 45 segundos, sem civil: três estrelas.',
+  'Chega em 47 segundos, sem civil: três estrelas.',
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const starsTxt = (n) => '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
@@ -284,8 +284,9 @@ function mountNatal() {
   };
   push([[7.5, -21.5], [7.5, -11]], 2.35);
   push([[16.2, -21.5], [16.2, -11]], 2.35);
-  push([[11.4, -9.2], [11.4, 17.5]], 2.35);
-  push([[15.7, -9.2], [15.7, 17.5]], 2.35);
+  push([[9.4, -9.6], [9.4, 3.2]], 2.35);
+  push([[19.0, -9.6], [19.0, 3.2]], 2.35);
+  push([[8, 50.2], [18, 50.2]], 5.5);
   push([[-5.9, 20], [-5.9, 29]], 2.45);
   push([[17.4, 4], [17.4, 36]], 2.35);
   push([[24.5, 4], [24.5, 36]], 2.35);
@@ -567,6 +568,11 @@ export function tickCourse(dt) {
   if (!p) return;
   if (deps.weapon() !== PIT.pistol) deps.armPistol();
   const pos = { x: p.pos.x, y: p.pos.y, z: p.pos.z };
+  const back = pitRescue(pos.x, pos.y, pos.z);
+  if (back) {
+    p.pos.set(back.x, deps.groundAt(back.x, back.z, (back.y || 0) + 1), back.z);
+    p.vel.set(0, 0, 0);
+  }
   if (!run.started && inGate(pos, PIT.gates[0])) {
     run.started = true;
     run.clock = 0;
