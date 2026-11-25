@@ -484,6 +484,7 @@ export class InvasionCore {
     const bossN = this.spec.boss ? BOSS_TYPES.indexOf(this.spec.bossKind) + 1 : 0;
     this.A.emit(['wv', 1, w, bossN, this.spec.boss ? 1 : 0, this.queue.length + (this.spec.boss ? 1 : 0) + ((this.drip && this.drip.length) || 0), themeIndex(this.spec.theme)]);
     if (this.storyName) this.A.emit(['qe', 'wv', this.storyName, this.storyBlurb || '']);
+    if (this.egg) this.A.emit(['qe', 'nar', w, this.storyName || '', this.storyBlurb || '']);
     this.openEggWave();
   }
   endWave() {

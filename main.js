@@ -35,6 +35,7 @@ import { HUPS, historiaSpot } from './shared/historia-ups.js';
 import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, platePoints } from './shared/historia-pass.js';
 import { createEgg, eggPrompt, eggCap, EGG_SPOTS } from './shared/historia-egg.js';
 import { breadBlocks } from './shared/historia-finale.js';
+import { storyLine } from './shared/historia-narrador.js';
 import { ULTS, frenzyTaken } from './shared/historia-ult.js';
 import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, rollStoryBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, openStoryCampus, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
@@ -7662,6 +7663,7 @@ function hidePodium() {
   if (podiumStage) { podiumStage.dispose(); podiumStage = null; }
 }
 function endGame() {
+  stopStoryNarrator();
   stopStoryCut();
   stopInspect(true); stopEmote(); // fim no meio da inspeção ou da dança (a mira com zoom continua na câmera lenta)
   if (state === 'over' || !player) return;
@@ -7804,6 +7806,7 @@ function softPause() { if (state !== 'playing') return; state = 'paused'; softPa
 function resume() { closePauseClass(); showPauseLoadout(false); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); const storyMouse = isHistoria(mode) && (($('hOffer') && !$('hOffer').classList.contains('hidden')) || ($('hMap') && !$('hMap').classList.contains('hidden'))); if (!storyMouse) lockPointer(); }
 function updateDeathSkinFx(dt) { deathSkinFx.update(dt); }
 function toMenu() {
+  stopStoryNarrator();
   clearMatchEnding(); deathSkinFx.clear();
   if (online) leaveOnline();
   endVictory(); stopEmote(); document.body.classList.remove('deadgray');
@@ -10288,7 +10291,48 @@ function invCrossNear() {
   return best;
 }
 let invBannerT = 0;
-function invBanner(title, sub, big = false) { const b = $('invBanner'); b.innerHTML = `<b>${escapeHtml(title)}</b><span>${escapeHtml(sub || '')}</span>`; b.classList.remove('hidden'); b.classList.toggle('big', big); invBannerT = big ? 4 : 3; }
+let storyTalk = 0;
+function stopStoryNarrator() {
+  storyTalk++;
+  try { if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel(); } catch (e) { /* sem voz */ }
+}
+function storyVoice() {
+  try {
+    const voices = speechSynthesis.getVoices();
+    const pt = voices.filter((v) => /pt-BR/i.test(v.lang) || /^pt/i.test(v.lang || ''));
+    return pt.find((v) => /felipe|daniel|ricardo|antonio|male|mascul/i.test(v.name)) || pt[0] || null;
+  } catch (e) { return null; }
+}
+function speakStory(text) {
+  if (typeof speechSynthesis === 'undefined' || !text) return;
+  const token = ++storyTalk;
+  try { speechSynthesis.cancel(); } catch (e) { /* sem voz */ }
+  setTimeout(() => {
+    if (token !== storyTalk) return;
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'pt-BR'; u.rate = 0.9; u.pitch = 0.78; u.volume = 1;
+      const voice = storyVoice(); if (voice) u.voice = voice;
+      if (speechSynthesis.paused) speechSynthesis.resume();
+      speechSynthesis.speak(u);
+    } catch (e) { /* sem voz */ }
+  }, 60);
+}
+function storyNarrate(wave, title, hint) {
+  const line = storyLine(wave | 0);
+  if (!line || !isHistoria(mode)) return;
+  invBanner(title || 'Narrador', line, true);
+  const b = $('invBanner');
+  b.classList.add('narr');
+  if (hint) { const s = document.createElement('span'); s.className = 'hint'; s.textContent = hint; b.appendChild(s); }
+  invBannerT = 12;
+  speakStory(line);
+}
+if (typeof speechSynthesis !== 'undefined') {
+  speechSynthesis.getVoices();
+  speechSynthesis.addEventListener('voiceschanged', () => speechSynthesis.getVoices());
+}
+function invBanner(title, sub, big = false) { const b = $('invBanner'); stopStoryNarrator(); b.classList.remove('narr'); b.innerHTML = `<b>${escapeHtml(title)}</b><span>${escapeHtml(sub || '')}</span>`; b.classList.remove('hidden'); b.classList.toggle('big', big); invBannerT = big ? 4 : 3; }
 function invHud(v, me, dt) {
   if (invBannerT > 0) { invBannerT -= dt; if (invBannerT <= 0) $('invBanner').classList.add('hidden'); }
   const ph = v.phase;
@@ -11058,6 +11102,7 @@ function storyEggEvent(ev) {
   if (kind === 'hp') { const e = storyWho(ev[2]); if (e) { e.hp = ev[3] | 0; e.hpCap = ev[4] | 0; e.eggShock = false; } return; }
   if (kind === 'muro' && book) { book.muroTaken = true; return; }
   if (kind === 'wv') { invBanner(ev[2], ev[3] || '', true); return; }
+  if (kind === 'nar') { storyNarrate(ev[2], ev[3], ev[4]); return; }
   if (kind === 'fire') { ensureStoryFire(); return; }
   if (kind === 'warn' && historiaMe(ev[2])) { flashMsg(ev[3]); msgTimer = 2.4; return; }
   if (kind === 'bread') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z) z.breadUntil = gameTime + (+ev[3] || 3); return; }
