@@ -9989,6 +9989,7 @@ function updateZombie(z, dt) {
   if (z.remote) interpRemote(z);
   m.group.visible = true; z.stunned = z.stunUntil > gameTime;
   animateZombie(m, z, dt, gameTime, gameTime < z.flashUntil);
+  docaoLod(z);
   voiceZombie(z);
 }
 function voiceZombie(z) {
