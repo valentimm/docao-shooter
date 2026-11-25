@@ -11,7 +11,7 @@ const LINES = [
   'Barriguinha na torre. Escuta, leitão.',
   'Javali vermelho, de fuzil pra frente: derruba. Azul, sem arma, mão baixa: é civil.',
   'Só a Pistolinha o percurso inteiro. Vinte e quatro javalis, cinco civis.',
-  'Chega em 35 segundos, sem civil: três estrelas.',
+  'Chega em 50 segundos, sem civil: três estrelas.',
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const starsTxt = (n) => '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
@@ -439,7 +439,7 @@ export function tickCourse(dt) {
   if (coach) coach.model.group.position.y = PIT.tower.y + Math.sin(lineAt * 1.7) * 0.04;
   for (const b of boards) {
     if (b.phase === 'rise' || b.phase === 'fall') {
-      b.anim += dt / (b.phase === 'rise' ? 0.32 : 0.28);
+      b.anim += dt / (b.phase === 'rise' ? PIT.rise : 0.22);
       if (b.anim >= 1) { b.anim = 1; b.phase = b.phase === 'rise' ? 'up' : 'dead'; }
     }
     pose(b);

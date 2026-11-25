@@ -1607,26 +1607,76 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     ramp: p.ramp,
   }));
   const g0 = PIT.gates[0], gF = PIT.gates[PIT.gates.length - 1];
-  const red = '#c0392b', yel = '#e8c25a', ink = '#2a1410';
+  const red = '#c0392b', yel = '#e8c25a', ink = '#2a1410', lane = '#f6d56a';
   const props = [
-    { t: 'decal', x0: -1.35, z0: g0.z - 0.14, x1: 1.35, z1: g0.z + 0.14, y: 0.03, c: '#f2c94c' },
-    { t: 'decal', x0: gF.x - 1.15, z0: gF.z - 1.15, x1: gF.x + 1.15, z1: gF.z + 1.15, y: 0.03, c: '#e63946' },
-    { t: 'sign', x: 0, y: 1.7, z: -4.15, w: 2.4, h: 0.55, rot: Math.PI, text: 'LARGADA', bg: yel, fg: ink },
-    { t: 'sign', x: 0, y: 2.7, z: 4.4, w: 3.6, h: 0.72, rot: Math.PI, text: 'OLHA O CANTO', bg: red, fg: '#fff6e4' },
-    { t: 'sign', x: -10.7, y: 2.15, z: 11.55, w: 2.1, h: 0.6, rot: Math.PI, text: 'SOBE', bg: yel, fg: ink },
-    { t: 'sign', x: 3.55, y: PIT.deck + 1.25, z: 17.6, w: 1.8, h: 0.6, rot: -Math.PI / 2, text: 'PULA', bg: yel, fg: ink },
-    { t: 'sign', x: 12.3, y: 1.85, z: 3.4, w: 2.2, h: 0.6, rot: 0, text: 'CORRE', bg: red, fg: '#fff6e4' },
-    { t: 'sign', x: 12.3, y: 1.85, z: 0.6, w: 2.2, h: 0.6, rot: 0, text: 'CORRE', bg: red, fg: '#fff6e4' },
-    { t: 'sign', x: 2.85, y: 1.9, z: -10, w: 2.6, h: 0.7, rot: Math.PI / 2, text: 'CHEGADA', bg: red, fg: '#fff6e4' },
-    { t: 'car', x: 7.2, z: 10.15, c: '#6e3a2e', rot: 0 },
-    { t: 'hay', x: 4.6, z: -12.4 }, { t: 'keg', x: -5.1, z: -12.3 },
-    { t: 'tree', x: -16.2, z: 2 }, { t: 'tree', x: 16.6, z: 8 },
+    { t: 'decal', x0: -1.6, z0: g0.z - 0.18, x1: 1.6, z1: g0.z + 0.18, y: 0.035, c: '#fff3bf' },
+    { t: 'decal', x0: gF.x - 1.3, z0: gF.z - 1.3, x1: gF.x + 1.3, z1: gF.z + 1.3, y: 0.035, c: '#ff8d8d' },
   ];
+  for (let i = 1; i < PIT.path.length; i++) {
+    const a = PIT.path[i - 1], b = PIT.path[i];
+    if (b.drop) continue;
+    const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz) || 1;
+    const flat = Math.abs((b.y || 0) - (a.y || 0)) < 0.4;
+    const col = b.sprint ? red : lane;
+    const y = Math.max(a.y || 0, b.y || 0) + 0.045;
+    if (flat) {
+      if (Math.abs(dz) >= Math.abs(dx)) {
+        const x = (a.x + b.x) / 2;
+        props.push({ t: 'decal', x0: x - 0.42, x1: x + 0.42, z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), y, c: col });
+      } else {
+        const z = (a.z + b.z) / 2;
+        props.push({ t: 'decal', x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: z - 0.42, z1: z + 0.42, y, c: col });
+      }
+    }
+    if (b.sprint) continue;
+    const n = Math.max(1, Math.floor(len / 9));
+    const fx = dx / len, fz = dz / len;
+    const lx = -fz, lz = fx;
+    const word = Math.abs(dz) >= Math.abs(dx) ? (dz >= 0 ? 'FRENTE' : 'VOLTA') : (dx < 0 ? 'ESQUERDA' : 'DIREITA');
+    const rot = Math.abs(dz) >= Math.abs(dx) ? (dz >= 0 ? Math.PI : 0) : (dx < 0 ? Math.PI / 2 : -Math.PI / 2);
+    for (let k = 1; k <= n; k++) {
+      const t = k / (n + 1);
+      props.push({
+        t: 'sign',
+        x: a.x + dx * t + lx * 1.35,
+        y: (a.y || 0) + ((b.y || 0) - (a.y || 0)) * t + 1.7,
+        z: a.z + dz * t + lz * 1.35,
+        w: word.length > 6 ? 2.6 : 2.05, h: 0.64, rot, text: word,
+        bg: yel, fg: ink,
+      });
+    }
+  }
+  props.push(
+    { t: 'sign', x: 2.3, y: 2.55, z: 0.2, w: 3.4, h: 0.85, rot: Math.PI, text: 'EM FRENTE', bg: yel, fg: ink },
+    { t: 'sign', x: 0, y: 2.85, z: 14.9, w: 4.4, h: 0.9, rot: Math.PI, text: 'OLHA O CANTO', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: -1.6, y: 2.7, z: 23.6, w: 3.6, h: 0.9, rot: Math.PI, text: 'ESQUERDA', bg: yel, fg: ink },
+    { t: 'sign', x: -22.3, y: 2.6, z: 29.2, w: 2.6, h: 0.85, rot: Math.PI, text: 'SOBE', bg: yel, fg: ink },
+    { t: 'sign', x: -16, y: PIT.deck + 1.7, z: 44.55, w: 3.6, h: 0.8, rot: -Math.PI / 2, text: 'PASSARELA', bg: '#1d5f8a', fg: '#fff6e4' },
+    { t: 'sign', x: 3.4, y: PIT.deck + 1.55, z: 42.4, w: 2.2, h: 0.8, rot: -Math.PI / 2, text: 'PULA', bg: yel, fg: ink },
+    { t: 'sign', x: 14.2, y: 2.45, z: 11.2, w: 2.8, h: 0.85, rot: 0, text: 'CORRE', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: 14.2, y: 2.45, z: 2.4, w: 2.8, h: 0.85, rot: 0, text: 'CORRE', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: 14.2, y: 2.45, z: -4.6, w: 2.8, h: 0.85, rot: 0, text: 'CORRE', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: 3.1, y: 2.15, z: -17, w: 3.2, h: 0.85, rot: Math.PI / 2, text: 'CHEGADA', bg: red, fg: '#fff6e4' },
+    { t: 'car', x: 7.4, z: 18.4, c: '#6e3a2e', rot: 0 },
+    { t: 'hay', x: 5.4, z: -19.4 }, { t: 'keg', x: -6.2, z: -19.2 },
+    { t: 'tree', x: -20, z: 6 }, { t: 'tree', x: 22, z: -2 },
+  );
   MAPS.push({
     id: PIT.map, name: 'A Pocilga', course: true,
     desc: 'Circuito solo: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada ao lado da largada.',
-    size: [20, 24], wallH: 3.2, wallColor: ['#8d8a82', '#6d747c'],
-    palette: DAY({ ground: '#c4a56e', tiles: ['#d2b27a', '#b59258', 48, 12] }),
+    size: [36, 56], wallH: 3.2, wallColor: ['#8d8a82', '#6d747c'],
+    palette: DAY({
+      ground: '#c4a56e', tiles: ['#d2b27a', '#b59258', 48, 12],
+      fog: ['#d7e6f2', 140, 460],
+      lights: [
+        ['#ffe08a', 0, 3.4, 6, 14, 22],
+        ['#ffe08a', -8, 3.4, 27, 16, 24],
+        ['#ffe08a', -24.5, 4.2, 34, 12, 20],
+        ['#ffd27a', 3, PIT.deck + 2.2, 43.2, 12, 18],
+        ['#ffb020', 14.2, 3.2, 8, 14, 24],
+        ['#ffb020', 14.2, 3.2, -4, 12, 22],
+      ],
+    }),
     ...fin(boxes), props,
     spawns: [[PIT.spawn[0], PIT.spawn[1]]],
     pickups: [],

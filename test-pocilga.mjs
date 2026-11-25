@@ -16,20 +16,34 @@ const stats = pathStats();
 const start = PIT.path[0], end = PIT.path[PIT.path.length - 1];
 const back = Math.hypot(start.x - end.x, start.z - end.z);
 ok(back < 6, `chegada colada na largada (${back.toFixed(1)} m)`);
-ok(stats.total > 50 && stats.dash > 10, `o caminho dobra e dispara no fim (${stats.total} m, disparada ${stats.dash} m)`);
+ok(stats.total > 160 && stats.dash > 25, `o caminho ficou longo (${stats.total} m, disparada ${stats.dash} m)`);
 ok(PIT.path.some((p) => p.y > 2.8) && PIT.path.some((p) => p.drop), 'sobe a escada e pula da passarela');
+ok(PIT.rise >= 0.15 && PIT.rise <= 0.25 && PIT.lead >= 10, `subida ${PIT.rise}s, gatilho pensado a ${PIT.lead} m`);
 const floor = minPlausible();
-ok(floor > 8 && floor < PIT.star3 - 8, `mínimo físico ${floor.toFixed(3)} s, folgado abaixo das 3 estrelas`);
-ok(starsOf(PIT.star3, 0, true) === 3 && starsOf(PIT.star3 + 0.01, 0, true) === 2 && starsOf(PIT.star2, 1, true) === 2 && starsOf(PIT.star2 + 0.01, 0, true) === 1, 'faixas 0:35 e 0:45');
+ok(floor > 18 && floor + 18 < PIT.star3, `mínimo físico ${floor.toFixed(3)} s, folgado abaixo das 3 estrelas`);
+ok(starsOf(PIT.star3, 0, true) === 3 && starsOf(PIT.star3 + 0.01, 0, true) === 2 && starsOf(PIT.star2, 1, true) === 2 && starsOf(PIT.star2 + 0.01, 0, true) === 1, `faixas ${formatPit(PIT.star3)} e ${formatPit(PIT.star2)}`);
 ok(starsOf(32, 1, true) === 2 && suggestion(3).id === 'javali', 'civil tira a 3ª estrela; sugestão Javali');
-ok(formatPit(35) === '0:35.00' && formatPit(45) === '0:45.00', 'relógio');
+ok(formatPit(PIT.star3) === '0:50.00' && formatPit(PIT.star2) === '1:04.00', 'relógio');
+for (const g of PIT.gates) {
+  if (!g.pop) continue;
+  const far = Math.min(...pitTargets().filter((t) => t.bay === g.pop).map((t) => Math.hypot(t.x - g.x, t.z - g.z)));
+  ok(far >= 8, `${g.id} arma a ${far.toFixed(1)} m do grupo`);
+}
+for (const t of pitTargets()) {
+  let near = 99;
+  for (const q of samplePath(0.45)) near = Math.min(near, Math.hypot(q.x - t.x, q.z - t.z));
+  const gate = PIT.gates.find((g) => g.pop === t.bay);
+  const dx = gate.x - t.x, dz = gate.z - t.z;
+  const facing = t.face === -1 ? dz < -0.5 : t.face === 1 ? dz > 0.5 : t.face === 'x' ? dx > 0.5 : dx < -0.5;
+  ok(near <= 1.9 && facing, `${t.id} na frente de quem corre (${near.toFixed(1)} m do eixo)`);
+}
 
 const clean = rankedRun(scriptRun({ finish: 32 }));
 ok(clean.ranked && clean.stars === 3 && clean.civs === 0 && clean.down.length === 24, `limpo em 32 s = 3 estrelas (${clean.final})`);
 const nipped = rankedRun(scriptRun({ finish: 32, civs: ['c1'] }));
 ok(nipped.ranked && nipped.stars === 2 && nipped.final === 35 && nipped.blocked3, 'civil soma 3 s e bloqueia a 3ª');
-const slow = rankedRun(scriptRun({ finish: 50 }));
-ok(slow.ranked && slow.stars === 1, `acima de 0:45 = 1 estrela (${slow.final})`);
+const slow = rankedRun(scriptRun({ finish: PIT.star2 + 6 }));
+ok(slow.ranked && slow.stars === 1, `acima de ${formatPit(PIT.star2)} = 1 estrela (${slow.final})`);
 const forgot = inspectRun(scriptRun({ finish: 40, skip: ['e15'] }));
 ok(!forgot.finished && forgot.reason === 'alvo' && forgot.missed.includes('e15'), 'javali em pé trava a chegada');
 const rifle = rankedRun(scriptRun({ finish: 40, rifle: true }));
