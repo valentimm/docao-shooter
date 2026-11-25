@@ -485,7 +485,16 @@ body.bombpick #bPrompt{display:none}
 #trainInfo{display:inline-block;margin-top:4px;background:rgba(20,10,8,.62);color:#fff;padding:4px 12px;border-radius:8px;font-size:14px;white-space:nowrap;pointer-events:none}
 #trainInfo b{color:#fff;font-size:16px}#trainInfo b.hd{color:#ffd23a}
 .trainnote{margin:6px 0;padding:6px 10px;border-radius:8px;background:rgba(242,201,76,.18);font-size:13px;line-height:1.35}
+body.pit-on #timer{visibility:hidden}
+#pitCod{position:fixed;top:16px;right:16px;z-index:6;pointer-events:none;min-width:168px;padding:8px 12px 10px;background:rgba(28,16,12,.78);color:#fff6e4;border:2px solid #2a1410;border-radius:12px;font:800 14px/1.35 Fredoka,sans-serif;text-align:right}
+#pitCod .pit-cod-time span{display:block;font-size:11px;letter-spacing:.16em;opacity:.8}
+#pitCod .pit-cod-time b{display:block;font:900 28px/1 Fredoka,sans-serif}
+#pitCod .pit-cod-stars{margin-top:2px;font-size:22px;letter-spacing:3px}
+#pitCod .pit-cod-stars .on{color:#f2c94c}
+#pitCod .pit-cod-stars .off{color:#5c4638}
+.pit-time{margin:2px 0 0;text-align:center;font:900 40px/1 Fredoka,sans-serif}
 #pitBanner{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:6;pointer-events:none;font:900 40px/1.1 Fredoka,sans-serif;color:#fff6e4;-webkit-text-stroke:2px #2a1410;text-align:center}
+#pitTalk{position:fixed;left:50%;top:78px;transform:translateX(-50%);z-index:6;max-width:min(520px,86vw);pointer-events:none;background:#fff6e4;color:#2a1410;border:3px solid #2a1410;border-radius:16px;padding:8px 14px;font:700 16px/1.3 Fredoka,sans-serif;text-align:center;box-shadow:0 4px 0 #2a1410}
 #pitBanner.bad{color:#ffd0d0}
 #pitOver{z-index:30;background:rgba(41,30,24,.55)}
 .pit-card{width:min(520px,92vw);max-height:min(88dvh,760px);overflow:auto;background:#f6e4bd;color:#2a1410;border:3px solid #2a1410;border-radius:16px;box-shadow:0 10px 0 #2a1410;padding:16px 18px 14px}

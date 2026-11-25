@@ -1,5 +1,5 @@
 import { addHotmilkNoite } from './maps-hotmilk-noite.js';
-import { PIT, pitAabbs } from './shared/pocilga.js';
+import { PIT, pitPieces } from './shared/pocilga.js';
 import { morroLeitao } from './favela-map.js';
 import { breezeStandoff } from './breeze-data.js';
 import { DECK, ELEVATOR } from './shared/nevasca.js';
@@ -1598,31 +1598,39 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   });
 }
 
-// ---------- A Pocilga: circuito solo linear. Não entra no rodízio. ----------
+// ---------- A Pocilga: pátio, fachada, sala, escada, passarela, pulo e chegada ao lado da largada. ----------
 {
-  const wood = '#9c6b3a', wood2 = '#c4a574', red = '#c0392b', yel = '#e8c25a';
-  const boxes = pitAabbs().map(([x0, y0, z0, x1, y1, z1]) => ({ b: [x0, y0, z0, x1, y1, z1], c: y1 - y0 < 1.4 ? wood2 : wood }));
+  const TONE = { concrete: '#8d8a82', metal: '#6d747c', bag: '#c6b48a', fence: '#3c434a', wood: '#9c6b3a', ramp: '#b5793e' };
+  const boxes = pitPieces().map((p) => ({
+    b: p.b,
+    c: p.ramp ? TONE.ramp : p.floor ? (p.tone === 'metal' ? '#8b939b' : p.tone === 'wood' ? '#c4a574' : '#9a958c') : (TONE[p.tone] || TONE.wood),
+    ramp: p.ramp,
+  }));
+  const g0 = PIT.gates[0], gF = PIT.gates[PIT.gates.length - 1];
+  const red = '#c0392b', yel = '#e8c25a', ink = '#2a1410';
   const props = [
-    { t: 'decal', x0: -4.8, z0: PIT.startZ - 0.16, x1: 4.8, z1: PIT.startZ + 0.16, y: 0.03, c: '#f2c94c' },
-    { t: 'decal', x0: -2.15, z0: PIT.finishZ - 0.16, x1: 2.15, z1: PIT.finishZ + 0.16, y: 0.03, c: '#e63946' },
-    { t: 'sign', x: 0, y: 2.55, z: -9.4, w: 6.4, h: 1.25, rot: Math.PI, text: 'A POCILGA', bg: red, fg: '#fff6e4' },
-    { t: 'sign', x: 0, y: 1.4, z: -9.4, w: 6.4, h: 0.72, rot: Math.PI, text: 'CRUZE A FAIXA · O RELÓGIO COMEÇA', bg: '#2a1410', fg: '#ffd27a' },
-    { t: 'sign', x: 0, y: 2.35, z: 37.2, w: 3.6, h: 0.78, rot: Math.PI, text: 'PISTOLINHA', bg: '#1d5f8a', fg: '#fff6e4' },
-    { t: 'sign', x: 0, y: 2.45, z: 57.4, w: 3.5, h: 0.85, rot: Math.PI, text: 'DISPARA!', bg: yel, fg: '#2a1410' },
-    { t: 'sign', x: 0, y: 2.5, z: 72.5, w: 3.6, h: 0.85, rot: Math.PI, text: 'CHEGADA', bg: red, fg: '#fff6e4' },
-    { t: 'hay', x: -4.15, z: -13.2 }, { t: 'hay', x: 4.15, z: -13.6 },
-    { t: 'hay', x: 5.15, z: 31.2 }, { t: 'keg', x: -5.15, z: 32.4 },
-    { t: 'tree', x: 12, z: -4 }, { t: 'tree', x: -12, z: 48 },
+    { t: 'decal', x0: -1.35, z0: g0.z - 0.14, x1: 1.35, z1: g0.z + 0.14, y: 0.03, c: '#f2c94c' },
+    { t: 'decal', x0: gF.x - 1.15, z0: gF.z - 1.15, x1: gF.x + 1.15, z1: gF.z + 1.15, y: 0.03, c: '#e63946' },
+    { t: 'sign', x: 0, y: 1.7, z: -4.15, w: 2.4, h: 0.55, rot: Math.PI, text: 'LARGADA', bg: yel, fg: ink },
+    { t: 'sign', x: 0, y: 2.7, z: 4.4, w: 3.6, h: 0.72, rot: Math.PI, text: 'OLHA O CANTO', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: -10.7, y: 2.15, z: 11.55, w: 2.1, h: 0.6, rot: Math.PI, text: 'SOBE', bg: yel, fg: ink },
+    { t: 'sign', x: 3.55, y: PIT.deck + 1.25, z: 17.6, w: 1.8, h: 0.6, rot: -Math.PI / 2, text: 'PULA', bg: yel, fg: ink },
+    { t: 'sign', x: 12.3, y: 1.85, z: 3.4, w: 2.2, h: 0.6, rot: 0, text: 'CORRE', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: 12.3, y: 1.85, z: 0.6, w: 2.2, h: 0.6, rot: 0, text: 'CORRE', bg: red, fg: '#fff6e4' },
+    { t: 'sign', x: 2.85, y: 1.9, z: -10, w: 2.6, h: 0.7, rot: Math.PI / 2, text: 'CHEGADA', bg: red, fg: '#fff6e4' },
+    { t: 'car', x: 7.2, z: 10.15, c: '#6e3a2e', rot: 0 },
+    { t: 'hay', x: 4.6, z: -12.4 }, { t: 'keg', x: -5.1, z: -12.3 },
+    { t: 'tree', x: -16.2, z: 2 }, { t: 'tree', x: 16.6, z: 8 },
   ];
   MAPS.push({
     id: PIT.map, name: 'A Pocilga', course: true,
-    desc: 'Circuito solo: largada, javalis de papelão, civis, Pistolinha no meio e disparada até a chegada.',
-    size: [16, 92], wallH: 3.2, wallColor: ['#c9844a', '#a56b32'],
-    palette: DAY({ ground: '#d7b56a', tiles: ['#e4c78a', '#c9a45c', 48, 12] }),
+    desc: 'Circuito solo: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada ao lado da largada.',
+    size: [20, 24], wallH: 3.2, wallColor: ['#8d8a82', '#6d747c'],
+    palette: DAY({ ground: '#c4a56e', tiles: ['#d2b27a', '#b59258', 48, 12] }),
     ...fin(boxes), props,
     spawns: [[PIT.spawn[0], PIT.spawn[1]]],
     pickups: [],
-    showcase: [0, 0, -12], view: [0, 2.4, -18, Math.PI, -0.18],
+    showcase: [0, 0, -11.4], view: [0, 1.7, -11.4, PIT.spawnYaw, -0.5],
   });
 }
 

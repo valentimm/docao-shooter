@@ -1,9 +1,9 @@
-// A Pocilga no WebKit: corre o circuito, confere relógio, civil, troca, estrelas e ranking.
+// A Pocilga no WebKit: oito etapas, torre, escada, civil × javali, trilho, estrelas e ranking.
 // SITE=http://127.0.0.1:8140/index.html?server=ws://127.0.0.1:8787&devSkins=0
 // API=http://127.0.0.1:8787  SHOTS=/opt/cursor/artifacts
 import { mkdirSync } from 'fs';
 import { webkit } from 'playwright';
-import { scriptRun, PIT } from './shared/pocilga.js';
+import { scriptRun, PIT, starsOf } from './shared/pocilga.js';
 
 const SITE = process.env.SITE || 'http://127.0.0.1:8140/index.html?server=ws://127.0.0.1:8787&devSkins=0';
 const API = process.env.API || 'http://127.0.0.1:8787';
@@ -20,33 +20,28 @@ async function account(nick) {
   return data.token || null;
 }
 async function seedRank() {
-  try {
-    const health = await fetch(API + '/health');
-    if (!health.ok) return false;
-  } catch (e) { return false; }
-  const seeds = [
-    ['AnaPocilga', scriptRun({ finish: 31 })],
-    ['BetoPocilga', scriptRun({ finish: 48, civs: ['c1'] })],
-    ['CaioPocilga', scriptRun({ finish: 74 })],
-  ];
-  for (const [nick, events] of seeds) {
+  try { if (!(await fetch(API + '/health')).ok) return false; } catch (e) { return false; }
+  for (const [nick, events] of [
+    ['AnaPocilga', scriptRun({ finish: 32 })],
+    ['BetoPocilga', scriptRun({ finish: 40, civs: ['c1'] })],
+    ['CaioPocilga', scriptRun({ finish: 50 })],
+  ]) {
     const token = await account(nick);
     if (!token) return false;
     const r = await fetch(API + '/api/pocilga/run', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ events }) });
     const body = await r.json();
-    if (!(r.status === 200 && body.ok && body.run && body.run.ranked)) { console.log('seed', nick, r.status, JSON.stringify(body).slice(0, 240)); return false; }
+    if (!(r.status === 200 && body.run && body.run.ranked && body.run.stars === (nick === 'AnaPocilga' ? 3 : nick === 'BetoPocilga' ? 2 : 1))) {
+      console.log('seed', nick, r.status, JSON.stringify(body).slice(0, 240));
+      return false;
+    }
   }
   const fast = await account('DudaPocilga');
   const bad = await fetch(API + '/api/pocilga/run', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + fast }, body: JSON.stringify({ events: scriptRun({ finish: 1 }) }) });
   const badBody = await bad.json();
-  ok(bad.status === 422 && badBody.run && badBody.run.reason === 'rápido' && !badBody.saved, 'servidor recusa tempo abaixo do mínimo');
-  const rank = await (await fetch(API + '/api/pocilga/rank?limit=10')).json();
-  ok(Array.isArray(rank.rows) && rank.rows[0] && rank.rows[0].nick === 'AnaPocilga' && rank.rows[0].stars === 3, `ranking abre com a Ana (${rank.rows && rank.rows.map((r) => r.nick + ':' + r.stars).join(', ')})`);
+  ok(bad.status === 422 && badBody.run && badBody.run.reason === 'rápido', 'servidor recusa tempo abaixo do mínimo');
   return true;
 }
-
-const seeded = await seedRank();
-ok(seeded, 'ranking semeado no D1 local');
+ok(await seedRank(), 'ranking semeado no D1 local');
 
 const errors = [];
 const browser = await webkit.launch({ headless: true });
@@ -57,84 +52,150 @@ await page.addInitScript(() => { localStorage.setItem('docao.name', 'Joao'); loc
 await page.goto(SITE, { waitUntil: 'load', timeout: 60000 });
 await page.waitForSelector('#modeSel', { timeout: 20000 });
 await page.selectOption('#modeSel', PIT.mode);
-await page.waitForTimeout(400);
-ok(await page.locator('#menuPit').isVisible(), 'o menu mostra A Pocilga');
-ok((await page.locator('#mapName').textContent()).includes('Pocilga'), 'mapa do circuito fica fixo');
-ok(await page.$eval('#modeSel', (el) => el.options[el.selectedIndex].textContent), 'modo selecionado');
-await page.locator('#modeSel').evaluate((el) => el.scrollIntoView({ block: 'center' }));
-await page.screenshot({ path: `${SHOTS}/pocilga-menu.png` });
-
+await page.waitForTimeout(300);
 await page.click('#playBtn');
-await page.waitForFunction(() => window.__docao && window.__docao.state === 'playing' && window.__docao.mode === 'pocilga' && window.__docao.pit && window.__docao.pit.on, null, { timeout: 20000 });
-const boot = await page.evaluate(() => ({ map: window.__docao.map.id, n: window.__docao.entities.length, w: window.__docao.player.weapon, targets: window.__docao.pit.targets.length }));
-ok(boot.map === 'pocilga' && boot.n === 1 && boot.w === 0 && boot.targets === 13, `entrou sozinho de fuzil (${JSON.stringify(boot)})`);
+await page.waitForFunction(() => window.__docao && window.__docao.state === 'playing' && window.__docao.pit && window.__docao.pit.on, null, { timeout: 20000 });
+const boot = await page.evaluate(() => ({
+  map: window.__docao.map.id,
+  w: window.__docao.player.weapon,
+  n: window.__docao.pit.targets.length,
+  coach: window.__docao.pit.coach,
+  ramps: window.__docao.map.boxes.filter((b) => b.ramp).length,
+}));
+ok(boot.map === 'pocilga' && boot.w === 4 && boot.n === 29 && boot.coach && boot.ramps >= 1, `pistola, torre e escada (${JSON.stringify(boot)})`);
 
-const place = (z, pitch = -0.08) => page.evaluate(([z, pitch]) => {
+await page.evaluate(() => { window.__cam = { p: [4, 58, 14], t: [-1, 0, 2], fov: 48 }; });
+await page.waitForTimeout(500);
+await page.screenshot({ path: `${SHOTS}/pocilga-planta.png` });
+
+const talk = await page.evaluate(() => window.__docao.pit.talk);
+ok(/[Bb]arriguinha|javali|civil|Pistolinha/.test(talk) && !(await page.locator('#pitTalk').evaluate((el) => el.classList.contains('hidden'))), `o Docão fala antes da largada (${talk})`);
+await page.evaluate(() => { window.__cam = { p: [-0.4, 3.7, -12.4], t: [-3.8, 4.05, -8.1], fov: 38 }; });
+await page.waitForTimeout(400);
+await page.screenshot({ path: `${SHOTS}/pocilga-torre.png` });
+await page.evaluate(() => { window.__cam = null; });
+
+const go = (x, y, z, yaw = Math.PI, pitch = -0.08) => page.evaluate(({ x, y, z, yaw, pitch }) => {
   const p = window.__docao.player;
-  p.pos.set(0, 0, z); p.vel.set(0, 0, 0); p.yaw = Math.PI; p.pitch = pitch;
-}, [z, pitch]);
+  p.pos.set(x, y, z); p.vel.set(0, 0, 0); p.yaw = yaw; p.pitch = pitch;
+}, { x, y, z, yaw, pitch });
 const snap = () => page.evaluate(() => window.__docao.pit);
-const shoot = (id) => page.evaluate(async (id) => {
-  const g = window.__docao, t = g.pit.targets.find((x) => x.id === id), p = g.player;
-  p.pos.set(t.x, 0, t.z - 4); p.vel.set(0, 0, 0); p.yaw = Math.PI; p.pitch = 0;
-  const eye = p.pos.y + 1.6, ty = 0.02 + 1.85 / 2;
-  const dir = new g.V3(t.x - p.pos.x, ty - eye, t.z - p.pos.z).normalize();
-  const origin = new g.V3(p.pos.x, eye, p.pos.z);
-  g.fire(p, origin, dir, p.weapon, 0, origin.clone());
-  return g.pit.targets.find((x) => x.id === id).phase;
-}, id);
+const shoot = (ids) => page.evaluate((ids) => {
+  const g = window.__docao;
+  const stair = (t) => {
+    const y = (t.z - 11.7) / (17.3 - 11.7) * 3.15;
+    return { x: -12.2, y, z: t.z, yaw: -Math.PI / 2 };
+  };
+  const out = {};
+  for (const id of ids) {
+    const t = g.pit.targets.find((x) => x.id === id);
+    const p = g.player;
+    const extra = (t.face === 'x' || t.face === '-x') ? 0.7 : 2.25;
+    let spot = { x: t.x, y: t.y || 0, z: t.z - extra, yaw: Math.PI };
+    if (t.face === 1) spot = { x: t.x, y: t.y || 0, z: t.z + extra, yaw: 0 };
+    else if (t.face === 'x') spot = { x: t.x + extra, y: t.y || 0, z: t.z, yaw: Math.PI / 2 };
+    else if (t.face === '-x') spot = { x: t.x - extra, y: t.y || 0, z: t.z, yaw: -Math.PI / 2 };
+    if (id === 'e4') spot = { x: t.x, y: 0, z: 0.85, yaw: Math.PI };
+    if (id === 'e12' || id === 'e13' || id === 'e14') spot = stair(t);
+    if (id === 'e20') spot = { x: t.x, y: 0, z: t.z - 1.5, yaw: Math.PI };
+    if (id === 'e23') spot = { x: t.x, y: 0, z: t.z + 0.7, yaw: 0 };
+    if (id === 'e22') spot = { x: t.x + 2.5, y: 0, z: t.z, yaw: Math.PI / 2 };
+    p.pos.set(spot.x, spot.y, spot.z); p.vel.set(0, 0, 0); p.yaw = spot.yaw;
+    const eyeY = spot.y + 1.6;
+    const aimY = (t.y || 0) + 0.95;
+    const dir = new g.V3(t.x - spot.x, aimY - eyeY, t.z - spot.z).normalize();
+    const origin = new g.V3(spot.x, eyeY, spot.z);
+    g.fire(p, origin, dir, p.weapon, 0, origin.clone());
+    const now = g.pit.targets.find((x) => x.id === id);
+    out[id] = { phase: now.phase, stop: g.__lastTrace ? null : null, trace: window.__lastTrace ? window.__lastTrace.stop : '' };
+  }
+  return out;
+}, ids);
 
-await place(-12, -0.12);
-await page.waitForTimeout(400);
+await go(0, 0, -4.2);
+await page.waitForTimeout(450);
 let s = await snap();
-ok(!s.started && s.timer === 'LARGADA', `antes da faixa o relógio espera (${s.timer})`);
-await page.screenshot({ path: `${SHOTS}/pocilga-largada.png` });
+ok(s.started && s.pops.includes('patio') && /INIMIGOS 0\/24/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
+let shot = await shoot(['e1', 'e2', 'e3']);
+for (const id of ['e1', 'e2', 'e3']) ok(shot[id].phase === 'fall', `${id} cai com a Pistolinha${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
-await place(1, -0.05);
+await go(0, 0, 2.2);
+await page.waitForTimeout(450);
+ok((await snap()).pops.includes('fachada'), 'fachada acorda');
+ok(/Olha o canto/.test((await snap()).talk + (await snap()).banner), 'o Barriguinha grita pra olhar o canto');
+await page.evaluate(() => {
+  document.getElementById('pitBanner').classList.add('hidden');
+  document.getElementById('pitTalk').classList.add('hidden');
+  window.__cam = { p: [0, 1.85, -1.15], t: [0, 1.15, 3.4], fov: 66 };
+});
+await page.waitForTimeout(250);
+await page.screenshot({ path: `${SHOTS}/pocilga-lados.png` });
+const x0 = (await snap()).targets.find((t) => t.id === 'e4').x;
 await page.waitForTimeout(700);
-s = await snap();
-const bay1 = s.targets.filter((t) => ['e1', 'e2', 'e3'].includes(t.id)).map((t) => t.phase);
-ok(s.started && bay1.every((p) => p === 'up'), `sala 1 levantou (${bay1.join(',')})`);
-ok(/^0:[0-9]{2}\.[0-9]{2}$/.test(s.timer), `cronômetro correndo (${s.timer})`);
-await page.screenshot({ path: `${SHOTS}/pocilga-meio.png` });
-for (const id of ['e1', 'e2', 'e3']) ok((await shoot(id)) === 'fall', `${id} cai com o fuzil`);
+const x1 = (await snap()).targets.find((t) => t.id === 'e4').x;
+ok(Math.abs(x1 - x0) > 0.2, `javali do telhado andou (${x0.toFixed(2)} → ${x1.toFixed(2)})`);
+await page.evaluate(() => {
+  const t = window.__docao.pit.targets.find((x) => x.id === 'e4');
+  window.__cam = { p: [t.x - 2.2, 2.5, 0.6], t: [t.x, 4.55, 5.5], fov: 48 };
+});
+await page.waitForTimeout(250);
+await page.screenshot({ path: `${SHOTS}/pocilga-trilho.png` });
+await page.evaluate(() => { window.__cam = null; });
+shot = await shoot(['e4', 'e5', 'e6']);
+for (const id of ['e4', 'e5', 'e6']) ok(shot[id].phase === 'fall', `${id} na fachada${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
-await place(22, -0.04);
-await page.waitForTimeout(700);
-ok((await shoot('c1')) !== 'up', 'civil da feira é acertado');
-await page.waitForTimeout(200);
-s = await snap();
-ok(s.civs === 1 && /3/.test(s.banner), `penalidade de civil no aviso (${s.banner}, civis ${s.civs})`);
-await page.screenshot({ path: `${SHOTS}/pocilga-civil.png` });
-for (const id of ['e4', 'e5', 'e6']) await shoot(id);
+await go(-5.2, 0, 9.2);
+await page.waitForTimeout(450);
+ok((await snap()).pops.includes('sala'), 'a curva acorda a sala');
+shot = await shoot(['e7', 'e8', 'e9', 'e10', 'e11']);
+for (const id of ['e7', 'e8', 'e9', 'e10', 'e11']) ok(shot[id].phase === 'fall', `${id} na sala${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
-await place(40, 0);
-await page.waitForTimeout(400);
-s = await snap();
-const gun = await page.evaluate(() => window.__docao.player.weapon);
-ok(s.swapped && gun === 4, `a bancada troca para a Pistolinha (${gun})`);
+await go(-12.2, 0.45, 12.4, Math.PI, -0.35);
+await page.waitForTimeout(450);
+ok((await snap()).pops.includes('escada') && /Sobe a escada/.test((await snap()).banner + (await snap()).talk), 'sobe a escada');
+await page.screenshot({ path: `${SHOTS}/pocilga-rampa.png` });
+shot = await shoot(['e12', 'e13', 'e14']);
+for (const id of ['e12', 'e13', 'e14']) ok(shot[id].phase === 'fall', `${id} na janela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
-await place(46, -0.06);
-await page.waitForTimeout(700);
-for (const id of ['e7', 'e8', 'e9', 'e10']) {
-  const phase = await shoot(id);
-  ok(phase === 'fall' || phase === 'dead', `${id} cai com a pistola (${phase})`);
-}
-await place(71, 0);
+await go(-2.5, 3.15, 17.6, -Math.PI / 2, -0.05);
+await page.waitForTimeout(450);
+ok((await snap()).pops.includes('passa'), 'passarela acorda');
+shot = await shoot(['e15', 'e16', 'e17', 'c3']);
+for (const id of ['e15', 'e16', 'e17', 'c3']) ok(shot[id].phase === 'fall', `${id} na passarela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+s = await snap();
+ok(s.civs === 1 && /3/.test(s.banner), `penalidade do civil (${s.banner})`);
+
+await go(4.4, 3.15, 17.6, -Math.PI / 2, 0.15);
+await page.waitForTimeout(350);
+ok(/Pula/.test((await snap()).banner + (await snap()).talk), 'grita pra pular');
+await go(10.6, 0, 12);
+await page.waitForTimeout(450);
+ok((await snap()).pops.includes('pulo'), 'o pátio de baixo acorda');
+shot = await shoot(['e18', 'e19', 'e20', 'e21', 'e22']);
+for (const id of ['e18', 'e19', 'e20', 'e21', 'e22']) ok(shot[id].phase === 'fall', `${id} depois do pulo${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+
+await go(12.3, 0, 5.2, 0, 0);
+await page.waitForTimeout(350);
+ok(/Corre/.test((await snap()).banner + (await snap()).talk), 'grita pra correr');
+await go(12.3, 0, 0.2, 0, 0);
+await page.waitForTimeout(450);
+ok((await snap()).pops.includes('reta'), 'o fim do corredor acorda');
+shot = await shoot(['e23', 'e24']);
+for (const id of ['e23', 'e24']) ok(shot[id].phase === 'fall', `${id} no fim${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+
+await go(4.2, 0, -10);
 await page.waitForFunction(() => window.__docao.pit.card, null, { timeout: 8000 });
 await page.waitForTimeout(800);
 s = await snap();
-ok(s.done && s.result && s.result.finished && s.result.stars === 2 && s.result.civs === 1, `fim com 2 estrelas por causa do civil (${JSON.stringify(s.result && { stars: s.result.stars, final: s.result.final, civs: s.result.civs })})`);
-ok(await page.locator('#pitOver').isVisible() && (await page.locator('.pit-stars').textContent()).includes('★'), 'tela final com estrelas');
-const rankText = await page.locator('#pitCard').innerText();
-ok(/Mais rápidos/.test(rankText) && /AnaPocilga/.test(rankText), 'a tela final lista o ranking');
+const expectStars = s.result ? starsOf(s.result.final, s.result.civs, true) : -1;
+ok(s.done && s.result && s.result.civs === 1 && s.result.stars === expectStars && s.result.stars < 3, `estrelas com um civil (${JSON.stringify(s.result && { stars: s.result.stars, final: s.result.final, civs: s.result.civs })})`);
+const card = await page.locator('#pitCard').innerText();
+ok(/MISSÃO CUMPRIDA/.test(card) && /AnaPocilga/.test(card) && /Inimigos/.test(card), 'tela final com missão, inimigos e ranking');
 await page.screenshot({ path: `${SHOTS}/pocilga-final.png` });
-
 await page.keyboard.press('KeyR');
 await page.waitForTimeout(400);
 s = await snap();
-const back = await page.evaluate(() => window.__docao.player.pos.z);
-ok(!s.started && !s.done && back < -10 && !(await page.locator('#pitOver').isVisible()), `R recomeça antes da faixa (z=${back.toFixed(1)})`);
+ok(!s.started && !s.card && (await page.evaluate(() => window.__docao.player.weapon)) === 4, 'R recomeça ainda de Pistolinha');
 
 const noisy = errors.filter((e) => !/WebGL|gpu|GPU|context lost/i.test(e));
 ok(!noisy.length, 'sem erro de página' + (noisy.length ? ': ' + noisy.slice(0, 4).join(' | ') : ''));

@@ -45,7 +45,7 @@ import { createInvMusic } from './invasion-music.js';
 import { makeZombie, makeMutant, animateZombie, dieZombie, applyHalloweenPalette, buildHalloween, makeFogWall, makeDropMesh, tickDrop, makeSpitMesh, makePowerPumpkin, makeRing, tickRing, makeLanternCone, setGhostLook, makeCrossMesh, setCrossProgress, tickCross } from './invasion-gfx.js';
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
 import { PIT } from './shared/pocilga.js';
-import { beginCourse, clearCourse, tickCourse, pitRay, pitHit, pitSpeedMul, pitHolding, pitResultOn, restartCourse, courseSnap, paintPitMenu } from './pocilga.js';
+import { beginCourse, clearCourse, tickCourse, pitRay, pitHit, pitMelee, pitSpeedMul, pitHolding, pitResultOn, restartCourse, courseSnap, paintPitMenu } from './pocilga.js';
 import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
 import { breezeMap, buildBreezeWorld, breezeMapReady, prepareBreezeMap } from './breeze-map.js';
 import { buildNav } from './nav.js';
@@ -2802,6 +2802,7 @@ function knifeAttack(e, kind, eye, dir) { // offline (jogador e bots); online o 
   if (e.model) { e.swingT = 0; e.swingKind = kind; e.swingVar = (!reducedAnims() && kind === 'slash') ? Math.floor(Math.random() * 3) : 0; }
   if (e.isPlayer) fp.knifeVar = e.swingVar;
   if (online && e.isPlayer) { netEv(['m', MELEE_KINDS.indexOf(kind), v3a(eye), v3a(dir), +(performance.now() / 1000).toFixed(3), +renderServerT().toFixed(3)]); window.__lastMelee = { kind, net: true }; return null; }
+  if (!online && pitMode() && e.isPlayer) pitMelee(eye.x, eye.y, eye.z, dir.x, dir.y, dir.z);
   const h = meleeHit(eye, dir, kind, meleeTargets(e), losPlain);
   window.__lastMelee = e.isPlayer ? { kind, hit: h ? h.e.name : null, back: !!(h && h.back), dmg: h ? h.dmg : 0, dist: h ? +h.dist.toFixed(2) : null } : window.__lastMelee;
   if (h) {
@@ -6960,14 +6961,14 @@ function markPick(kind, i) {
 }
 // ---------------- Treino (Estande do Docão) ----------------
 // B / N / M: próxima primária / secundária / faca-sabre, na hora e com pente cheio (online o servidor faz o mesmo ao receber 'pr')
-function armPit(which) {
+function armPit() {
   const p = player; if (!p) return;
-  p.slots = [0, PISTOL, KNIFE];
-  p.primary = 0; p.secondary = PISTOL; p.melee = KNIFE;
-  p.nextPrimary = 0; p.nextSecondary = PISTOL; p.nextMelee = KNIFE;
-  for (const i of [0, PISTOL]) { p.mag[i] = WEAPONS[i].mag; p.reserve[i] = WEAPONS[i].reserve; }
+  p.slots = [PISTOL, PISTOL, KNIFE];
+  p.primary = PISTOL; p.secondary = PISTOL; p.melee = KNIFE;
+  p.nextPrimary = PISTOL; p.nextSecondary = PISTOL; p.nextMelee = KNIFE;
+  p.mag[PISTOL] = WEAPONS[PISTOL].mag; p.reserve[PISTOL] = WEAPONS[PISTOL].reserve;
   p.reloadEnd = 0; p.switchEnd = 0; p.burstLeft = 0;
-  if (p.weapon !== which) setWeapon(p, which);
+  if (p.weapon !== PISTOL) setWeapon(p, PISTOL);
 }
 function trainSwap(code) {
   const cyc = (list, cur) => { const L = pool(list); if (!L.length) return cur; const i = L.includes(cur) ? L.indexOf(cur) : 0; return L[(i + 1) % L.length]; };
@@ -7716,7 +7717,7 @@ function startGame(mapId) {
   }
   if (pitMode()) beginCourse({
     scene, player: () => player, groundAt, weapon: () => player && player.weapon,
-    armRifle: () => armPit(0), armPistol: () => armPit(PISTOL),
+    armPistol: () => armPit(),
     lock: lockPointer, unlock: () => { if (document.pointerLockElement) document.exitPointerLock(); },
     menu: toMenu,
     sfx: { hit: () => sfx.hit(), oink: () => sfx.oink(0.9, 1.25), pickup: () => sfx.pickup(), fanfare: () => sfx.kill() },
@@ -8378,7 +8379,7 @@ const MENU_RULES = {
   dm: 'Todos contra todos · vence quem fizer 20 abates ou liderar em 5 minutos',
   dom: 'Times · capture a zona · o primeiro a completar as capturas vence',
   treino: 'Estande do Docão: alvos que não atacam e voltam em 2 s. B/N/M trocam a arma, munição infinita, sem tempo.',
-  pocilga: 'A POCILGA · Circuito solo. A faixa amarela liga o relógio. Os javalis de papelão levantam quando você chega e todos têm que cair, senão a chegada não abre. Cada civil soma 3 segundos e impede as 3 estrelas. No meio a Pistolinha entra na mão. A reta final dispara até a faixa vermelha. 3 estrelas até 0:42 sem civil, 2 estrelas até 1:00, 1 estrela ao terminar. R na tela final recomeça.',
+  pocilga: 'A POCILGA · Circuito solo, só a Pistolinha Leitão. O Barriguinha na torre explica e grita no caminho. Javali vermelho, de fuzil, cai; civil azul, sem arma e de mão baixa, soma 3 segundos e tira as 3 estrelas. Pátio, sala, escada, passarela, pulo e a chegada ao lado da largada. Javali esquecido trava a chegada. 3 estrelas até 0:35 sem civil, 2 estrelas até 0:45, 1 estrela ao terminar. R na tela final recomeça.',
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho, ray gun e saco de presentes. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. O esquerdo carrega a força. O direito joga na força mínima. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
