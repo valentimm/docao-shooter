@@ -10,8 +10,8 @@ const LOCAL_KEY = 'docao.pocilga.best';
 const LINES = [
   'Barriguinha na torre. Escuta, leitão.',
   'Javali vermelho, de fuzil pra frente: derruba. Azul, sem arma, mão baixa: é civil.',
-  'Só a Pistolinha o percurso inteiro. Vinte e quatro javalis, cinco civis.',
-  'Chega em 50 segundos, sem civil: três estrelas.',
+  'Só a Pistolinha o percurso inteiro. Vinte e três javalis, cinco civis.',
+  'Chega em 45 segundos, sem civil: três estrelas.',
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const starsTxt = (n) => '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
@@ -282,14 +282,15 @@ function mountNatal() {
       }
     }
   };
-  push([[-4.15, -21.4], [-4.15, -12.2]], 2.25);
-  push([[4.15, -21.4], [4.15, -12.2]], 2.25);
-  push([[-3.35, -8.5], [-3.35, 14.2]], 2.25);
-  push([[3.35, -8.5], [3.35, 14.2]], 2.25);
-  push([[-26.15, 32.5], [-26.15, 41.2]], 2.4);
-  push([[12.9, -6], [12.9, 14]], 2.35);
-  push([[15.55, -6], [15.55, 14]], 2.35);
-  bulbs.push([-3.55, 2.85, -16.7], [-1.85, 2.85, -16.7], [-2.9, 3.15, -15.35]);
+  push([[7.5, -21.5], [7.5, -11]], 2.35);
+  push([[16.2, -21.5], [16.2, -11]], 2.35);
+  push([[11.4, -9.2], [11.4, 17.5]], 2.35);
+  push([[15.7, -9.2], [15.7, 17.5]], 2.35);
+  push([[-5.9, 20], [-5.9, 29]], 2.45);
+  push([[17.4, 4], [17.4, 36]], 2.35);
+  push([[24.5, 4], [24.5, 36]], 2.35);
+  bulbs.push([15.4, 2.85, -17.4], [16.2, 2.85, -17.4], [15.8, 3.15, -16.5]);
+  bulbs.push([19.2, 2.55, -18.7], [20.2, 2.7, -18.7], [21.2, 2.55, -18.7], [19.2, 1.5, -18.7], [21.2, 1.5, -18.7]);
   const geo = new THREE.SphereGeometry(0.065, 6, 4);
   const warm = new THREE.MeshBasicMaterial({ color: 0xffd27a });
   const cool = new THREE.MeshBasicMaterial({ color: 0xb7dcff });
@@ -324,10 +325,24 @@ function mountNatal() {
   });
   const star = own(new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), new THREE.MeshBasicMaterial({ color: 0xffd56a })));
   star.position.y = 1.95; tree.add(star);
-  tree.position.set(2.45, 0, -17.55);
+  tree.position.set(9.4, 0, -17.5);
   root.add(tree);
+  const arch = new THREE.Group();
+  const postGeo = new THREE.BoxGeometry(0.28, 2.7, 0.28);
+  const beamGeo = new THREE.BoxGeometry(3.4, 0.22, 0.28);
+  const woodArch = new THREE.MeshBasicMaterial({ color: 0x6a4a32 });
+  const glow = new THREE.MeshBasicMaterial({ color: 0xffd27a });
+  for (const x of [18.7, 21.8]) {
+    const post = own(new THREE.Mesh(postGeo, woodArch));
+    post.position.set(x, 1.35, -18.75);
+    arch.add(post);
+  }
+  const beam = own(new THREE.Mesh(beamGeo, glow));
+  beam.position.set(20.25, 2.62, -18.75);
+  arch.add(beam);
+  root.add(arch);
   const wraps = [0xf4efe4, 0xe6b325, 0x24344d, 0x6b3040];
-  [[3.15, -18.15, 0.28, 0.2], [1.7, -18.35, 0.22, 0.16], [3.2, -16.85, 0.32, 0.22], [-3.45, -20.2, 0.3, 0.2]].forEach(([x, z, w, h], i) => {
+  [[8.7, -18.2, 0.28, 0.2], [10.2, -18.4, 0.22, 0.16], [9.8, -16.7, 0.3, 0.2], [8.4, -16.6, 0.24, 0.16]].forEach(([x, z, w, h], i) => {
     const box = own(new THREE.Mesh(new THREE.BoxGeometry(w, h, w * 0.82), new THREE.MeshBasicMaterial({ color: wraps[i] })));
     box.position.set(x, h / 2, z); box.rotation.y = i * 0.4;
     const ribbon = own(new THREE.Mesh(new THREE.BoxGeometry(0.045, h * 1.05, w * 0.84), snow));
@@ -429,7 +444,7 @@ function paintHud() {
   const clockText = !run.started ? '0:00.00' : (run.done && run.result && run.result.final != null ? formatPit(run.result.final) : formatPit(run.clock));
   if (!run.started) timer.textContent = 'LARGADA';
   else timer.textContent = clockText;
-  let lead = 'O Barriguinha explica. A faixa amarela liga o relógio.';
+  let lead = 'O Barriguinha explica. Javali vermelho cai. Azul é civil.';
   if (run.done) lead = 'Missão cumprida. R tenta de novo.';
   else if (run.started && onSprint(deps.player().pos.x, deps.player().pos.y, deps.player().pos.z)) lead = 'CORRE até a chegada';
   else if (run.started) lead = view && view.missed.length ? `Faltam ${view.missed.length} javalis` : 'Javalis no chão';

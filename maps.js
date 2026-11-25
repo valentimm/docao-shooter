@@ -1606,9 +1606,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     c: p.ramp ? TONE.ramp : p.floor ? (p.tone === 'metal' ? '#d5dee6' : p.tone === 'snow' ? TONE.snow : p.tone === 'wood' ? '#c4a574' : '#b7b3ac') : (TONE[p.tone] || TONE.wood),
     ramp: p.ramp,
   }));
-  const props = [
-    { t: 'car', x: 7.4, z: 18.4, c: '#6e3a2e', rot: 0 },
-  ];
+  const props = [];
   MAPS.push({
     id: PIT.map, name: 'A Pocilga', course: true,
     desc: 'Circuito solo de inverno: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada ao lado da largada.',
@@ -1620,7 +1618,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     }),
     weather: {
       kind: 'snow', n: 280, fall: 3.6, wind: [0.45, 0, 0.2], top: 16, color: 0xF7FBFF, size: 0.1,
-      roofs: [[-7.2, 15.2, 7.2, 17.3, 3.84], [-26.3, 41.6, 7.6, 44.9, 3.2]],
+      roofs: [[-6.6, 44.5, 20.7, 48.2, 3.2]],
     },
     ...fin(boxes), props,
     spawns: [[PIT.spawn[0], PIT.spawn[1]]],

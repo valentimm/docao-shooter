@@ -12,11 +12,11 @@
 import { SPEED, KNIFE } from './rules.js';
 
 export const BOARD = { w: 1.05, h: 1.85, d: 0.12, y: 0.02 };
-const H = 2.7;
+const H = 2.8;
 const DECK = 3.15;
-const R0 = 30.2;
-const R1 = 43.6;
-const ROOF = 3.72;
+const R0 = 31;
+const R1 = 45;
+const WALLTOP = 2.9;
 const ROUND = (n) => Math.round(n * 1000) / 1000;
 const rampY = (z) => ROUND((z - R0) / (R1 - R0) * DECK);
 
@@ -32,88 +32,79 @@ export const PIT = {
   // antes do grupo em que o gatilho deve armar.
   rise: 0.18,
   lead: 12,
-  star3: 50,
-  star2: 64,
+  star3: 45,
+  star2: 58,
   sprint: 1.45,
   deck: DECK,
-  roof: ROOF,
-  stair: { x: -24.5, z0: R0, z1: R1, y: DECK },
-  spawn: [0, -18],
-  spawnYaw: Math.atan2(3, -1.8),
-  tower: { x: -2.9, z: -16.3, y: 2.7 },
+  roof: WALLTOP,
+  stair: { x: 0, z0: R0, z1: R1, y: DECK },
+  spawn: [14.6, -18],
+  spawnYaw: Math.PI,
+  tower: { x: 15.7, z: -17.15, y: 2.7 },
   path: [
-    { x: 0, z: -18, y: 0 },
-    { x: 0, z: -10.4, y: 0 },
-    { x: 0, z: 8, y: 0 },
-    { x: 0, z: 20, y: 0 },
-    { x: 0, z: 27, y: 0 },
-    { x: -24.5, z: 27, y: 0 },
-    { x: -24.5, z: 31.2, y: rampY(31.2) },
-    { x: -24.5, z: 41.4, y: rampY(41.4) },
-    { x: -24.5, z: 43.2, y: DECK },
-    { x: 6, z: 43.2, y: DECK },
-    { x: 10, z: 30, y: 0, drop: true },
+    { x: 14.6, z: -18, y: 0 },
+    { x: 14.2, z: -10.2, y: 0 },
     { x: 14.2, z: 16, y: 0 },
-    { x: 14.2, z: -13.2, y: 0, sprint: true },
-    { x: 9.2, z: -13.2, y: 0, sprint: true },
-    { x: 9.2, z: -17, y: 0, sprint: true },
-    { x: 4.8, z: -17, y: 0, sprint: true },
+    { x: 14.2, z: 24, y: 0 },
+    { x: 0, z: 24, y: 0 },
+    { x: 0, z: R0, y: 0 },
+    { x: 0, z: 36, y: rampY(36) },
+    { x: 0, z: 42, y: rampY(42) },
+    { x: 0, z: 45.4, y: DECK },
+    { x: 0, z: 47.1, y: DECK },
+    { x: 16, z: 47.1, y: DECK },
+    { x: 20.2, z: 40, y: 0, drop: true },
+    { x: 20.2, z: 8, y: 0, sprint: true },
+    { x: 20.2, z: -17.4, y: 0, sprint: true },
   ],
   gates: [
-    { id: 'start', x: 0, z: -10.4, y: 0, r: 2.3, pop: 'patio' },
-    { id: 'fachada', x: 0, z: 2.2, y: 0, r: 4, pop: 'fachada', say: 'Olha o canto!' },
-    { id: 'sala', x: -4, z: 27, y: 0, r: 3.6, pop: 'sala' },
-    { id: 'escada', x: -24.5, z: 30.4, y: 0.2, r: 3.2, pop: 'escada', say: 'Sobe a escada!' },
-    { id: 'passa', x: -22, z: 43.2, y: DECK, r: 3.4, pop: 'passa' },
-    { id: 'pulo', x: 4.2, z: 43.2, y: DECK, r: 2.4, say: 'Pula!' },
-    { id: 'baixo', x: 10, z: 32, y: 0, r: 4, pop: 'pulo' },
-    { id: 'corre', x: 14.2, z: 14, y: 0, r: 3, say: 'Corre!' },
-    { id: 'reta', x: 14.2, z: 6, y: 0, r: 3.5, pop: 'reta' },
-    { id: 'finish', x: 4.8, z: -17, y: 0, r: 1.8 },
+    { id: 'start', x: 14.2, z: -10.2, y: 0, r: 2.2, pop: 'patio' },
+    { id: 'sala', x: 14.2, z: 16.0, y: 0, r: 2.3, pop: 'sala', say: 'Em cima do muro!' },
+    { id: 'escada', x: 0, z: 27.6, y: 0, r: 2.8, pop: 'escada', say: 'Sobe a escada!' },
+    { id: 'passa', x: -2.2, z: 47.1, y: DECK, r: 2.6, pop: 'passa' },
+    { id: 'pulo', x: 14, z: 47.1, y: DECK, r: 2.3, say: 'Pula!' },
+    { id: 'baixo', x: 20.2, z: 39, y: 0, r: 3.6, pop: 'pulo' },
+    { id: 'corre', x: 20.2, z: 14, y: 0, r: 3.2, say: 'Corre!' },
+    { id: 'finish', x: 20.2, z: -17.4, y: 0, r: 2.4 },
   ],
   bays: [
     { id: 'patio', targets: [
-      { id: 'e1', kind: 'enemy', name: 'Javali da porteira', x: -1.55, z: 1.6, y: 0, face: -1 },
-      { id: 'e2', kind: 'enemy', name: 'Javali do meio', x: 1.55, z: 5.4, y: 0, face: -1 },
-      { id: 'e3', kind: 'enemy', name: 'Javali do pátio', x: 0.15, z: 9.2, y: 0, face: -1 },
-    ] },
-    { id: 'fachada', targets: [
-      { id: 'e4', kind: 'enemy', name: 'Javali do telhado', x: 0, z: 16.7, y: ROOF, face: -1, move: { axis: 'x', min: -4.2, max: 4.2, speed: 0.85, phase: 0.2 } },
-      { id: 'e5', kind: 'enemy', name: 'Javali da esquerda', x: -1.6, z: 13.6, y: 0, face: -1 },
-      { id: 'e6', kind: 'enemy', name: 'Javali da direita', x: 1.85, z: 13.8, y: 0, face: -1 },
-      { id: 'c1', kind: 'civil', name: 'Leitão da fachada', x: 0.95, z: 11.2, y: 0, face: -1 },
+      { id: 'e1', kind: 'enemy', name: 'Javali da porteira', x: 12.8, z: 15.4, y: 0, face: -1 },
+      { id: 'e2', kind: 'enemy', name: 'Javali do meio', x: 13.1, z: 15.4, y: 0, face: -1, move: { axis: 'x', min: 12.45, max: 13.7, speed: 0.9, phase: 0.2 } },
+      { id: 'e3', kind: 'enemy', name: 'Javali do pátio', x: 14.4, z: 15.4, y: 0, face: -1, move: { axis: 'x', min: 13.85, max: 14.95, speed: 1.05, phase: 1.1 } },
+      { id: 'e4', kind: 'enemy', name: 'Javali do trilho', x: 12.7, z: 16.5, y: 0, face: -1, move: { axis: 'x', min: 12.35, max: 13.5, speed: 0.85, phase: 0.4 } },
+      { id: 'e5', kind: 'enemy', name: 'Javali da fileira', x: 14.3, z: 16.5, y: 0, face: -1, move: { axis: 'x', min: 13.7, max: 14.9, speed: 1.1, phase: 1.6 } },
+      { id: 'c1', kind: 'civil', name: 'Leitão do corredor', x: 13.4, z: 16.5, y: 0, face: -1, move: { axis: 'x', min: 12.7, max: 14.1, speed: 0.75, phase: 0.8 } },
     ] },
     { id: 'sala', targets: [
-      { id: 'e7', kind: 'enemy', name: 'Javali da sala', x: -15.2, z: 28.4, y: 0, face: 'x' },
-      { id: 'e8', kind: 'enemy', name: 'Javali do canto', x: -18.6, z: 28.4, y: 0, face: 'x' },
-      { id: 'e9', kind: 'enemy', name: 'Javali do fundo', x: -22, z: 28.4, y: 0, face: 'x' },
-      { id: 'e10', kind: 'enemy', name: 'Javali do trilho', x: -18, z: 25.5, y: 0, face: 'x', move: { axis: 'x', min: -20.4, max: -15.6, speed: 0.9, phase: 0.6 } },
-      { id: 'e11', kind: 'enemy', name: 'Javali da curva', x: -13.4, z: 25.55, y: 0, face: 'x' },
-      { id: 'c2', kind: 'civil', name: 'Porquinho da sala', x: -16.8, z: 25.55, y: 0, face: 'x' },
+      { id: 'e6', kind: 'enemy', name: 'Javali da sala', x: 11, z: 25.5, y: 0, face: -1, move: { axis: 'x', min: 8.5, max: 13.5, speed: 0.8, phase: 0.3 } },
+      { id: 'e7', kind: 'enemy', name: 'Javali largo', x: 4.5, z: 25.5, y: 0, face: -1, move: { axis: 'x', min: 2.2, max: 7.2, speed: 0.95, phase: 1.2 } },
+      { id: 'e8', kind: 'enemy', name: 'Javali do fundo', x: -1.2, z: 25.8, y: 0, face: -1, move: { axis: 'x', min: -3.4, max: 1.2, speed: 0.85, phase: 0.6 } },
+      { id: 'c2', kind: 'civil', name: 'Porquinho da sala', x: 7.5, z: 26.6, y: 0, face: -1, move: { axis: 'x', min: 5.2, max: 10.2, speed: 0.7, phase: 1.4 } },
+      { id: 'e9', kind: 'enemy', name: 'Javali do muro', x: -5.42, z: 26.2, y: WALLTOP, face: 'x', move: { axis: 'z', min: 24.8, max: 27.8, speed: 0.8, phase: 0.5 } },
+      { id: 'e10', kind: 'enemy', name: 'Javali em cima', x: 11.2, z: 29.42, y: WALLTOP, face: -1, move: { axis: 'x', min: 8.8, max: 13.6, speed: 0.9, phase: 1.0 } },
     ] },
     { id: 'escada', targets: [
-      { id: 'e12', kind: 'enemy', name: 'Javali da escada', x: -23.35, z: 39.4, y: rampY(39.4), face: -1 },
-      { id: 'e13', kind: 'enemy', name: 'Javali do meio da escada', x: -23.35, z: 41.1, y: rampY(41.1), face: -1 },
-      { id: 'e14', kind: 'enemy', name: 'Javali de cima', x: -23.35, z: 42.7, y: DECK, face: -1 },
+      { id: 'e12', kind: 'enemy', name: 'Javali da escada', x: -3.6, z: 36.5, y: rampY(36.5), face: -1, move: { axis: 'x', min: -4.8, max: -2.2, speed: 0.8, phase: 0.2 } },
+      { id: 'e13', kind: 'enemy', name: 'Javali do meio da escada', x: 0.2, z: 39.6, y: rampY(39.6), face: -1 },
+      { id: 'e14', kind: 'enemy', name: 'Javali de cima', x: 3.6, z: 42.6, y: rampY(42.6), face: -1, move: { axis: 'x', min: 2.4, max: 4.8, speed: 0.85, phase: 1.3 } },
     ] },
     { id: 'passa', targets: [
-      { id: 'e15', kind: 'enemy', name: 'Javali no peito', x: -10, z: 44.2, y: DECK, face: '-x', close: true },
-      { id: 'e16', kind: 'enemy', name: 'Javali da passarela', x: -4, z: 44.25, y: DECK, face: '-x' },
-      { id: 'e17', kind: 'enemy', name: 'Javali do corrimão', x: 1.6, z: 44.2, y: DECK, face: '-x' },
-      { id: 'c3', kind: 'civil', name: 'Porquinha da passarela', x: -7.2, z: 42.05, y: DECK, face: '-x' },
-      { id: 'c4', kind: 'civil', name: 'Leitão da passarela', x: -1.2, z: 42.05, y: DECK, face: '-x' },
+      { id: 'e15', kind: 'enemy', name: 'Javali no peito', x: 6.4, z: 47.1, y: DECK, face: '-x', close: true },
+      { id: 'e16', kind: 'enemy', name: 'Javali da passarela', x: 9.2, z: 47.1, y: DECK, face: '-x', move: { axis: 'z', min: 46.45, max: 47.75, speed: 0.9, phase: 0.4 } },
+      { id: 'e17', kind: 'enemy', name: 'Javali do corrimão', x: 13.2, z: 47.1, y: DECK, face: '-x' },
+      { id: 'c3', kind: 'civil', name: 'Porquinha da passarela', x: 7.2, z: 47.1, y: DECK, face: '-x', move: { axis: 'z', min: 46.45, max: 47.75, speed: 0.7, phase: 1.1 } },
+      { id: 'c4', kind: 'civil', name: 'Leitão da passarela', x: 11.2, z: 46.7, y: DECK, face: '-x' },
     ] },
     { id: 'pulo', targets: [
-      { id: 'e18', kind: 'enemy', name: 'Javali da queda', x: 11.05, z: 22.2, y: 0, face: 1 },
-      { id: 'e19', kind: 'enemy', name: 'Javali do pátio baixo', x: 12.4, z: 19.4, y: 0, face: 1 },
-      { id: 'e20', kind: 'enemy', name: 'Javali da cerca baixa', x: 12.35, z: 18.4, y: 0, face: 1 },
-      { id: 'c5', kind: 'civil', name: 'Vovó do carro', x: 12.15, z: 18.2, y: 0, face: 1 },
-      { id: 'e21', kind: 'enemy', name: 'Javali do carro', x: 13.7, z: 13.2, y: 0, face: 1 },
-      { id: 'e22', kind: 'enemy', name: 'Javali na frente do carro', x: 11.3, z: 21.2, y: 0, face: 1, move: { axis: 'x', min: 10.6, max: 12.0, speed: 1.05, phase: 1.1 } },
-    ] },
-    { id: 'reta', targets: [
-      { id: 'e23', kind: 'enemy', name: 'Javali do fim', x: 13.65, z: -8.6, y: 0, face: 1 },
-      { id: 'e24', kind: 'enemy', name: 'Javali da chegada', x: 14.75, z: -11.1, y: 0, face: 1 },
+      { id: 'e18', kind: 'enemy', name: 'Javali da queda', x: 21.2, z: 28, y: 0, face: 1, move: { axis: 'x', min: 19.4, max: 23.2, speed: 0.95, phase: 0.2 } },
+      { id: 'e19', kind: 'enemy', name: 'Javali do corredor', x: 22.2, z: 22, y: 0, face: 1, move: { axis: 'x', min: 20.2, max: 23.4, speed: 0.85, phase: 0.8 } },
+      { id: 'e20', kind: 'enemy', name: 'Javali da reta', x: 20.6, z: 16, y: 0, face: 1 },
+      { id: 'c5', kind: 'civil', name: 'Vovó da reta', x: 21.6, z: 12, y: 0, face: 1, move: { axis: 'x', min: 19.6, max: 23.4, speed: 0.7, phase: 1.2 } },
+      { id: 'e21', kind: 'enemy', name: 'Javali do meio da reta', x: 21.2, z: 6, y: 0, face: 1 },
+      { id: 'e22', kind: 'enemy', name: 'Javali que cruza', x: 21, z: 0, y: 0, face: 1, move: { axis: 'x', min: 19.4, max: 23.2, speed: 1.05, phase: 0.5 } },
+      { id: 'e23', kind: 'enemy', name: 'Javali do fim', x: 22.2, z: -8, y: 0, face: 1, move: { axis: 'x', min: 20.2, max: 23.6, speed: 0.9, phase: 1.4 } },
+      { id: 'e24', kind: 'enemy', name: 'Javali da chegada', x: 20.8, z: -13, y: 0, face: 1 },
     ] },
   ],
 };
@@ -204,7 +195,7 @@ export function onSprint(x, y, z) {
     const t = Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / ab2));
     const dx = x - (a.x + abx * t), dz = z - (a.z + abz * t);
     const midY = a.y + (b.y - a.y) * t;
-    if (dx * dx + dz * dz <= 2.4 * 2.4 && Math.abs((y || 0) - midY) < 1.6) return true;
+    if (dx * dx + dz * dz <= 4 * 4 && Math.abs((y || 0) - midY) < 1.6) return true;
   }
   return false;
 }
@@ -334,84 +325,46 @@ export function pitPieces() {
   const slab = (x0, z0, x1, z1, y, tone = 'metal', th = 0.28) => add(x0, y - th, z0, x1, y, z1, { floor: true, tone });
   const ramp = (x0, z0, x1, z1, yLo, yHi, axis, dir) => add(x0, yLo, z0, x1, yHi, z1, { ramp: { axis, dir }, tone: 'ramp' });
 
-  // 1. Largada comprida, sacos e a torre ao lado do eixo.
-  wall(-8.2, -22.3, 8.2, -21.85, 2.6, 0, 'concrete');
-  wall(-8.2, -22.3, -7.75, -10.5, 2.6, 0, 'concrete');
-  wall(7.75, -22.3, 8.2, -18.7, 2.6, 0, 'concrete');
-  wall(7.75, -15.3, 8.2, -10.5, 2.6, 0, 'concrete');
-  wall(-8.2, -11.45, -1.55, -10.9, 2.4, 0, 'bag');
-  wall(1.55, -11.45, 8.2, -10.9, 2.4, 0, 'bag');
-  add(-3.75, 0, -16.95, -3.35, 2.42, -16.5, { tone: 'wood' });
-  add(-2.05, 0, -16.95, -1.65, 2.42, -16.5, { tone: 'wood' });
-  slab(-3.8, -17.05, -1.6, -15.2, 2.7, 'wood', 0.28);
-  wall(-4.45, -22.2, -4.05, -17.95, 2.6, 0, 'fence');
-  wall(-4.45, -16.15, -4.05, -11.5, 2.6, 0, 'fence');
-  wall(4.05, -22.2, 4.45, -17.95, 2.6, 0, 'fence');
-  wall(4.05, -16.15, 4.45, -11.5, 2.6, 0, 'fence');
+  // 1. Sala da largada. Uma porta só, afastada da torre.
+  wall(7.2, -22.3, 16.5, -21.85, H);
+  wall(7.2, -22.3, 7.65, -10.15, H);
+  wall(16.05, -22.3, 16.5, -10.15, H);
+  wall(7.65, -10.6, 12.5, -10.15, H);
+  wall(15.5, -10.6, 16.05, -10.15, H);
+  add(15.15, 0, -17.7, 15.55, 2.42, -17.25, { tone: 'wood' });
+  add(16.0, 0, -17.7, 16.4, 2.42, -17.25, { tone: 'wood' });
+  slab(15.05, -17.85, 16.45, -16.35, 2.7, 'wood', 0.28);
 
-  // 2. Pátio longo e a fachada. O vão do meio é a porta.
-  wall(-10.3, -10.6, -9.85, 15.3, 2.5, 0, 'concrete');
-  wall(9.85, -10.6, 10.3, 15.3, 2.5, 0, 'concrete');
-  wall(-3.55, -10.55, -3.15, 15.15, 2.6, 0, 'fence');
-  wall(3.15, -10.55, 3.55, 15.15, 2.6, 0, 'fence');
-  wall(-10.3, 15.35, -1.7, 15.85, 3.6, 0, 'concrete');
-  wall(1.7, 15.35, 10.3, 15.85, 3.6, 0, 'concrete');
-  slab(-7.2, 15.15, 7.2, 17.35, ROOF, 'concrete', 0.26);
-  slab(-7.6, 16.1, 7.6, 30.4, 3.38, 'concrete', 0.3);
+  // 2. Corredor único, sem vão lateral.
+  wall(11.15, -10.15, 11.6, 18.85, H);
+  wall(15.55, -10.15, 16.0, 18.85, H);
 
-  // 3. Sala e o corredor da curva, bem mais comprido.
-  wall(-8.25, 15.85, -7.8, 24.4, H, 0, 'concrete');
-  wall(-8.25, 29.5, -7.8, 32.1, H, 0, 'concrete');
-  wall(7.8, 15.85, 8.25, 32.1, H, 0, 'concrete');
-  wall(-8.25, 31.7, 8.25, 32.15, H, 0, 'concrete');
-  wall(2.15, 16.05, 2.55, 28.75, 2.6, 0, 'concrete');
-  wall(-2.55, 16.05, -2.15, 25.55, 2.6, 0, 'concrete');
-  wall(-8.3, 25.35, -2.15, 25.75, 2.6, 0, 'concrete');
-  wall(-2.1, 28.9, 8.25, 29.3, 2.6, 0, 'concrete');
-  wall(-28.4, 24.55, -8.25, 25.05, H, 0, 'concrete');
-  wall(-28.4, 24.55, -27.95, 30.6, H, 0, 'concrete');
-  wall(-22.4, 29.35, -8.25, 29.85, H, 0, 'concrete');
-  wall(-28.4, 14.6, -10.3, 15.05, 2.6, 0, 'concrete');
+  // 3. Sala larga. A parede da esquerda é contínua. A boca da rampa é a única saída.
+  wall(-6.2, 18.45, 11.15, 18.9, WALLTOP);
+  wall(16.0, 18.45, 16.6, 18.9, WALLTOP);
+  wall(-6.2, 18.45, -5.75, 30.15, WALLTOP);
+  wall(16.15, 18.45, 16.6, 30.15, WALLTOP);
+  wall(-6.2, 29.7, -4.35, 30.15, WALLTOP);
+  wall(4.35, 29.7, 16.6, 30.15, WALLTOP);
+  slab(-5.75, 24.4, -5.15, 28.2, WALLTOP, 'concrete', 0.16);
+  slab(8.2, 29.15, 14.2, 29.7, WALLTOP, 'concrete', 0.16);
 
-  // 4. Escada longa. As placas ficam na frente, no próprio lance.
-  ramp(-25.85, R0, -22.55, R1, 0, DECK, 'z', 1);
-  wall(-26.45, R0, -25.95, 42.6, 4.4, 0, 'concrete');
-  wall(-22.4, R0, -21.95, 42.05, 4.4, 0, 'concrete');
+  // 4. Rampa larga. O lado direito é parede, não um corredor.
+  ramp(-6, R0, 6, R1, 0, DECK, 'z', 1);
+  wall(-6.55, 30.15, -6.1, 47.5, 5.9);
+  wall(6.1, 30.15, 6.55, 46.15, 5.9);
+  add(6.55, 0, 30.15, 16.6, 5.6, 45.7, { tone: 'concrete' });
 
-  // 5. Passarela longa. A ponta leste fica aberta pro pulo.
-  slab(-26.3, 42.45, -22.2, 44.85, DECK, 'metal');
-  slab(-22.2, 41.65, 7.6, 44.85, DECK, 'metal');
-  wall(-21.5, 41.15, 5.05, 41.55, 2.3, DECK, 'metal');
-  wall(-26.3, 44.85, 7.2, 45.25, 2.3, DECK, 'metal');
-  wall(7.2, 41.65, 7.65, 44.85, 1.05, DECK, 'metal');
-  wall(-20, 33, 2, 41.2, 4.3, 0, 'concrete');
+  // 5. Topo segue em frente. A direita do cume fica fechada. A ponte é uma laje só.
+  slab(-6.55, 44.55, 6.55, 48.15, DECK);
+  slab(6.15, 46.2, 20.7, 48.15, DECK);
+  wall(-6.55, 47.75, 20.7, 48.2, 2.5, DECK, 'metal');
+  wall(6.55, 46.2, 20.7, 46.65, 2.5, DECK, 'metal');
 
-  // 6. Pátio de baixo, longo, fechado a oeste.
-  wall(4.15, 14.2, 4.6, 45.5, 2.6, 0, 'fence');
-  wall(15.75, 15.4, 16.2, 45.5, 2.6, 0, 'fence');
-  wall(4.6, 32.55, 6.5, 33.0, 2.6, 0, 'concrete');
-  wall(11.95, 32.55, 16.2, 33.0, 2.6, 0, 'concrete');
-  wall(4.55, 31.6, 6.6, 41.35, 2.6, 0, 'fence');
-  wall(11.45, 31.6, 16.25, 41.35, 2.6, 0, 'fence');
-  wall(4.6, 14.85, 12.55, 15.3, 2.6, 0, 'concrete');
-
-  // 7. Corredor de grades, longo, e a volta até a largada.
-  wall(12.65, -12.45, 13.1, 16.6, 2.9, 0, 'fence');
-  wall(15.35, -18.2, 15.8, 16.6, 2.9, 0, 'fence');
-  wall(8.3, -12.6, 12.7, -12.2, 2.6, 0, 'fence');
-  wall(9.7, -14.25, 15.9, -13.85, 2.6, 0, 'fence');
-  wall(8.2, -10.35, 12.75, -9.95, 2.6, 0, 'concrete');
-  wall(10.65, -18.6, 11.05, -14.15, 2.6, 0, 'concrete');
-  wall(8.25, -19.25, 16.6, -18.85, 2.6, 0, 'concrete');
-  wall(-29.2, -10.55, -8.2, -10.15, 2.6, 0, 'fence');
-  wall(10.2, -16.35, 16.4, -15.9, 2.6, 0, 'fence');
-  wall(-29.2, -22.5, 16.8, -22.1, 2.8, 0, 'fence');
-  wall(-29.2, -22.5, -28.8, 45.6, 2.8, 0, 'concrete');
-  wall(-28.8, 45.15, 16.9, 45.6, 2.8, 0, 'concrete');
-  wall(16.5, -22.5, 16.95, 45.6, 2.8, 0, 'concrete');
-  slab(-7.2, 15.2, 7.2, 17.3, 3.84, 'snow', 0.08);
-
-  // 8. Portão de alambrado colado na largada.
-  for (const z0 of [-18.55, -15.85]) wall(7.15, z0, 7.5, z0 + 0.42, 2.35, 0, 'fence');
+  // 6. Disparada: um corredor largo e reto até o arco.
+  wall(17.15, -19.5, 17.6, 48.3, H, 0, 'fence');
+  wall(24.35, -19.5, 24.8, 48.3, H, 0, 'fence');
+  wall(17.15, -19.5, 24.8, -19.05, H, 0, 'fence');
+  wall(17.15, 47.9, 24.8, 48.35, H, 0, 'fence');
   return out;
 }

@@ -62,7 +62,7 @@ const boot = await page.evaluate(() => ({
   coach: window.__docao.pit.coach,
   ramps: window.__docao.map.boxes.filter((b) => b.ramp).length,
 }));
-ok(boot.map === 'pocilga' && boot.w === 4 && boot.n === 29 && boot.coach && boot.ramps >= 1, `pistola, torre e escada (${JSON.stringify(boot)})`);
+ok(boot.map === 'pocilga' && boot.w === 4 && boot.n === 28 && boot.coach && boot.ramps >= 1, `pistola, torre e escada (${JSON.stringify(boot)})`);
 ok(await page.evaluate(() => !window.__docao.map.props.some((p) => p.t === 'sign' || p.t === 'decal')), 'sem faixa no chão e sem placa de direção');
 const gpu = await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => {
   const i = window.__docao.renderer.info.render;
@@ -70,22 +70,14 @@ const gpu = await page.evaluate(() => new Promise((res) => requestAnimationFrame
 })));
 console.log('GPU', JSON.stringify(gpu));
 
-await page.evaluate(() => { window.__cam = { p: [2, 72, 30], t: [-6, 0, 6], fov: 50 }; });
+await page.evaluate(() => { window.__cam = { p: [10, 86, 12], t: [8, 0, 16], fov: 48 }; });
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${SHOTS}/pocilga-planta.png` });
 
 const talk = await page.evaluate(() => window.__docao.pit.talk);
+const lead = await page.evaluate(() => document.getElementById('leader').textContent);
 ok(/[Bb]arriguinha|javali|civil|Pistolinha/.test(talk) && !(await page.locator('#pitTalk').evaluate((el) => el.classList.contains('hidden'))), `o Docão fala antes da largada (${talk})`);
-await page.evaluate(() => {
-  document.getElementById('pitTalk').classList.add('hidden');
-  window.__cam = { p: [8.4, 6.4, -9.6], t: [0.2, 1.3, -18.4], fov: 58 };
-});
-await page.waitForTimeout(300);
-await page.screenshot({ path: `${SHOTS}/pocilga-natal.png` });
-await page.evaluate(() => { window.__cam = { p: [-0.2, 2.5, -19.6], t: [-2.9, 3.6, -16.2], fov: 42 }; });
-await page.waitForTimeout(400);
-await page.screenshot({ path: `${SHOTS}/pocilga-torre.png` });
-await page.evaluate(() => { window.__cam = null; });
+ok(!/faixa|placa de direção|FRENTE|ESQUERDA/i.test(`${talk} ${lead}`), `nenhuma fala cita faixa ou placa (${lead})`);
 
 const go = (x, y, z, yaw = Math.PI, pitch = -0.08) => page.evaluate(({ x, y, z, yaw, pitch }) => {
   const p = window.__docao.player;
@@ -107,10 +99,8 @@ const shoot = (ids) => page.evaluate((ids) => {
     if (t.face === 1) spot = { x: t.x, y: t.y || 0, z: t.z + extra, yaw: 0 };
     else if (t.face === 'x') spot = { x: t.x + extra, y: t.y || 0, z: t.z, yaw: Math.PI / 2 };
     else if (t.face === '-x') spot = { x: t.x - extra, y: t.y || 0, z: t.z, yaw: -Math.PI / 2 };
-    if (id === 'e4') spot = { x: t.x, y: 0, z: t.z - 5.6, yaw: Math.PI };
-    else if (t.face === -1 && (t.y || 0) > 0.8) { spot.y = Math.max(0, t.y - 0.5); spot.z = t.z - 1.8; }
-    if (id === 'e20') spot = { x: t.x, y: 0, z: t.z + 2.2, yaw: 0 };
-    if (id === 'e22') spot = { x: t.x + 2.5, y: 0, z: t.z, yaw: Math.PI / 2 };
+    if (t.face === -1 && (t.y || 0) > 0.8) { spot.y = Math.max(0, t.y - 0.4); spot.z = t.z - 2.2; }
+    if (t.face === 'x' && (t.y || 0) > 0.8) { spot.x = t.x + 2.4; spot.y = t.y; }
     p.pos.set(spot.x, spot.y, spot.z); p.vel.set(0, 0, 0); p.yaw = spot.yaw;
     const eyeY = spot.y + 1.6;
     const aimY = (t.y || 0) + 0.95;
@@ -124,87 +114,77 @@ const shoot = (ids) => page.evaluate((ids) => {
 }, ids);
 
 const gate = (id) => PIT.gates.find((g) => g.id === id);
-await go(gate('start').x, gate('start').y, gate('start').z);
-await page.waitForTimeout(450);
-let s = await snap();
-ok(s.started && s.pops.includes('patio') && /INIMIGOS 0\/24/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
-await go(0, 0, -4, Math.PI, -0.05);
-await page.waitForTimeout(200);
-await page.screenshot({ path: `${SHOTS}/pocilga-bloqueio-patio.png` });
-let shot = await shoot(['e1', 'e2', 'e3']);
-for (const id of ['e1', 'e2', 'e3']) ok(shot[id].phase === 'fall', `${id} cai com a Pistolinha${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+const shotOf = async (name, x, y, z, yaw, pitch = -0.06) => {
+  await page.evaluate(() => { window.__cam = null; });
+  await go(x, y, z, yaw, pitch);
+  await page.waitForTimeout(280);
+  await page.screenshot({ path: `${SHOTS}/${name}.png` });
+};
 
-await go(gate('fachada').x, gate('fachada').y, gate('fachada').z);
-await page.waitForTimeout(450);
-ok((await snap()).pops.includes('fachada'), 'fachada acorda');
-ok(/Olha o canto/.test((await snap()).talk + (await snap()).banner), 'o Barriguinha grita pra olhar o canto');
-await page.evaluate(() => {
-  document.getElementById('pitBanner').classList.add('hidden');
-  document.getElementById('pitTalk').classList.add('hidden');
-  window.__cam = { p: [0, 1.75, 9.4], t: [0, 1.25, 13.6], fov: 62 };
-});
-await page.waitForTimeout(250);
-await page.screenshot({ path: `${SHOTS}/pocilga-lados.png` });
-const x0 = (await snap()).targets.find((t) => t.id === 'e4').x;
-await page.waitForTimeout(700);
-const x1 = (await snap()).targets.find((t) => t.id === 'e4').x;
-ok(Math.abs(x1 - x0) > 0.2, `javali do telhado andou (${x0.toFixed(2)} → ${x1.toFixed(2)})`);
-await page.evaluate(() => {
-  const t = window.__docao.pit.targets.find((x) => x.id === 'e4');
-  window.__cam = { p: [t.x - 2.4, 2.5, t.z - 6.2], t: [t.x, 4.6, t.z], fov: 46 };
-});
-await page.waitForTimeout(250);
-await page.screenshot({ path: `${SHOTS}/pocilga-trilho.png` });
-await page.evaluate(() => { window.__cam = null; });
-shot = await shoot(['e4', 'e5', 'e6']);
-for (const id of ['e4', 'e5', 'e6']) ok(shot[id].phase === 'fall', `${id} na fachada${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
-
-await go(0, 0, 18.2, Math.PI, -0.16);
+await page.evaluate(() => { window.__cam = { p: [11.2, 3.4, -21.4], t: [13.6, 1.7, -13.2], fov: 64 }; });
 await page.waitForTimeout(300);
-await page.screenshot({ path: `${SHOTS}/pocilga-curva.png` });
+await page.screenshot({ path: `${SHOTS}/pocilga-1-largada.png` });
+await page.evaluate(() => { window.__cam = null; });
+
+await go(gate('start').x, gate('start').y, gate('start').z);
+await page.waitForTimeout(90);
+let s = await snap();
+const patio = s.targets.filter((t) => ['e1', 'e2', 'e3', 'e4', 'e5', 'c1'].includes(t.id));
+ok(s.started && s.pops.includes('patio') && patio.every((t) => t.phase !== 'down') && new Set(patio.map((t) => t.phase)).size === 1, `o corredor sobe junto (${patio.map((t) => t.phase).join(',')})`);
+await page.waitForTimeout(360);
+s = await snap();
+ok(/INIMIGOS 0\/23/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
+await shotOf('pocilga-2-corredor', 14.2, 0, 2.2, Math.PI, -0.04);
+const before = await page.evaluate(() => window.__docao.pit.targets.filter((t) => t.mover).map((t) => [t.id, t.x, t.z]));
+await page.waitForTimeout(900);
+const after = await page.evaluate(() => window.__docao.pit.targets.filter((t) => t.mover).map((t) => [t.id, t.x, t.z]));
+const travel = Math.max(...before.map((a, i) => Math.hypot(a[1] - after[i][1], a[2] - after[i][2])));
+ok(travel > 0.2, `algum alvo andou (${travel.toFixed(2)} m)`);
+let shot = await shoot(['e1', 'e2', 'e3', 'e4', 'e5']);
+for (const id of ['e1', 'e2', 'e3', 'e4', 'e5']) ok(shot[id].phase === 'fall', `${id} cai com a Pistolinha${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+
 await go(gate('sala').x, gate('sala').y, gate('sala').z);
-await page.waitForTimeout(450);
-ok((await snap()).pops.includes('sala'), 'a curva acorda a sala');
-shot = await shoot(['e7', 'e8', 'e9', 'e10', 'e11']);
-for (const id of ['e7', 'e8', 'e9', 'e10', 'e11']) ok(shot[id].phase === 'fall', `${id} na sala${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+await page.waitForTimeout(120);
+s = await snap();
+const sala = s.targets.filter((t) => ['e6', 'e7', 'e8', 'e9', 'e10', 'c2'].includes(t.id));
+ok(s.pops.includes('sala') && sala.every((t) => t.phase !== 'down'), `a sala sobe junta (${sala.map((t) => t.phase).join(',')})`);
+ok(/muro/.test(s.talk + s.banner), 'o Barriguinha fala do muro');
+await shotOf('pocilga-3-sala', 14.2, 0, 21.2, Math.PI, -0.08);
+shot = await shoot(['e6', 'e7', 'e8', 'e9', 'e10']);
+for (const id of ['e6', 'e7', 'e8', 'e9', 'e10']) ok(shot[id].phase === 'fall', `${id} na sala${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
 await go(gate('escada').x, gate('escada').y, gate('escada').z, Math.PI, -0.2);
-await page.waitForTimeout(450);
+await page.waitForTimeout(200);
 ok((await snap()).pops.includes('escada') && /Sobe a escada/.test((await snap()).banner + (await snap()).talk), 'sobe a escada');
-await go(PIT.stair.x, 0.78, 33.4, Math.PI - 0.16, -0.22);
+await shotOf('pocilga-4-rampa', 0, 0.9, 34.5, Math.PI, -0.32);
+await page.evaluate(() => { window.__cam = { p: [-1.2, 5.6, 43.4], t: [9, 3.3, 47.2], fov: 55 }; });
 await page.waitForTimeout(250);
-await page.screenshot({ path: `${SHOTS}/pocilga-escada.png` });
+await page.screenshot({ path: `${SHOTS}/pocilga-5-topo.png` });
+await page.evaluate(() => { window.__cam = null; });
 shot = await shoot(['e12', 'e13', 'e14']);
-for (const id of ['e12', 'e13', 'e14']) ok(shot[id].phase === 'fall', `${id} na janela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+for (const id of ['e12', 'e13', 'e14']) ok(shot[id].phase === 'fall', `${id} na rampa${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
 await go(gate('passa').x, gate('passa').y, gate('passa').z, -Math.PI / 2, -0.05);
-await page.waitForTimeout(450);
+await page.waitForTimeout(200);
 ok((await snap()).pops.includes('passa'), 'passarela acorda');
+await shotOf('pocilga-6-passarela', 3.2, 3.15, 47.1, -Math.PI / 2, -0.05);
 shot = await shoot(['e15', 'e16', 'e17', 'c3']);
 for (const id of ['e15', 'e16', 'e17', 'c3']) ok(shot[id].phase === 'fall', `${id} na passarela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 s = await snap();
 ok(s.civs === 1 && /3/.test(s.banner), `penalidade do civil (${s.banner})`);
 
-await go(gate('pulo').x, gate('pulo').y, gate('pulo').z, -Math.PI / 2, 0.1);
-await page.waitForTimeout(350);
-ok(/Pula/.test((await snap()).banner + (await snap()).talk), 'grita pra pular');
-await go(gate('baixo').x, gate('baixo').y, gate('baixo').z);
-await page.waitForTimeout(450);
-ok((await snap()).pops.includes('pulo'), 'o pátio de baixo acorda');
-shot = await shoot(['e18', 'e19', 'e20', 'e21', 'e22']);
-for (const id of ['e18', 'e19', 'e20', 'e21', 'e22']) ok(shot[id].phase === 'fall', `${id} depois do pulo${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
-
-await go(gate('corre').x, gate('corre').y, gate('corre').z, 0, 0);
-await page.waitForTimeout(350);
-ok(/Corre/.test((await snap()).banner + (await snap()).talk), 'grita pra correr');
-await go(gate('reta').x, gate('reta').y, gate('reta').z, 0, 0);
-await page.waitForTimeout(450);
-ok((await snap()).pops.includes('reta'), 'o fim do corredor acorda');
-await go(14.2, 0, 9.5, 0, 0.02);
+await go(gate('pulo').x, gate('pulo').y, gate('pulo').z, -Math.PI / 2, 0.05);
 await page.waitForTimeout(250);
-await page.screenshot({ path: `${SHOTS}/pocilga-sem-placas.png` });
-shot = await shoot(['e23', 'e24']);
-for (const id of ['e23', 'e24']) ok(shot[id].phase === 'fall', `${id} no fim${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+ok(/Pula/.test((await snap()).banner + (await snap()).talk), 'grita pra pular');
+await go(gate('baixo').x, gate('baixo').y, gate('baixo').z, 0, 0);
+await page.waitForTimeout(200);
+ok((await snap()).pops.includes('pulo'), 'a disparada acorda');
+await go(gate('corre').x, gate('corre').y, gate('corre').z, 0, 0);
+await page.waitForTimeout(250);
+ok(/Corre/.test((await snap()).banner + (await snap()).talk), 'grita pra correr');
+await shotOf('pocilga-7-final', 20.2, 0, -1.2, 0, -0.02);
+shot = await shoot(['e18', 'e19', 'e20', 'e21', 'e22', 'e23', 'e24']);
+for (const id of ['e18', 'e19', 'e20', 'e21', 'e22', 'e23', 'e24']) ok(shot[id].phase === 'fall', `${id} na reta${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
 await go(gate('finish').x, gate('finish').y, gate('finish').z);
 await page.waitForFunction(() => window.__docao.pit.card, null, { timeout: 8000 });
