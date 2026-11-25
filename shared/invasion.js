@@ -368,6 +368,29 @@ export function scaleHit(o, d, pos, size, fn) {
   const h = fn(so, pos); return h ? { ...h, t: h.t * size } : null;
 }
 
+function storyInside(pos, box) {
+  if (!pos || !box) return false;
+  const [x0, z0, x1, z1, y0, y1] = box;
+  return pos.x >= x0 && pos.x <= x1 && pos.z >= z0 && pos.z <= z1 && (pos.y || 0) >= (y0 || 0) - 1.2 && (pos.y || 0) <= (y1 == null ? 8 : y1) + 1.4;
+}
+function storyCentroid(players) {
+  if (!players.length) return null;
+  let x = 0, z = 0;
+  for (const p of players) { x += p.pos.x; z += p.pos.z; }
+  return { x: x / players.length, z: z / players.length };
+}
+// A rua é maior que um prédio. Lá a leva nasce perto de quem está jogando, não na cerca do outro lado.
+function tightenStoryBlock(block, players) {
+  const [x0, z0, x1, z1, y0, y1] = block.box;
+  if (Math.hypot(x1 - x0, z1 - z0) <= 38) return { id: block.id, box: block.box, points: block.points || [] };
+  const inside = players.filter((p) => storyInside(p.pos, block.box));
+  const src = inside.length ? inside : players;
+  const c = storyCentroid(src) || { x: (x0 + x1) / 2, z: (z0 + z1) / 2 };
+  const R = 14;
+  const points = (block.points || []).filter((p) => Math.hypot(p.x - c.x, p.z - c.z) <= R + 2);
+  return { id: block.id, box: [c.x - R, c.z - R, c.x + R, c.z + R, y0, y1], points };
+}
+
 // ------------------------------------------------------------
 //  Simulação. A (adaptador do host):
 //   T() tempo de jogo · P física (shared/physics) · nav (nav.js) · size [hx, hz]
@@ -457,9 +480,11 @@ export class InvasionCore {
     if (this.egg) { const plan = storyPlan(w); if (plan) this.applyStoryPlan(plan); }
     this.nextSpawn = this.T + (this.spec.lead > 0 ? this.spec.lead : 0.8); this.bossPending = this.spec.boss; this.bossAt = this.T + 3.5; this.bossId = 0;
     this.planFog(w);
+    this.clusterId = ''; this.clusterWave = -1;
     const bossN = this.spec.boss ? BOSS_TYPES.indexOf(this.spec.bossKind) + 1 : 0;
     this.A.emit(['wv', 1, w, bossN, this.spec.boss ? 1 : 0, this.queue.length + (this.spec.boss ? 1 : 0) + ((this.drip && this.drip.length) || 0), themeIndex(this.spec.theme)]);
     if (this.storyName) this.A.emit(['qe', 'wv', this.storyName, this.storyBlurb || '']);
+    if (this.egg) this.A.emit(['qe', 'nar', w, this.storyName || '', this.storyBlurb || '']);
     this.openEggWave();
   }
   endWave() {
@@ -543,8 +568,9 @@ export class InvasionCore {
     this.shapeWant = false;
   }
   shapePos() {
-    const custom = this.A.spawnPoints ? this.A.spawnPoints() : null;
-    const good = (custom && custom.length ? custom : ((this.A.nav && this.A.nav.good) || []));
+    const cluster = this.A.story && this.A.story() ? this.storyCluster() : null;
+    const custom = cluster ? (cluster.points || []) : (this.A.spawnPoints ? this.A.spawnPoints() : null);
+    const good = (custom && custom.length ? custom : (cluster ? [] : ((this.A.nav && this.A.nav.good) || [])));
     if (!good.length) return null;
     const H = this.A.players().filter((p) => this.visible(p)), P = this.A.P;
     const hidden = (nd) => {
@@ -567,6 +593,10 @@ export class InvasionCore {
     // Survival: A.spawnPoints() devolve só os pontos das áreas já compradas (array).
     // Sem o método, ou devolvendo null, continua o sorteio no mapa inteiro.
     const custom = this.A.spawnPoints ? this.A.spawnPoints() : null;
+    if (custom && this.A.survival && this.A.story && this.A.story()) {
+      const cluster = this.storyCluster();
+      if (cluster) return this.survivalSpawn(cluster.points || [], cluster.box);
+    }
     if (custom && !custom.length) return null;
     if (custom && this.A.survival) return this.survivalSpawn(custom);
     const good = custom || ((this.A.nav && this.A.nav.good) || []), H = this.A.players().filter((p) => p.alive), P = this.A.P;
@@ -1250,12 +1280,39 @@ export class InvasionCore {
     if (n && Math.hypot(n.x - z.pos.x, n.z - z.pos.z) <= 3) { z.pos.x = n.x; z.pos.y = n.y; z.pos.z = n.z; z.vel.x = z.vel.y = z.vel.z = 0; }
     z.stuck = 0; z.node = null;
   }
-  survivalSpawn(custom) {
+  // Um bloco por wave. As levas continuam espaçadas; o próximo zumbi não nasce do outro lado do campus.
+  storyCluster() {
+    const blocks = (this.A.storyBlocks && this.A.storyBlocks()) || [];
+    if (!blocks.length) return null;
+    if (this.clusterWave !== this.wave || !this.clusterId) {
+      const players = this.A.players().filter((p) => p && p.alive && p.pos);
+      const tally = new Map(blocks.map((b) => [b.id, 0]));
+      for (const p of players) {
+        const hit = blocks.find((b) => storyInside(p.pos, b.box));
+        if (hit) tally.set(hit.id, tally.get(hit.id) + 1);
+      }
+      let best = blocks[0], bn = -1, bd = 1e9;
+      const c = storyCentroid(players);
+      for (const b of blocks) {
+        const n = tally.get(b.id) || 0;
+        const mid = { x: (b.box[0] + b.box[2]) / 2, z: (b.box[1] + b.box[3]) / 2 };
+        const near = c ? Math.hypot(mid.x - c.x, mid.z - c.z) : 0;
+        if (n > bn || (n === bn && near < bd)) { bn = n; bd = near; best = b; }
+      }
+      this.clusterWave = this.wave;
+      this.clusterId = best.id;
+    }
+    const block = blocks.find((b) => b.id === this.clusterId) || blocks[0];
+    return tightenStoryBlock(block, this.A.players().filter((p) => p && p.alive && p.pos));
+  }
+  survivalSpawn(custom, boxOverride) {
     if (!this.flow || this.T - this.flowAt > 0.45) this.buildFlow();
     const P = this.A.P, nav = this.A.nav;
-    const boxes = (this.A.spawnAreas && this.A.spawnAreas()) || [];
-    if (this._spawnGen !== this.flowGen) {
+    const boxes = boxOverride ? [boxOverride] : ((this.A.spawnAreas && this.A.spawnAreas()) || []);
+    const tag = boxOverride ? boxOverride.map((n) => Math.round(n * 10) / 10).join(',') : '';
+    if (this._spawnGen !== this.flowGen || this._spawnTag !== tag) {
       this._spawnGen = this.flowGen;
+      this._spawnTag = tag;
       const pts = [], seen = new Set();
       const push = (x, y, z) => {
         if (Math.abs(x) > this.hx - 1.2 || Math.abs(z) > this.hz - 1.2) return;

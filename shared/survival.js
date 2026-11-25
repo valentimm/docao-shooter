@@ -369,6 +369,29 @@ export function rollBox(rng, avoid = -1) {
   const i = Math.min(src.length - 1, Math.max(0, Math.floor(t * src.length)));
   return src[i];
 }
+
+// Modo história: a barraca fica com as armas normais. Sem Ray Gun, explosivo, arma de truque ou tiro que apaga a horda.
+const STORY_BOX_BAN = new Set(['ray', 'bazooka', 'sniper', 'canhao', 'minigun', 'disco', 'milho', 'saco', 'estilingue', 'sabre', 'sabre2', 'tampa', 'knife', 'faca-dourada']);
+export function storyBoxOk(w) {
+  if (!w || STORY_BOX_BAN.has(w.key)) return false;
+  if (w.ray || w.rocket || w.corn || w.disc || w.egg || w.gift || w.melee || w.saber || w.shield) return false;
+  return papOk(w);
+}
+export function rollStoryBox(rng, avoid = -1) {
+  const rnd = rng || Math.random;
+  const pool = BOX_POOL.filter((w) => w !== avoid && storyBoxOk(WEAPONS[w]));
+  const src = pool.length ? pool : BOX_POOL.filter((w) => storyBoxOk(WEAPONS[w]));
+  if (!src.length) return PISTOL;
+  return src[Math.min(src.length - 1, Math.floor(rnd() * src.length))];
+}
+
+// Modo história abre o prédio inteiro. As portas compráveis não fecham o caminho; a Papada, a barraca e as armas de parede ficam.
+export function openStoryCampus(map, state) {
+  if (!map || !map.survival || !state) return state;
+  for (const area of map.survival.areas || []) state.areas.add(area.id);
+  for (const door of map.survival.doors || []) state.open.add(door.id);
+  return state;
+}
 export function takeBox(e, w, weapons = WEAPONS) {
   const how = giveGun(e, w, weapons);
   return { ok: true, how, weapon: w, pts: e.pts | 0 };
