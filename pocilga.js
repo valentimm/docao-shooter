@@ -306,8 +306,20 @@ export function pitSpeedMul() {
   const p = deps.player();
   return p && onSprint(p.pos.x, p.pos.y, p.pos.z) ? PIT.sprint : 1;
 }
-export function pitHolding() { return !!(run && run.done); }
-export function pitResultOn() { return !!(run && run.done); }
+let escQuietUntil = 0;
+const cardOpen = () => {
+  const el = $('pitOver');
+  return !!(el && !el.classList.contains('hidden'));
+};
+export function pitHolding() { return false; }
+export function pitFinished() { return !!(run && run.done); }
+export function pitResultOn() { return !!(run && run.done && cardOpen()); }
+export function pitEscQuiet() { return performance.now() < escQuietUntil; }
+export function dismissResult() {
+  escQuietUntil = performance.now() + 700;
+  const el = $('pitOver');
+  if (el) el.classList.add('hidden');
+}
 export const pitActive = () => !!run;
 
 function liveStars(clock, civs, started) {
@@ -382,6 +394,7 @@ function paintCard(result, extra) {
   const enemies = pitEnemiesCount();
   const hitE = result.down ? result.down.length : 0;
   card.innerHTML = `
+    <button type="button" id="pitDismiss" class="pit-x" aria-label="Fechar">×</button>
     <p class="pit-kicker">A Pocilga</p>
     <h2>${result.finished ? 'MISSÃO CUMPRIDA' : 'Incompleta'}</h2>
     <p class="pit-time">${result.finished ? formatPit(result.final) : '—'}</p>
@@ -393,10 +406,12 @@ function paintCard(result, extra) {
     <h3>Mais rápidos</h3>
     ${rankRows(rows, me && me.nick)}
     <p class="pit-note">${note}</p>
-    <div class="pit-actions"><button type="button" id="pitAgain">DE NOVO · R</button><button type="button" id="pitMenu" class="secondary">MENU</button></div>`;
-  const again = $('pitAgain'), menu = $('pitMenu');
+    <p class="pit-how">R volta pra largada e começa outra. Esc ou FECHAR só tira este cartaz: você continua andando no mapa, e R recomeça.</p>
+    <div class="pit-actions"><button type="button" id="pitAgain">DE NOVO · R</button><button type="button" id="pitClose" class="secondary">FECHAR · ESC</button></div>`;
+  const again = $('pitAgain'), close = $('pitClose'), x = $('pitDismiss');
   if (again) again.onclick = () => restartCourse();
-  if (menu) menu.onclick = () => deps && deps.menu();
+  if (close) close.onclick = () => dismissResult();
+  if (x) x.onclick = () => dismissResult();
 }
 
 function showResult(result, extra) {
@@ -410,7 +425,6 @@ async function closeRun() {
   run.done = true;
   run.result = inspectRun(run.events);
   writeBest(run.result);
-  deps.unlock();
   banner('CHEGADA', false, 2.2);
   deps.sfx.fanfare();
   showResult(run.result, { remote: null, rank: null });
@@ -418,7 +432,7 @@ async function closeRun() {
     submitPit(run.events).catch(() => ({ ok: false, error: 'Sem conexão com o ranking' })),
     loadPitRank().catch(() => null),
   ]);
-  if (mine !== gen || !run || !run.done) return;
+  if (mine !== gen || !run || !run.done || !cardOpen()) return;
   showResult(run.result, { remote, rank });
 }
 

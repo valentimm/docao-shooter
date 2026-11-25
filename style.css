@@ -496,8 +496,10 @@ body.pit-on #timer{visibility:hidden}
 #pitBanner{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:6;pointer-events:none;font:900 40px/1.1 Fredoka,sans-serif;color:#fff6e4;-webkit-text-stroke:2px #2a1410;text-align:center}
 #pitTalk{position:fixed;left:50%;top:78px;transform:translateX(-50%);z-index:6;max-width:min(520px,86vw);pointer-events:none;background:#fff6e4;color:#2a1410;border:3px solid #2a1410;border-radius:16px;padding:8px 14px;font:700 16px/1.3 Fredoka,sans-serif;text-align:center;box-shadow:0 4px 0 #2a1410}
 #pitBanner.bad{color:#ffd0d0}
-#pitOver{z-index:30;background:rgba(41,30,24,.55)}
-.pit-card{width:min(520px,92vw);max-height:min(88dvh,760px);overflow:auto;background:#f6e4bd;color:#2a1410;border:3px solid #2a1410;border-radius:16px;box-shadow:0 10px 0 #2a1410;padding:16px 18px 14px}
+#pitOver{z-index:30;background:rgba(41,30,24,.38)}
+.pit-card{position:relative;width:min(520px,92vw);max-height:min(88dvh,760px);overflow:auto;background:#f6e4bd;color:#2a1410;border:3px solid #2a1410;border-radius:16px;box-shadow:0 10px 0 #2a1410;padding:16px 18px 14px}
+.pit-x{position:absolute;top:8px;right:8px;width:32px;height:32px;border:2px solid #2a1410;border-radius:8px;background:#fff6e4;color:#2a1410;font:800 20px/1 Fredoka,sans-serif;cursor:pointer}
+.pit-how{margin:8px 0 0;font:700 14px/1.35 Fredoka,sans-serif;text-align:center}
 .pit-card h2{margin:0;font:900 48px/1 Fredoka,sans-serif;text-align:center}
 .pit-kicker{margin:0;text-align:center;font:800 13px/1 Fredoka,sans-serif;letter-spacing:.14em}
 .pit-stars{margin:4px 0;text-align:center;font-size:28px;letter-spacing:4px;color:#c0392b}

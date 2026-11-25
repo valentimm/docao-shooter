@@ -63,6 +63,7 @@ const boot = await page.evaluate(() => ({
   ramps: window.__docao.map.boxes.filter((b) => b.ramp).length,
 }));
 ok(boot.map === 'pocilga' && boot.w === 4 && boot.n === 29 && boot.coach && boot.ramps >= 1, `pistola, torre e escada (${JSON.stringify(boot)})`);
+ok(await page.evaluate(() => !window.__docao.map.props.some((p) => p.t === 'sign' || p.t === 'decal')), 'sem faixa no chão e sem placa de direção');
 
 await page.evaluate(() => { window.__cam = { p: [6, 78, 34], t: [-8, 0, 8], fov: 52 }; });
 await page.waitForTimeout(500);
@@ -187,7 +188,7 @@ await page.waitForTimeout(450);
 ok((await snap()).pops.includes('reta'), 'o fim do corredor acorda');
 await go(14.2, 0, 9.5, 0, 0.02);
 await page.waitForTimeout(250);
-await page.screenshot({ path: `${SHOTS}/pocilga-corredor.png` });
+await page.screenshot({ path: `${SHOTS}/pocilga-sem-placas.png` });
 shot = await shoot(['e23', 'e24']);
 for (const id of ['e23', 'e24']) ok(shot[id].phase === 'fall', `${id} no fim${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
@@ -198,8 +199,15 @@ s = await snap();
 const expectStars = s.result ? starsOf(s.result.final, s.result.civs, true) : -1;
 ok(s.done && s.result && s.result.civs === 1 && s.result.stars === expectStars && s.result.stars < 3, `estrelas com um civil (${JSON.stringify(s.result && { stars: s.result.stars, final: s.result.final, civs: s.result.civs })})`);
 const card = await page.locator('#pitCard').innerText();
-ok(/MISSÃO CUMPRIDA/.test(card) && /AnaPocilga/.test(card) && /Inimigos/.test(card), 'tela final com missão, inimigos e ranking');
-await page.screenshot({ path: `${SHOTS}/pocilga-final.png` });
+ok(/MISSÃO CUMPRIDA/.test(card) && /AnaPocilga/.test(card) && /Inimigos/.test(card) && /FECHAR/.test(card), 'tela final com missão, inimigos e ranking');
+const aberto = await page.evaluate(() => ({ state: window.__docao.state, pause: document.getElementById('pause').classList.contains('hidden'), card: window.__docao.pit.card }));
+ok(aberto.state === 'playing' && aberto.pause && aberto.card, `cartaz com o jogo rodando, sem pausa (${JSON.stringify(aberto)})`);
+await page.screenshot({ path: `${SHOTS}/pocilga-modal.png` });
+await page.keyboard.press('Escape');
+await page.waitForTimeout(350);
+const fechado = await page.evaluate(() => ({ state: window.__docao.state, pause: document.getElementById('pause').classList.contains('hidden'), card: window.__docao.pit.card, done: window.__docao.pit.done }));
+ok(fechado.state === 'playing' && fechado.pause && !fechado.card && fechado.done, `Esc fecha o cartaz e não abre a pausa (${JSON.stringify(fechado)})`);
+await page.screenshot({ path: `${SHOTS}/pocilga-depois.png` });
 await page.keyboard.press('KeyR');
 await page.waitForTimeout(400);
 s = await snap();
