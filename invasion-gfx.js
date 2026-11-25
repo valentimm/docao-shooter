@@ -61,7 +61,7 @@ export function makeZombie(type) {
   const eyeM = glowMat(C.eye);
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
   const mesh = (geo, mat, parent = body, ol = 0.012) => { const m = new THREE.Mesh(geo, mat); parent.add(m); if (ol) outline(m, ol); m.castShadow = true; return m; };
-  const part = (geo, mat, parent, [x, y, z], [sx, sy, sz], rot = null, ol = 0.01) => { const m = mesh(geo, mat, parent, ol); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (rot) m.rotation.set(...rot); return m; };
+  const part = (geo, mat, parent, [x, y, z], [sx, sy, sz], rot = null, ol = 0.01) => { const m = mesh(geo, mat, parent, ol); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (rot) m.rotation.set(...rot); if (Math.max(sx, sy, sz) <= 0.12) m.castShadow = false; if (geo === G.cone && sx <= 0.03) m.userData.tiny = true; return m; }; // tiny: dente/garra (o LOD esconde de longe) // dente, garra, olho, narina: a sombra seria menor que 1 cm (e custa um draw call na passada de sombra)
   const thin = type === 'runner', fat = type === 'tank' || type === 'bossBelly', bossPumpkin = type === 'boss', spit = type === 'spitter';
   const boss = isBoss(type);
   // pernas (endoesqueleto: coxa de metal, joelho, canela, pé)
@@ -316,10 +316,12 @@ export function animateZombie(m, z, dt, T, flashing) {
   const eye = z.feral ? '#ff1c14' : (ZCOL[m.type] || ZCOL.walker).eye;
   for (const mat of m.flashMats) mat.emissive.set(flashing ? 0x992222 : (z.feral ? (T % 0.4 < 0.08 ? 0x6a1010 : 0x2a0808) : 0x000000));
   if (z.feral && pose !== 'cry') { m.body.rotation.x += 0.14; m.arms[0].rotation.x -= 0.22; m.arms[1].rotation.x -= 0.22; }
-  m.eyeM.color.set(T % (z.feral ? 0.45 : 0.9) < 0.06 ? '#ffffff' : eye); // pisca; feroz fica com o olho em brasa
+  m.eyeM.color.copy(T % (z.feral ? 0.45 : 0.9) < 0.06 ? WHITE : eyeColor(eye)); // pisca; feroz fica com o olho em brasa
   const blinks = m.group.userData.blinks;
   if (blinks) { const on = T % 0.6 < 0.3; for (let i = 0; i < blinks.length; i++) blinks[i].visible = on; }
 }
+const WHITE = new THREE.Color('#ffffff'), eyeColors = new Map(); // cores prontas: antes Color.set(string) parseava texto por zumbi por frame
+function eyeColor(hex) { let c = eyeColors.get(hex); if (!c) eyeColors.set(hex, c = new THREE.Color(hex)); return c; }
 // morte: desaba e afunda; devolve true quando já pode sumir
 export function dieZombie(m, z, T) {
   const k = Math.min(1, (T - z.deathAt) / 0.5), s = m.group.userData.size || 1;
@@ -469,11 +471,12 @@ export function makeGraveMark(label) {
   return g;
 }
 
+let dropRingGeo = null;
 export function makeDropMesh(kind) {
   const g = new THREE.Group();
   const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTex(kind), depthWrite: false, transparent: true, fog: false })); icon.scale.setScalar(1.0); icon.position.y = 1.0; g.add(icon);
   const beam = new THREE.Mesh(G.cyl, addMat(powerColor(kind), 0.35)); beam.scale.set(0.07, 7, 0.07); beam.position.y = 3.5; g.add(beam);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.6, 32), addMat(powerColor(kind), 0.7)); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; g.add(ring);
+  const ring = new THREE.Mesh(dropRingGeo || (dropRingGeo = new THREE.RingGeometry(0.45, 0.6, 32)), addMat(powerColor(kind), 0.7)); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; g.add(ring);
   g.userData.icon = icon; g.userData.ring = ring; return g;
 }
 export function tickDrop(g, T, born) { g.userData.icon.position.y = 1.0 + Math.sin(T * 3 + born) * 0.15; g.userData.ring.rotation.z = T * 2; }
@@ -517,8 +520,9 @@ export function makeSpitMesh(style) {
 }
 export function makePowerPumpkin() { return makePumpkin(0.75, true); }
 // anel que cresce e some (uivo, poção, ressurreição, splash de cuspe)
+let ringGeo = null; // compartilhada: antes cada anel criava uma RingGeometry(48) que nunca era descartada (vazava na GPU a cada uivo/poção/splash)
 export function makeRing(color, from, to, life, y = 0.1) {
-  const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48), addMat(color, 0.8)); m.rotation.x = -Math.PI / 2; m.position.y = y;
+  const m = new THREE.Mesh(ringGeo || (ringGeo = new THREE.RingGeometry(0.8, 1, 48)), addMat(color, 0.8)); m.rotation.x = -Math.PI / 2; m.position.y = y;
   m.userData = { from, to, life, t: 0 }; return m;
 }
 export function tickRing(m, dt) { const u = m.userData; u.t += dt; const k = Math.min(1, u.t / u.life); const s = u.from + (u.to - u.from) * k; m.scale.set(s, s, 1); m.material.opacity = 0.8 * (1 - k); return k >= 1; }

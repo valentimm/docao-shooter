@@ -6199,6 +6199,7 @@ function docaoLod(e) {
   m.group.traverse((o) => {
     if (!o.isMesh) return;
     if (o.userData.isOutline) { if (o.userData.lodVis == null) o.userData.lodVis = o.visible; o.visible = next >= 1 ? false : o.userData.lodVis; return; }
+    if (o.userData.tiny) o.visible = next < 2; // dente/garra do zumbi: some junto com a sombra (menos de 2 px a 24 m)
     if (o.userData.lodCast == null) o.userData.lodCast = o.castShadow; o.castShadow = next >= 2 ? false : o.userData.lodCast;
   });
 }
@@ -10334,27 +10335,30 @@ if (typeof speechSynthesis !== 'undefined') {
   speechSynthesis.addEventListener('voiceschanged', () => speechSynthesis.getVoices());
 }
 function invBanner(title, sub, big = false) { const b = $('invBanner'); stopStoryNarrator(); b.classList.remove('narr'); b.innerHTML = `<b>${escapeHtml(title)}</b><span>${escapeHtml(sub || '')}</span>`; b.classList.remove('hidden'); b.classList.toggle('big', big); invBannerT = big ? 4 : 3; }
+// escreve no DOM só quando o valor muda (antes o invHud reescrevia ~8 nós por frame: recalcula estilo/layout à toa)
+const _domTxt = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
+const _domHtml = (el, v) => { if (el && el._hv !== v) { el._hv = v; el.innerHTML = v; } };
 function invHud(v, me, dt) {
   if (invBannerT > 0) { invBannerT -= dt; if (invBannerT <= 0) $('invBanner').classList.add('hidden'); }
   const ph = v.phase;
-  $('invWaveN').textContent = ph === 'prep' ? 'PREPARAÇÃO' : `WAVE ${Math.max(1, v.wave)}/${storyWaveCap()}`;
+  _domTxt($('invWaveN'), ph === 'prep' ? 'PREPARAÇÃO' : `WAVE ${Math.max(1, v.wave)}/${storyWaveCap()}`);
   const theme = ph === 'wave' && v.theme ? WAVE_THEMES[v.theme - 1] : null;
-  $('invWaveSub').textContent = ph === 'wave' ? `${theme ? theme.name + ' · ' : ''}🧟 ${v.remaining} zumbi${v.remaining === 1 ? '' : 's'} restando` : ph === 'break' || ph === 'prep' ? `Próxima wave em ${Math.ceil(v.left)} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}` : ph === 'over' ? 'Fim' : '';
+  _domTxt($('invWaveSub'), ph === 'wave' ? `${theme ? theme.name + ' · ' : ''}🧟 ${v.remaining} zumbi${v.remaining === 1 ? '' : 's'} restando` : ph === 'break' || ph === 'prep' ? `Próxima wave em ${Math.ceil(v.left)} s · ${survOn() ? SURV.useLabel + ' usa a loja' : 'B troca de arma'}` : ph === 'over' ? 'Fim' : '');
   $('timer').textContent = ph === 'wave' ? `🧟 ${v.remaining}` : ph === 'over' ? '—' : `${Math.ceil(v.left)} s`;
   // chefão
   const boss = v.bossId ? (online ? entOf(v.bossId) : inv && inv.zombies.find((z) => z.id === v.bossId)) : null;
   $('invBoss').classList.toggle('hidden', !(boss && boss.alive));
   if (boss && boss.alive) {
     const bossName = (ZOMBIES[boss.zt] && ZOMBIES[boss.zt].name) || boss.name || 'Chefão';
-    $('invBossName').textContent = `🎃 ${bossName.toUpperCase()}`;
-    $('invBossFill').style.width = (100 * Math.max(0, boss.hp) / (boss.maxHp || 1)).toFixed(1) + '%';
+    _domTxt($('invBossName'), `🎃 ${bossName.toUpperCase()}`);
+    { const w = (100 * Math.max(0, boss.hp) / (boss.maxHp || 1)).toFixed(1) + '%', f = $('invBossFill'); if (f.style.width !== w) f.style.width = w; }
   }
   // vidas
-  if (me) $('invLives').innerHTML = `${'❤'.repeat(Math.max(0, me.lives))}<span class="lost">${'❤'.repeat(Math.max(0, INV.LIVES - me.lives))}</span>`;
+  if (me) _domHtml($('invLives'), `${'❤'.repeat(Math.max(0, me.lives))}<span class="lost">${'❤'.repeat(Math.max(0, INV.LIVES - me.lives))}</span>`);
   const out = !!(me && me.out && player && !player.alive);
   $('invOut').classList.toggle('hidden', !out); document.body.classList.toggle('invout', out); // sem vidas: some a tela de morte normal
   if (out) { const mates = entities.filter((e) => !e.zt && e !== player && e.alive); $('invOutTxt').textContent = !mates.length ? 'Ninguém de pé…' : v.hard ? `Assistindo ${mates[0].name} · Hardcore: sem volta até o fim` : survOn() ? `Assistindo ${mates[0].name} · um aliado pode te reviver com a ✨ Ressurreição` : `Assistindo ${mates[0].name} · ✝ um aliado pode te reviver na cruz (segurando ${INV_CROSS.keyLabel} 5 s) ou com a ✨ Ressurreição`; }
-  { const tag = $('invDiffTag'); if (tag) { tag.textContent = v.hard ? '💀 HARDCORE' : 'NORMAL'; tag.classList.toggle('hard', !!v.hard); } }
+  { const tag = $('invDiffTag'); if (tag) { _domTxt(tag, v.hard ? '💀 HARDCORE' : 'NORMAL'); tag.classList.toggle('hard', !!v.hard); } }
   // névoa: fora da área segura = tela roxa + seta pro centro
   let outside = false;
   if (player && player.alive && v.fog) {
@@ -10362,7 +10366,7 @@ function invHud(v, me, dt) {
     const arr = $('invFogArrow'); arr.classList.toggle('hidden', !outside);
     if (outside) { const ang = Math.atan2(dx, dz), rel = ang - (player.yaw + Math.PI); arr.querySelector('i').style.transform = `rotate(${-rel}rad)`; $('invFogDist').textContent = Math.ceil(d - v.fog.r) + ' m'; }
   } else $('invFogArrow').classList.add('hidden');
-  $('fogVeil').style.opacity = outside ? (0.55 + Math.sin(gameTime * 4) * 0.1).toFixed(2) : '0';
+  { const op = outside ? (0.55 + Math.sin(gameTime * 4) * 0.1).toFixed(2) : '0', fv = $('fogVeil'); if (fv.style.opacity !== op) fv.style.opacity = op; }
   if (invPick) invUpdatePick(v);
   paintHistoriaBar();
 }
@@ -11674,7 +11678,7 @@ function paintHistoriaBar() {
       const left = player.hCd && player.hCd[id] > gameTime ? Math.ceil(player.hCd[id] - gameTime) : 0;
       b.classList.toggle('on', id === player.hSel);
       b.classList.toggle('cd', left > 0);
-      b.innerHTML = `<b>${u.icon} ${escapeHtml(u.name)}</b><small>${left > 0 ? `${left} s` : 'pronto'}</small>`;
+      _domHtml(b, `<b>${u.icon} ${escapeHtml(u.name)}</b><small>${left > 0 ? `${left} s` : 'pronto'}</small>`);
     }
   }
   const sh = $('hShield');
