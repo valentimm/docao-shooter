@@ -8,7 +8,7 @@ import { SKINS, skinOk } from '../../skins.js';
 import { ITEMS, itemById, parseLook, lookItemIds, isFreeItem, knifeKind, sniperKind, gunKey, parseGuns, GUN_EQUIP_KEYS, EARN } from '../../shared/closet.js';
 import { spDay, parseChal, applyChal, chalView } from '../../shared/challenges.js';
 import { rollBox, BOX_NAME, BOX_PRICE, wheelInputs, rollWheel } from '../../shared/lootbox.js';
-import { PROMO_ID, PROMO_NAME, PROMO_COINS, promoActive } from '../../shared/promo.js';
+import { PROMO_ID, PROMO_NAME, PROMO_COINS, PROMO_BOXES, promoActive } from '../../shared/promo.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 export const dayNow = () => Math.floor(now() / 86400);
@@ -156,7 +156,7 @@ export async function buyBox(env, id) {
 }
 
 
-// Promoção vigente (DÉCIMO PINGOU): +N Docoins uma vez por conta, só dentro da janela.
+// Promoção vigente (INTEGRA): +N Docoins e +N caixotes uma vez por conta, só dentro da janela.
 // promoActive() exige início e fim. INSERT + crédito no mesmo lote atômico.
 // Segunda chamada (reload, outro aparelho) não soma de novo. Outro promo_id não bloqueia.
 export async function grantPromo(env, id, now = Date.now()) {
@@ -165,10 +165,10 @@ export async function grantPromo(env, id, now = Date.now()) {
   try {
     const out = await env.DB.batch([
       env.DB.prepare('INSERT INTO promo_claims (account_id, promo_id, coins, claimed_at) VALUES (?1, ?2, ?3, ?4)').bind(id, PROMO_ID, PROMO_COINS, t),
-      env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1').bind(id, PROMO_COINS),
+      env.DB.prepare('UPDATE accounts SET coins = coins + ?2, boxes = boxes + ?3 WHERE id = ?1').bind(id, PROMO_COINS, PROMO_BOXES),
     ]);
     if (!out[0].meta || !out[0].meta.changes) return { granted: false };
-    return { granted: true, coins: PROMO_COINS, id: PROMO_ID, name: PROMO_NAME };
+    return { granted: true, coins: PROMO_COINS, boxes: PROMO_BOXES, id: PROMO_ID, name: PROMO_NAME };
   } catch (e) {
     const msg = String(e && e.message || e);
     if (/unique|constraint/i.test(msg)) return { granted: false };

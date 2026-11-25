@@ -1,41 +1,42 @@
 // ============================================================
-//  DÉCIMO PINGOU: +1000 Docoins, uma vez por conta, só em 19/11/2026
-//  (00:00 às 23:59:59 horário de Brasília). Constantes e textos do popup
-//  (cliente e servidor). O crédito em si é só no Worker.
+//  INTEGRA: +500 Docoins e +5 caixotes, uma vez por conta, na
+//  janela abaixo (horário de Brasília). Constantes e textos do
+//  popup (cliente e servidor). O crédito em si é só no Worker.
+//  Para mudar o prazo, altere só PROMO_STARTS_AT e PROMO_EXPIRES_AT.
 // ============================================================
-export const PROMO_ID = 'decimo-pingou-2026-11-19';
-export const PROMO_NAME = 'DÉCIMO PINGOU';
-export const PROMO_COINS = 1000;
-// 19/11/2026 00:00:00.000 a 23:59:59.999 horário de Brasília (UTC-3)
-export const PROMO_STARTS_AT = Date.parse('2026-11-19T03:00:00.000Z');
-export const PROMO_EXPIRES_AT = Date.parse('2026-11-20T02:59:59.999Z');
+export const PROMO_ID = 'integra-2026-2027';
+export const PROMO_NAME = 'INTEGRA';
+export const PROMO_COINS = 500;
+export const PROMO_BOXES = 5;
+// 25/11/2026 00:00:00.000 a 06/01/2027 23:59:59.999 horário de Brasília (UTC-3)
+export const PROMO_STARTS_AT = Date.parse('2026-11-25T03:00:00.000Z');
+export const PROMO_EXPIRES_AT = Date.parse('2027-01-07T02:59:59.999Z');
 
 export const promoActive = (now = Date.now()) => now >= PROMO_STARTS_AT && now <= PROMO_EXPIRES_AT;
 
-// Z + 8 z + 18 u, grafia pedida (o nome longo quebra no CSS do popup)
-export const PROMO_THANKS_NAME = 'Z' + 'z'.repeat(8) + 'u'.repeat(18);
-
-export const PROMO_TITLE = 'DÉCIMO PINGOU 🐷💸';
-export const PROMO_KICKER = 'Promoção da casa';
-export const PROMO_CREDIT_OK = 'VALEU, MEU 13º';
+export const PROMO_TITLE = 'INTEGRA 🎉🐷';
+export const PROMO_KICKER = 'Festa de final de ano da Cheers';
+export const PROMO_CREDIT_OK = 'VALEU, INTEGRA';
 export const PROMO_GUEST_OK = 'ENTRAR / CRIAR CONTA';
 export const PROMO_GUEST_SKIP = 'DEIXA PRA LÁ';
 
-const thanks = `Agradecimento especial à ${PROMO_THANKS_NAME}`;
-const thanksHtml = `Agradecimento especial à <span class="promo-thanks">${PROMO_THANKS_NAME}</span>`;
-
-export function promoCreditText(coins = PROMO_COINS) {
-  return `O Docão recebeu o 13º e, em vez de guardar, transformou tudo em Docoins pra turma. Caiu ${coins} Docoins na sua comanda — o décimo pingou, só hoje, até meia-noite. ${thanks}. Corre no Brechó antes que o RH peça o salário de volta.`;
+// Rótulo do último dia da janela em Brasília, para o texto acompanhar a data.
+export function promoUntilLabel(expires = PROMO_EXPIRES_AT) {
+  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(expires));
 }
 
-export function promoGuestText(coins = PROMO_COINS) {
-  return `O décimo pingou, mas a Porca Véia só deposita ${coins} Docoins pra quem tem comanda. Entra ou cria a conta pra levar o 13º: só hoje, até meia-noite. ${thanks}.`;
+export function promoCreditText(coins = PROMO_COINS, boxes = PROMO_BOXES) {
+  return `A Cheers chama pra festa de final de ano e o Docão abriu a comanda. Caiu ${coins} Docoins e ${boxes} caixotes na sua conta — o Integra chegou. Vale uma vez por comanda, até ${promoUntilLabel()}. Corre no Brechó e abre os caixotes antes que a Porca Véia recolha o salgadinho.`;
 }
 
-export function promoCreditHtml(coins = PROMO_COINS) {
-  return `O Docão recebeu o 13º e, em vez de guardar, transformou tudo em Docoins pra turma. Caiu <b>${coins} Docoins</b> na sua comanda — o décimo pingou, só hoje, até meia-noite. ${thanksHtml}. Corre no Brechó antes que o RH peça o salário de volta.`;
+export function promoGuestText(coins = PROMO_COINS, boxes = PROMO_BOXES) {
+  return `O Integra pingou, mas a Porca Véia só deposita ${coins} Docoins e ${boxes} caixotes pra quem tem comanda. Entra ou cria a conta pra ir pra festa: até ${promoUntilLabel()}.`;
 }
 
-export function promoGuestHtml(coins = PROMO_COINS) {
-  return `O décimo pingou, mas a Porca Véia só deposita <b>${coins} Docoins</b> pra quem tem comanda. Entra ou cria a conta pra levar o 13º: só hoje, até meia-noite. ${thanksHtml}.`;
+export function promoCreditHtml(coins = PROMO_COINS, boxes = PROMO_BOXES) {
+  return `A Cheers chama pra festa de final de ano e o Docão abriu a comanda. Caiu <b>${coins} Docoins</b> e <b>${boxes} caixotes</b> na sua conta — o Integra chegou. Vale uma vez por comanda, até ${promoUntilLabel()}. Corre no Brechó e abre os caixotes antes que a Porca Véia recolha o salgadinho.`;
+}
+
+export function promoGuestHtml(coins = PROMO_COINS, boxes = PROMO_BOXES) {
+  return `O Integra pingou, mas a Porca Véia só deposita <b>${coins} Docoins</b> e <b>${boxes} caixotes</b> pra quem tem comanda. Entra ou cria a conta pra ir pra festa: até ${promoUntilLabel()}.`;
 }

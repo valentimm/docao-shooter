@@ -8,7 +8,7 @@ import { COIN_ICON, CURRENCY } from './shared/closet.js';
 import { BOX_PRICE } from './shared/lootbox.js';
 import { TIERS } from './shared/challenges.js';
 import { ELO_START, ELO_TIERS, ELO_MODES, eloMode, eloSummary, isMaxEloTier } from './shared/elo.js';
-import { promoActive, PROMO_ID, PROMO_COINS, PROMO_TITLE, PROMO_KICKER, PROMO_CREDIT_OK, PROMO_GUEST_OK, PROMO_GUEST_SKIP, promoCreditHtml, promoGuestHtml } from './shared/promo.js';
+import { promoActive, PROMO_ID, PROMO_COINS, PROMO_BOXES, PROMO_TITLE, PROMO_KICKER, PROMO_CREDIT_OK, PROMO_GUEST_OK, PROMO_GUEST_SKIP, promoCreditHtml, promoGuestHtml } from './shared/promo.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -63,7 +63,11 @@ function openPromo({ guest }) {
   $('promoTitle').textContent = PROMO_TITLE;
   const coins = $('promoCoins');
   if (guest) coins.classList.add('hidden');
-  else { coins.classList.remove('hidden'); coins.innerHTML = `${COIN_ICON} <b>${PROMO_COINS}</b> <small>${CURRENCY}</small>`; }
+  else {
+    coins.classList.remove('hidden');
+    coins.innerHTML = `<span class="promo-reward">${COIN_ICON} <b>${PROMO_COINS}</b> <small>${CURRENCY}</small></span>`
+      + `<span class="promo-reward">🌽 <b>${PROMO_BOXES}</b> <small>caixotes</small></span>`;
+  }
   $('promoBody').innerHTML = guest ? promoGuestHtml() : promoCreditHtml();
   $('promoOk').textContent = guest ? PROMO_GUEST_OK : PROMO_CREDIT_OK;
   $('promoSkip').textContent = PROMO_GUEST_SKIP;
