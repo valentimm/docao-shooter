@@ -5,6 +5,17 @@ import { toon, outline, drawLogo } from './docao.js';
 const COIN_N = 16;
 let coinMap = null;
 let coinFaceGeo = null;
+// geometrias compartilhadas: antes cada morte com FX recriava dezenas de geometrias e o contorno suavizado (mergeVertices) de cada uma = engasgo.
+// Compartilhadas, o contorno é calculado uma vez só (cache por geometria em docao.js) e nunca é descartado.
+const geoCache = new Map();
+function G(kind, ...args) {
+  const key = kind + ':' + args.join(',');
+  let g = geoCache.get(key);
+  if (!g) { g = new THREE[kind + 'Geometry'](...args); geoCache.set(key, g); sharedSet.add(g); }
+  return g;
+}
+const sharedSet = new Set();
+const sharedGeo = (g) => sharedSet.has(g) || g === coinFaceGeo;
 
 function coinTexture() {
   if (coinMap) return coinMap;
@@ -32,38 +43,38 @@ function put(parent, geo, color, x, y, z, th = 0.01) {
 
 function makeDragon() {
   const g = new THREE.Group();
-  const body = put(g, new THREE.SphereGeometry(0.28, 12, 10), '#1f8f4a', 0, 0, 0, 0.016);
+  const body = put(g, G('Sphere', 0.28, 12, 10), '#1f8f4a', 0, 0, 0, 0.016);
   body.scale.set(0.72, 0.55, 1.55);
-  const head = put(g, new THREE.SphereGeometry(0.2, 12, 10), '#24924a', 0, 0.06, 0.48, 0.014);
+  const head = put(g, G('Sphere', 0.2, 12, 10), '#24924a', 0, 0.06, 0.48, 0.014);
   head.scale.set(0.95, 0.78, 1.05);
-  const snout = put(g, new THREE.CylinderGeometry(0.07, 0.08, 0.07, 12), '#f58a6e', 0, 0.02, 0.66, 0.008);
+  const snout = put(g, G('Cylinder', 0.07, 0.08, 0.07, 12), '#f58a6e', 0, 0.02, 0.66, 0.008);
   snout.rotation.x = Math.PI / 2;
-  put(g, new THREE.SphereGeometry(0.018, 8, 6), '#3a0806', -0.025, 0.02, 0.7, 0.004);
-  put(g, new THREE.SphereGeometry(0.018, 8, 6), '#3a0806', 0.025, 0.02, 0.7, 0.004);
+  put(g, G('Sphere', 0.018, 8, 6), '#3a0806', -0.025, 0.02, 0.7, 0.004);
+  put(g, G('Sphere', 0.018, 8, 6), '#3a0806', 0.025, 0.02, 0.7, 0.004);
   for (const s of [-1, 1]) {
-    const ear = put(g, new THREE.SphereGeometry(0.07, 8, 6), '#f7a531', s * 0.1, 0.2, 0.42, 0.008);
+    const ear = put(g, G('Sphere', 0.07, 8, 6), '#f7a531', s * 0.1, 0.2, 0.42, 0.008);
     ear.scale.set(0.42, 1.35, 0.55);
-    const horn = put(g, new THREE.ConeGeometry(0.035, 0.22, 6), '#f3d78a', s * 0.08, 0.28, 0.4, 0.008);
+    const horn = put(g, G('Cone', 0.035, 0.22, 6), '#f3d78a', s * 0.08, 0.28, 0.4, 0.008);
     horn.rotation.z = s * -0.35;
     horn.rotation.x = -0.4;
-    const eye = put(g, new THREE.SphereGeometry(0.028, 8, 6), '#d8261c', s * 0.08, 0.1, 0.6, 0.004);
+    const eye = put(g, G('Sphere', 0.028, 8, 6), '#d8261c', s * 0.08, 0.1, 0.6, 0.004);
     eye.scale.set(1, 0.7, 0.6);
   }
   for (const z of [-0.05, 0.18, 0.38]) {
-    const spike = put(g, new THREE.ConeGeometry(0.04, 0.16, 5), '#f3d78a', 0, 0.22, z, 0.006);
+    const spike = put(g, G('Cone', 0.04, 0.16, 5), '#f3d78a', 0, 0.22, z, 0.006);
     spike.rotation.x = 0.3;
   }
   for (const z of [-0.28, -0.48, -0.64]) {
-    const tail = put(g, new THREE.SphereGeometry(0.12, 8, 6), z < -0.5 ? '#0e5a32' : '#1f8f4a', 0, 0.02, z, 0.01);
+    const tail = put(g, G('Sphere', 0.12, 8, 6), z < -0.5 ? '#0e5a32' : '#1f8f4a', 0, 0.02, z, 0.01);
     tail.scale.set(0.7, 0.55, 1.1);
   }
   const wings = [];
   for (const s of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.position.set(s * 0.18, 0.08, 0.02);
-    const sail = put(pivot, new THREE.SphereGeometry(0.34, 8, 6), '#1f8f4a', s * 0.36, 0, -0.02, 0.012);
+    const sail = put(pivot, G('Sphere', 0.34, 8, 6), '#1f8f4a', s * 0.36, 0, -0.02, 0.012);
     sail.scale.set(1.35, 0.08, 0.72);
-    const tip = put(pivot, new THREE.SphereGeometry(0.16, 8, 6), '#0e5a32', s * 0.62, 0.02, 0.08, 0.008);
+    const tip = put(pivot, G('Sphere', 0.16, 8, 6), '#0e5a32', s * 0.62, 0.02, 0.08, 0.008);
     tip.scale.set(0.9, 0.1, 0.45);
     g.add(pivot);
     wings.push(pivot);
@@ -75,7 +86,7 @@ function makeDragon() {
 
 function makeCoin() {
   const g = new THREE.Group();
-  const disc = put(g, new THREE.CylinderGeometry(0.16, 0.16, 0.04, 18), '#e8c56b', 0, 0, 0, 0.006);
+  const disc = put(g, G('Cylinder', 0.16, 0.16, 0.04, 18), '#e8c56b', 0, 0, 0, 0.006);
   if (!coinFaceGeo) coinFaceGeo = new THREE.CircleGeometry(0.11, 16);
   const faceMat = new THREE.MeshBasicMaterial({ map: coinTexture(), transparent: true, side: THREE.DoubleSide });
   const face = new THREE.Mesh(coinFaceGeo, faceMat);
@@ -95,7 +106,7 @@ function dropMesh(mesh) {
   mesh.traverse((o) => {
     if (!o.isMesh) return;
     const skip = o.userData && o.userData.isOutline;
-    if (o.geometry && o.geometry !== coinFaceGeo && o.geometry.dispose) o.geometry.dispose();
+    if (o.geometry && !sharedGeo(o.geometry) && !o.userData.isOutline && o.geometry.dispose) o.geometry.dispose(); // contorno usa a geometria suavizada em cache de docao.js
     if (skip || !o.material || seen.has(o.material)) return;
     seen.add(o.material);
     o.material.dispose();
