@@ -14,7 +14,7 @@ import { passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroSca
 import { breadBlocks } from '../../shared/historia-finale.js';
 import { frenzyTaken } from '../../shared/historia-ult.js';
 import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
-import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
+import { SURV, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, rollStoryBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, nearPoint, papTierOf, survRefill, cornPopDmg, giftBoomDmg, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, openStoryCampus, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, unlockedZombieSpawns, DOOR_FAIL } from '../../shared/survival.js';
 import { DOWN, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, clearDownFlags, packKeep, stepDowned } from '../../shared/downed.js';
 import { TRAIN, isTraining, dummyX } from '../../shared/training.js';
 import { ARMS_RACE, ARMS_STAGES, ARMS_LAST, isArmsRace, armsStage, armsScore, resetArmsRace, equipArmsRace, armsRaceKill } from '../../shared/arms-race.js';
@@ -338,6 +338,7 @@ export class Game {
     if (this.invasion) for (const b of [...this.ents.values()]) if (b.bot) { this.ents.delete(b.id); } // começa sem zumbi velho/bot
     const map = getMap(id); this.mapId = id; this.map = map;
     this.surv = this.survival ? createMatchSurvival(map) : null;
+    if (this.surv && isHistoria(this.cfg.mode)) openStoryCampus(map, this.surv);
     this.fall = resolveFall(map);
     const hc = map.heavy && !this.surv ? HEAVY_CACHE.get(map.id) : null; // mapa GLB (Breeze, 14 mil caixas): física e nav montadas uma vez por isolate
     const solids = hc ? hc.solids : mapSolids(map).concat(this.surv ? closedDoorSolids(map, this.surv.open) : []); this.P = hc ? hc.P : createPhysics(solids, map.size, this.fall);
@@ -2073,7 +2074,7 @@ startMsg() {
       if (this.boxState.phase !== 'idle') { this.toMe(e, ['svno', 'ocupada']); return; }
       const pay = tryBoxPay(e);
       if (!pay.ok) { this.toMe(e, ['svno', pay.reason, pay.cost | 0, pay.have | 0]); return; }
-      const weapon = rollBox(Math.random, e.weapon);
+      const weapon = isHistoria(this.cfg.mode) ? rollStoryBox(Math.random, e.weapon) : rollBox(Math.random, e.weapon);
       this.boxState = { phase: 'spin', weapon, owner: e.id, until: this.T + SURV.boxSpin };
       say(['sbox', 'spin', weapon, r2(this.boxState.until), e.id, e.pts | 0, e.purseN | 0]);
       return;
@@ -2139,6 +2140,14 @@ startMsg() {
       spawnAreas: () => {
         if (!g.survival || !g.surv || !g.map.survival) return [];
         return g.map.survival.areas.filter((a) => g.surv.areas.has(a.id)).map((a) => a.box);
+      },
+      storyBlocks: () => {
+        if (!isHistoria(g.cfg.mode) || !g.survival || !g.surv || !g.map.survival) return [];
+        return g.map.survival.areas.filter((a) => g.surv.areas.has(a.id)).map((a) => ({
+          id: a.id,
+          box: a.box,
+          points: (a.zspawns || []).map((s) => ({ x: s[0], z: s[1], y: g.P.groundAt(s[0], s[1], (s[2] || 0) + 0.35) })).filter((s) => !g.P.collides(s.x, s.y, s.z)),
+        }));
       },
       targetable: (p) => !!(p && !p.down),
     });

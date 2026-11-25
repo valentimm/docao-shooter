@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { kickRecoil, stepRecoil, resetRecoil, cancelRecoilReturn } from './shared/recoil.js';
 import { makeWardrobeCase } from './menu-wardrobe.js';
 import { makeMenuBackdrop } from './menu-backdrop.js';
-import { makeDocao, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, poseDig, clearDigPose, poseHistoria, clearHistoriaPose, fpHistoriaPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
+import { makeDocao, rottenCast, makeFPArms, makeFPForearm, poseFPForearm, setPose, setCrouchPose, setDownPose, poseDig, clearDigPose, poseHistoria, clearHistoriaPose, fpHistoriaPose, toon, outline, makeCup, makeRocket, drawLogo, makeKnife, applyKnifeSkin, poseButterfly, setExpression, updateExpression, makeNukeRider, gloveMat, gloveSparkles, KARAMBIT_RING_Z, SKELETON_HOLE } from './docao.js';
 import { DANCES, PAID_DANCE_LIST, isPaidDance, normDance, poseVictory, makeShadowDancer, hideVictoryGuns, resetVictoryPose } from './victory-dance.js';
 import { DANCE_TIME, danceId } from './shared/emote.js';
 import { emptyFun, notePodiumKill, notePodiumHurt, notePodiumDeath, awardPodium } from './shared/podium.js';
@@ -36,7 +36,7 @@ import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaD
 import { createEgg, eggPrompt, eggCap, EGG_SPOTS } from './shared/historia-egg.js';
 import { breadBlocks } from './shared/historia-finale.js';
 import { ULTS, frenzyTaken } from './shared/historia-ult.js';
-import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
+import { SURV, PAPADA_NAME, BOX_NAME, isSurvival, normSurv, withPap, tryPap, tryBoxPay, rollBox, rollStoryBox, takeBox, tryWall, applySurvivalLoadout, grantHit, grantKill, bindStations, exclusiveSurvivalMap, papTierOf, survRefill, cornPopDmg, giftBoomDmg, statLine, fmtPts, papRefuse, needsAmmo, getSurvivalWaveTuning, SURVIVAL, isSurvivalMode, createMatchSurvival, openStoryCampus, closedDoorSolids, evaluateDoorBuy, commitDoorBuy, nearestClosedDoor, unlockedZombieSpawns, DOOR_FAIL, acceptPurse } from './shared/survival.js';
 import { DOWN as DOWNED, goesDown, snapshotLoadout, restoreLoadout, beginDown, finishRevive, applyKeep, stepDowned, losPoints } from './shared/downed.js';
 import { makePapada, makeMysteryBox, makeWallGun, makeOfferGun, makeRayOffer, tickStation } from './survival-gfx.js';
 import { createNightAmbience } from './night-ambience.js';
@@ -7346,6 +7346,7 @@ function beginSurvival(saved) {
   if (!currentMap || !currentMap.survival) { surv = null; return; }
   surv = createMatchSurvival(currentMap);
   if (saved) { for (const id of saved.open || []) surv.open.add(id); for (const id of saved.areas || []) surv.areas.add(id); }
+  if (isHistoria(mode)) openStoryCampus(currentMap, surv);
   for (const e of entities) if (e && !e.zt && !e.bot && e.points == null && e.pts == null) acceptPurse(e, SURVIVAL.START_POINTS, 0);
   syncSurvivalSpace();
   for (const [id, g] of doorGroups) applyDoorLeaf(id, surv.open.has(id));
@@ -10034,6 +10035,14 @@ function startInvasionOffline() {
       if (!survivalMode() || !surv || !currentMap || !currentMap.survival) return [];
       return currentMap.survival.areas.filter((a) => surv.areas.has(a.id)).map((a) => a.box);
     },
+    storyBlocks: () => {
+      if (!isHistoria(mode) || !survivalMode() || !surv || !currentMap || !currentMap.survival) return [];
+      return currentMap.survival.areas.filter((a) => surv.areas.has(a.id)).map((a) => ({
+        id: a.id,
+        box: a.box,
+        points: (a.zspawns || []).map((s) => ({ x: s[0], z: s[1], y: groundAt(s[0], s[1], (s[2] || 0) + 0.35) })).filter((s) => !collides(s.x, s.y, s.z)),
+      }));
+    },
     targetable: (p) => !!(p && !p.down),
     removeZombie(z) { scene.remove(z.model.group); entities = entities.filter((x) => x !== z); },
     hurtPlayer(p, dmg, src) { if (!src) fogSrc.pos.set(inv.fog.cx, p.pos.y, inv.fog.cz); damage(p, dmg, src || fogSrc, src ? KNIFE : W_NADE, false); },
@@ -10760,7 +10769,7 @@ function survUse() {
     const pay = tryBoxPay(player);
     if (!pay.ok) { survDenied(['svno', pay.reason, pay.cost, pay.have]); return; }
     survPop(-pay.cost); paintSurvPurse();
-    const weapon = rollBox(Math.random, player.weapon);
+    const weapon = isHistoria(mode) ? rollStoryBox(Math.random, player.weapon) : rollBox(Math.random, player.weapon);
     survBox = { phase: 'spin', weapon, until: gameTime + SURV.boxSpin, owner: player.id };
     return;
   }
@@ -11186,6 +11195,7 @@ function dressCast(z) {
   const big = z.zt === 'bossBig';
   scene.remove(z.model.group);
   z.model = makeDocao(big ? bigSkin() : getSkin(z.skin || 'classico'));
+  rottenCast(z.model);
   if (z.pos) z.model.group.position.copy(z.pos);
   z.model.group.rotation.y = z.yaw || 0;
   z.model.group.userData.cast = 1;
