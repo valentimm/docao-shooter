@@ -120,10 +120,69 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const BASE_FOV = 75, ADS_TIME = 0.15, ADS_SPEED = 0.6; // mira (botão direito)
 const COLORS = { skin: 0xF7A531, snout: 0xF58A6E, cheek: 0xFF7FA0, hoof: 0x7a4535, outline: 0x2a1410, red: 0xe63946, cyan: 0x7DF9FF };
 
+// ---------------- Qualidade gráfica (Ajustes e pausa) ----------------
+// Alta = o visual de sempre. Média limita o pixel ratio e a sombra. Baixa corta luzes decorativas
+// (abóbora, postes do mapa) e o antialias (este só vale no carregamento da página).
+const GFX = {
+  high: { label: 'Alta', pr: 2, aa: true, shadow: 2048, sun: true, decor: true },
+  medium: { label: 'Média', pr: 1.5, aa: true, shadow: 1024, sun: true, decor: true },
+  low: { label: 'Baixa', pr: 1, aa: false, shadow: 1024, sun: true, decor: false },
+};
+function loadGfxQuality() {
+  try { const v = localStorage.getItem('docao.gfx'); if (GFX[v]) return v; } catch (e) { /* sem storage */ }
+  return 'high';
+}
+let gfxQuality = loadGfxQuality();
+let gfxDynPr = null, gfxSlow = 0, gfxFast = 0, gfxAAHint = false;
+const gfxCfg = () => GFX[gfxQuality] || GFX.high;
+function gfxPrCap() { return gfxCfg().pr; }
+function gfxPixelRatio() { return Math.min(window.devicePixelRatio || 1, gfxDynPr != null ? gfxDynPr : gfxPrCap()); }
+function applyDecorLights(on) {
+  if (typeof scene === 'undefined' || !scene) return;
+  scene.traverse((o) => {
+    if (!o.isLight || !o.userData || !o.userData.decorLight) return;
+    o.visible = !!on;
+    if (on && o.userData.baseIntensity != null) o.intensity = o.userData.baseIntensity;
+  });
+}
+function applyGfxQuality(q) {
+  if (!GFX[q]) q = 'high';
+  const prev = gfxQuality; gfxQuality = q; gfxDynPr = null; gfxSlow = 0; gfxFast = 0;
+  try { localStorage.setItem('docao.gfx', q); } catch (e) { /* sem storage */ }
+  document.querySelectorAll('[data-gfx-quality]').forEach((el) => { if (el.value !== q) el.value = q; });
+  const c = gfxCfg();
+  if (typeof renderer !== 'undefined' && renderer) {
+    renderer.setPixelRatio(gfxPixelRatio());
+    renderer.shadowMap.enabled = !!c.sun;
+    if (typeof sun !== 'undefined' && sun) {
+      sun.castShadow = !!c.sun;
+      if (c.sun && sun.shadow) {
+        if (sun.shadow.map && sun.shadow.mapSize.x !== c.shadow) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+        sun.shadow.mapSize.set(c.shadow, c.shadow);
+      }
+    }
+    applyDecorLights(c.decor);
+    const hint = $('gfxAaHint'), liveAA = gfxRendererAA !== false;
+    gfxAAHint = c.aa !== liveAA;
+    if (hint) { hint.classList.toggle('hidden', !gfxAAHint); hint.textContent = gfxAAHint ? 'O anti-aliasing muda no próximo carregamento da página.' : ''; }
+  }
+  return prev !== q;
+}
+function stepGfxResolution(realDt) {
+  if (state !== 'playing') return;
+  const ms = realDt * 1000, cap = gfxPrCap(), cur = gfxDynPr != null ? gfxDynPr : cap;
+  if (ms > 22) { gfxSlow++; gfxFast = 0; } else if (ms < 16) { gfxFast++; gfxSlow = 0; } else { gfxSlow = Math.max(0, gfxSlow - 1); gfxFast = Math.max(0, gfxFast - 1); }
+  let next = cur;
+  if (gfxSlow > 40 && cur > 1) { next = Math.max(1, Math.round((cur - 0.25) * 4) / 4); gfxSlow = 0; }
+  else if (gfxFast > 90 && cur < cap) { next = Math.min(cap, Math.round((cur + 0.25) * 4) / 4); gfxFast = 0; }
+  if (next !== cur) { gfxDynPr = next === cap ? null : next; if (renderer) renderer.setPixelRatio(gfxPixelRatio()); }
+}
+
 // ---------------- Renderer / cenas ----------------
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: gfxCfg().aa });
+const gfxRendererAA = gfxCfg().aa;
+renderer.setPixelRatio(gfxPixelRatio());
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -143,7 +202,7 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x6a8f4a, 1.6); scene.add(hemi)
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
 sun.position.set(30, 50, 20);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(gfxCfg().shadow, gfxCfg().shadow);
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 120 });
 sun.shadow.bias = -0.0008;
 scene.add(sun, sun.target);
@@ -151,6 +210,7 @@ const fpHemi = new THREE.HemisphereLight(0xffffff, 0x6a8f4a, 1.8); fpScene.add(f
 const fpSun = new THREE.DirectionalLight(0xffffff, 2); fpSun.position.set(1, 2, 1); fpScene.add(fpSun);
 
 addEventListener('resize', () => {
+  renderer.setPixelRatio(gfxPixelRatio());
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = fpCam.aspect = innerWidth / innerHeight;
   if (state === 'menu') camera.clearViewOffset();
@@ -804,6 +864,11 @@ document.querySelectorAll('[data-reduced-anim]').forEach((el) => {
   el.checked = reducedAnims();
   el.addEventListener('change', () => setReducedAnims(el.checked));
 });
+document.querySelectorAll('[data-gfx-quality]').forEach((el) => {
+  el.value = gfxQuality;
+  el.addEventListener('change', () => applyGfxQuality(el.value));
+});
+applyGfxQuality(gfxQuality);
 let mode = 'dm', teamScore = [0, 0], zone = null, zoneT = 0; // modo de jogo: 'dm' (mata-mata) | 'dom' (Dominação) | 'explore' (mapa vazio) | 'treino' | 'bomb' (Bomba, protótipo)
 let botDiff = 'ceva'; // dificuldade dos bots (shared/bot-difficulty.js); a preferência entra mais abaixo, quando o menu existe
 let hideS = null, hideBlindEl = null; // Docão Escondido (shared/hide.js): estado da rodada · tela preta dos Caçadores na preparação
@@ -6799,7 +6864,7 @@ function renderWardrobePreview() {
   if (crateJourney.phase !== 'inside' || crateJourney.view !== 'operator') return;
   if (!wardrobePreviewRenderer) {
     wardrobePreviewRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    wardrobePreviewRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    wardrobePreviewRenderer.setPixelRatio(Math.min(devicePixelRatio, gfxPrCap()));
     wardrobePreviewRenderer.domElement.setAttribute('aria-hidden', 'true');
     $('wardrobePreview').appendChild(wardrobePreviewRenderer.domElement);
   }
@@ -7221,7 +7286,7 @@ function renderDanceShadows(t) {
   if (rect.width < 8 || rect.height < 8) return;
   if (!danceRenderer) {
     danceRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    danceRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    danceRenderer.setPixelRatio(Math.min(devicePixelRatio, gfxPrCap()));
     danceRenderer.setClearColor(0x000000, 0);
     danceRenderer.domElement.setAttribute('aria-hidden', 'true');
     stage.insertBefore(danceRenderer.domElement, stage.firstChild);
@@ -7316,7 +7381,7 @@ function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de muniçã
   doorGroups = new Map(); for (const g of w.doors || []) doorGroups.set(g.userData.doorId, g);
   nightLights = w.nightLights || []; nightAmb.stop();
   solids = w.solids; worldMeshes = w.meshes; mapBounds = map.size; indexSolids(map);
-  applyPalette(scene, hemi, sun, map); fpHemi.intensity = map.palette.stars ? 1.25 : 1.8;
+  applyPalette(scene, hemi, sun, map); fpHemi.intensity = map.palette.stars ? 1.25 : 1.8; applyDecorLights(gfxCfg().decor);
   SPAWNS = map.spawns.map(([x, z, y = 0]) => new V3(x, groundAt(x, z, y + 0.3), z));
   for (const [t, x, z, y] of inv && map.invPickups ? [...map.pickups, ...map.invPickups] : map.pickups) makePickup(t, x, z, y || 0);
   pickups.forEach((p) => (p.mesh.visible = state !== 'menu'));
@@ -8037,6 +8102,7 @@ const clock = new THREE.Clock(); let menuT = 0, danceT = 0;
 function loop() {
   requestAnimationFrame(loop);
   const realDt = clock.getDelta();
+  stepGfxResolution(realDt);
   let dt = Math.min(realDt, 0.05);
   if (window.__stopAt != null) dt = Math.max(0, Math.min(dt, window.__stopAt - gameTime)); // testes/screenshots: congela o tempo de jogo num instante exato
   if (state === 'playing' || (online && state === 'paused' && player)) { // online o jogo não pausa
@@ -10172,7 +10238,7 @@ function invApplyLook(on) {
   for (const d of invGfx.drops.values()) scene.remove(d.m); invGfx.drops.clear(); for (const p of invGfx.projs.values()) scene.remove(p.m); invGfx.projs.clear(); for (const r of invGfx.rings) scene.remove(r); invGfx.rings.length = 0;
   for (const c of invGfx.cones.values()) c.parent && c.parent.remove(c); invGfx.cones.clear();
   if (!currentMap) return;
-  if (on) { applyHalloweenPalette(scene, hemi, sun, currentMap); fpHemi.intensity = 1.2; invGfx.hal = buildHalloween(currentMap, nav, groundAt); scene.add(invGfx.hal); }
+  if (on) { applyHalloweenPalette(scene, hemi, sun, currentMap); fpHemi.intensity = 1.2; invGfx.hal = buildHalloween(currentMap, nav, groundAt); scene.add(invGfx.hal); applyDecorLights(gfxCfg().decor); }
   else { applyPalette(scene, hemi, sun, currentMap); fpHemi.intensity = currentMap.palette.stars ? 1.25 : 1.8; }
   document.body.classList.toggle('invmode', !!on); invMusicOn(!!on);
   ['invhud', 'invPowers'].forEach((id) => $(id).classList.toggle('hidden', !on)); if (!on) document.body.classList.remove('invout', 'ghostfx'); if (!on) { $('invBoss').classList.add('hidden'); $('invOut').classList.add('hidden'); $('invBanner').classList.add('hidden'); const gh = $('graveHud'); if (gh) gh.classList.add('hidden'); clearGraveMarks(); invBannerT = 0; $('fogVeil').style.opacity = '0'; invClosePick(); const sp = $('sPrompt'); if (sp) sp.classList.add('hidden'); for (const id of ['papMark', 'boxMark', 'papCard']) { const m = $(id); if (m) m.classList.add('hidden'); } $('invWaveN').textContent = 'WAVE 1/20'; $('invWaveSub').textContent = ''; const msg = $('centermsg'); if (msg) msg.style.top = ''; }
@@ -11726,7 +11792,7 @@ function invEndText() {
 }
 
 // ganchos para testes automatizados
-window.__docao = { renderer, get gta() { const p = player; if (!p) return null; const eye = camera.position.y - p.pos.y; return { tank: !!p.tank, jet: !!p.jet, glide: !!p.jetGlide, big: !!p.big, subido: !!p.subido, hp: p.hp, hpCap: p.hpCap || 100, jetLeft: +(p.jetLeft || 0).toFixed(2), bigLeft: +(p.bigLeft || 0).toFixed(2), eye: +eye.toFixed(2), bodyH: p.bodyH || 0, bodyR: p.bodyR || 0, wave: document.body.dataset.subidoWave === '1', green: document.body.classList.contains('subido'), lowHz: subidoLp ? Math.round(subidoLp.frequency.value) : 0, hud: ($('gtaHud') && !$('gtaHud').classList.contains('hidden')) ? $('gtaHud').textContent : '' }; }, get state() { return state; }, get mapId() { return currentMap ? currentMap.id : null; }, get navGood() { return nav ? nav.good.length : 0; }, get zombies() { return inv ? inv.zombies : []; }, get invInfo() { return inv ? { wave: inv.wave, phase: inv.phase, left: inv.left, n: (inv.zombies || []).length, t: inv.t } : null; }, get bombInfo() { return bombS ? { phase: bombS.phase, t: bombS.t, carrier: bombS.carrier } : null; }, get mode() { return mode; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
+window.__docao = { renderer, get gfx() { return { quality: gfxQuality, pr: renderer.getPixelRatio(), aa: gfxRendererAA !== false, shadow: sun.shadow.mapSize.x, decor: gfxCfg().decor, dyn: gfxDynPr }; }, setGfx: (q) => applyGfxQuality(q), GFX, get gta() { const p = player; if (!p) return null; const eye = camera.position.y - p.pos.y; return { tank: !!p.tank, jet: !!p.jet, glide: !!p.jetGlide, big: !!p.big, subido: !!p.subido, hp: p.hp, hpCap: p.hpCap || 100, jetLeft: +(p.jetLeft || 0).toFixed(2), bigLeft: +(p.bigLeft || 0).toFixed(2), eye: +eye.toFixed(2), bodyH: p.bodyH || 0, bodyR: p.bodyR || 0, wave: document.body.dataset.subidoWave === '1', green: document.body.classList.contains('subido'), lowHz: subidoLp ? Math.round(subidoLp.frequency.value) : 0, hud: ($('gtaHud') && !$('gtaHud').classList.contains('hidden')) ? $('gtaHud').textContent : '' }; }, get state() { return state; }, get mapId() { return currentMap ? currentMap.id : null; }, get navGood() { return nav ? nav.good.length : 0; }, get zombies() { return inv ? inv.zombies : []; }, get invInfo() { return inv ? { wave: inv.wave, phase: inv.phase, left: inv.left, n: (inv.zombies || []).length, t: inv.t } : null; }, get bombInfo() { return bombS ? { phase: bombS.phase, t: bombS.t, carrier: bombS.carrier } : null; }, get mode() { return mode; }, toMenu: () => toMenu(), benchOpen: () => benchOn, victoryFit: () => { const m = victory.model; if (!m) return null; m.group.updateMatrixWorld(true); const box = new THREE.Box3(), c = []; m.group.traverseVisible((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } }); const _u = 0, v = new V3(); for (let i = 0; i < 8; i++) { v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera); c.push([v.x, v.y]); } return { minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minY: Math.min(...c.map((q) => q[1])), maxY: Math.max(...c.map((q) => q[1])), h: box.max.y - box.min.y, fov: camera.fov, dist: camera.position.distanceTo(m.group.position) }; }, get ending() { return matchEnding; }, get entities() { return entities; }, get player() { return player; }, get camera() { return camera; }, TAMPA, get shield() { const p = player; return p ? { hp: p.shieldHp || 0, broken: !!p.shieldBroken, blocked: Math.round(p.shieldBlocked || 0), raised: shieldRaised(p), stage: shieldStage(p.shieldHp) } : null; }, shieldAttack: (kind = 0) => player && shieldStrike(player, kind, camera.position.clone(), new V3(0, 0, -1).applyQuaternion(camera.quaternion)), startGame, endGame, pause, visible: (e) => losClear(center(player, EYE), center(e, 1.2)),
   set time(v) { gameTime = v; }, get time() { return gameTime; }, get grenades() { return grenades; }, get grenadeAim() { return { origin: throwOrigin().toArray(), velocity: throwVelocity(throwPower()).toArray(), points: Array.from(arcGeo.attributes.position.array.slice(0, arcGeo.drawRange.count * 3)), marker: arcMark.position.toArray(), visible: arcLine.visible, cupVisible: fp.cup.visible, handVisible: fp.cupHand.visible, cupX: heldUtilMesh().position.x, smokeVisible: !!(fp.smokeCan && fp.smokeCan.visible), flashVisible: !!(fp.flashCan && fp.flashCan.visible) }; }, get tacticals() { return tacticals; }, get explosions() { return explosions; }, get pickups() { return pickups; }, get ads() { return ads; }, get noclip() { return noclipLive(); }, get noclipSpeed() { return noclipSpeed; }, get fov() { return camera.fov; }, get rockets() { return rockets; }, get lastKnock() { return lastKnock; }, WEAPONS, setPrimary, tuneClass, armClass, get classes() { return classes; }, get classIndex() { return classIndex; }, get held() { return player ? gunOf(player, player.weapon) : null; }, get scoped() { return scoped(); }, get fpVisible() { return !!(fp.root && fp.root.visible); },
   MAPS, loadMap, selectMap, get map() { return currentMap; }, get gas() { return gasSim ? gasSim.list.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, r: c.r, h: c.h, hp: +c.hp.toFixed(1), phase: c.phase, explodeAt: +c.explodeAt.toFixed(2), respawnAt: +c.respawnAt.toFixed(2) })) : []; }, get nav() { return nav; }, get navMs() { return navMs; }, get spawns() { return SPAWNS; }, groundAt, collides, get solids() { return solids; },
   get online() { return online; }, joinRoom, leaveOnline, netEv,

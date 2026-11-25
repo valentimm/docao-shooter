@@ -2335,3 +2335,11 @@ body.subido #hud::after{content:'';position:fixed;inset:0;pointer-events:none;ba
 @media (prefers-reduced-motion: reduce){
   body.subido #hud::after{background:rgba(20,90,30,.08)}
 }
+
+/* Qualidade gráfica (Ajustes e pausa) */
+#menu .gfx-ticket{display:flex;flex-direction:column;gap:8px;margin:10px 0 4px}
+#menu .gfx-ticket select{font:700 14px var(--font);padding:8px 10px;border:2px solid #9b7c4f;background:#fff8e6;color:var(--ink);border-radius:4px}
+#menu .gfx-ticket small{font-size:11px;opacity:.85;line-height:1.35}
+#menu .gfx-ticket #gfxAaHint{color:var(--red)}
+#pause .gfx-pause{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;padding:10px 12px;border:2px solid #9b7c4f;background:#fff0d0;font-weight:700}
+#pause .gfx-pause select{font:700 14px var(--font);padding:6px 8px;border:2px solid #9b7c4f;background:#fff8e6;color:var(--ink)}

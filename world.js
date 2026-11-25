@@ -507,7 +507,7 @@ export function buildWorld(map) {
   const nightLights = [];
   for (const L of pal.lights || []) {
     const [c, x, y, z, i, d, kind] = L;
-    const l = new THREE.PointLight(c, i, d, 1.4); l.position.set(x, y, z);
+    const l = new THREE.PointLight(c, i, d, 1.4); l.position.set(x, y, z); l.userData.decorLight = true; l.userData.baseIntensity = i;
     if (kind) { l.userData.flicker = kind; l.userData.base = i; nightLights.push(l); }
     group.add(l);
   }
