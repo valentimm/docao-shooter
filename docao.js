@@ -47,7 +47,7 @@ function smoothGeo(geo) {
   g = mergeVertices(g, 1e-3); g.computeVertexNormals(); smoothCache.set(geo, g); return g;
 }
 export function outline(mesh, th = 0.012) {
-  const o = new THREE.Mesh(smoothGeo(mesh.geometry), outlineMat(th)); o.raycast = () => {}; o.userData.isOutline = true; mesh.add(o); return mesh;
+  const o = new THREE.Mesh(smoothGeo(mesh.geometry), outlineMat(th)); o.raycast = () => {}; o.userData.isOutline = true; o.userData.olTh = th; mesh.add(o); return mesh;
 }
 export const basic = (c) => new THREE.MeshBasicMaterial({ color: c });
 

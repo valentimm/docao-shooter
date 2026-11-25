@@ -324,6 +324,15 @@
         <input id="sensAds" aria-label="Sensibilidade mirando" type="range" min="0.2" max="2" step="0.05" value="1">
       </label>
         </div>
+        <label class="range-ticket gfx-ticket" for="gfxQuality"><span class="field-caption">Qualidade gráfica</span>
+          <select id="gfxQuality" data-gfx-quality aria-label="Qualidade gráfica">
+            <option value="high">Alta</option>
+            <option value="medium">Média</option>
+            <option value="low">Baixa</option>
+          </select>
+          <small>Alta é o visual completo. Média limita a nitidez. Baixa corta luzes de enfeite e o anti-aliasing.</small>
+          <small id="gfxAaHint" class="hidden"></small>
+        </label>
     <div class="controls">
       <b>Controles</b>
       <div>WASD mover · Mouse mirar · Espaço pular · Segurar Shift: agachar · Botão direito: mirar/zoom (com a faca: estocada)</div>
@@ -337,6 +346,13 @@
       <div>Na Grelha (13 abates): clique atira · 1 Espeto / 2 Panela / 3 Caldeirão (rodinha ou botão direito também) · F sai do avião</div>
       <label class="checkline"><input type="checkbox" data-nade-voice checked> Vozes da granada (&quot;granada!&quot; e &quot;banana!&quot;) · tecla H na partida</label>
       <label class="checkline"><input type="checkbox" data-reduced-anim> Animações reduzidas</label>
+      <label class="gfx-pause">Qualidade gráfica
+        <select data-gfx-quality aria-label="Qualidade gráfica">
+          <option value="high">Alta</option>
+          <option value="medium">Média</option>
+          <option value="low">Baixa</option>
+        </select>
+      </label>
       <label class="checkline"><input type="checkbox" data-chat-toggle checked> Mostrar chat</label>
       <div>T todos · Y time · Enter fala (vivo) · J troca a voz · Apertar = segure K, Aberto = microfone livre · Tab placar · Esc pausar</div>
     </div>

@@ -5,6 +5,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { toon, outline, HEAD, headR, TORSO_PTS } from './docao.js';
+import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
 import { POWERS, POWER_KEYS, ZOMBIES, isBoss } from './shared/invasion.js';
 
 const V3 = THREE.Vector3, V2 = THREE.Vector2;
@@ -54,14 +55,161 @@ function getHeadGeo() {
 const getTorsoGeo = () => torsoGeo || (torsoGeo = new THREE.LatheGeometry(TORSO_PTS, 18));
 const G = { cyl: new THREE.CylinderGeometry(1, 1, 1, 8), sph: new THREE.SphereGeometry(1, 10, 8), box: new THREE.BoxGeometry(1, 1, 1), cone: new THREE.ConeGeometry(1, 1, 6) };
 
+// Junta malhas irmãs do mesmo material (e mesmas flags) num grupo. Cada peça animada
+// (perna, braço, cabeça, mandíbula, corpo) continua sendo um grupo que gira sozinho;
+// só some o tanto de draw call das dezenas de cubos/esferas que não se movem uma
+// sem a outra. A geometria unida é compartilhada entre zumbis do mesmo tipo (clone).
+function bakeMeshGeo(mesh) {
+  mesh.updateMatrix();
+  const g = mesh.geometry.clone(); // clone: nunca aplica a matriz na geometria compartilhada (cilindro/esfera/caixa)
+  g.applyMatrix4(mesh.matrix);
+  return g;
+}
+function partKey(mesh) {
+  const u = mesh.userData || {};
+  if (u.isOutline || u.blink || u.eye || u.goo || u.zRole === 'wing' || u.zRole === 'tear') return null; // animação/visão própria
+  const ol = mesh.children.find((c) => c.userData && c.userData.isOutline);
+  const th = ol ? (ol.userData.olTh != null ? ol.userData.olTh : 'x') : '0';
+  return (mesh.material && mesh.material.uuid) + '|' + (u.tiny ? '1' : '0') + '|' + (mesh.castShadow ? '1' : '0') + '|' + th;
+}
+function collapseParts(root) {
+  for (const c of root.children.slice()) if (c.isGroup) collapseParts(c);
+  const buckets = new Map();
+  for (const c of root.children) {
+    if (!c.isMesh) continue;
+    const k = partKey(c); if (!k) continue;
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(c);
+  }
+  for (const list of buckets.values()) {
+    if (list.length < 2) continue;
+    const baked = list.map(bakeMeshGeo);
+    const indexed = baked.every((g) => g.index);
+    const geos = indexed ? baked : baked.map((g) => (g.index ? g.toNonIndexed() : g));
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) continue;
+    const proto = list[0];
+    const m = new THREE.Mesh(merged, proto.material);
+    m.castShadow = proto.castShadow;
+    m.receiveShadow = proto.receiveShadow;
+    if (proto.userData.tiny) m.userData.tiny = true;
+    const ol = proto.children.find((c) => c.userData && c.userData.isOutline);
+    if (ol) outline(m, ol.userData.olTh != null ? ol.userData.olTh : 0.01);
+    root.add(m);
+    for (const old of list) root.remove(old);
+  }
+  batchVertexParts(root);
+}
+function batchVertexParts(root) {
+  const can = (mesh) => {
+    if (!mesh.isMesh) return false;
+    const u = mesh.userData || {}, mat = mesh.material;
+    if (u.isOutline || u.blink || u.eye || u.goo || u.zRole === 'wing' || u.zRole === 'tear' || !mat || Array.isArray(mat)) return false;
+    if (mat.userData && (mat.userData.zFlash != null || mat.userData.zEye)) return false;
+    if (mat.transparent && mat.opacity < 0.99) return false;
+    if (!(mat.isMeshToonMaterial || mat.isMeshBasicMaterial) || !mat.color) return false;
+    return true;
+  };
+  const buckets = new Map();
+  for (const c of root.children) {
+    if (!can(c)) continue;
+    const kind = c.material.isMeshToonMaterial ? 'toon' : 'basic';
+    const k = kind + '|' + (c.userData.tiny ? '1' : '0') + '|' + (c.castShadow ? '1' : '0');
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(c);
+  }
+  for (const [k, list] of buckets) {
+    if (list.length < 2) continue;
+    const kind = k.split('|')[0];
+    const geos = [];
+    for (const mesh of list) {
+      const g = bakeMeshGeo(mesh);
+      const col = mesh.material.color;
+      const n = (g.getAttribute('position').count);
+      const arr = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b; }
+      g.setAttribute('color', new THREE.Float32BufferAttribute(arr, 3));
+      geos.push(g);
+    }
+    const indexed = geos.every((g) => g.index);
+    const ready = indexed ? geos : geos.map((g) => (g.index ? g.toNonIndexed() : g));
+    const merged = mergeGeometries(ready, false);
+    for (const g of ready) g.dispose();
+    if (!merged) continue;
+    const proto = list[0];
+    const mat = kind === 'toon' ? toon('#ffffff') : new THREE.MeshBasicMaterial({ color: 0xffffff });
+    mat.vertexColors = true;
+    if (kind === 'toon' && proto.material.gradientMap) mat.gradientMap = proto.material.gradientMap;
+    const m = new THREE.Mesh(merged, mat);
+    m.castShadow = proto.castShadow;
+    if (proto.userData.tiny) m.userData.tiny = true;
+    const ol = proto.children.find((c) => c.userData && c.userData.isOutline);
+    if (ol) outline(m, ol.userData.olTh != null ? ol.userData.olTh : 0.01);
+    root.add(m);
+    for (const old of list) root.remove(old);
+  }
+}
+function cloneMat(mat, map) {
+  if (!mat) return mat;
+  if (map.has(mat)) return map.get(mat);
+  const c = mat.clone();
+  c.userData = { ...mat.userData };
+  if (mat.userData.baseEmissive && mat.userData.baseEmissive.clone) c.userData.baseEmissive = mat.userData.baseEmissive.clone();
+  if (mat.userData.ghostBase) c.userData.ghostBase = { t: mat.userData.ghostBase.t, o: mat.userData.ghostBase.o };
+  map.set(mat, c);
+  return c;
+}
+function cloneZombie(proto) {
+  const mats = new Map();
+  const group = proto.group.clone(true);
+  group.visible = true;
+  group.traverse((o) => {
+    if (!o.material) return;
+    o.material = Array.isArray(o.material) ? o.material.map((m) => cloneMat(m, mats)) : cloneMat(o.material, mats);
+  });
+  const legs = [], arms = [], wings = [], tears = [], flash = [];
+  let body, head, jaw, eyeM;
+  group.traverse((o) => {
+    const u = o.userData || {};
+    if (u.zRole === 'body') body = o;
+    else if (u.zRole === 'leg') legs[u.zSlot] = o;
+    else if (u.zRole === 'arm') arms[u.zSlot] = o;
+    else if (u.zRole === 'head') head = o;
+    else if (u.zRole === 'jaw') jaw = o;
+    else if (u.zRole === 'wing') wings[u.zSlot] = o;
+    else if (u.zRole === 'tear') tears[u.zSlot] = o;
+    for (const m of [].concat(o.material || [])) {
+      if (m.userData && m.userData.zEye) eyeM = m;
+      if (m.userData && m.userData.zFlash != null) flash[m.userData.zFlash] = m;
+    }
+  });
+  const blinks = []; group.traverse((o) => { if (o.userData.blink) blinks.push(o); });
+  group.userData.blinks = blinks;
+  if (wings.length) group.userData.wings = wings; else delete group.userData.wings;
+  if (tears.length) group.userData.tears = tears; else delete group.userData.tears;
+  group.userData.size = proto.group.userData.size;
+  // materiais de flash/olho vêm do protótipo (mesmo que alguma malha tenha sido unida e o traverse não os ache)
+  const flashMats = (proto.flashMats || []).map((m) => cloneMat(m, mats)).filter(Boolean);
+  eyeM = (proto.eyeM && cloneMat(proto.eyeM, mats)) || eyeM;
+  return { group, body, legs, arms, head, jaw: jaw || null, guns: [], flashMats, type: proto.type, eyeM, boss: proto.boss };
+}
+const protoZombies = new Map();
 export function makeZombie(type) {
+  const key = type || 'walker';
+  let proto = protoZombies.get(key);
+  if (!proto) { proto = assembleZombie(key); proto.group.visible = false; protoZombies.set(key, proto); }
+  return cloneZombie(proto);
+}
+function assembleZombie(type) {
+
   const C = ZCOL[type] || ZCOL.walker, st = ZOMBIES[type] || ZOMBIES.walker;
   const suitM = toon(C.suit), suit2M = toon(C.suit2), metalM = toon(C.metal), darkM = toon('#141012'), snoutM = toon(C.snout), toothM = toon('#e8e0c8');
   for (const m of [suitM, suit2M, metalM, snoutM]) { m.emissive = new THREE.Color(0x000000); m.userData.baseEmissive = m.emissive.clone(); }
   const eyeM = glowMat(C.eye);
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
   const mesh = (geo, mat, parent = body, ol = 0.012) => { const m = new THREE.Mesh(geo, mat); parent.add(m); if (ol) outline(m, ol); m.castShadow = true; return m; };
-  const part = (geo, mat, parent, [x, y, z], [sx, sy, sz], rot = null, ol = 0.01) => { const m = mesh(geo, mat, parent, ol); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (rot) m.rotation.set(...rot); if (Math.max(sx, sy, sz) <= 0.12) m.castShadow = false; if (geo === G.cone && sx <= 0.03) m.userData.tiny = true; return m; }; // tiny: dente/garra (o LOD esconde de longe) // dente, garra, olho, narina: a sombra seria menor que 1 cm (e custa um draw call na passada de sombra)
+  const part = (geo, mat, parent, [x, y, z], [sx, sy, sz], rot = null, ol = 0.01) => { const m = mesh(geo, mat, parent, ol); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (rot) m.rotation.set(...rot); if (Math.max(sx, sy, sz) <= 0.12 || (geo === G.cone && sx <= 0.03)) m.castShadow = false; if (geo === G.cone && sx <= 0.03) m.userData.tiny = true; return m; }; // tiny: dente/garra (o LOD esconde de longe) // dente, garra, olho, narina: a sombra seria menor que 1 cm (e custa um draw call na passada de sombra)
   const thin = type === 'runner', fat = type === 'tank' || type === 'bossBelly', bossPumpkin = type === 'boss', spit = type === 'spitter';
   const boss = isBoss(type);
   // pernas (endoesqueleto: coxa de metal, joelho, canela, pé)
@@ -243,8 +391,16 @@ export function makeZombie(type) {
   // postura: corcunda (corredor bem inclinado pra frente)
   body.rotation.x = thin ? 0.38 : spit ? 0.22 : fat ? 0.08 : type === 'bossWolf' ? 0.36 : type === 'bossCrazy' ? 0.24 : 0.14;
   g.scale.setScalar(st.size); g.userData.size = st.size;
-  const blinks = []; g.traverse((o) => { if (o.userData.blink) blinks.push(o); }); g.userData.blinks = blinks;
   const flashMats = [suitM, suit2M, metalM, snoutM];
+  suitM.userData.zFlash = 0; suit2M.userData.zFlash = 1; metalM.userData.zFlash = 2; snoutM.userData.zFlash = 3; eyeM.userData.zEye = 1;
+  body.userData.zRole = 'body'; headPivot.userData.zRole = 'head';
+  if (hg.userData.jaw) hg.userData.jaw.userData.zRole = 'jaw';
+  for (let i = 0; i < legs.length; i++) { legs[i].userData.zRole = 'leg'; legs[i].userData.zSlot = i; }
+  for (let i = 0; i < arms.length; i++) { arms[i].userData.zRole = 'arm'; arms[i].userData.zSlot = i; }
+  const wings = g.userData.wings || []; for (let i = 0; i < wings.length; i++) { wings[i].userData.zRole = 'wing'; wings[i].userData.zSlot = i; }
+  const tears = g.userData.tears || []; for (let i = 0; i < tears.length; i++) { tears[i].userData.zRole = 'tear'; tears[i].userData.zSlot = i; }
+  collapseParts(g);
+  const blinks = []; const wings2 = [], tears2 = []; g.traverse((o) => { if (o.userData.blink) blinks.push(o); if (o.userData.zRole === 'wing') wings2[o.userData.zSlot] = o; if (o.userData.zRole === 'tear') tears2[o.userData.zSlot] = o; }); g.userData.blinks = blinks; if (wings2.length) g.userData.wings = wings2; if (tears2.length) g.userData.tears = tears2;
   return { group: g, body, legs, arms, head: headPivot, jaw: hg.userData.jaw || null, guns: [], flashMats, type, eyeM, boss };
 }
 // Dois modelos prontos, um de cada lado, costurados no meio. Cada metade continua com a animação do próprio tipo.
@@ -314,9 +470,9 @@ export function animateZombie(m, z, dt, T, flashing) {
   const wings = m.group.userData.wings;
   if (wings) { const f = Math.sin(T * (7 + Math.min(8, speed * 2))) * 0.75; wings[0].rotation.z = -0.45 + f; wings[1].rotation.z = 0.45 - f; }
   const eye = z.feral ? '#ff1c14' : (ZCOL[m.type] || ZCOL.walker).eye;
-  for (const mat of m.flashMats) mat.emissive.set(flashing ? 0x992222 : (z.feral ? (T % 0.4 < 0.08 ? 0x6a1010 : 0x2a0808) : 0x000000));
+  for (const mat of m.flashMats) if (mat && mat.emissive) mat.emissive.set(flashing ? 0x992222 : (z.feral ? (T % 0.4 < 0.08 ? 0x6a1010 : 0x2a0808) : 0x000000));
   if (z.feral && pose !== 'cry') { m.body.rotation.x += 0.14; m.arms[0].rotation.x -= 0.22; m.arms[1].rotation.x -= 0.22; }
-  m.eyeM.color.copy(T % (z.feral ? 0.45 : 0.9) < 0.06 ? WHITE : eyeColor(eye)); // pisca; feroz fica com o olho em brasa
+  if (m.eyeM && m.eyeM.color) m.eyeM.color.copy(T % (z.feral ? 0.45 : 0.9) < 0.06 ? WHITE : eyeColor(eye)); // pisca; feroz fica com o olho em brasa
   const blinks = m.group.userData.blinks;
   if (blinks) { const on = T % 0.6 < 0.3; for (let i = 0; i < blinks.length; i++) blinks[i].visible = on; }
 }
@@ -380,7 +536,7 @@ export function buildHalloween(map, nav, groundAt) {
   const nP = Math.round(18 + ext * 0.35), lights = []; let nl = 0;
   for (let i = 0; i < nP && good.length; i++) {
     const n = pickNode(); if (!away(n, 1.5)) continue; const pk = makePumpkin(0.8 + r() * 0.7, true); pk.position.set(n.x + (r() - 0.5), groundAt(n.x, n.z, n.y + 0.3), n.z + (r() - 0.5)); pk.rotation.y = r() * Math.PI * 2; group.add(pk);
-    if (nl < 6 && r() < 0.35) { const l = new THREE.PointLight('#ff7a1a', 5, 11, 1.5); l.position.set(pk.position.x, pk.position.y + 0.6, pk.position.z); group.add(l); lights.push(l); nl++; }
+    if (nl < 6 && r() < 0.35) { const l = new THREE.PointLight('#ff7a1a', 5, 11, 1.5); l.position.set(pk.position.x, pk.position.y + 0.6, pk.position.z); l.userData.decorLight = true; l.userData.baseIntensity = 5; group.add(l); lights.push(l); nl++; }
   }
   const candles = [];
   for (let i = 0; i < Math.round(12 + ext * 0.2) && good.length; i++) { const n = pickNode(); const c = makeCandles(r); c.position.set(n.x + (r() - 0.5) * 1.5, groundAt(n.x, n.z, n.y + 0.3), n.z + (r() - 0.5) * 1.5); group.add(c); candles.push(c); }
@@ -396,6 +552,7 @@ export function buildHalloween(map, nav, groundAt) {
     for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), batM); w.position.x = s * 0.28; b.add(w); b.userData['w' + s] = w; }
     b.userData = { ...b.userData, R: 10 + r() * ext * 0.6, h: 9 + r() * 10, sp: 0.3 + r() * 0.4, ph: r() * 6, cx: (r() - 0.5) * hx, cz: (r() - 0.5) * hz }; group.add(b); bats.push(b);
   }
+  group.userData.lights = lights;
   group.userData.tick = (T) => {
     for (const c of candles) for (const f of c.userData.flames) f.scale.y = 0.06 + Math.sin(T * 17 + f.position.x * 40) * 0.015;
     for (const f of fogs) { const p = f.userData.ph; f.position.x = f.userData.base.x + Math.sin(T * 0.15 + p) * 1.2; f.position.z = f.userData.base.z + Math.cos(T * 0.12 + p) * 1.2; f.rotation.z = T * 0.03 + p; }
