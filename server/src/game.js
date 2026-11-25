@@ -356,7 +356,7 @@ export class Game {
       e.kills = 0; e.deaths = 0; e.alive = false; e.needRs = false; e.caps = 0; e.fun = emptyFun(); e.pendingTeam = false; e.points = this.survival && !e.bot ? SURVIVAL.START_POINTS : 0; e.pts = e.points; e._purse = e.points; e.purseN = 0; if (!this.teamMode) e.team = -1;
       // this.T e o relógio do cliente voltam a 0 na partida nova: zera cadência/anti speed-hack, senão os tiros da partida anterior
       // (lastShot/lastCt/lastMelee no futuro) fazem o servidor rejeitar todo tiro no "Próximo mapa"/"Jogar de novo" (sem dano)
-      e.lastShot = WEAPONS.map(() => -9); e.lastShotL = WEAPONS.map(() => -9); e.lastCt = []; e.lastCtL = []; e.maxOff = undefined; e.lastMeleeCt = undefined; e.lastMeleeT = undefined; e.lastMeleeRate = 0; e.lastKnock = -9; e.mg = null; e.shotBud = [];
+      this.resetCombatClock(e);
       e.pap = {}; e.hitFarm = {}; e.slotOn = null; e.papUntil = 0; e.papGun = -1;
       e.hUps = []; e.hCd = {}; e.hOffer = null; e.hPOffer = null; e.hPass = {}; e.hQueue = []; e.hShield = 0; e.hpCap = 0;
       e.hSpeedUntil = e.hShieldUntil = e.hDmgUntil = e.hImmuneUntil = e.hAimUntil = e.hReflectUntil = e.hRootUntil = e.hDashUntil = e.hHopUntil = e.hAnimUntil = 0;
@@ -943,12 +943,51 @@ startMsg() {
     }
     this.events.push(['td', e.id, Math.round(e.shieldHp || 0), e.shieldBroken ? 1 : 0, Math.round(e.shieldBlocked || 0)]);
   }
+  // Vida nova (nascimento, rodada, "jogar de novo"): o relógio do tiro não pode ficar no futuro.
+  resetCombatClock(e) {
+    if (!e) return;
+    e.lastShot = WEAPONS.map(() => -9); e.lastShotL = WEAPONS.map(() => -9); e.lastCt = []; e.lastCtL = []; e.maxOff = undefined; e.aheadOff = null;
+    e.lastMeleeCt = undefined; e.lastMeleeT = undefined; e.lastMeleeRate = 0; e.lastKnock = -9; e.mg = null; e.shotBud = [];
+  }
+  // performance.now() do cliente. Maior carimbo já aceito, pra perceber quando a aba recomeçou do zero.
+  clientStamp(e) {
+    let last = -Infinity;
+    const take = (t) => { if (Number.isFinite(t) && t > -1e8 && t > last) last = t; };
+    for (const t of e.lastCt || []) take(t);
+    for (const t of e.lastCtL || []) take(t);
+    take(e.lastMeleeCt);
+    if (e.mg) take(e.mg.at);
+    return last;
+  }
+  // Refresh, aba anônima (mesma conta) ou o Safari devolvendo performance.now() pra trás: o carimbo velho
+  // ficava na entidade e rejeitava todo tiro até o relógio novo alcançar o antigo. Não é speed hack.
+  rebaseIfRestart(e, ct) {
+    if (!Number.isFinite(ct) || !(ct < this.clientStamp(e) - 1)) return false;
+    e.lastCt = []; e.lastCtL = []; e.lastMeleeCt = undefined; e.maxOff = undefined; e.aheadOff = null;
+    if (e.mg) { e.mg.at = -1e9; e.mg.lastCt = -9; e.mg.hotUntil = -1e9; }
+    return true;
+  }
+  // (tServidor - tCliente) não pode cair mais que 0,75 s abaixo do máximo visto (speed hack).
+  // Um salto único que depois fica parado (Safari com a aba pesada) reancora; relógio que continua
+  // correndo na frente não reancora e segue recusado.
+  noteOff(e, ct) {
+    if (!Number.isFinite(ct)) return false;
+    const off = this.now() - ct, max = e.maxOff;
+    if (max == null || !Number.isFinite(max) || off >= max - 0.75) {
+      e.maxOff = max == null || !Number.isFinite(max) ? off : Math.max(max, off);
+      e.aheadOff = null;
+      return true;
+    }
+    if (e.aheadOff == null || off < e.aheadOff - 0.01) { e.aheadOff = off; e.aheadSince = this.now(); return false; }
+    if (this.now() - (e.aheadSince || 0) < 1) return false;
+    e.maxOff = off; e.aheadOff = null; return true;
+  }
   // cadência: usa o relógio do cliente (tiros chegam agrupados pela rede), mas o relógio do cliente não pode
   // andar mais rápido que o do servidor (speed hack): (tServidor - tCliente) não pode cair mais que 0,75 s abaixo do máximo visto
   clockOk(e, ct, w, hand = 0) {
     if (!Number.isFinite(ct) || !WEAPONS[w]) return false;
-    const off = this.now() - ct; e.maxOff = Math.max(e.maxOff ?? -Infinity, off);
-    if (off < e.maxOff - 0.75) { e.rejectedShots = (e.rejectedShots || 0) + 1; return false; }
+    this.rebaseIfRestart(e, ct);
+    if (!this.noteOff(e, ct)) { e.rejectedShots = (e.rejectedShots || 0) + 1; return false; }
     const left = !!(WEAPONS[w].akimbo && hand === 1);
     const bag = left ? (e.lastCtL || (e.lastCtL = [])) : e.lastCt;
     const rate = this.survival ? this.resolvedW(e, w).rate : WEAPONS[w].rate;
@@ -959,9 +998,10 @@ startMsg() {
   mgLevel(e, ct) { const m = e.mg, S = WEAPONS[MINIGUN].spin; if (!m) return 0; const d = Math.max(0, ct - m.at); return clamp(m.v + (m.on ? d / S.up : -d / S.down), 0, 1); }
   mgSpin(e, on, ct) {
     if (!Number.isFinite(ct) || e.weapon !== MINIGUN || !e.slots.includes(MINIGUN)) return;
+    this.rebaseIfRestart(e, ct);
     const m = e.mg || (e.mg = { v: 0, on: false, at: -1e9, onT: -9, fresh: false, heat: 0, lastCt: -9, hotUntil: -1e9 });
     if (ct < m.at) return; // fora de ordem
-    const off = this.now() - ct; e.maxOff = Math.max(e.maxOff ?? -Infinity, off); if (off < e.maxOff - 0.75) return; // relógio adiantado (speed hack)
+    if (!this.noteOff(e, ct)) return; // relógio adiantado (speed hack)
     m.v = this.mgLevel(e, ct); m.fresh = !!on && m.v < 0.2; m.on = !!on; m.at = ct; if (on) m.onT = this.T;
     this.events.push(['mgs', e.id, on ? 1 : 0]);
   }
@@ -1038,9 +1078,9 @@ startMsg() {
     if (e.soul) { e.rejectedMelee = (e.rejectedMelee || 0) + 1; return; }
     const kind = MELEE_KINDS[kindIdx], o = obj3(oA), d0 = obj3(dA);
     if (!kind || !o || !d0 || vlen(d0) < 0.5 || !isKnife(e.weapon) || !e.slots.includes(e.weapon) || dist(o, center(e, EYE)) > 1.3 || !Number.isFinite(ct)) { e.rejectedMelee = (e.rejectedMelee || 0) + 1; return; }
-    const off = this.now() - ct; e.maxOff = Math.max(e.maxOff ?? -Infinity, off);
-    const lastRate = e.lastMeleeRate || 0;
-    if (off < e.maxOff - 0.75 || ct - (e.lastMeleeCt ?? -Infinity) < lastRate * 0.9 || this.T - (e.lastMeleeT ?? -9) < lastRate * 0.35) { e.rejectedMelee = (e.rejectedMelee || 0) + 1; return; }
+    this.rebaseIfRestart(e, ct);
+    const lastRate = e.lastMeleeRate || 0, lastCt = e.lastMeleeCt;
+    if (!this.noteOff(e, ct) || (Number.isFinite(lastCt) && ct - lastCt < lastRate * 0.9) || this.T - (e.lastMeleeT ?? -9) < lastRate * 0.35) { e.rejectedMelee = (e.rejectedMelee || 0) + 1; return; }
     e.lastMeleeCt = ct; e.lastMeleeT = this.T; e.lastMeleeRate = MELEE[kind].rate; e.invulnUntil = Math.min(e.invulnUntil, this.T);
     const rewind = Number.isFinite(rt) ? clamp(rt, this.T - 0.4, this.T) : this.T - clamp(e.ping / 1000 + 0.1, 0, 0.4);
     this.melee(e, kind, o, norm(d0), rewind);
@@ -1825,6 +1865,7 @@ startMsg() {
     return best;
   }
   spawn(e, silent = false) {
+    this.resetCombatClock(e); // refresh/rejoin e rodada nova: o relógio do tiro da vida anterior não pode zerar o dano
     clearCheats(e);
     const storyHp = isHistoria(this.cfg.mode) ? passHp(passLv(e, 'porcao')) : 100;
     if (storyHp > 100) e.hpCap = storyHp;
