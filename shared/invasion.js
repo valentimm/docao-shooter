@@ -7,7 +7,7 @@
 //    horda nasce feroz: 1,5× o zumbi normal da wave, mais esperta e com um golpe a mais do próprio tipo.
 //    Às vezes a wave vira temática: a horda puxa para um grupo de zumbis que já entrou na rotação.
 //    Da wave 10 em diante, 1% dos zumbis comuns nasce Docão Mutação Macabra: dois tipos no mesmo corpo, com o poder dos dois.
-//    Com mais de um jogador, um Docão Shapeshifter (nunca dois ao mesmo tempo) nasce escondido, fora da visão: copia a pele e a arma de alguém e, se chegarem perto, suga a alma.
+//    Com mais de um jogador, a partir da wave 5, um Docão Shapeshifter (nunca dois ao mesmo tempo) pode nascer escondido, fora da visão: copia a pele e a arma de alguém e, se chegarem perto, suga a alma. Chance de 1/3 na wave elegível e folga de 2 waves depois que aparece.
 //    Chefão a cada 5 waves (Abóbora, Barriguinha, Fantasma, Múmia, Lobisomem, Louco ou Hospício).
 //    Pausa de ~15 s entre as waves. Wave 20 = vitória.
 //  • 2 vidas por jogador: morreu com vida sobrando, renasce normal; sem vidas, fica assistindo.
@@ -319,8 +319,20 @@ export function themeIndex(id) {
   const i = WAVE_THEMES.findIndex((t) => t.id === id);
   return i < 0 ? 0 : i + 1;
 }
+// Shapeshifter: só com 2+ jogadores, a partir da wave 5, 1/3 de chance, e folga de 2 waves depois que nasce.
+// Antes (PR #91) entrava em toda wave desde a 1ª — nas 20 waves da clássica, até 20 aparições.
+export const SHAPE_FROM = 5;
+export const SHAPE_P = 1 / 3;
+export const SHAPE_GAP = 2;
+export function wantShape(spec, rnd = Math.random, lastShapeWave = 0) {
+  if ((spec.n | 0) < 2) return false;
+  const w = spec.w | 0;
+  if (w < SHAPE_FROM) return false;
+  if (lastShapeWave && w <= lastShapeWave + SHAPE_GAP) return false;
+  return rnd() < SHAPE_P;
+}
 // fila da wave: o total é um orçamento. Tipo mais forte pesa mais e entra menos vezes.
-export function waveQueue(spec, rnd = Math.random) {
+export function waveQueue(spec, rnd = Math.random, lastShapeWave = 0) {
   const keys = Object.keys(spec.mix).filter((k) => spec.mix[k] > 0 && ZOMBIES[k]);
   if (!keys.length) return [];
   const sum = keys.reduce((a, k) => a + spec.mix[k], 0);
@@ -339,7 +351,7 @@ export function waveQueue(spec, rnd = Math.random) {
     q.push(feral ? 'f:' + k : k);
     budget -= wgt;
   }
-  if ((spec.n | 0) > 1 && q.length) {
+  if (wantShape(spec, rnd, lastShapeWave) && q.length) {
     const walkers = [];
     q.forEach((t, idx) => { if (spawnKind(t).type === 'walker') walkers.push(idx); });
     const pool = walkers.length ? walkers : q.map((_, idx) => idx);
@@ -412,6 +424,7 @@ export class InvasionCore {
     this.flow = null; this.flowAt = -9; this.rev = null; this.fogTick = 0; this.overAt = 0; this.embers = [];
     this.kills = 0;
     this.crosses = []; // Normal: { p, x, y, z, by, prog } — quem ficou sem vidas espera aqui um aliado
+    this.shapeWant = false; this.shapeWave = 0; this.nextShape = 0;
   }
   get T() { return this.A.T(); }
   // Hardcore: A.hard (bool ou função). Lido na hora (a sala pode trocar antes de começar).
@@ -423,7 +436,7 @@ export class InvasionCore {
     return typeof fn === 'function' ? fn(w, n) : waveSpec(w, n);
   }
   start() {
-    this.phase = 'prep'; this.wave = 0;
+    this.phase = 'prep'; this.wave = 0; this.shapeWant = false; this.shapeWave = 0; this.nextShape = 0;
     const custom = typeof this.A.specFor === 'function';
     const prep = custom ? this.specFor(1, Math.max(1, this.A.players().length)).prep : 0;
     this.phaseEnd = this.T + (prep > 0 ? prep : INV.PREP);
@@ -475,7 +488,7 @@ export class InvasionCore {
     const theme = rollTheme(w, this.rnd, this.spec.mix, this.themeId);
     this.spec = applyTheme(this.spec, theme);
     if (theme) this.themeId = theme.id;
-    this.queue = waveQueue(this.spec, this.rnd);
+    this.queue = waveQueue(this.spec, this.rnd, this.shapeWave);
     this.drip = []; this.storyName = '';
     if (this.egg) { const plan = storyPlan(w); if (plan) this.applyStoryPlan(plan); }
     this.nextSpawn = this.T + (this.spec.lead > 0 ? this.spec.lead : 0.8); this.bossPending = this.spec.boss; this.bossAt = this.T + 3.5; this.bossId = 0;
@@ -565,7 +578,7 @@ export class InvasionCore {
     if (T < (this.nextShape || 0)) return;
     const pos = this.shapePos();
     if (!pos || !this.spawn('shape', pos)) { this.nextShape = T + 0.5; return; }
-    this.shapeWant = false;
+    this.shapeWant = false; this.shapeWave = this.wave;
   }
   shapePos() {
     const cluster = this.A.story && this.A.story() ? this.storyCluster() : null;
