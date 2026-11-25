@@ -1,5 +1,5 @@
 // Chefões da Invasão: rotação, peso da horda e os zumbis novos. Uso: node test-bosses.mjs
-import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore, coreView, FERAL, FERAL_ACT, FERAL_FROM, feralChance, feralTune, spawnKind, THEME_P, WAVE_THEMES, themesForWave, rollTheme, applyTheme, themeIndex, INV_CROSS, MUTANT_FROM, MUTANT_P, MUTANT_NAME, mutantProfile, rollMutantParts } from './shared/invasion.js';
+import { BOSS_TYPES, bossOfWave, isBoss, waveSpec, waveQueue, zombieWeight, zombieTaken, shuffleBosses, ZOMBIES, INV, InvasionCore, coreView, FERAL, FERAL_ACT, FERAL_FROM, feralChance, feralTune, spawnKind, THEME_P, WAVE_THEMES, themesForWave, rollTheme, applyTheme, themeIndex, INV_CROSS, MUTANT_FROM, MUTANT_P, MUTANT_NAME, mutantProfile, rollMutantParts, SHAPE_FROM, SHAPE_P, SHAPE_GAP, wantShape } from './shared/invasion.js';
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
@@ -421,10 +421,23 @@ ok(seen.size >= 8, 'o sorteio alcança temas diferentes');
 
 // ---------- Docão Shapeshifter ----------
 {
-  const solo = waveQueue(waveSpec(1, 1), () => 0.5);
+  ok(SHAPE_FROM === 5 && Math.abs(SHAPE_P - 1 / 3) < 1e-9 && SHAPE_GAP === 2, 'shapeshifter: wave 5, chance 1/3, folga de 2 waves');
+  ok(!wantShape(waveSpec(4, 2), () => 0), 'antes da wave 5 não nasce shapeshifter');
+  ok(!wantShape(waveSpec(5, 1), () => 0), 'sozinho não nasce shapeshifter');
+  ok(wantShape(waveSpec(5, 2), () => 0), 'na wave 5 com dois jogadores a chance pode pegar');
+  ok(!wantShape(waveSpec(5, 2), () => 0.9), 'na wave 5 a chance de 1/3 pode falhar');
+  ok(!wantShape(waveSpec(6, 2), () => 0, 5) && !wantShape(waveSpec(7, 2), () => 0, 5), 'depois que aparece, as 2 waves seguintes não têm');
+  ok(wantShape(waveSpec(8, 2), () => 0, 5), 'na terceira wave depois já pode voltar');
+  const solo = waveQueue(waveSpec(5, 1), () => 0.5);
   ok(!solo.includes('shape'), 'sozinho a horda não tem shapeshifter');
-  const duo = waveQueue(waveSpec(1, 2), () => 0.5);
-  ok(duo.filter((t) => t === 'shape').length === 1, 'com dois jogadores um zumbi da fila vira shapeshifter');
+  const early = waveQueue(waveSpec(4, 2), () => 0);
+  ok(!early.includes('shape'), 'com dois jogadores, antes da wave 5 a fila não tem shapeshifter');
+  const duo = waveQueue(waveSpec(5, 2), () => 0);
+  ok(duo.filter((t) => t === 'shape').length === 1, 'com dois jogadores, a partir da wave 5, um zumbi da fila pode virar shapeshifter');
+  const miss = waveQueue(waveSpec(5, 2), () => 0.5);
+  ok(!miss.includes('shape'), 'se a chance falha, a fila da wave 5 fica sem shapeshifter');
+  const cool = waveQueue(waveSpec(7, 2), () => 0, 5);
+  ok(!cool.includes('shape'), 'na folga de 2 waves a fila não encaixa shapeshifter');
   const ev = [];
   const ana = { id: 1, name: 'Ana', skin: 'rosa', weapon: 4, alive: true, hp: 80, pos: { x: 1.2, y: 0, z: 0 }, inv: [] };
   const beto = { id: 2, name: 'Beto', skin: 'azul', weapon: 2, alive: true, hp: 90, pos: { x: 28, y: 0, z: 0 }, inv: [] };
@@ -471,6 +484,29 @@ ok(seen.size >= 8, 'o sorteio alcança temas diferentes');
   ok(!open.shapePos() && !open.spawn('shape'), 'à vista dos jogadores o shapeshifter não aparece');
   const hid = mk(false).shapePos();
   ok(hid && hid.x === 10 && hid.z === 0, 'sem linha de visão ele nasce direto nesse ponto');
+}
+{
+  const people = [
+    { id: 1, alive: true, pos: { x: 0, y: 0, z: 0 } },
+    { id: 2, alive: true, pos: { x: 2, y: 0, z: 0 } },
+  ];
+  const core = new InvasionCore({
+    size: [40, 40], T: () => 0, rnd: () => 0,
+    nav: { good: [{ x: 10, y: 0, z: 0 }] },
+    players: () => people,
+    P: { groundAt: () => 0, collides: () => false, losClear: () => false },
+    spawnZombie: (type, pos) => ({ id: 8, zt: type, pos: { ...pos }, vel: { x: 0, y: 0, z: 0 } }),
+    emit() {},
+  });
+  core.startWave(5);
+  ok(core.queue.includes('shape'), 'startWave 5 com dois jogadores pode enfileirar o shapeshifter');
+  core.shapeWave = 5;
+  core.startWave(6);
+  ok(!core.queue.includes('shape'), 'startWave respeita a folga na wave 6');
+  core.startWave(7);
+  ok(!core.queue.includes('shape'), 'startWave respeita a folga na wave 7');
+  core.startWave(8);
+  ok(core.queue.includes('shape'), 'startWave 8 já pode enfileirar de novo');
 }
 
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK');
