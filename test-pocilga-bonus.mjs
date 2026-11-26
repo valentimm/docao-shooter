@@ -56,14 +56,15 @@ function withShots(events, zones) {
 }
 
 const bull = rankedRun(withShots(scriptRun({ finish: floor }), ['center']));
-ok(bull.ranked && bull.bonusZone === 'center' && bull.bonus === -PIT.bonusCut && near(bull.final, floor - PIT.bonusCut), `no mínimo físico, o miolo deixa a nota ${bull.final}`);
-ok(bull.final + 1e-6 >= rankFloor() && near(rankFloor(), floor - PIT.bonusCut), 'o piso e o miolo usam o mesmo desconto de 2 s, uma vez');
+ok(bull.ranked && bull.bonusZone === 'center' && bull.bonus === -PIT.bonusCut && near(bull.final, floor - PIT.bonusCut), `no mínimo de deslocamento, o miolo deixa a nota ${bull.final}`);
+ok(bull.final + 1e-6 >= rankFloor(), 'o miolo no mínimo de deslocamento continua acima do piso folgado');
 ok(rankedRun(withShots(scriptRun({ finish: rankFloor() }), ['center'])).reason === 'rápido', 'miolo em cima do piso já descontado não tira outros 2 s');
 
-const shaved = rankedRun(withShots(scriptRun({ finish: floor - 0.05 }), ['center']));
-ok(shaved.finished && !shaved.ranked && shaved.reason === 'rápido', 'o miolo não cobre um relógio abaixo do piso físico');
-ok(rankedRun(scriptRun({ finish: floor - 0.05 })).ranked, 'sem o miolo, um relógio pouco abaixo do físico ainda cabe no piso');
-ok(!rankedRun(scriptRun({ finish: rankFloor() - 0.05 })).ranked, 'abaixo do piso único o ranking recusa');
+const shaved = rankedRun(withShots(scriptRun({ finish: rankFloor() + 1.5 }), ['center']));
+ok(shaved.finished && !shaved.ranked && shaved.reason === 'rápido', 'o miolo não cobre um relógio que, descontado, fica abaixo do piso');
+ok(rankedRun(scriptRun({ finish: 21.17 })).ranked, '21,17 s, tempo real em produção, entra no ranking');
+ok(rankedRun(withShots(scriptRun({ finish: 21.17 }), ['center'])).ranked, '21,17 s com miolo (−2 s) ainda entra');
+ok(!rankedRun(scriptRun({ finish: rankFloor() - 0.05 })).ranked, 'abaixo do piso folgado o ranking recusa');
 
 const moving = 24.56; // pouco abaixo do mínimo antigo (deslocamento + 0,04 s × 25 alvos)
 ok(rankedRun(withShots(scriptRun({ finish: moving }), ['center'])).ranked, 'atirar andando e acertar o miolo ainda entra no ranking');

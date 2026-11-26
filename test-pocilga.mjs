@@ -71,10 +71,11 @@ const knifed = rankedRun(scriptRun({ finish: 34, knife: ['e15'] }));
 ok(knifed.ranked && knifed.down.includes('e15') && knifed.stars === 3, 'a faca derruba o javali perto');
 ok(KNIFE === PIT.knife, 'a faca do circuito é a faca do jogo');
 const fast = rankedRun(scriptRun({ finish: rankFloor() - 0.05 }));
-ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'tempo abaixo do piso (mínimo físico − bônus) fica fora do ranking');
-ok(rankedRun(scriptRun({ finish: rankFloor() })).ranked, 'no piso configurável o ranking aceita');
-ok(rankedRun(scriptRun({ finish: floor })).ranked, 'no mínimo físico o ranking aceita');
-ok(PIT.bonusCut === 2 && Math.abs(rankFloor() - (floor - PIT.bonusCut)) < 1e-9, `piso = mínimo físico menos ${PIT.bonusCut} s do alvo de bônus (${rankFloor().toFixed(3)})`);
+ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'tempo claramente impossível fica fora do ranking');
+ok(rankedRun(scriptRun({ finish: rankFloor() })).ranked, 'no piso folgado o ranking aceita');
+ok(rankedRun(scriptRun({ finish: floor })).ranked, 'no mínimo de deslocamento o ranking aceita');
+ok(PIT.rankMin === 10 && rankFloor() === PIT.rankMin, `piso folgado ${rankFloor()} s, só recusa relógio impossível`);
+ok(rankedRun(scriptRun({ finish: 21.17 })).ranked, '21,17 s, tempo real em produção, entra no ranking');
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'swap', w: 4, t: 1 }]).reason === 'diário', 'troca de arma não faz parte do diário');
 {
   const skip = inspectRun([{ k: 'start', t: 0 }, { k: 'pop', bay: 'sala', t: 1 }]);

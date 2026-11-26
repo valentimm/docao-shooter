@@ -6,7 +6,7 @@ import { PIT, minPlausible, rankFloor, rankedRun, scriptRun } from './shared/poc
 import { BONUS, aimAt } from './shared/pocilga-bonus.js';
 import { pitRank, pitSave } from './server/src/pocilga.js';
 import { handleAccountRoute, sha256hex } from './server/src/auth.js';
-import { GUEST_RANK_NOTE, PIT_RANK_LIMIT, PIT_TAB_CACHE_MS, formatRankClock, pitBoardRows, renderPitRank, createRankCache } from './pocilga-rank.js';
+import { GUEST_RANK_NOTE, PIT_RANK_LIMIT, PIT_TAB_CACHE_MS, formatRankClock, pitBoardRows, renderPitRank, createRankCache, rankRejectNote } from './pocilga-rank.js';
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
@@ -14,13 +14,14 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
 ok(GUEST_RANK_NOTE === 'Entre na conta para entrar no ranking', 'aviso do deslogado é a frase pedida');
 ok(PIT.bonusCut === 2, 'o desconto do alvo de bônus é a constante 2 s');
-ok(Math.abs(rankFloor() - (minPlausible() - PIT.bonusCut)) < 1e-9, `piso ${rankFloor()} = mínimo físico − bonusCut`);
+ok(PIT.rankMin === 10 && rankFloor() === 10, `piso folgado ${rankFloor()} s`);
 ok(formatRankClock(52) === '0:52,000' && formatRankClock(66.5) === '1:06,500' && formatRankClock(125.004) === '2:05,004', 'tempo do ranking é m:ss,mmm');
 ok(formatRankClock(-1) === '—' && formatRankClock(Number.NaN) === '—', 'tempo inválido não vira número');
 
 const fast = rankedRun(scriptRun({ finish: rankFloor() - 0.05 }));
 ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'abaixo do piso o ranking recusa');
 ok(rankedRun(scriptRun({ finish: rankFloor() })).ranked, 'no piso o ranking aceita');
+ok(rankRejectNote({ reason: 'rápido' }) === 'Corrida não validada: tempo abaixo do mínimo aceito', 'o cartaz explica a recusa');
 
 const migs = readdirSync(new URL('./server/migrations/', import.meta.url)).filter((f) => f.endsWith('.sql')).sort();
 ok(migs.includes('0013_pocilga.sql'), 'a tabela da Pocilga está na migração 0013');
