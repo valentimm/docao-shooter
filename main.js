@@ -11156,7 +11156,7 @@ function survTick(dt) {
       survGfx.offer.userData.w = want; scene.add(survGfx.offer);
     }
     if (survGfx.offer) {
-      const b = survGfx.layout.box; survGfx.offer.visible = show; survGfx.offer.position.set(b.x, (b.y || 0), b.z); tickStation(survGfx.offer, gameTime);
+      const b = survGfx.layout.box; survGfx.offer.visible = show && !!b; if (b) survGfx.offer.position.set(b.x, (b.y || 0), b.z); tickStation(survGfx.offer, gameTime);
       if (!show) { scene.remove(survGfx.offer); survGfx.offer = null; }
     }
   }
