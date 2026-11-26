@@ -1,6 +1,21 @@
 // Ranking do Circuito Pocilga: tempo m:ss,mmm, estrelas e a linha de quem está logado.
 // Sem DOM, sem Three.js e sem rede — o menu e o Tab só pintam o que esta função devolve.
 export const GUEST_RANK_NOTE = 'Entre na conta para entrar no ranking';
+export const RANK_REJECT = {
+  rápido: 'tempo abaixo do mínimo aceito',
+  linha: 'chegada fora da faixa',
+  alvo: 'faltou derrubar alvo',
+  sala: 'faltou passar por uma sala',
+  ordem: 'diário fora de ordem',
+  diário: 'diário inválido',
+  andamento: 'corrida incompleta',
+  largada: 'sem largada',
+};
+export function rankRejectNote(run) {
+  const reason = run && run.reason;
+  if (!reason || reason === 'ok') return 'O servidor não guardou este tempo.';
+  return `Corrida não validada: ${RANK_REJECT[reason] || reason}`;
+}
 export const PIT_RANK_LIMIT = 10;
 export const PIT_TAB_CACHE_MS = 12000;
 

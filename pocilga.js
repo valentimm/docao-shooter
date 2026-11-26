@@ -8,7 +8,7 @@ import { PIT, BOARD, FINISH_LINE, pitTargets, boardAabb, rayAabb, inspectRun, fo
 import { bonusLine } from './shared/pocilga-bonus.js';
 import { mountBonusTarget, clearBonusTarget, tickBonusTarget, offerBonus, armBonus, takeBonusShot, bonusAdjust, bonusSnap } from './pocilga-bonus.js';
 import { loadPitRank, submitPit, getAccount, getToken } from './account.js';
-import { formatRankClock, GUEST_RANK_NOTE } from './pocilga-rank.js';
+import { formatRankClock, GUEST_RANK_NOTE, rankRejectNote } from './pocilga-rank.js';
 
 const LOCAL_KEY = 'docao.pocilga.best';
 const LINES = [
@@ -735,9 +735,8 @@ function paintCard(result, extra) {
     if (!remote) note = 'Mandando o tempo para o ranking…';
     else if (remote.guest) note = GUEST_RANK_NOTE;
     else if (remote.ok && remote.saved) note = 'Este tempo entrou no ranking da conta.';
-    else if (remote.run && remote.run.reason === 'rápido') note = 'O servidor recusou o ranking: tempo abaixo do mínimo.';
     else if (remote.error) note = esc(remote.error);
-    else note = 'O servidor não guardou este tempo.';
+    else note = rankRejectNote(remote.run);
   }
   const rows = (remote && remote.rows) || (extra && extra.rank && extra.rank.rows) || [];
   const me = (remote && remote.me) || (extra && extra.rank && extra.rank.me);

@@ -44,7 +44,10 @@ export async function pitRank(env, accountId, limit) {
 // Devolve { status, body }. best_ms só troca quando o novo final é menor.
 export async function pitSave(env, accountId, events) {
   const run = rankedRun(events);
-  if (!run.ranked) return { status: 422, body: { ok: false, saved: false, run: publicRun(run) } };
+  if (!run.ranked) {
+    console.log('pocilga reject', run.reason, 'raw', run.raw, 'final', run.final);
+    return { status: 422, body: { ok: false, saved: false, run: publicRun(run) } };
+  }
   const t = now();
   const best = ms(run.final), raw = ms(run.raw), pen = ms(run.penalty);
   await env.DB.prepare(

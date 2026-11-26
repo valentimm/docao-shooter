@@ -6,8 +6,8 @@
 //  existir no jogo, também derruba o Barriguinha que está ao alcance.
 //
 //  Barriguinha esquecido trava a chegada. Civil soma tempo e tira as 3 estrelas.
-//  O ranking recusa diário incompleto ou mais rápido que o piso
-//  (mínimo físico menos PIT.bonusCut, o alvo de bônus).
+//  O ranking recusa diário incompleto ou relógio claramente impossível
+//  (abaixo de PIT.rankMin). O modelo de deslocamento é mais lento que o jogo.
 //  Sem DOM e sem Three.js.
 // ============================================================
 import { SPEED, KNIFE } from './rules.js';
@@ -30,9 +30,11 @@ export const PIT = {
   pistol: 4,
   knife: KNIFE,
   civPenalty: 3,
-  // Alvo de bônus tira até estes segundos do relógio. O piso do ranking
-  // é minPlausible() − bonusCut; mude só esta constante se o bônus mudar.
+  // Alvo de bônus tira até estes segundos do relógio final.
   bonusCut: 2,
+  // Piso folgado do ranking: só recusa tempo claramente impossível.
+  // 21,17 s já foi corrida humana em produção, abaixo do minPlausible().
+  rankMin: 10,
   zombie: { speed: 3.2, reach: 1.65, penalty: 3 },
   // Ajuste fino: rise = segundos até a placa ficar em pé; lead = metros de eixo
   // antes do grupo em que o gatilho deve armar.
@@ -199,11 +201,11 @@ export function minPlausible() {
   return ROUND(run / SPEED + dash / (SPEED * PIT.sprint));
 }
 
-// Piso do ranking. O alvo de bônus pode deixar o relógio PIT.bonusCut segundos
-// abaixo do mínimo físico; abaixo disto o servidor recusa.
+// Piso do ranking: só barra relógio claramente impossível. Não usa
+// minPlausible() — o deslocamento teórico é mais lento que o jogo real.
 export function rankFloor() {
-  const cut = Number.isFinite(PIT.bonusCut) ? PIT.bonusCut : 0;
-  return ROUND(Math.max(0, minPlausible() - cut));
+  const hard = Number.isFinite(PIT.rankMin) ? PIT.rankMin : 10;
+  return ROUND(Math.max(0, hard));
 }
 
 export function pitRescue(x, y, z) {
@@ -390,8 +392,8 @@ export function inspectRun(events) {
   };
 }
 
-// Um desconto só: PIT.bonusCut. O miolo já entrou em final (−cut) e o piso
-// também é o mínimo físico menos esse cut. final não pode cair mais do que cut abaixo do relógio.
+// Um desconto só: PIT.bonusCut. final não pode cair mais do que cut abaixo do relógio.
+// O piso é o mínimo impossível (PIT.rankMin), não o modelo de deslocamento.
 export function rankedRun(events) {
   const run = inspectRun(events);
   if (!run.finished) return run;
