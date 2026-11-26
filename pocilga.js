@@ -5,7 +5,8 @@ import { makeDocao, setPose } from './docao.js';
 import { makeZombie, animateZombie } from './invasion-gfx.js';
 import { lookToSkin } from './shared/closet.js';
 import { PIT, BOARD, FINISH_LINE, pitTargets, boardAabb, rayAabb, inspectRun, formatPit, suggestion, moverAt, inGate, onFinishLine, onSprint, pitRescue } from './shared/pocilga.js';
-import { loadPitRank, submitPit, getAccount } from './account.js';
+import { loadPitRank, submitPit, getAccount, getToken } from './account.js';
+import { formatRankClock, GUEST_RANK_NOTE } from './pocilga-rank.js';
 
 const LOCAL_KEY = 'docao.pocilga.best';
 const LINES = [
@@ -652,7 +653,7 @@ function pitEnemiesCount() { return pitTargets().filter((t) => t.kind === 'enemy
 
 function rankRows(rows, meNick) {
   if (!rows || !rows.length) return '<p class="pit-empty">Ranking ainda vazio. O primeiro tempo com conta abre a lista.</p>';
-  return `<ol class="pit-rank">${rows.map((r) => `<li class="${meNick && r.nick === meNick ? 'me' : ''}"><b>${r.place}. ${esc(r.nick)}</b><span>${esc(r.clock)} ${starsTxt(r.stars | 0)}</span></li>`).join('')}</ol>`;
+  return `<ol class="pit-rank">${rows.map((r) => `<li class="${meNick && r.nick === meNick ? 'me' : ''}"><b>${r.place}. ${esc(r.nick)}</b><span>${esc(formatRankClock(r.best))} ${starsTxt(r.stars | 0)}</span></li>`).join('')}</ol>`;
 }
 
 function paintCard(result, extra) {
@@ -661,12 +662,13 @@ function paintCard(result, extra) {
   const best = readBest();
   const sug = result.suggestion || suggestion(result.stars);
   const remote = extra && extra.remote;
-  let note = 'Convidado: o melhor tempo fica neste navegador. Entre na conta para o ranking.';
-  if (getAccount() && getAccount().nick && getAccount().nick !== 'DEV local') {
+  const logged = !!(getToken() && getAccount() && !getAccount().dev);
+  let note = GUEST_RANK_NOTE;
+  if (logged) {
     if (!remote) note = 'Mandando o tempo para o ranking…';
-    else if (remote.guest) note = 'Convidado: o melhor tempo fica neste navegador.';
+    else if (remote.guest) note = GUEST_RANK_NOTE;
     else if (remote.ok && remote.saved) note = 'Este tempo entrou no ranking da conta.';
-    else if (remote.run && remote.run.reason === 'rápido') note = 'O servidor recusou o ranking: tempo abaixo do mínimo físico.';
+    else if (remote.run && remote.run.reason === 'rápido') note = 'O servidor recusou o ranking: tempo abaixo do mínimo.';
     else if (remote.error) note = esc(remote.error);
     else note = 'O servidor não guardou este tempo.';
   }
@@ -683,7 +685,7 @@ function paintCard(result, extra) {
     <p class="pit-split">Inimigos ${hitE}/${enemies} · Civis ${result.civs || 0}/${pitTargets().filter((t) => t.kind === 'civil').length}</p>
     <p class="pit-split">Tempo ${formatPit(result.raw)} · penalidade +${(result.penalty || 0).toFixed(2)} s</p>
     <p class="pit-sug">${result.finished ? `Sugestão do Docão: <b>${esc(sug.label)}</b> · ${esc(sug.hint)}` : 'A chegada não abriu.'}</p>
-    <p class="pit-best">Seu melhor ${getAccount() && me ? 'na conta' : 'neste navegador'}: <b>${best ? formatPit(best.final) + ' ' + starsTxt(best.stars) : '—'}</b>${me ? ` · ranking ${me.place}º (${esc(me.clock)})` : ''}</p>
+    <p class="pit-best">Seu melhor ${logged && me ? 'na conta' : 'neste navegador'}: <b>${best ? formatRankClock(best.final) + ' ' + starsTxt(best.stars) : '—'}</b>${me ? ` · ranking ${me.place}º (${esc(formatRankClock(me.best))})` : ''}</p>
     <h3>Mais rápidos</h3>
     ${rankRows(rows, me && me.nick)}
     <p class="pit-note">${note}</p>

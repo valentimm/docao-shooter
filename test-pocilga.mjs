@@ -1,6 +1,6 @@
 // Regras da Pocilga: oito etapas, só a Pistolinha, faca no javali perto, tempo mínimo.
 // Uso: node test-pocilga.mjs
-import { PIT, FINISH_LINE, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate, onFinishLine } from './shared/pocilga.js';
+import { PIT, FINISH_LINE, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, rankFloor, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate, onFinishLine } from './shared/pocilga.js';
 import { ZOMBIES } from './shared/invasion.js';
 import { KNIFE, RADIUS, SPEED, JUMP } from './shared/rules.js';
 import { getMap } from './maps.js';
@@ -70,9 +70,11 @@ ok(PIT.deck >= 4.8 && PIT.deck <= 6, `a rampa sobe até ${PIT.deck} m`);
 const knifed = rankedRun(scriptRun({ finish: 34, knife: ['e15'] }));
 ok(knifed.ranked && knifed.down.includes('e15') && knifed.stars === 3, 'a faca derruba o javali perto');
 ok(KNIFE === PIT.knife, 'a faca do circuito é a faca do jogo');
-const fast = rankedRun(scriptRun({ finish: floor - 0.05 }));
-ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'tempo impossível fica fora do ranking');
+const fast = rankedRun(scriptRun({ finish: rankFloor() - 0.05 }));
+ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'tempo abaixo do piso (mínimo físico − bônus) fica fora do ranking');
+ok(rankedRun(scriptRun({ finish: rankFloor() })).ranked, 'no piso configurável o ranking aceita');
 ok(rankedRun(scriptRun({ finish: floor })).ranked, 'no mínimo físico o ranking aceita');
+ok(PIT.bonusCut === 2 && Math.abs(rankFloor() - (floor - PIT.bonusCut)) < 1e-9, `piso = mínimo físico menos ${PIT.bonusCut} s do alvo de bônus (${rankFloor().toFixed(3)})`);
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'swap', w: 4, t: 1 }]).reason === 'diário', 'troca de arma não faz parte do diário');
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'pop', bay: 'sala', t: 1 }]).reason === 'ordem', 'pular o pátio invalida');
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'hit', id: 'e1', w: PIT.pistol, t: 0.4 }]).down.includes('e1'), 'alvo já de pé conta o tiro sem o gatilho da subida');

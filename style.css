@@ -1634,7 +1634,7 @@ body.invout #deathpick,body.invout #stamp,body.invout #centermsg{display:none!im
 #hud #medals .medal small{color:var(--wood)}
 
 #hud #tabboard{
-  background:var(--paper);color:var(--ink);border:3px solid var(--wood);border-radius:4px;
+  z-index:12;background:var(--paper);color:var(--ink);border:3px solid var(--wood);border-radius:4px;
   box-shadow:4px 5px 0 var(--shadow)
 }
 #hud #tabboard th{color:var(--wood);border-bottom:2px solid #c9ad78}
@@ -1956,7 +1956,12 @@ body.deadgray #game{filter:grayscale(.68) brightness(.72) contrast(1.06);transit
 .rank-body th:nth-child(2),.rank-body td:nth-child(2){text-align:left;width:100%}
 .rank-body td:first-child{font:900 15px var(--font);color:var(--red)}
 .rank-body tr.me td{background:#f2c9794d;font-weight:900}
+.rank-body td.stars,#hud #tabboard td.stars{color:#a56b12;letter-spacing:1px}
+.rank-body .pit-rank-warn{padding:8px 10px 12px;text-align:center;font:900 14px/1.35 var(--font);color:var(--red)}
 .rank-empty{padding:26px 10px;text-align:center;font:700 14px var(--font);color:#5b4a2c}
+#hud #tabboard .pit-tab-kicker{margin:0 0 4px;text-align:center;font:900 13px/1 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--wood)}
+#hud #tabboard .pit-rank-empty{margin:10px 0;text-align:center;font:800 14px/1.35 var(--font);color:var(--ink)}
+#hud #tabboard .pit-rank-warn{margin:10px 0 0;text-align:center;font:900 15px/1.35 var(--font);color:var(--brick)}
 @media (max-width:700px){#menu .acct-strip{flex-direction:column;align-items:stretch}#menu .acct-btns{justify-content:flex-end}.acct-stats{grid-template-columns:repeat(2,1fr)}}
 /* Fim de partida na língua da comanda (igual à pausa): prancheta de madeira, papel, tinta e tijolo. */
 #gameover{

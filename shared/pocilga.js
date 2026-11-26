@@ -6,7 +6,8 @@
 //  existir no jogo, também derruba o javali que está ao alcance.
 //
 //  Javali esquecido trava a chegada. Civil soma tempo e tira as 3 estrelas.
-//  O ranking recusa diário incompleto ou mais rápido que o mínimo físico.
+//  O ranking recusa diário incompleto ou mais rápido que o piso
+//  (mínimo físico menos PIT.bonusCut, o alvo de bônus).
 //  Sem DOM e sem Three.js.
 // ============================================================
 import { SPEED, KNIFE } from './rules.js';
@@ -28,6 +29,9 @@ export const PIT = {
   pistol: 4,
   knife: KNIFE,
   civPenalty: 3,
+  // Alvo de bônus tira até estes segundos do relógio. O piso do ranking
+  // é minPlausible() − bonusCut; mude só esta constante se o bônus mudar.
+  bonusCut: 2,
   zombie: { speed: 3.2, reach: 1.65, penalty: 3 },
   // Ajuste fino: rise = segundos até a placa ficar em pé; lead = metros de eixo
   // antes do grupo em que o gatilho deve armar.
@@ -185,6 +189,13 @@ export function pathStats() {
 export function minPlausible() {
   const { run, dash } = pathStats();
   return ROUND(run / SPEED + dash / (SPEED * PIT.sprint) + pitEnemies().length * 0.04);
+}
+
+// Piso do ranking. O alvo de bônus pode deixar o relógio PIT.bonusCut segundos
+// abaixo do mínimo físico; abaixo disto o servidor recusa.
+export function rankFloor() {
+  const cut = Number.isFinite(PIT.bonusCut) ? PIT.bonusCut : 0;
+  return ROUND(Math.max(0, minPlausible() - cut));
 }
 
 export function pitRescue(x, y, z) {
@@ -346,7 +357,10 @@ export function inspectRun(events) {
 export function rankedRun(events) {
   const run = inspectRun(events);
   if (!run.finished) return run;
-  if (!(run.raw + 1e-6 >= minPlausible())) return { ...run, ranked: false, reason: 'rápido' };
+  const floor = rankFloor();
+  const cut = Number.isFinite(PIT.bonusCut) ? PIT.bonusCut : 0;
+  if (!(run.raw + 1e-6 >= floor) || !(run.final + 1e-6 >= floor)) return { ...run, ranked: false, reason: 'rápido' };
+  if (run.final + 1e-6 < run.raw - cut) return { ...run, ranked: false, reason: 'rápido' };
   return { ...run, ranked: true, reason: 'ok' };
 }
 

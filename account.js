@@ -161,8 +161,9 @@ export async function spinWheel(ids) {
   emit();
   return { ok: true, dupe: !!r.data.dupe, item: r.data.item, coins: account.coins, gain: r.data.gain | 0, spent, knife: account.knife, sniper: account.sniper, guns: account.guns };
 }
-export async function loadPitRank() {
-  const r = await api('/api/pocilga/rank?limit=10', { auth: !!token });
+export async function loadPitRank(limit = 10) {
+  const n = Math.max(1, Math.min(20, limit | 0 || 10));
+  const r = await api(`/api/pocilga/rank?limit=${n}`, { auth: !!token });
   return r.ok ? r.data : null;
 }
 export async function submitPit(events) {

@@ -46,6 +46,7 @@ import { makeZombie, makeMutant, animateZombie, dieZombie, applyHalloweenPalette
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
 import { PIT } from './shared/pocilga.js';
 import { beginCourse, clearCourse, tickCourse, pitRay, pitHit, pitMelee, pitSpeedMul, pitHolding, pitResultOn, pitFinished, pitEscQuiet, dismissResult, restartCourse, courseSnap, paintPitMenu } from './pocilga.js';
+import { fillPitTab } from './pocilga-tab.js';
 import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
 import { breezeMap, buildBreezeWorld, breezeMapReady, prepareBreezeMap } from './breeze-map.js';
 import { buildNav } from './nav.js';
@@ -4272,7 +4273,7 @@ function updateHud(dt) {
   const prot = $('protmsg');
   const shielded = !!(p.alive && gameTime < p.invulnUntil && msgTimer <= 0);
   if (prot) { prot.textContent = shielded ? (spawnShielded(p) ? 'PROTEGIDO · SEM TIRO' : 'PROTEGIDO') : ''; prot.classList.toggle('hidden', !shielded); }
-  if (!$('tabboard').classList.contains('hidden')) $('tabboard').innerHTML = boardHtml();
+  if (!$('tabboard').classList.contains('hidden') && !pitMode()) $('tabboard').innerHTML = boardHtml();
   if (gfLive() && gfS) { const raw = gunfightHud(gfS, entities); gfState = normalizeGunfight(adaptGunfightHud(raw, { format: gfS.format, ents: entities })); teamScore = [gfState.score[0] | 0, gfState.score[1] | 0]; renderGunfightHud(gfState); tickGunfightBanner(); paintGfZone(); }
 }
 
@@ -8130,7 +8131,7 @@ document.addEventListener('keydown', (e) => {
       if (exploreMode() && player.alive && !emote.on && !e.repeat && (e.code === 'Comma' || e.code === 'Period' || e.code === 'BracketLeft' || e.code === 'BracketRight')) cycleExplorePrimary(e.code === 'Period' || e.code === 'BracketRight' ? 1 : -1);
     }
     if (!emote.on && !gfLive() && e.code === 'KeyQ' && !e.repeat && !(player && player.down)) { if (player.pokeballs > 0) { cancelUtilPress(); player.utilSel = ''; startCharge(); } else selectUtil('nade'); }
-    if (e.code === 'Tab') $('tabboard').classList.remove('hidden');
+    if (e.code === 'Tab') { $('tabboard').classList.remove('hidden'); if (pitMode() && !e.repeat) fillPitTab(); }
     if (e.code === 'Escape' || e.code === 'KeyP') pause();
     if (e.code === 'Backquote') { e.preventDefault(); softPause(); }
   } else if (state === 'paused' && softPauseOn && e.code === 'Backquote') { e.preventDefault(); resume(); }
