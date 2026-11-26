@@ -7540,7 +7540,7 @@ function fetchMap(id, onReady) {
     glbStatus.set(m.id, `Falha ao baixar ${m.name}. Escolha de novo para tentar.`); console.warn(m.name, error); refreshMapUI();
   });
 }
-function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } return v === 'random' || mapPool().some((m) => m.id === v) ? v : (bombMenu() || compMenu()) ? BOMB_MAP : isSurvivalMode($('modeSel').value) ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : MAPS[0].id; }
+function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } if (v === 'random' || mapPool().some((m) => m.id === v)) return v; if (bombMenu() || compMenu()) return BOMB_MAP; if (menuSurvival() || isSurvivalMode($('modeSel').value)) return mapPool().some((m) => m.id === SURVIVAL.DEFAULT_MAP) ? SURVIVAL.DEFAULT_MAP : (mapPool()[0] ? mapPool()[0].id : INV.DEFAULT_MAP); if (invMenu()) return INV.DEFAULT_MAP; return MAPS[0].id; }
 let selectedMap = storedMap();
 const pitMenu = () => $('modeSel').value === PIT.mode;
 function syncMapForMode() {
@@ -7559,8 +7559,10 @@ function syncMapForMode() {
     return;
   }
   if (menuSurvival()) {
-    if (!mapPool().some((m) => m.id === selectedMap)) selectedMap = mapPool().some((m) => m.id === INV.DEFAULT_MAP) ? INV.DEFAULT_MAP : SURVIVAL.DEFAULT_MAP;
-    if (!currentMap || currentMap.id !== selectedMap) loadMap(selectedMap, true);
+    // Relê docao.invMap: o selectedMap inicial roda antes do modo/variante voltarem do storage e cai na Arena (MAPS[0]).
+    const v = storedMap();
+    if (v !== selectedMap) selectedMap = v;
+    if (selectedMap !== 'random' && (!currentMap || currentMap.id !== selectedMap)) loadMap(selectedMap, true);
     $('mapModal').classList.add('hidden');
     buildMapGrid();
     return;
@@ -7638,7 +7640,7 @@ function resolveX1Map(mapId) {
 function pickMapForMatch() {
   if (historiaMenu()) return HISTORIA.map;
   if (selectedMap !== 'random' && mapPool().some((m) => m.id === selectedMap)) return selectedMap;
-  if (selectedMap !== 'random') return (bombMenu() || compMenu()) ? BOMB_MAP : invMenu() ? INV.DEFAULT_MAP : $('modeSel').value === GF_MODE ? (mapPool()[0] ? mapPool()[0].id : 'galpao-assalto') : PLAY_MAPS[0].id; // Bomba e Competitivo: mapa sem sites → Rodízio. Gunfight: primeiro do pool.
+  if (selectedMap !== 'random') return (bombMenu() || compMenu()) ? BOMB_MAP : menuSurvival() ? (mapPool().some((m) => m.id === SURVIVAL.DEFAULT_MAP) ? SURVIVAL.DEFAULT_MAP : INV.DEFAULT_MAP) : invMenu() ? INV.DEFAULT_MAP : $('modeSel').value === GF_MODE ? (mapPool()[0] ? mapPool()[0].id : 'galpao-assalto') : PLAY_MAPS[0].id; // Survival: se o salvo não vale, HOTMILK à Noite. Bomba e Competitivo: mapa sem sites → Rodízio. Gunfight: primeiro do pool.
   const pool = mapPool().filter((m) => !m.heavy && (!currentMap || m.id !== currentMap.id)); return pool[Math.floor(Math.random() * pool.length)].id;
 }
 $('mapBtn').onclick = () => { if (historiaMenu() || pitMenu()) return; buildMapGrid(); $('mapModal').classList.remove('hidden'); };
