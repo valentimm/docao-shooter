@@ -44,6 +44,14 @@ export const getChal = () => (chal ? { ...chal, resetIn: Math.max(0, Math.round(
 export const onAccount = (f) => { subs.add(f); return () => subs.delete(f); };
 const promoSubs = new Set();
 export const onPromoGrant = (f) => { promoSubs.add(f); return () => promoSubs.delete(f); };
+let promoInfo = null;
+export const getPromo = () => promoInfo;
+export async function loadPromo() {
+  if (DEV_LOCAL) { promoInfo = null; return null; }
+  const r = await api('/api/promo');
+  promoInfo = r.ok && r.data && r.data.promo ? r.data.promo : null;
+  return promoInfo;
+}
 function setToken(t) { token = t || ''; try { if (token) localStorage.setItem(KEY, token); else localStorage.removeItem(KEY); } catch (e) { /* sem storage */ } }
 
 async function api(path, { method = 'GET', body, auth = false } = {}) {
@@ -65,7 +73,7 @@ export async function refreshStats() {
   if (DEV_LOCAL) { emit(); return { account, items: getItems() }; }
   if (!token) return null; const r = await api('/api/me', { auth: true });
   if (r.status === 401) { dropSession(); return null; }
-  if (r.ok) { account = r.data.account; stats = r.data.stats; elo = r.data.elo || null; items = r.data.items || []; earn = r.data.earn || earn; chal = r.data.chal || null; chalAt = Date.now(); emit(); if (r.data.promoGrant && r.data.promoGrant.granted) promoSubs.forEach((f) => { try { f(r.data.promoGrant); } catch (e) { console.error(e); } }); } return r.ok ? r.data : null;
+  if (r.ok) { account = r.data.account; stats = r.data.stats; elo = r.data.elo || null; items = r.data.items || []; earn = r.data.earn || earn; chal = r.data.chal || null; chalAt = Date.now(); if (r.data.promo) promoInfo = r.data.promo; emit(); if (r.data.promoGrant && r.data.promoGrant.granted) promoSubs.forEach((f) => { try { f(r.data.promoGrant); } catch (e) { console.error(e); } }); } return r.ok ? r.data : null;
 }
 export const loadMe = refreshStats; // no começo: confere o token guardado (se vencer, volta a convidado)
 let skinTimer = 0, skinWant = '';

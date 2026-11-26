@@ -10,7 +10,8 @@ import { cleanNick, nickKey, nickError, passError } from '../../shared/nick.js';
 import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
 import { ELO_START, ELO_MODES, ELO_MODE_IDS, eloSummary, computeCompEloDeltas, computeDmEloDeltas, eloEligible } from '../../shared/elo.js';
-import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, grantPromo, buyBox, openBox, spinWheel } from './shop.js';
+import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, grantPromo, getPromoState, buyBox, openBox, spinWheel } from './shop.js';
+import { publicPromo } from '../../shared/promo.js';
 import { pitRank, pitSave } from './pocilga.js';
 
 const ITERS = 100000; // teto do WebCrypto do Workers
@@ -185,7 +186,7 @@ export async function recordCompElo(env, payload) {
 // devolve Response ou null (rota não é de conta). json(obj, status, extraHeaders)
 export async function handleAccountRoute(req, env, url, json) {
   const p = url.pathname, m = req.method;
-  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/buy' || p === '/api/lootbox/wheel' || p === '/api/rank' || p === '/api/elo' || p === '/api/pocilga/rank' || p === '/api/pocilga/run')) return null;
+  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/buy' || p === '/api/lootbox/wheel' || p === '/api/rank' || p === '/api/elo' || p === '/api/pocilga/rank' || p === '/api/pocilga/run' || p === '/api/promo')) return null;
   if (!env.DB) return json({ error: 'Contas indisponíveis no momento. Você pode jogar como convidado.' }, 503);
   const ip = req.headers.get('CF-Connecting-IP') || 'local';
   try {
@@ -276,6 +277,10 @@ export async function handleAccountRoute(req, env, url, json) {
       const token = await newSession(env, acc.id); await housekeeping(env);
       return json({ token, account: publicAcc(acc) });
     }
+    if (p === '/api/promo' && m === 'GET') {
+      const promo = publicPromo(await getPromoState(env));
+      return json({ ok: true, promo });
+    }
     const tok = tokenFrom(req);
     if (p === '/api/auth/logout' && m === 'POST') {
       if (tok) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256hex(tok)).run();
@@ -286,8 +291,9 @@ export async function handleAccountRoute(req, env, url, json) {
       await unlockDevSkins(env, a.id, url);
       const boxGrant = await grantLoginBox(env, a.id);
       const promoGrant = await grantPromo(env, a.id);
+      const promo = promoGrant.promo || publicPromo(await getPromoState(env));
       const w = await wallet(env, a.id);
-      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), elo: await myElo(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant, promoGrant });
+      return json({ account: { ...publicAcc(a), custom: w.custom, coins: w.coins, knife: w.knife, sniper: w.sniper, guns: w.guns, boxes: w.boxes, boxBought: w.boxBought }, stats: await myStats(env, a.id), elo: await myElo(env, a.id), items: w.items, earn: { today: w.earnToday, cap: w.dayCap }, chal: w.chal, boxGrant, promoGrant, promo });
     }
     if (p === '/api/me/skin' && m === 'PUT') {
       const a = await accountFromToken(env, tok); if (!a) return json({ error: 'Sessão inválida' }, 401);

@@ -8,7 +8,7 @@ import { SKINS, skinOk } from '../../skins.js';
 import { ITEMS, itemById, parseLook, lookItemIds, isFreeItem, knifeKind, sniperKind, gunKey, parseGuns, GUN_EQUIP_KEYS, EARN } from '../../shared/closet.js';
 import { spDay, parseChal, applyChal, chalView } from '../../shared/challenges.js';
 import { rollBox, BOX_NAME, BOX_PRICE, wheelInputs, rollWheel } from '../../shared/lootbox.js';
-import { PROMO_ID, PROMO_NAME, PROMO_COINS, promoActive } from '../../shared/promo.js';
+import { PROMO_ID, PROMO_NAME, PROMO_COINS, PROMO_BOXES, PROMO_CONFIG_ID, promoFromConfig, publicPromo } from '../../shared/promo.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 export const dayNow = () => Math.floor(now() / 86400);
@@ -156,19 +156,43 @@ export async function buyBox(env, id) {
 }
 
 
-// Promoção vigente (DÉCIMO PINGOU): +N Docoins uma vez por conta, só dentro da janela.
-// promoActive() exige início e fim. INSERT + crédito no mesmo lote atômico.
+// Config da promo no D1 (promo_config). Cache curto pra não consultar a cada /api/me.
+export const PROMO_CACHE_MS = 45_000;
+let promoCache = { at: 0, env: null, row: undefined };
+export function clearPromoConfigCache() { promoCache = { at: 0, env: null, row: undefined }; }
+
+async function readPromoConfig(env) {
+  try {
+    return await env.DB.prepare('SELECT promo_id, enabled, starts_at, expires_at FROM promo_config WHERE promo_id = ?1').bind(PROMO_CONFIG_ID).first();
+  } catch (e) {
+    return null; // tabela ainda não existe: cai no fallback desligado
+  }
+}
+
+export async function getPromoState(env, now = Date.now()) {
+  if (promoCache.env === env && promoCache.row !== undefined && (now - promoCache.at) < PROMO_CACHE_MS) {
+    return promoFromConfig(promoCache.row, now);
+  }
+  const row = await readPromoConfig(env);
+  promoCache = { at: now, env, row: row || null };
+  return promoFromConfig(row, now);
+}
+
+// Promoção vigente (INTEGRA): +N Docoins e +N caixotes uma vez por conta, só se
+// enabled=1 e o relógio estiver entre starts_at e expires_at no banco.
+// INSERT + crédito no mesmo lote atômico.
 // Segunda chamada (reload, outro aparelho) não soma de novo. Outro promo_id não bloqueia.
 export async function grantPromo(env, id, now = Date.now()) {
-  if (!promoActive(now)) return { granted: false, expired: true };
+  const state = await getPromoState(env, now);
+  if (!state.active) return { granted: false, expired: true, promo: publicPromo(state) };
   const t = Math.floor(now / 1000);
   try {
     const out = await env.DB.batch([
       env.DB.prepare('INSERT INTO promo_claims (account_id, promo_id, coins, claimed_at) VALUES (?1, ?2, ?3, ?4)').bind(id, PROMO_ID, PROMO_COINS, t),
-      env.DB.prepare('UPDATE accounts SET coins = coins + ?2 WHERE id = ?1').bind(id, PROMO_COINS),
+      env.DB.prepare('UPDATE accounts SET coins = coins + ?2, boxes = boxes + ?3 WHERE id = ?1').bind(id, PROMO_COINS, PROMO_BOXES),
     ]);
     if (!out[0].meta || !out[0].meta.changes) return { granted: false };
-    return { granted: true, coins: PROMO_COINS, id: PROMO_ID, name: PROMO_NAME };
+    return { granted: true, coins: PROMO_COINS, boxes: PROMO_BOXES, id: PROMO_ID, name: PROMO_NAME };
   } catch (e) {
     const msg = String(e && e.message || e);
     if (/unique|constraint/i.test(msg)) return { granted: false };

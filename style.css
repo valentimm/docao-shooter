@@ -1933,7 +1933,8 @@ body.deadgray #game{filter:grayscale(.68) brightness(.72) contrast(1.06);transit
 .promo-panel{width:min(420px,92vw);text-align:center}
 .promo-kicker{margin:0 0 4px;font:900 11px/1 var(--font);letter-spacing:1.4px;text-transform:uppercase;color:#5b4a2c}
 .promo-panel h2{margin-bottom:8px}
-.promo-coins{margin:6px 0 12px;font:900 40px/1 var(--font);color:var(--red,#a52e26)}
+.promo-coins{margin:6px 0 12px;display:flex;justify-content:center;gap:28px;font:900 40px/1 var(--font);color:var(--red,#a52e26)}
+.promo-reward{display:flex;flex-direction:column;align-items:center}
 .promo-coins b{font:inherit}
 .promo-coins small{display:block;margin-top:4px;font:900 13px/1 var(--font);letter-spacing:1px;text-transform:uppercase;color:var(--ink,#203e35)}
 .promo-panel #promoBody{margin:0 0 4px;font:700 16px/1.4 var(--font);color:var(--ink,#203e35);text-align:center;overflow-wrap:anywhere;word-break:break-word}

@@ -2,13 +2,13 @@
 //  Telas de conta e ranking (menu): faixa "Convidado / Logado", janela de entrar/criar conta e ranking.
 //  Textos em pt-BR, estilo comanda. Não mexe no jogo: só avisa quem mudou via onAccount.
 // ============================================================
-import { DEV_LOCAL, getAccount, getToken, getStats, getChal, getElo, onAccount, onPromoGrant, register, login, logout, loadRank, loadEloRank, loadPitRank, refreshStats } from './account.js';
+import { DEV_LOCAL, getAccount, getToken, getStats, getChal, getElo, onAccount, onPromoGrant, register, login, logout, loadRank, loadEloRank, loadPitRank, refreshStats, loadPromo, getPromo } from './account.js';
 import { nickError, passError, cleanNick } from './shared/nick.js';
 import { COIN_ICON, CURRENCY } from './shared/closet.js';
 import { BOX_PRICE } from './shared/lootbox.js';
 import { TIERS } from './shared/challenges.js';
 import { ELO_START, ELO_TIERS, ELO_MODES, eloMode, eloSummary, isMaxEloTier } from './shared/elo.js';
-import { promoActive, PROMO_ID, PROMO_COINS, PROMO_TITLE, PROMO_KICKER, PROMO_CREDIT_OK, PROMO_GUEST_OK, PROMO_GUEST_SKIP, promoCreditHtml, promoGuestHtml } from './shared/promo.js';
+import { PROMO_ID, PROMO_COINS, PROMO_BOXES, PROMO_TITLE, PROMO_KICKER, PROMO_CREDIT_OK, PROMO_GUEST_OK, PROMO_GUEST_SKIP, promoCreditHtml, promoGuestHtml } from './shared/promo.js';
 import { renderPitRank, PIT_RANK_LIMIT } from './pocilga-rank.js';
 
 const $ = (id) => document.getElementById(id);
@@ -60,14 +60,24 @@ const guestPromoKey = () => `docao.promo.${PROMO_ID}.guest`;
 function guestPromoSeen() { try { return localStorage.getItem(guestPromoKey()) === '1'; } catch (e) { return true; } }
 function markGuestPromoSeen() { try { localStorage.setItem(guestPromoKey(), '1'); } catch (e) { /* sem storage */ } }
 function closePromo() { const m = $('promoModal'); if (m) m.classList.add('hidden'); }
+function promoExpires() {
+  const p = getPromo();
+  const t = p && Number(p.expiresAt);
+  return Number.isFinite(t) ? t : undefined;
+}
 function openPromo({ guest }) {
   const modal = $('promoModal'); if (!modal) return;
   $('promoKicker').textContent = PROMO_KICKER;
   $('promoTitle').textContent = PROMO_TITLE;
   const coins = $('promoCoins');
+  const expires = promoExpires();
   if (guest) coins.classList.add('hidden');
-  else { coins.classList.remove('hidden'); coins.innerHTML = `${COIN_ICON} <b>${PROMO_COINS}</b> <small>${CURRENCY}</small>`; }
-  $('promoBody').innerHTML = guest ? promoGuestHtml() : promoCreditHtml();
+  else {
+    coins.classList.remove('hidden');
+    coins.innerHTML = `<span class="promo-reward">${COIN_ICON} <b>${PROMO_COINS}</b> <small>${CURRENCY}</small></span>`
+      + `<span class="promo-reward">🌽 <b>${PROMO_BOXES}</b> <small>caixotes</small></span>`;
+  }
+  $('promoBody').innerHTML = guest ? promoGuestHtml(PROMO_COINS, PROMO_BOXES, expires) : promoCreditHtml(PROMO_COINS, PROMO_BOXES, expires);
   $('promoOk').textContent = guest ? PROMO_GUEST_OK : PROMO_CREDIT_OK;
   $('promoSkip').textContent = PROMO_GUEST_SKIP;
   $('promoSkip').classList.toggle('hidden', !guest);
@@ -75,8 +85,10 @@ function openPromo({ guest }) {
   modal.classList.remove('hidden');
   $('promoOk').focus();
 }
-function showPromoGuestOnce() {
-  if (DEV_LOCAL || !promoActive() || getAccount() || guestPromoSeen()) return;
+async function showPromoGuestOnce() {
+  if (DEV_LOCAL || getAccount() || guestPromoSeen()) return;
+  const p = await loadPromo();
+  if (!p || !p.active || getAccount()) return;
   markGuestPromoSeen();
   openPromo({ guest: true });
 }
