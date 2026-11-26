@@ -128,6 +128,7 @@ export function makeOfferGun() {
 }
 
 export function tickStation(mesh, t, phase) {
+  if (!mesh) return; // mapa sem Barraca da Sorte (só a Papada): a estação não existe
   const u = mesh.userData;
   if (!u) return;
   if (u.kind === 'papada' && u.mouth) {
