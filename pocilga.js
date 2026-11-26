@@ -2,6 +2,7 @@
 // O placar sai de shared/pocilga.js. O áudio usa o contexto que o jogo já abriu.
 import * as THREE from 'three';
 import { makeDocao, setPose } from './docao.js';
+import { makeZombie, animateZombie } from './invasion-gfx.js';
 import { lookToSkin } from './shared/closet.js';
 import { PIT, BOARD, pitTargets, boardAabb, rayAabb, inspectRun, formatPit, suggestion, moverAt, inGate, onSprint, pitRescue } from './shared/pocilga.js';
 import { loadPitRank, submitPit, getAccount } from './account.js';
@@ -10,14 +11,14 @@ const LOCAL_KEY = 'docao.pocilga.best';
 const LINES = [
   'Barriguinha na torre. Escuta, leitão.',
   'Javali vermelho, de fuzil pra frente: derruba. Azul, sem arma, mão baixa: é civil.',
-  'Só a Pistolinha o percurso inteiro. Vinte e três javalis, cinco civis.',
+  'Só a Pistolinha o percurso inteiro. Vinte e três javalis, dois zumbis, cinco civis.',
   'Chega em 52 segundos, sem civil: três estrelas.',
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const starsTxt = (n) => '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
 const ease = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k * (3 - 2 * k); };
 
-let deps = null, root = null, boards = [], run = null, coach = null, natal = null, bits = null, arrival = null;
+let deps = null, root = null, boards = [], zeds = [], run = null, coach = null, natal = null, bits = null, arrival = null;
 let bannerUntil = 0, bannerText = '', warned = false, gen = 0, lineAt = 0;
 let shout = '', shoutUntil = 0;
 
@@ -473,9 +474,29 @@ function tickNatal(t) {
   natal.cool.color.setRGB(0.55 + 0.25 * (1 - s), 0.78 + 0.1 * s, 1);
 }
 
+function zedBox(z) {
+  return { minX: z.x - 0.42, maxX: z.x + 0.42, minY: z.y + 0.15, maxY: z.y + 1.75, minZ: z.z - 0.42, maxZ: z.z + 0.42 };
+}
+function makeZed(t) {
+  const model = makeZombie('walker');
+  model.group.visible = false;
+  model.group.position.set(t.x, t.y, t.z);
+  root.add(model.group);
+  return {
+    ...t, model, phase: 'wait', x: t.x, z: t.z, y: t.y,
+    alive: true, onGround: true, stunned: false, walk: 0, vel: { x: 0, z: 0 },
+    pos: { x: t.x, y: t.y, z: t.z }, yaw: Math.PI / 2,
+  };
+}
 export function pitRay(ox, oy, oz, dx, dy, dz, maxT) {
   if (!run || run.done) return null;
   let best = null;
+  for (const z of zeds) {
+    if (z.phase !== 'run') continue;
+    const t = rayAabb(ox, oy, oz, dx, dy, dz, zedBox(z), maxT);
+    if (t == null) continue;
+    if (!best || t < best.t) best = { t, id: z.id };
+  }
   for (const b of boards) {
     if (!standing(b)) continue;
     const t = rayAabb(ox, oy, oz, dx, dy, dz, boardAabb(b, b.ground), maxT);
@@ -487,6 +508,20 @@ export function pitRay(ox, oy, oz, dx, dy, dz, maxT) {
 
 export function pitHit(id, weapon) {
   if (!run || !run.started || run.done) return false;
+  const zed = zeds.find((x) => x.id === id);
+  if (zed) {
+    if (zed.phase !== 'run' || weapon !== PIT.pistol) return false;
+    const before = inspectRun(run.events);
+    pushEvent('hit', { id, w: weapon });
+    const after = inspectRun(run.events);
+    if (!(after.reason !== 'diário' && after.reason !== 'ordem' && !before.down.includes(id) && after.down.includes(id))) {
+      run.events.pop(); return false;
+    }
+    zed.phase = 'dead';
+    zed.model.group.visible = false;
+    deps.sfx.hit();
+    return true;
+  }
   const b = boards.find((x) => x.id === id);
   if (!b || !standing(b)) return false;
   const before = inspectRun(run.events);
@@ -656,6 +691,39 @@ async function closeRun() {
   showResult(run.result, { remote, rank });
 }
 
+function grabZed(z) {
+  if (z.phase !== 'run') return;
+  const before = inspectRun(run.events.length >= 2 ? run.events : [{ k: 'start', t: 0 }, { k: 'pop', bay: z.bay, t: 0 }]);
+  pushEvent('grab', { id: z.id });
+  const after = inspectRun(run.events);
+  if (after.reason === 'diário' || after.reason === 'ordem' || !(after.grabs > (before.grabs || 0))) {
+    run.events.pop();
+    return;
+  }
+  z.phase = 'dead';
+  z.model.group.visible = false;
+  banner(`+${PIT.zombie.penalty.toFixed(1).replace('.', ',')} s · ${z.name} te alcançou`, true, 1.8);
+  deps.sfx.oink();
+}
+function stepZeds(dt) {
+  if (!run || !run.started || run.done || !deps) return;
+  const p = deps.player();
+  if (!p) return;
+  for (const z of zeds) {
+    if (z.phase !== 'run') continue;
+    const dx = p.pos.x - z.x, dz = p.pos.z - z.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    if (dist < PIT.zombie.reach) { grabZed(z); continue; }
+    const step = Math.min(dist - 0.2, PIT.zombie.speed * dt);
+    z.x += dx / dist * step;
+    z.z += dz / dist * step;
+    z.yaw = Math.atan2(dx, dz);
+    z.vel.x = dx / dist * PIT.zombie.speed;
+    z.vel.z = dz / dist * PIT.zombie.speed;
+    z.pos.x = z.x; z.pos.y = z.y; z.pos.z = z.z;
+    animateZombie(z.model, z, dt, lineAt, false);
+  }
+}
 function stepMovers(dt) {
   run.moverT += dt;
   for (const b of boards) {
@@ -673,6 +741,7 @@ export function tickCourse(dt) {
   tickBits(dt);
   tickGate(dt);
   stepMovers(dt);
+  stepZeds(dt);
   if (coach) coach.model.group.position.y = PIT.tower.y + Math.sin(lineAt * 1.7) * 0.04;
   for (const b of boards) {
     if (b.phase === 'rise' || b.phase === 'fall') {
@@ -711,6 +780,7 @@ export function tickCourse(dt) {
     run.pops.add(gate.pop);
     pushEvent('pop', { bay: gate.pop });
     for (const b of boards) if (b.bay === gate.pop && b.phase === 'down') { b.phase = 'rise'; b.anim = 0; }
+    for (const z of zeds) if (z.bay === gate.pop && z.phase === 'wait') { z.phase = 'run'; z.model.group.visible = true; }
   }
   const finish = PIT.gates[PIT.gates.length - 1];
   if (run.started && inGate(pos, finish)) {
@@ -733,7 +803,12 @@ export function beginCourse(next) {
   root = new THREE.Group();
   root.name = 'pocilga';
   deps.scene.add(root);
-  boards = pitTargets().map((t) => makeBoard(t, deps.groundAt(t.x, t.z, (t.y || 0) + 1)));
+  boards = pitTargets().filter((t) => !t.zombie).map((t) => {
+    const floor = deps.groundAt(t.x, t.z, (t.y || 0) + 1);
+    const ground = (t.y || 0) > floor + 0.8 ? t.y : floor;
+    return makeBoard(t, ground);
+  });
+  zeds = pitTargets().filter((t) => t.zombie).map((t) => makeZed(t));
   for (const b of boards) pose(b);
   placeCoach();
   mountNatal();
@@ -765,6 +840,15 @@ export function clearCourse() {
   });
   root = null;
   boards = [];
+  for (const z of zeds) {
+    const g = z.model && z.model.group;
+    if (g && root) root.remove(g);
+    if (g) g.traverse((o) => {
+      const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      for (const m of list) m.dispose();
+    });
+  }
+  zeds = [];
   run = null;
   coach = null;
   natal = null;
@@ -810,7 +894,7 @@ export function courseSnap() {
     missed: view ? view.missed : [],
     civs: view ? view.civs : 0,
     pops: run ? [...run.pops] : [],
-    targets: boards.map((b) => ({ id: b.id, kind: b.kind, name: b.name, x: b.x, z: b.z, y: b.y || 0, phase: b.phase, face: b.face || -1, mover: !!b.move })),
+    targets: boards.map((b) => ({ id: b.id, kind: b.kind, name: b.name, x: b.x, z: b.z, y: b.y || 0, phase: b.phase, face: b.face || -1, mover: !!b.move, zombie: false })).concat(zeds.map((z) => ({ id: z.id, kind: z.kind, name: z.name, x: z.x, z: z.z, y: z.y || 0, phase: z.phase === 'run' ? 'up' : z.phase === 'dead' ? 'dead' : 'down', face: z.face || '-x', mover: false, zombie: true }))),
     card: $('pitOver') ? !$('pitOver').classList.contains('hidden') : false,
     coach: !!coach,
   };

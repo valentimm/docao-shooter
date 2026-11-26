@@ -1,6 +1,7 @@
 // Regras da Pocilga: oito etapas, só a Pistolinha, faca no javali perto, tempo mínimo.
 // Uso: node test-pocilga.mjs
 import { PIT, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate } from './shared/pocilga.js';
+import { ZOMBIES } from './shared/invasion.js';
 import { KNIFE, RADIUS, SPEED, JUMP } from './shared/rules.js';
 import { getMap } from './maps.js';
 import { mapSolids, createPhysics } from './shared/physics.js';
@@ -8,7 +9,8 @@ import { mapSolids, createPhysics } from './shared/physics.js';
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 
-ok(pitEnemies().length === 23 && pitCivils().length === 5, `23 javalis e 5 civis (${pitEnemies().length}/${pitCivils().length})`);
+ok(pitEnemies().filter((t) => !t.zombie).length === 23 && pitEnemies().filter((t) => t.zombie).length === 2 && pitCivils().length === 5, `23 javalis, 2 zumbis e 5 civis (${pitEnemies().length}/${pitCivils().length})`);
+ok(ZOMBIES.walker.hp === 110 && ZOMBIES.walker.speed === 4.4 && PIT.zombie.speed <= 3.4, 'o zumbi da Pocilga reusa o tipo do Survival sem mudar a tabela');
 ok(PIT.bays.length === 8, 'oito gatilhos, na ordem do percurso');
 ok(pitMovers().length >= 10 && pitMovers().filter((t) => t.kind === 'civil').length >= 2, `vários no trilho, inclusive civis (${pitMovers().map((t) => t.id).join(',')})`);
 ok(pitTargets().some((t) => t.close), 'um javali fica ao alcance da faca');
@@ -40,7 +42,7 @@ for (const t of pitTargets()) {
 }
 
 const clean = rankedRun(scriptRun({ finish: 32 }));
-ok(clean.ranked && clean.stars === 3 && clean.civs === 0 && clean.down.length === 23, `limpo em 32 s = 3 estrelas (${clean.final})`);
+ok(clean.ranked && clean.stars === 3 && clean.civs === 0 && clean.down.includes('z1') && clean.down.includes('z2') && clean.down.length === 25, `limpo em 32 s = 3 estrelas, zumbis inclusos (${clean.final})`);
 const nipped = rankedRun(scriptRun({ finish: 32, civs: ['c1'] }));
 ok(nipped.ranked && nipped.stars === 2 && nipped.final === 35 && nipped.blocked3, 'civil soma 3 s e bloqueia a 3ª');
 const slow = rankedRun(scriptRun({ finish: PIT.star2 + 6 }));
@@ -48,7 +50,21 @@ ok(slow.ranked && slow.stars === 1, `acima de ${formatPit(PIT.star2)} = 1 estrel
 const forgot = inspectRun(scriptRun({ finish: 40, skip: ['e15'] }));
 ok(!forgot.finished && forgot.reason === 'alvo' && forgot.missed.includes('e15'), 'javali em pé trava a chegada');
 const rifle = rankedRun(scriptRun({ finish: 40, rifle: true }));
-ok(!rifle.finished && rifle.missed.length === 23, 'tiro que não é a Pistolinha não derruba');
+ok(!rifle.finished && rifle.missed.length === 25, 'tiro que não é a Pistolinha não derruba, nem o zumbi');
+{
+  const ev = scriptRun({ finish: 50 });
+  const at = ev.find((e) => e.k === 'hit' && e.id === 'z1');
+  at.k = 'grab'; delete at.w;
+  const grabbed = rankedRun(ev);
+  ok(grabbed.finished && grabbed.grabs === 1 && grabbed.penalty === PIT.zombie.penalty && grabbed.stars === 2 && grabbed.down.includes('z1'), `zumbi que alcança soma ${PIT.zombie.penalty} s e tira a 3ª (${grabbed.stars}, +${grabbed.penalty})`);
+  const far = PIT.gates.find((g) => g.pop === 'passa');
+  for (const id of ['z1', 'z2']) {
+    const t = pitTargets().find((x) => x.id === id);
+    const d = Math.hypot(t.x - far.x, t.z - far.z);
+    ok(d >= 15, `${id} nasce a ${d.toFixed(1)} m do gatilho`);
+  }
+}
+ok(PIT.deck >= 4.8 && PIT.deck <= 6, `a rampa sobe até ${PIT.deck} m`);
 const knifed = rankedRun(scriptRun({ finish: 34, knife: ['e15'] }));
 ok(knifed.ranked && knifed.down.includes('e15') && knifed.stars === 3, 'a faca derruba o javali perto');
 ok(KNIFE === PIT.knife, 'a faca do circuito é a faca do jogo');
@@ -81,6 +97,11 @@ for (const q of samplePath(0.35)) {
   if (Math.abs(g - q.y) > 0.55 || Popen.collides(q.x, g + 0.02, q.z)) { stuck = { ...q, g, hit: Popen.collides(q.x, g + 0.02, q.z) }; break; }
 }
 ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou em ${stuck.x.toFixed(1)},${stuck.z.toFixed(1)} y=${stuck.y.toFixed(2)} chão=${stuck.g.toFixed(2)} colide=${stuck.hit})` : ` (alto ${hi.toFixed(2)} m)`}`);
+{
+  const e = { pos: { x: 0, y: 0.05, z: 28.4 }, vel: { x: 0, y: 0, z: SPEED * PIT.sprint }, onGround: true };
+  for (let i = 0; i < 150; i++) P.moveEntity(e, 1 / 30);
+  ok(e.pos.y > PIT.deck - 0.35 && e.pos.z > 46, `a rampa nova se sobe em sprint (y=${e.pos.y.toFixed(2)} z=${e.pos.z.toFixed(1)})`);
+}
 
 {
   const samples = [];

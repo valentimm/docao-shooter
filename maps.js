@@ -1620,7 +1620,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
     }),
     weather: {
       kind: 'snow', n: 280, fall: 3.6, wind: [0.45, 0, 0.2], top: 16, color: 0xF7FBFF, size: 0.1,
-      roofs: [[-6.6, 44.5, 20.3, 55.4, 3.2]],
+      roofs: [[-6.6, 47.2, 20.3, 55.4, 5.35]],
     },
     ...fin(boxes), props,
     spawns: [[PIT.spawn[0], PIT.spawn[1]]],

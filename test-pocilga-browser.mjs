@@ -62,7 +62,7 @@ const boot = await page.evaluate(() => ({
   coach: window.__docao.pit.coach,
   ramps: window.__docao.map.boxes.filter((b) => b.ramp).length,
 }));
-ok(boot.map === 'pocilga' && boot.w === 4 && boot.n === 28 && boot.coach && boot.ramps >= 1, `pistola, torre e escada (${JSON.stringify(boot)})`);
+ok(boot.map === 'pocilga' && boot.w === 4 && boot.n === 30 && boot.coach && boot.ramps >= 1, `pistola, torre e escada (${JSON.stringify(boot)})`);
 ok(await page.evaluate(() => !window.__docao.pit.started && !window.__docao.pit.done), 'no começo nem a largada nem a chegada disparam');
 ok(await page.evaluate(() => !window.__docao.map.props.some((p) => p.t === 'sign' || p.t === 'decal')), 'sem faixa no chão e sem placa de direção');
 const gpu = await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => {
@@ -95,7 +95,7 @@ const shoot = (ids) => page.evaluate((ids) => {
   for (const id of ids) {
     const t = g.pit.targets.find((x) => x.id === id);
     const p = g.player;
-    const extra = (t.face === 'x' || t.face === '-x') ? 0.7 : 2.25;
+    const extra = t.zombie ? 4.2 : (t.face === 'x' || t.face === '-x') ? 0.7 : 2.25;
     let spot = { x: t.x, y: t.y || 0, z: t.z - extra, yaw: Math.PI };
     if (t.face === 1) spot = { x: t.x, y: t.y || 0, z: t.z + extra, yaw: 0 };
     else if (t.face === 'x') spot = { x: t.x + extra, y: t.y || 0, z: t.z, yaw: Math.PI / 2 };
@@ -156,7 +156,7 @@ const later = s.targets.filter((t) => ['e3', 'e4', 'e5', 'c1'].includes(t.id));
 ok(s.started && s.pops.includes('patio') && patio.every((t) => t.phase !== 'down') && later.every((t) => t.phase === 'down'), `o primeiro grupo sobe junto e o fundo espera (${patio.map((t) => t.phase).join(',')})`);
 await page.waitForTimeout(200);
 s = await snap();
-ok(/INIMIGOS 0\/23/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
+ok(/INIMIGOS 0\/25/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
 await shotOf('pocilga-2-corredor', 14.2, 0, -8.6, Math.PI, -0.02);
 await page.evaluate(() => { window.__cam = { p: [14.2, 22, 6], t: [14.2, 0, 6], fov: 42 }; });
 await page.waitForTimeout(200);
@@ -185,11 +185,19 @@ await shotOf('pocilga-3-sala', 14.2, 0, 21.2, Math.PI, -0.08);
 shot = await shoot(['e6', 'e7', 'e8', 'e9', 'e10']);
 for (const id of ['e6', 'e7', 'e8', 'e9', 'e10']) ok(shot[id].phase === 'fall', `${id} na sala${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 
-await go(gate('escada').x, gate('escada').y, gate('escada').z, Math.PI, -0.2);
+await go(gate('escada').x, gate('escada').y, gate('escada').z, Math.PI, -0.35);
 await page.waitForTimeout(200);
 ok((await snap()).pops.includes('escada') && /Sobe a escada/.test((await snap()).banner + (await snap()).talk), 'sobe a escada');
-await shotOf('pocilga-4-rampa', 0, 0.9, 34.5, Math.PI, -0.32);
-await page.evaluate(() => { window.__cam = { p: [16, 8.2, 50.5], t: [28, 0.4, 50.5], fov: 58 }; });
+await shotOf('pocilga-4-rampa', 0, 1.6, 36, Math.PI, -0.28);
+await page.evaluate(() => {
+  const ban = document.getElementById('pitBanner'); if (ban) ban.classList.add('hidden');
+  window.__cam = { p: [-1.2, 1.35, 24.8], t: [0.4, 4.6, 46], fov: 52 };
+});
+await page.waitForTimeout(250);
+await page.screenshot({ path: `${SHOTS}/pocilga-rampa-baixo.png` });
+await page.evaluate((deck) => { window.__cam = { p: [2, deck + 1.7, 50.5], t: [24, deck + 0.6, 50.5], fov: 58 }; }, PIT.deck);
+await page.waitForTimeout(200);
+await page.screenshot({ path: `${SHOTS}/pocilga-rampa-topo.png` });
 await page.waitForTimeout(250);
 await page.screenshot({ path: `${SHOTS}/pocilga-pouso.png` });
 await page.evaluate(() => { window.__cam = null; });
@@ -199,18 +207,30 @@ for (const id of ['e12', 'e13', 'e14']) ok(shot[id].phase === 'fall', `${id} na 
 await go(gate('passa').x, gate('passa').y, gate('passa').z, -Math.PI / 2, -0.05);
 await page.waitForTimeout(200);
 ok((await snap()).pops.includes('passa'), 'passarela acorda');
-await shotOf('pocilga-6-passarela', 6.2, 3.15, 50.5, -Math.PI / 2, -0.04);
+await shotOf('pocilga-6-passarela', 4.2, PIT.deck, 50.5, -Math.PI / 2, -0.02);
+await page.evaluate((deck) => { window.__cam = { p: [8, deck + 1.6, 48.6], t: [26, deck + 1.1, 50.6], fov: 48 }; }, PIT.deck);
+await page.waitForTimeout(200);
+await page.screenshot({ path: `${SHOTS}/pocilga-zumbis.png` });
+await go(gate('passa2').x, gate('passa2').y, gate('passa2').z, -Math.PI / 2, 0);
+await page.waitForTimeout(350);
+await page.evaluate((deck) => {
+  const ban = document.getElementById('pitBanner'); if (ban) ban.classList.add('hidden');
+  window.__cam = { p: [10, deck + 1.8, 49.2], t: [24, deck + 1.3, 51.2], fov: 55 };
+}, PIT.deck);
+await page.waitForTimeout(200);
+await page.screenshot({ path: `${SHOTS}/pocilga-corredor-inesperado.png` });
 await page.evaluate(() => { window.__cam = { p: [18, 16, 50.5], t: [18, 3.15, 50.5], fov: 48 }; });
 await page.waitForTimeout(200);
 await page.screenshot({ path: `${SHOTS}/pocilga-passarela-cima.png` });
 await page.evaluate(() => { window.__cam = null; });
-shot = await shoot(['e15', 'e16']);
-for (const id of ['e15', 'e16']) ok(shot[id].phase === 'fall', `${id} na passarela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+shot = await shoot(['e15', 'z1', 'z2']);
+ok(shot.e15.phase === 'fall', `e15 na passarela${shot.e15.phase !== 'fall' ? ' (' + shot.e15.trace + ')' : ''}`);
+for (const id of ['z1', 'z2']) ok(shot[id].phase === 'dead', `${id} cai com um tiro (${shot[id].phase})`);
 await go(gate('passa2').x, gate('passa2').y, gate('passa2').z, -Math.PI / 2, 0);
 await page.waitForTimeout(200);
 ok((await snap()).pops.includes('passa2'), 'o fim da passarela acorda');
-shot = await shoot(['e17', 'c3']);
-for (const id of ['e17', 'c3']) ok(shot[id].phase === 'fall', `${id} na passarela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
+shot = await shoot(['e16', 'e17', 'c3']);
+for (const id of ['e16', 'e17', 'c3']) ok(shot[id].phase === 'fall', `${id} na passarela${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
 s = await snap();
 ok(s.civs === 1 && /3/.test(s.banner), `penalidade do civil (${s.banner})`);
 

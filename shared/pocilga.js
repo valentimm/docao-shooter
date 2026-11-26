@@ -13,9 +13,9 @@ import { SPEED, KNIFE } from './rules.js';
 
 export const BOARD = { w: 1.05, h: 1.85, d: 0.12, y: 0.02 };
 const H = 2.8;
-const DECK = 3.15;
-const R0 = 31;
-const R1 = 45;
+const DECK = 5.2;
+const R0 = 28;
+const R1 = 48;
 const WALLTOP = 2.9;
 const ROUND = (n) => Math.round(n * 1000) / 1000;
 const rampY = (z) => ROUND((z - R0) / (R1 - R0) * DECK);
@@ -28,6 +28,7 @@ export const PIT = {
   pistol: 4,
   knife: KNIFE,
   civPenalty: 3,
+  zombie: { speed: 3.2, reach: 1.65, penalty: 3 },
   // Ajuste fino: rise = segundos até a placa ficar em pé; lead = metros de eixo
   // antes do grupo em que o gatilho deve armar.
   rise: 0.18,
@@ -49,9 +50,9 @@ export const PIT = {
     { x: 14.2, z: 24, y: 0 },
     { x: 0, z: 24, y: 0 },
     { x: 0, z: R0, y: 0 },
-    { x: 0, z: 36, y: rampY(36) },
+    { x: 0, z: 35, y: rampY(35) },
     { x: 0, z: 42, y: rampY(42) },
-    { x: 0, z: 45.6, y: DECK },
+    { x: 0, z: R1, y: DECK },
     { x: 0, z: 50.5, y: DECK },
     { x: 26, z: 50.5, y: DECK },
     { x: 32, z: 50.5, y: 0, drop: true },
@@ -65,9 +66,9 @@ export const PIT = {
     { id: 'meio', x: 14.2, z: -1.6, y: 0, r: 1.8, pop: 'patio2' },
     { id: 'fundo', x: 14.2, z: 6.6, y: 0, r: 1.8, pop: 'patio3' },
     { id: 'sala', x: 14.2, z: 12.4, y: 0, r: 2.2, pop: 'sala', say: 'Em cima do muro!' },
-    { id: 'escada', x: 0, z: 27.6, y: 0, r: 2.8, pop: 'escada', say: 'Sobe a escada!' },
-    { id: 'passa', x: 4.2, z: 50.5, y: DECK, r: 2.4, pop: 'passa' },
-    { id: 'passa2', x: 18.2, z: 50.5, y: DECK, r: 2.2, pop: 'passa2' },
+    { id: 'escada', x: 0, z: 26.2, y: 0, r: 2.4, pop: 'escada', say: 'Sobe a escada!' },
+    { id: 'passa', x: 0.4, z: 50.5, y: DECK, r: 2.2, pop: 'passa' },
+    { id: 'passa2', x: 8.2, z: 50.5, y: DECK, r: 2.2, pop: 'passa2' },
     { id: 'pulo', x: 26, z: 50.5, y: DECK, r: 2.2, say: 'Pula!' },
     { id: 'baixo', x: 31.8, z: 42, y: 0, r: 3.4, pop: 'pulo' },
     { id: 'corre', x: 31.8, z: 8, y: 0, r: 3, say: 'Corre!' },
@@ -97,18 +98,20 @@ export const PIT = {
       { id: 'e10', kind: 'enemy', name: 'Javali em cima', x: 11.2, z: 29.42, y: WALLTOP, face: -1, move: { axis: 'x', min: 8.8, max: 13.6, speed: 0.9, phase: 1.0 } },
     ] },
     { id: 'escada', targets: [
-      { id: 'e12', kind: 'enemy', name: 'Javali da escada', x: -3.6, z: 36.5, y: rampY(36.5), face: -1, move: { axis: 'x', min: -4.8, max: -2.2, speed: 0.8, phase: 0.2 } },
-      { id: 'e13', kind: 'enemy', name: 'Javali do meio da escada', x: 0.2, z: 39.6, y: rampY(39.6), face: -1 },
-      { id: 'e14', kind: 'enemy', name: 'Javali de cima', x: 3.6, z: 42.6, y: rampY(42.6), face: -1, move: { axis: 'x', min: 2.4, max: 4.8, speed: 0.85, phase: 1.3 } },
+      { id: 'e12', kind: 'enemy', name: 'Javali da escada', x: -3.4, z: 33.2, y: rampY(33.2), face: -1, move: { axis: 'x', min: -4.6, max: -2.2, speed: 0.8, phase: 0.2 } },
+      { id: 'e13', kind: 'enemy', name: 'Javali do meio da escada', x: 3.2, z: 39.4, y: rampY(39.4), face: -1 },
+      { id: 'e14', kind: 'enemy', name: 'Javali de cima', x: -2.8, z: 44.6, y: rampY(44.6), face: -1, move: { axis: 'x', min: -4.2, max: -1.6, speed: 0.85, phase: 1.3 } },
     ] },
     { id: 'passa', targets: [
-      { id: 'e15', kind: 'enemy', name: 'Javali no peito', x: 11.2, z: 47.6, y: DECK, face: '-x', close: true },
-      { id: 'e16', kind: 'enemy', name: 'Javali da passarela', x: 16.0, z: 53.2, y: DECK, face: '-x', move: { axis: 'z', min: 52.2, max: 54.3, speed: 0.85, phase: 0.4 } },
+      { id: 'c3', kind: 'civil', name: 'Porquinha da passarela', x: 13.4, z: 47.4, y: DECK, face: '-x' },
+      { id: 'e15', kind: 'enemy', name: 'Javali do muro alto', x: 15.8, z: 54.25, y: DECK + 1.35, face: '-x' },
+      { id: 'z1', kind: 'enemy', zombie: true, name: 'Podre da esquerda', x: 26.2, z: 49.1, y: DECK, face: '-x' },
+      { id: 'z2', kind: 'enemy', zombie: true, name: 'Podre da direita', x: 27.1, z: 52.2, y: DECK, face: '-x' },
     ] },
     { id: 'passa2', targets: [
-      { id: 'c3', kind: 'civil', name: 'Porquinha da passarela', x: 23.4, z: 47.3, y: DECK, face: '-x' },
-      { id: 'e17', kind: 'enemy', name: 'Javali do corrimão', x: 27.0, z: 48.6, y: DECK, face: '-x' },
-      { id: 'c4', kind: 'civil', name: 'Leitão da passarela', x: 26.6, z: 53.1, y: DECK, face: '-x', move: { axis: 'z', min: 52.2, max: 54.0, speed: 0.7, phase: 0.6 } },
+      { id: 'c4', kind: 'civil', name: 'Leitão da passarela', x: 19.6, z: 53.6, y: DECK, face: '-x' },
+      { id: 'e16', kind: 'enemy', name: 'Javali atrás do caixote', x: 22.5, z: 47.7, y: DECK, face: '-x', close: true },
+      { id: 'e17', kind: 'enemy', name: 'Javali que surge de lado', x: 24.6, z: 53.4, y: DECK, face: '-x', move: { axis: 'z', min: 52.2, max: 54.2, speed: 0.85, phase: 0.4 } },
     ] },
     { id: 'pulo', targets: [
       { id: 'e18', kind: 'enemy', name: 'Javali da queda', x: 29.8, z: 32, y: 0, face: 1 },
@@ -272,7 +275,7 @@ export function inspectRun(events) {
   const targets = new Map(pitTargets().map((t) => [t.id, t]));
   const bayOrder = PIT.bays.map((b) => b.id);
   let prev = -1, started = false, finishT = null;
-  const pops = [], down = new Map(), civHit = new Set();
+  const pops = [], down = new Map(), civHit = new Set(), grabs = new Set();
   for (const e of events) {
     if (!e || typeof e.k !== 'string' || typeof e.t !== 'number' || !Number.isFinite(e.t)) return empty('diário');
     if (e.t < -1e-9 || e.t > 900 || e.t + 1e-9 < prev) return empty('ordem');
@@ -293,8 +296,18 @@ export function inspectRun(events) {
       if (!t) return empty('diário');
       if (!countsAsShot(e.w)) continue;
       if (!pops.includes(t.bay)) continue;
-      if (t.kind === 'enemy') { if (!down.has(t.id)) down.set(t.id, e.t); }
+      if (t.kind === 'enemy') {
+        if (t.zombie && e.w !== PIT.pistol) continue;
+        if (!down.has(t.id)) down.set(t.id, e.t);
+      }
       else civHit.add(t.id);
+      continue;
+    }
+    if (e.k === 'grab') {
+      const t = targets.get(e.id);
+      if (!t || !t.zombie || !pops.includes(t.bay)) return empty('diário');
+      if (!down.has(t.id)) down.set(t.id, e.t);
+      grabs.add(t.id);
       continue;
     }
     if (e.k === 'finish') {
@@ -307,15 +320,17 @@ export function inspectRun(events) {
   const missed = pitEnemies().filter((t) => !down.has(t.id)).map((t) => t.id);
   const finished = finishT != null && missed.length === 0 && pops.length === PIT.bays.length;
   const civs = civHit.size;
-  const penalty = civs * PIT.civPenalty;
+  const grabN = grabs.size;
+  const penalty = civs * PIT.civPenalty + grabN * PIT.zombie.penalty;
+  const scars = civs + grabN;
   const final = finished ? ROUND(finishT + penalty) : null;
-  const stars = starsOf(final, civs, finished);
+  const stars = starsOf(final, scars, finished);
   const reason = !started ? 'largada' : finishT == null ? 'andamento' : missed.length ? 'alvo' : pops.length < PIT.bays.length ? 'sala' : 'ok';
   return {
     ok: finished, ranked: false, reason, started, finished,
-    raw: finished ? finishT : null, penalty: finished ? penalty : civs * PIT.civPenalty,
-    final, civs, stars, missed, down: [...down.keys()], pops: pops.slice(),
-    suggestion: suggestion(stars), blocked3: civs > 0,
+    raw: finished ? finishT : null, penalty: finished ? penalty : scars * PIT.civPenalty,
+    final, civs, grabs: grabN, stars, missed, down: [...down.keys()], pops: pops.slice(),
+    suggestion: suggestion(stars), blocked3: scars > 0,
   };
 }
 
@@ -387,22 +402,23 @@ export function pitPieces() {
   slab(-5.75, 24.4, -5.15, 28.2, WALLTOP, 'concrete', 0.16);
   slab(8.2, 29.15, 14.2, 29.7, WALLTOP, 'concrete', 0.16);
 
-  // 4. Rampa larga. O lado direito é parede, não um corredor.
+  // 4. Rampa mais longa e mais alta. O topo é o patamar do corredor de cima.
   ramp(-6, R0, 6, R1, 0, DECK, 'z', 1);
-  wall(-6.55, 30.15, -6.1, 55.5, 5.9);
-  wall(6.1, 30.15, 6.55, 45.95, 5.9);
-  add(6.55, 0, 30.15, 17.2, 5.6, 45.7, { tone: 'concrete' });
+  wall(-6.55, R0, -6.1, 55.5, DECK + 2.8);
+  wall(6.1, R0, 6.55, 47.2, DECK + 2.8);
+  add(6.55, 0, 30.4, 17.2, DECK + 2.4, 46.2, { tone: 'concrete' });
 
-  // 5. Passarela de 9 m. O miolo é cheio: não existe chão andável embaixo.
-  slab(-6.55, 44.5, 6.7, 55.5, DECK);
-  add(6.55, 0, 45.55, 28.15, DECK, 55.5, { floor: true, tone: 'metal' });
+  // 5. Patamar. O miolo embaixo continua cheio.
+  slab(-6.55, 47.2, 6.7, 55.5, DECK);
+  add(6.55, 0, 46.2, 28.15, DECK, 55.5, { floor: true, tone: 'metal' });
+  add(20.35, DECK, 47.15, 21.55, DECK + 1.15, 48.45, { tone: 'wood' });
   wall(-6.55, 54.95, 28.15, 55.45, 2.7, DECK, 'metal');
   wall(6.55, 45.55, 28.15, 46.05, 2.7, DECK, 'metal');
 
   // 6. Pouso fechado, encostado no limite do mapa. A disparada desce e volta pelo fundo da largada.
-  wall(28.15, 54.95, 35.7, 55.45, 7);
-  wall(28.15, 45.55, 29.0, 46.05, 7);
-  wall(34.7, 45.55, 35.7, 46.05, 7);
+  wall(28.15, 54.95, 35.7, 55.45, DECK + 3.4);
+  wall(28.15, 45.55, 29.0, 46.05, DECK + 3.4);
+  wall(34.7, 45.55, 35.7, 46.05, DECK + 3.4);
   wall(28.15, -22.2, 28.6, 45.55, H, 0, 'fence');
   wall(35.15, -29.2, 35.6, 45.55, H, 0, 'fence');
   wall(8.0, -29.2, 35.6, -28.75, H, 0, 'fence');
