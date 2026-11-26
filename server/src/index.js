@@ -123,7 +123,10 @@ export class Room extends DurableObject {
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
     this.ctx.blockConcurrencyWhile(async () => {
       const saved = await this.ctx.storage.get('room');
+      const adv = await this.ctx.storage.get('adventure');
       if (saved) this.restore(saved);
+      if (adv && adv.exp > Date.now()) { if (this.game) this.game.adventure = adv; }
+      else if (adv) await this.ctx.storage.delete('adventure');
     });
   }
   // recria o jogo depois de hibernar (lobby/fim de partida): config + jogadores ainda conectados
@@ -147,6 +150,8 @@ export class Room extends DurableObject {
       stopLoop() { if (self.loop) { clearInterval(self.loop); self.loop = null; } self.persist(); },
       saveCfg() { self.persist(); },
       stats(items) { if (self.env.DB && items.length) self.ctx.waitUntil(recordStats(self.env, items).catch((e) => console.error('stats', e && e.message))); },
+      saveAdventure(blob) { self.ctx.storage.put('adventure', blob); },
+      clearAdventure() { self.ctx.storage.delete('adventure'); },
       elo(payload) {
         if (!self.env.DB || !payload) return;
         self.ctx.waitUntil((async () => {
@@ -280,11 +285,18 @@ export class Room extends DurableObject {
     const a = ws.deserializeAttachment(); if (!a) return; ws.serializeAttachment(null);
     try { ws.close(1000, 'bye'); } catch (e) { /* já fechado */ }
     if (this.game) this.game.leave(a.id);
-    if (!this.sockets().length) { this.ctx.storage.setAlarm(Date.now() + EMPTY_TTL); this.persist(); }
+    if (!this.sockets().length) {
+      const adv = this.game && this.game.adventure;
+      if (adv && adv.exp > Date.now()) { this.ctx.storage.put('adventure', adv); this.ctx.storage.setAlarm(adv.exp); }
+      else this.ctx.storage.setAlarm(Date.now() + EMPTY_TTL);
+      this.persist();
+    }
   }
   async alarm() {
     if (this.sockets().length) return;
+    const adv = (this.game && this.game.adventure) || await this.ctx.storage.get('adventure');
+    if (adv && adv.exp > Date.now()) { await this.ctx.storage.setAlarm(adv.exp); return; }
     if (this.loop) { clearInterval(this.loop); this.loop = null; }
-    this.game = null; await this.ctx.storage.deleteAll(); // sala vazia: limpa tudo
+    this.game = null; await this.ctx.storage.deleteAll(); // sala vazia, sem aventura: limpa tudo
   }
 }

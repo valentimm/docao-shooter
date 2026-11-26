@@ -33,7 +33,8 @@ import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getM
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES, WAVE_THEMES, normInvDiff, INV_DIFF_LABEL, INV_CROSS, mutantProfile } from './shared/invasion.js';
 import { HUPS, historiaSpot } from './shared/historia-ups.js';
 import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, platePoints } from './shared/historia-pass.js';
-import { createEgg, eggPrompt, eggCap, EGG_SPOTS } from './shared/historia-egg.js';
+import { createEgg, eggPrompt, eggCap, EGG_SPOTS, LINK_ROOM, linkDoorSolid } from './shared/historia-egg.js';
+import { packAdventure, applyAdventure, adventureExpired } from './shared/historia-save.js';
 import { breadBlocks } from './shared/historia-finale.js';
 import { storyLine } from './shared/historia-narrador.js';
 import { ULTS, frenzyTaken } from './shared/historia-ult.js';
@@ -298,9 +299,12 @@ const topAt = (s, x, z) => PHYS.topAt(s, x, z);
 const collides = (x, y, z) => PHYS.collides(x, y, z);
 const groundAt = (x, z, y) => PHYS.groundAt(x, z, y);
 const ceilingAt = (x, z, headY) => PHYS.ceilingAt(x, z, headY);
+let storyDoorOn = false, linkDoorMesh = null;
 function syncNevasca(t) {
   if (!PHYS.setMovers) return;
-  PHYS.setMovers(currentMap && currentMap.id === 'posto-nevasca' ? nevascaSolids(t) : []);
+  const list = currentMap && currentMap.id === 'posto-nevasca' ? nevascaSolids(t) : [];
+  if (storyDoorOn) list.push(linkDoorSolid());
+  PHYS.setMovers(list);
 }
 const moveEntity = (e, dt) => {
   const blocked = PHYS.moveEntity(e, dt);
@@ -2430,8 +2434,8 @@ function fire(shooter, origin, dir, wIdx, spread, muzzle, mul = 1, hand = 0) {
     else if (!online && inv) inv.frenzyArm(shooter);
     return { hit: false, kill: false, kills: 0, wall: false };
   }
-  if (isHistoria(mode) && shooter && !shooter.zt && shooter.eggHideUntil > gameTime) return { hit: false, kill: false, kills: 0, wall: false };
   if (isHistoria(mode) && shooter && shooter.eggShock && !shooter.zt) { storyShockPulse(shooter); return { hit: false, kill: false, kills: 0, wall: false }; }
+  if (isHistoria(mode) && shooter && !shooter.zt && shooter.eggHideUntil > gameTime) return { hit: false, kill: false, kills: 0, wall: false };
   if (!online && shooter) hearGunshot(entities, origin, shooter, gameTime); // bots surdos (Leitão/Ceva) ignoram; os outros vão investigar, sem atirar no som
   const w = shooter && shooter.isPlayer ? gunOf(shooter, wIdx) : WEAPONS[wIdx]; const res = { hit: false, kill: false, kills: 0, wall: false };
   if (shooter && shooter.model) setExpression(shooter.model, 'angry', 0.5); // cara de brava ao atirar
@@ -2507,7 +2511,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   }
   if (!online && compOn()) amount = mitigate(t, amount, head);
   if (!online) amount = subidoTaken(t, amount);
-  if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
+  if (invMode() && !t.zt && attacker && !attacker.zt && !attacker.fog && !(wIdx === RAY && t === attacker) && !(isHistoria(mode) && (t.soul || attacker.soul))) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou. Na história, quem está com a alma sugada toma o tiro dos outros.
   if (!online) amount = frenzyTaken(amount, t, gameTime);
   t.hp -= amount; t.lastAttacker = attacker; t.flashUntil = gameTime + 0.12; noteHurt(t, attacker, gameTime); if (!online && attacker && attacker !== t && attacker.fun) notePodiumHurt(attacker.fun, amount); // regen só com dano de outro
   if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
@@ -4246,7 +4250,9 @@ function updateHud(dt) {
   hurtLevel = Math.max(0, hurtLevel - dt * 2.5);
   { const left = p.alive ? eggSplatUntil - gameTime : 0, el = $('eggsplat'); if (el) { el.style.opacity = left > 0 ? Math.min(1, left / 0.5).toFixed(2) : '0'; if (left > 0) drawEggSplat(); } } // sujeira de ovo na tela: 2 s escorrendo, some no último meio segundo
   updateHitDirs();
-  $('vignette').style.opacity = Math.max(hurtLevel, p.alive && p.hp < 35 ? 0.35 + Math.sin(gameTime * 6) * 0.1 : 0);
+  const soulRed = isHistoria(mode) && p.alive && p.soul;
+  $('vignette').style.background = soulRed ? 'radial-gradient(ellipse at center, rgba(120,0,0,.34) 18%, rgba(150,12,12,.78) 100%)' : '';
+  $('vignette').style.opacity = soulRed ? Math.max(0.62, hurtLevel) : Math.max(hurtLevel, p.alive && p.hp < 35 ? 0.35 + Math.sin(gameTime * 6) * 0.1 : 0);
   const cm = $('centermsg');
   const veil = document.body.classList.contains('dead') || bombPick || invPick || pauseClassOpen();
   document.body.classList.toggle('cls-on', veil);
@@ -5959,6 +5965,11 @@ function updatePlayer(dt) {
   if (p.hRootUntil > gameTime) wish.set(0, 0, 0); // Pelo bem da Cheers: parado
   if (bebado) wish.set(0, 0, 0);
   if (p.eggHideUntil > gameTime) { wish.set(0, 0, 0); p.vel.x = p.vel.z = 0; } // pulou o muro: some por 10 s
+  if (p.eggSeat || p.eggTrap) {
+    wish.set(0, 0, 0); p.vel.x = p.vel.z = 0; p.crouch = 0.9;
+    if (p.eggSeatPos) { p.pos.x = p.eggSeatPos.x; p.pos.z = p.eggSeatPos.z; }
+    p.yaw = Math.PI;
+  }
   if (wish.lengthSq()) wish.normalize().multiplyScalar(SPEED * (p.down ? DOWNED.speed : 1) * (p.hSpeedUntil > gameTime ? 1.5 : 1) * (isHistoria(mode) ? passoMul(p) : 1) * moveScale(WEAPONS[p.weapon], p.weapon, KNIFE, MELEE.speedMul) * (p.stunUntil > gameTime && !(p.flashUntil > gameTime) ? SHOCK.slow : 1) * (p.ghostOn ? 1.3 : 1) * (1 - (1 - ADS_SPEED) * ads) * (1 - (1 - CROUCH.speed) * p.crouch)); // caído rasteja. Em pé: faca corre; sabre anda normal; agachado anda mais devagar. Flashbang não deixa lento. Passinho do Hotmilk soma em cima.
   if (hideFrozen(hideS, p)) wish.set(0, 0, 0); else if (hideS && p.hider) wish.multiplyScalar(p.propLock ? 0 : HIDE.SPEED); // Docão Escondido: Caçador preso na preparação · Escondido mais lento
   if (!online) { const wasJet = !!p.jet, wasBig = !!p.big; stepCheats(p, gameTime, p.onGround); if (wasJet && !p.jet) flashMsg(p.jetGlide ? 'Jetpack acabou · descendo devagar' : 'Jetpack acabou'); if (wasBig && !p.big) flashMsg('Voltou ao tamanho normal'); }
@@ -6016,6 +6027,11 @@ function updatePlayer(dt) {
   if (p.tank) { fireTank(p); return; }
   if (p.graveHold) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; return; } // pá na mão: sem tiro até soltar
   if (p.soul) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; return; } // alma sugada: zumbi não atira nem golpeia
+  if (isHistoria(mode) && p.eggShock) {
+    const shockLatch = !mouseDown && clickLatch && performance.now() - clickLatch < 250;
+    if ((mouseDown || shockLatch) && !(p.eggShockAt > gameTime)) { firedThisPress = true; clickLatch = 0; storyShockPulse(p); }
+    return;
+  }
   if (bebado) { p.charging = false; p.bowDraw = 0; p.eggDraw = 0; p.burstLeft = 0; arcLine.visible = arcMark.visible = false; camera.rotation.z += Math.sin(gameTime * 8) * 0.28; return; }
   if (emote.on) { // dança: anda e olha, mas a arma não dispara até a animação acabar
     if (gameTime >= emote.until) stopEmote();
@@ -7733,6 +7749,7 @@ function endGame() {
   stopStoryCut();
   stopInspect(true); stopEmote(); // fim no meio da inspeção ou da dança (a mira com zoom continua na câmera lenta)
   if (state === 'over' || !player) return;
+  if (invMode() && isHistoria(mode) && !online) clearAdventureLocal();
   const boom = nukeWin; nukeWin = false; // Fim da chapa: o dono (ou o time dele) vence, mesmo atrás no placar
   beginMatchEnding();
   if (boom && teamMode() && player && (player.team === 0 || player.team === 1) && teamScore[1 - player.team] > teamScore[player.team]) teamScore[player.team] = teamScore[1 - player.team] + 1;
@@ -7866,13 +7883,14 @@ function fillPauseBrief() {
   else if (armsMode() && p) score = `Etapa ${p.armsStage + 1}/${ARMS_STAGES.length} · ${p.armsKills | 0}/2`;
   set('pauseScore', score);
 }
-function pause() { if (state !== 'playing') return; softPauseOn = false; state = 'paused'; releaseLook(); closePauseClass(); tuckDeathMenu(); if (player && player.alive) document.body.classList.remove('dead', 'deadgray', 'cls-on', 'killcam'); $('pauseInvite').classList.toggle('hidden', !online); $('pauseVoice').classList.toggle('hidden', !online); const note = $('pauseClassNote'); if (note) note.textContent = x1Mode() ? 'No X1 a arma é sortida e igual pra todo mundo. Não dá pra trocar.' : survOn() ? 'No Survival a arma se compra na partida, na loja.' : invMode() ? 'Na Invasão a classe entra no painel B, entre as waves.' : training() ? 'No estande a classe entra agora e o pente não enche sozinho.' : 'A classe escolhida entra na próxima vida. Não derruba.'; const swap = $('pauseClassBtn'); if (swap) swap.classList.add('hidden'); const classBox = $('pauseClasses'); if (classBox) classBox.classList.toggle('hidden', !pauseClassesAllowed()); buildPauseGuns(); $('pauseDance').classList.toggle('hidden', invMode()); fillPauseBrief(); showPauseLoadout(false); pauseFocus = 0; paintPauseFocus(); const opt = $('pauseOptions'); if (opt) opt.classList.remove('is-hot'); $('pause').classList.remove('hidden'); showPauseLoadout(false); if (document.pointerLockElement) document.exitPointerLock(); }
+function pause() { if (state !== 'playing') return; softPauseOn = false; state = 'paused'; const saveBtn = $('saveAdvBtn'); if (saveBtn) saveBtn.classList.toggle('hidden', !isHistoria(mode) || !!(online && online.myId !== online.hostId)); releaseLook(); closePauseClass(); tuckDeathMenu(); if (player && player.alive) document.body.classList.remove('dead', 'deadgray', 'cls-on', 'killcam'); $('pauseInvite').classList.toggle('hidden', !online); $('pauseVoice').classList.toggle('hidden', !online); const note = $('pauseClassNote'); if (note) note.textContent = x1Mode() ? 'No X1 a arma é sortida e igual pra todo mundo. Não dá pra trocar.' : survOn() ? 'No Survival a arma se compra na partida, na loja.' : invMode() ? 'Na Invasão a classe entra no painel B, entre as waves.' : training() ? 'No estande a classe entra agora e o pente não enche sozinho.' : 'A classe escolhida entra na próxima vida. Não derruba.'; const swap = $('pauseClassBtn'); if (swap) swap.classList.add('hidden'); const classBox = $('pauseClasses'); if (classBox) classBox.classList.toggle('hidden', !pauseClassesAllowed()); buildPauseGuns(); $('pauseDance').classList.toggle('hidden', invMode()); fillPauseBrief(); showPauseLoadout(false); pauseFocus = 0; paintPauseFocus(); const opt = $('pauseOptions'); if (opt) opt.classList.remove('is-hot'); $('pause').classList.remove('hidden'); showPauseLoadout(false); if (document.pointerLockElement) document.exitPointerLock(); }
 // ` solta o mouse como o Esc, sem a pausa na chapa: o HUD fica como estava. Clique ou ` de novo volta a mirar.
 function softPause() { if (state !== 'playing') return; state = 'paused'; softPauseOn = true; releaseLook(); if (document.pointerLockElement) document.exitPointerLock(); }
 function resume() { closePauseClass(); showPauseLoadout(false); softPauseOn = false; $('pause').classList.add('hidden'); state = 'playing'; if (!document.body.classList.contains('dead') && !bombPick && !invPick) document.body.classList.remove('cls-on'); const storyMouse = isHistoria(mode) && (($('hOffer') && !$('hOffer').classList.contains('hidden')) || ($('hMap') && !$('hMap').classList.contains('hidden'))); if (!storyMouse) lockPointer(); }
 function updateDeathSkinFx(dt) { deathSkinFx.update(dt); }
 function toMenu() {
   stopStoryNarrator();
+  storyDoorOn = false;
   clearMatchEnding(); deathSkinFx.clear();
   if (online) leaveOnline();
   endVictory(); stopEmote(); document.body.classList.remove('deadgray');
@@ -7892,6 +7910,8 @@ function lockPointer() {
 
 $('playBtn').onclick = () => startGame(); $('menuBtn').onclick = toMenu;
 $('resumeBtn').onclick = resume; $('quitBtn').onclick = toMenu;
+if ($('saveAdvBtn')) $('saveAdvBtn').onclick = () => { saveStoryAdventure(); resume(); };
+if ($('dropAdvBtn')) $('dropAdvBtn').onclick = () => { if (online) online.net.send({ t: 'dropAdv' }); else { clearAdventureLocal(); flashMsg('Jogo salvo apagado'); } };
 if ($('pauseClassBtn')) $('pauseClassBtn').onclick = () => { if (pauseClassesAllowed()) showPauseLoadout(true); else openPauseClass(); };
 if ($('pauseLoadoutBack')) $('pauseLoadoutBack').onclick = () => showPauseLoadout(false);
 if ($('pauseOptBtn')) $('pauseOptBtn').onclick = () => { const box = $('pauseOptions'); if (!box) return; box.classList.add('is-hot'); try { box.focus({ preventScroll: true }); } catch (e) { /* sem focus */ } };
@@ -8011,7 +8031,7 @@ document.addEventListener('keydown', (e) => {
   const tag = e.target && e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if (chatTyping()) { if (e.code === 'Escape') { e.preventDefault(); closeChat(true); } return; }
-  if (state === 'playing' && player && historiaKey(e)) { e.preventDefault(); return; } // oferta 1/2/3, L e o mapa do Grok antes do painel de classe
+  if (state === 'playing' && player && historiaKey(e)) { e.preventDefault(); return; } // oferta 1/2/3, Z e o mapa do Grok antes do painel de classe
   if (benchKey(e)) { e.preventDefault(); return; }
   if (killcamGunKey(e)) { e.preventDefault(); return; }
   if (classMenuKey(e)) { e.preventDefault(); return; }
@@ -8038,7 +8058,7 @@ document.addEventListener('keydown', (e) => {
     if (hit && hit.id !== 'urina' && !(surv && nearestClosedDoor(currentMap, surv, player.pos))) { e.preventDefault(); if (online) netEv(['qe', 'u', hit.id]); else if (inv) inv.eggUse(player, hit.id); return; }
   }
   if (state === 'playing' && survivalMode() && e.code === 'KeyE' && !e.repeat && player && player.alive && !nearestGrave(player)) { e.preventDefault(); tryBuyDoor(); return; }
-  if (state === 'playing' && player && (historiaKey(e) || invKey(e))) { e.preventDefault(); return; } // Invasão: G poder · X troca · B painel. História: L upgrade
+  if (state === 'playing' && player && (historiaKey(e) || invKey(e))) { e.preventDefault(); return; } // Invasão: G poder · X troca · B painel. História: Z upgrade
   if (state === 'playing' && player && gunner) { // no Chopper: 1/2 trocam a arma dele, F sai
     if (e.code === 'Digit1') setGunnerMode('mini');
     if (e.code === 'Digit2') setGunnerMode('sniper');
@@ -8340,7 +8360,7 @@ const MENU_RULES = {
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho, ray gun e saco de presentes. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. O esquerdo carrega a força. O direito joga na força mínima. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
-  historia: 'Modo história · a Invasão zumbi, sempre na HOTMILK à Noite e no Normal. Papada, barraca, parede e portas do mapa continuam valendo. Dá pra jogar solo ou em sala. Com dois ou mais jogadores, a partir da wave 5, pode aparecer um Shapeshifter.',
+  historia: 'Modo história · a Invasão zumbi, sempre na HOTMILK à Noite e no Normal. Papada, barraca, parede e portas do mapa continuam valendo. Dá pra jogar solo ou em sala. Com dois ou mais jogadores, a partir da wave 5, um Shapeshifter tem 15% de chance em cada wave. Z usa o upgrade.',
   survival: 'Survival, dentro da Invasão: a Papada aparece em todos os mapas. Nasce de pistola e faca. Na HOTMILK à Noite, F também usa a barraca e a parede, e E compra a porta. A Ray Gun só sai na barraca.',
   explore: 'Mapa vazio, só você. Ande e teste as armas. Vírgula, ponto ou [ ] trocam a primária. N liga o noclip: voa na direção da mira, atravessa parede, Espaço sobe, Ctrl ou C desce, Shift acelera, a rodinha muda a velocidade. Munição não acaba e a partida não termina.',
   hide: `🫥 COMO JOGAR · Docão Escondido (protótipo, estilo Prop Hunt)\n🙈 Escondidos: você vira um objeto do mapa. ${HIDE.KEY_LABEL} troca o objeto (só os que existem no mapa), ${HIDE.ROT_LABEL} gira, ${HIDE.LOCK_LABEL} trava a posição (só a câmera mexe). Mapa: Rodízio do Docão. Fique parado e sobreviva até o tempo acabar.\n🔫 Caçadores: ${HIDE.PREP} s presos e cegos no spawn, depois ${Math.round(HIDE.ROUND / 60 * 10) / 10} min pra achar e abater todos os objetos-Docão.\n🔁 Os papéis trocam toda rodada · primeiro time a ${HIDE.WIN} vence.`,
@@ -9333,6 +9353,8 @@ function renderLobby() {
   if ($('lobbyGfLabel')) $('lobbyGfLabel').classList.toggle('hidden', lobbyMode !== GF_MODE);
   if ($('lobbyMax')) $('lobbyMax').closest('label').classList.toggle('hidden', lobbyMode === COMP.mode);
   if (isHistoria(cfg.mode)) $('lobbyInfo').textContent += ' · HOTMILK À NOITE · NORMAL';
+  if (isHistoria(cfg.mode) && L.adventure) $('lobbyInfo').textContent += ` · aventura salva na wave ${L.adventure.wave} · o código fica desta partida por até 10 dias`;
+  if ($('dropAdvBtn')) $('dropAdvBtn').classList.toggle('hidden', !(isHost && isHistoria(cfg.mode) && L.adventure));
   else if (lobbyMode === INV.mode) $('lobbyInfo').textContent += (lobbyVariant ? ' · SURVIVAL · HOTMILK À NOITE' : ' · CLÁSSICA') + ' · ' + INV_DIFF_LABEL[normInvDiff(cfg.invDiff)].toUpperCase();
   if ((lobbyMode === GF_MODE || cfg.gfStub) && !GF_LIVE) $('lobbyInfo').textContent += ' · GUNFIGHT EM BREVE · a partida cai no Mata-mata';
   if ($('lobbyGf') && cfg.gfFormat) $('lobbyGf').value = String(normFormat(cfg.gfFormat));
@@ -9460,7 +9482,7 @@ function remoteEnt(info) {
   const e = makeEntity(info.name, false, info.skin, info.tag || '#ffffff');
   Object.assign(e, { id: info.id, remote: true, netId: info.id, bot: !!info.bot, buf: [], kills: info.kills || 0, deaths: info.deaths || 0, points: info.pts | 0, alive: false, primary: info.primary || 0, ping: 0 });
   if (armsMode()) { [e.armsStage, e.armsKills] = info.arms || [0, 0]; equipArmsLocal(e); }
-  e.model.group.visible = false; setWeapon(e, info.w || 0); e.slots = [e.primary, e.secondary ?? PISTOL, e.melee ?? KNIFE]; if (info.soul) e.soul = info.soul; if (info.gr) applyGr(e, info.gr[0], info.gr[1], info.gr[2], info.gr[3], info.gr[4], info.gr[5], info.gr[6], info.gr[7], info.gr[8], info.gr[9]); e.caps = info.caps || 0; if (armsMode()) equipArmsLocal(e); applyTeam(e, info.team ?? -1); if (info.kn) applyWorldKnife(e, info.kn); if (info.sn) applyWorldSniper(e, info.sn); if (info.gn) applyWorldGuns(e, info.gn);
+  e.model.group.visible = false; setWeapon(e, info.w || 0); e.slots = [e.primary, e.secondary ?? PISTOL, e.melee ?? KNIFE]; if (info.soul) e.soul = info.soul; if (info.gr) applyGr(e, info.gr[0], info.gr[1], info.gr[2], info.gr[3], info.gr[4], info.gr[5], info.gr[6], info.gr[7], info.gr[8], info.gr[9]); e.caps = info.caps || 0; if (armsMode()) equipArmsLocal(e); applyTeam(e, info.team ?? -1); if (info.kn) applyWorldKnife(e, info.kn); if (info.sn) applyWorldSniper(e, info.sn); if (info.gn) applyWorldGuns(e, info.gn); if (isHistoria(mode)) applyHistoriaKit(e, info);
   o.ents.set(info.id, e); entities.push(e); return e;
 }
 function removeEnt(id) {
@@ -9484,6 +9506,7 @@ function startOnlineMatch(m) {
     for (const info of m.ents) if (!o.ents.has(info.id) && info.id !== o.myId) remoteEnt(info);
     const meNow = m.ents.find((x) => x.id === o.myId);
     if (meNow && meNow.pts != null && survOn()) { player.pts = meNow.pts | 0; player.points = player.pts; player._purse = player.pts; player.purseN = meNow.pn | 0; paintSurvPurse(); }
+    if (meNow && isHistoria(mode)) applyHistoriaKit(player, meNow);
     if (meNow) player.soul = meNow.soul || 0;
     if (m.gas && gasSim) { gasSim.apply(m.gas); if (gasView) gasView.syncAll(gasSim.list); }
     if (Array.isArray(m.gg)) syncGround(m.gg);
@@ -9498,6 +9521,7 @@ function startOnlineMatch(m) {
   player.kills = me.kills || 0; player.deaths = me.deaths || 0; player.points = me.pts != null ? me.pts : (survivalMode() ? SURVIVAL.START_POINTS : 0); player.pts = player.points; player._purse = player.points; player.purseN = me.pn | 0; player.gunKills = WEAPONS.map(() => 0); revengeName = null; resetNemesis(); resetFeedback(); resetMatchCamos();
   player.primary = player.nextPrimary = selectedPrimary; player.nextSecondary = selectedSecondary; player.nextMelee = selectedMelee; player.slots = [selectedPrimary, selectedSecondary, selectedMelee]; setWeapon(player, selectedPrimary); // até o servidor mandar o renascimento
   if (survOn()) { player.pts = me.pts | 0; player.points = player.pts; player._purse = player.pts; player.purseN = me.pn | 0; player.pap = me.pap || {}; player.slotOn = me.slotOn || [1, 0, 1]; if (me.slots) player.slots = me.slots.slice(); }
+  if (isHistoria(mode)) applyHistoriaKit(player, me);
   if (armsMode()) { [player.armsStage, player.armsKills] = me.arms || [0, 0]; equipArmsLocal(player); }
   entities.push(player); o.ents.set(o.myId, player); fp.setSkin(me.skin); applyHeldKnife(me.kn); applyHeldSniper(me.sn); applyHeldGuns(me.gn); player.sniper = me.sn || ''; player.guns = { ...(me.gn || {}) }; player.ownGuns = { ...player.guns }; player.caps = me.caps || 0; if (me.gr) applyGr(player, me.gr[0], me.gr[1], me.gr[2], me.gr[3], me.gr[4], me.gr[5], me.gr[6], me.gr[7], me.gr[8], me.gr[9]); applyTeam(player, me.team ?? -1);
   for (const info of m.ents) remoteEnt(info);
@@ -10128,6 +10152,8 @@ function startInvasionOffline() {
     over(won) { const finale = !!(won && isHistoria(mode) && storyWaveCap() >= 30); if (finale) startStoryCut(); setTimeout(() => endGame(), finale ? 14000 : 1800); },
   });
   inv.start();
+  const savedAdv = isHistoria(mode) ? readAdventureLocal() : null;
+  if (savedAdv && applyAdventure(inv, [player], savedAdv)) { inv.notePowers(player.primary, player.secondary, player.melee); flashMsg(`Aventura retomada na wave ${savedAdv.wave}`); }
 }
 // ---------- eventos (core offline chama direto; online chegam no snapshot) ----------
 const INV_EVENTS = new Set(['wv', 'za', 'zs', 'zx', 'zb', 'dp', 'dg', 'pw', 'pb', 'zh', 'zf', 'zp', 'cxr', 'soul', 'hoffer', 'hgot', 'hcast', 'hbuff', 'hsh', 'hpoffer', 'hpgot', 'hem', 'hbk', 'hest', 'hpi', 'hcas', 'qe']);
@@ -11172,6 +11198,25 @@ function storyEggEvent(ev) {
   if (kind === 'boost') { const e = storyWho(ev[2]); if (e) { e.hp = ev[3] | 0; e.hpCap = ev[4] | 0; } if (book && historiaMe(ev[2])) book.drunk[ev[2]] = 1; return; }
   if (kind === 'hp') { const e = storyWho(ev[2]); if (e) { e.hp = ev[3] | 0; e.hpCap = ev[4] | 0; e.eggShock = false; } return; }
   if (kind === 'muro' && book) { book.muroTaken = true; return; }
+  if (kind === 'seat') {
+    const e = storyWho(ev[2]); if (!e) return;
+    if ((ev[3] | 0) > 0) {
+      e.eggSeat = true; e.crouch = 0.9;
+      e.eggSeatPos = { x: LINK_ROOM.sofa.x, y: e.pos ? e.pos.y : 0, z: LINK_ROOM.sofa.z };
+    } else if (!e.eggTrap) { e.eggSeat = false; e.eggSeatPos = null; e.crouch = 0; }
+    return;
+  }
+  if (kind === 'link') {
+    storyDoorOn = (ev[4] | 0) === 1;
+    const e = ev[2] ? storyWho(ev[2]) : null;
+    if (e) {
+      e.eggTrap = storyDoorOn;
+      e.eggSeat = storyDoorOn;
+      if (!storyDoorOn) { e.eggSeat = false; e.eggTrap = false; e.eggSeatPos = null; e.crouch = 0; }
+    }
+    if (!storyDoorOn && linkDoorMesh) linkDoorMesh.visible = false;
+    return;
+  }
   if (kind === 'wv') { invBanner(ev[2], ev[3] || '', true); return; }
   if (kind === 'nar') { storyNarrate(ev[2], ev[3], ev[4]); return; }
   if (kind === 'fire') { ensureStoryFire(); return; }
@@ -11181,15 +11226,21 @@ function storyEggEvent(ev) {
   if (kind === 'camp') { const z = online ? entOf(ev[2]) : (inv && inv.zombies.find((x) => x.id === ev[2])); if (z && z.pos) { z.pos.set(ev[3], ev[4], ev[5]); if (z.vel) z.vel.set(0, 0, 0); } return; }
   if (kind === 'ruin') { storyRuin(); return; }
 }
+const ADV_LOCAL = 'docao-historia-save';
+function readAdventureLocal() {
+  try { const raw = localStorage.getItem(ADV_LOCAL); if (!raw) return null; const snap = JSON.parse(raw); if (adventureExpired(snap)) { localStorage.removeItem(ADV_LOCAL); return null; } return snap; } catch (e) { return null; }
+}
+function writeAdventureLocal(snap) { try { localStorage.setItem(ADV_LOCAL, JSON.stringify(snap)); } catch (e) { /* o navegador recusou o storage */ } }
+function clearAdventureLocal() { try { localStorage.removeItem(ADV_LOCAL); } catch (e) { /* já estava limpo */ } }
+function saveStoryAdventure() {
+  if (!isHistoria(mode) || state !== 'paused') return;
+  if (online) { if (online.myId === online.hostId) online.net.send({ t: 'saveAdv' }); return; }
+  if (!inv || !inv.egg) return;
+  writeAdventureLocal(packAdventure(inv, [player]));
+  flashMsg(`Aventura salva na wave ${inv.wave}. O código local vale por 10 dias.`);
+}
 function paintEggPrompt() {
-  if (!isHistoria(mode) || state !== 'playing' || !player || !player.alive) return;
-  const el = $('bPrompt'); if (!el) return;
-  if (surv && nearestClosedDoor(currentMap, surv, player.pos)) return;
-  const hit = eggPrompt(player, eggBook());
-  if (!hit) return;
-  el.classList.remove('hidden'); el.className = 'hot';
-  const a = el.querySelector('.bp1'), b = el.querySelector('.bp2');
-  if (a) a.textContent = hit.text; if (b) b.textContent = '';
+  // Os capítulos secretos não escrevem a receita na tela. Quem acha, acha.
 }
 function buildEggSet() {
   if (eggSet || !scene) return;
@@ -11210,10 +11261,6 @@ function buildEggSet() {
   fridge.add(new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.7, 0.7), new THREE.MeshBasicMaterial({ color: 0xe8eef2 })));
   const door = new THREE.Mesh(new THREE.BoxGeometry(0.72, 1.15, 0.06), new THREE.MeshBasicMaterial({ color: 0xb9d7ee })); door.position.set(0, 0.15, 0.36); fridge.add(door);
   eggSet.add(fridge);
-  for (const w of EGG_SPOTS.walls) {
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.28, 0.08), new THREE.MeshBasicMaterial({ color: 0xF7A531 }));
-    sign.position.set(w.x, 1.35, w.z); eggSet.add(sign);
-  }
 }
 function stepEggLooks() {
   const on = isHistoria(mode) && state === 'playing';
@@ -11249,6 +11296,7 @@ function stepEggLooks() {
     dressStoryExtra(z);
     const s = z.egg === 'refri' ? 1.28 : z.egg === 'cria' ? 0.72 : z.egg === 'lanche' ? 1.05 : 0;
     if (s && !z.model.group.userData.eggFit) { z.model.group.scale.multiplyScalar(s); z.model.group.userData.eggFit = s; }
+    if (z.egg === 'chavi') dressChavi(z);
     if (z.egg === 'refri' && z.alive && Math.random() < 0.08) puff(center(z, (z.size || 1) * 1.2), 0xb7f3ff);
     if (z.egg === 'lanche' && z.alive) z.model.group.position.y = (z.pos.y || 0) + Math.sin(gameTime * 4) * 0.04;
     if (z.friendly && z.alive && !z.model.group.userData.ally) {
@@ -11271,6 +11319,7 @@ function stepEggLooks() {
   stepStoryFire();
   stepStoryBeams();
   stepStoryCut();
+  stepLinkDoor();
 }
 let storyFire = null, storyBeams = [], storyCut = null, linkShirtTex = null, ultPuddles = [];
 function storyPuddle(x, z, y, r, dur) {
@@ -11290,6 +11339,40 @@ function redressUltAlly(id, zt, size) {
   z.model.group.userData.size = z.size || 1;
   if (z.pos) z.model.group.position.copy(z.pos);
   scene.add(z.model.group);
+}
+let chaviShirtTex = null;
+function chaviShirtMap() {
+  if (chaviShirtTex) return chaviShirtTex;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = '#f4f7ff'; x.fillRect(0, 0, 256, 96);
+  x.font = 'bold 54px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#1a1c22';
+  x.fillText('CHAVI', 128, 50);
+  chaviShirtTex = new THREE.CanvasTexture(c); chaviShirtTex.colorSpace = THREE.SRGBColorSpace;
+  return chaviShirtTex;
+}
+function dressChavi(z) {
+  if (!z.model || !z.model.group || z.model.group.userData.chavi) return;
+  scene.remove(z.model.group);
+  z.model = makeDocao(getSkin('classico'));
+  const skinM = z.model.flashMats && z.model.flashMats[0];
+  const shirt = z.model.flashMats && z.model.flashMats[2];
+  if (skinM) { skinM.color.set('#f7fbff'); if (skinM.emissive) { skinM.emissive.set('#fff4b0'); skinM.emissiveIntensity = 0.9; } }
+  if (z.model.snout && z.model.snout.material) { z.model.snout.material.color.set('#ffe9a8'); if (z.model.snout.material.emissive) z.model.snout.material.emissive.set('#fff1a8'); }
+  if (shirt) { shirt.map = chaviShirtMap(); shirt.color.set('#ffffff'); if (shirt.emissive) shirt.emissive.set('#ffffff'); }
+  if (z.pos) z.model.group.position.copy(z.pos);
+  z.model.group.rotation.y = z.yaw || 0;
+  z.model.group.userData.chavi = 1;
+  scene.add(z.model.group);
+}
+function stepLinkDoor() {
+  if (!scene) return;
+  if (!linkDoorMesh) {
+    linkDoorMesh = new THREE.Mesh(new THREE.BoxGeometry(1.44, 2.55, 0.08), new THREE.MeshBasicMaterial({ color: 0xd7eef8, transparent: true, opacity: 0.62, depthWrite: false }));
+    linkDoorMesh.position.set(0, 1.28, -25.39);
+    scene.add(linkDoorMesh);
+  }
+  linkDoorMesh.visible = !!(isHistoria(mode) && storyDoorOn && state === 'playing');
 }
 function linkShirtMap() {
   if (linkShirtTex) return linkShirtTex;
@@ -11515,12 +11598,19 @@ function storyReviveNear() {
   }
   return false;
 }
+function applyHistoriaKit(e, info) {
+  if (!e || !info) return;
+  if (Array.isArray(info.hu)) { e.hUps = info.hu.slice(); e.hSel = info.hut || e.hUps[0] || e.hSel || ''; }
+  if (info.hpss && typeof info.hpss === 'object') e.hPass = { ...info.hpss };
+  if (info.hut) { e.hUlt = info.hut; e.hSel = info.hut; }
+  if (info.lives != null) e.lives = info.lives | 0;
+}
 function historiaKey(e) { // true = a tecla fica no Modo história
   if (!isHistoria(mode) || state !== 'playing' || !player) return false;
   const offer = historiaOfferIds();
   const n = offer ? historiaDigit(e.code) : -1;
   if (n >= 0) { if (!e.repeat && offer[n]) historiaPick(offer[n]); return true; }
-  if (e.code === 'KeyL') { if (storyReviveNear()) return false; if (!e.repeat && player.alive && !player.down) historiaUseSelected(); return true; }
+  if (e.code === 'KeyZ') { if (isSaber(player.weapon)) return false; if (!e.repeat && player.alive && !player.down) historiaUseSelected(); return true; }
   if (e.code === 'Escape' && hMapOpen()) { if (!e.repeat) closeHMap(); return true; }
   return false;
 }
