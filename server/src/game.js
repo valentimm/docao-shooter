@@ -6,9 +6,11 @@
 //  O cliente é dono só do próprio movimento (com checagem de velocidade/paredes) e manda eventos de tiro com origem+direção.
 // ============================================================
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap } from '../../maps.js';
-import { BREEZE_ID, setBreezeBoxes } from '../../breeze-data.js';
+import { setGlbBoxes } from '../../glb-data.js';
+import { BREEZE_ID } from '../../breeze-data.js';
+import { DUST2_ID } from '../../dust2-data.js';
 import BREEZE_BOXES from '../../assets/maps/breeze/breeze-collision.json' with { type: 'json' };
-setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão do GLB vem do JSON (o cliente baixa o mesmo arquivo)
+import DUST2_BOXES from '../../assets/maps/dust2/dust2-collision.json' with { type: 'json' };
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE, normInvDiff, invasionFriends } from '../../shared/invasion.js';
 import { packAdventure, applyAdventure, adventureExpired } from '../../shared/historia-save.js';
 import { linkDoorSolid } from '../../shared/historia-egg.js';
@@ -58,6 +60,7 @@ import { GF_MAP_POOL, gfSpawns } from '../../shared/gunfight-maps.js';
 import { COMP, isComp, normSide, armComp, mitigate, payKill, payObj, payRound, compEnterRound, buyWeapon, buyArmor, buyUtil, applyBuy, isPistolRound, flashSeconds, deathGun, primaryGun, packGun, tossSpot, dropFromHand, takeGun } from '../../shared/comp.js';
 import { rounds, spendRound, drumsFull, drumsEmpty, refillDrums, resetDrums, setDrum, pickBotSecondary, akimboReady, ammoLow } from '../../shared/revolver.js';
 import { SABER_KIT, profileOf as saberProfile, moveScale, ensureSaber, stepStamina, guardOpen, inFront, payGuard, payProjectile, bladeTouch, peekSwing, applySwing, tryDash, trySpecial, spinDue, catchBlade, botSkill, botPlan, targetsInArc } from '../../shared/saber.js';
+for (const [id, boxes] of [[BREEZE_ID, BREEZE_BOXES], [DUST2_ID, DUST2_BOXES]]) setGlbBoxes(getMap(id), boxes); // mapas GLB: a colisão vem do JSON (o cliente baixa o mesmo arquivo)
 const CHAL_WEAPONS = { shotgun: 'w_shot', semi: 'w_shot', sniper: 'w_snip', canhao: 'w_snip', carabina: 'w_snip', besta: 'w_bow', arco: 'w_bow', estilingue: 'w_bow', sabre: 'w_saber', sabre2: 'w_saber', bazooka: 'w_boom', milho: 'w_boom', saco: 'w_boom' }; // grupos de armas dos desafios
 const MODE_OK = (m) => (m === 'dom' || isArmsRace(m) || m === 'bomb' || isComp(m) || isTraining(m) || isInvasion(m) || isHistoria(m) || m === 'survival' || isX1(m) || m === GF_MODE ? m : 'dm');
 function applyHistoriaLock(cfg) {

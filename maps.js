@@ -2,6 +2,7 @@ import { addHotmilkNoite } from './maps-hotmilk-noite.js';
 import { PIT, pitPieces } from './shared/pocilga.js';
 import { morroLeitao } from './favela-map.js';
 import { breezeStandoff } from './breeze-data.js';
+import { dust2 } from './dust2-data.js';
 import { DECK, ELEVATOR } from './shared/nevasca.js';
 // ============================================================
 //  MAPAS DO DOCÃO SHOOTER: só dados (geometria original).
@@ -1634,6 +1635,9 @@ MAPS.push(morroLeitao());
 
 // ---------- 10) Breeze Standoff: modelo GLB (breeze-data.js; colisão no JSON, carregada à parte) ----------
 MAPS.push(breezeStandoff());
+
+// ---------- 11) Dust 2: modelo GLB (dust2-data.js; colisão no JSON, carregada à parte) ----------
+MAPS.push(dust2());
 
 export const getMap = (id) => MAPS.find((m) => m.id === id) || MAPS[0];
 // mapas jogáveis nas listas/rodízio (o Estande só abre no modo Treino; os currais do X1 só abrem no X1)

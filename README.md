@@ -271,7 +271,9 @@ São **9 mapas** pro Mata-mata, a Dominação e a Exploração, mais o **Rodízi
 
 No fim da partida, **PRÓXIMO MAPA ▸** segue a ordem da lista.
 
-**Breeze Standoff** entra no Mata-mata, Dominação, Corrida Armada, Exploração, Bomba, Competitivo, Invasão e Gunfight 3v3/4v4 (offline e online). Como o arquivo é grande (32 MB), só entra quando alguém escolhe: fica fora do Aleatório e do rodízio de próximo mapa, e baixa ao escolher (online, a sala avisa e todo mundo já vai baixando). O modelo [Breeze standoff 2](https://sketchfab.com/3d-models/breeze-standoff-2-57def7a762a04f72af794829664e0b6a) foi publicado no Sketchfab por [frostychaos144](https://sketchfab.com/frostychaos144), com [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) declarada no arquivo. A integração ajusta a escala e um material, e adiciona colisão e uma miniatura.
+**Breeze Standoff** e **Dust 2** entram no Mata-mata, Dominação, Corrida Armada, Exploração, Bomba, Competitivo, Invasão, Survival e Gunfight 3v3/4v4 (offline e online). Como são arquivos maiores (`32 MB` no Breeze e `~10 MB` na Dust 2), só entram quando alguém escolhe: ficam fora do Aleatório e do rodízio de próximo mapa, e baixam sob demanda ao escolher (online, a sala avisa e todo mundo já vai baixando).
+- O modelo [Breeze standoff 2](https://sketchfab.com/3d-models/breeze-standoff-2-57def7a762a04f72af794829664e0b6a) foi publicado no Sketchfab por [frostychaos144](https://sketchfab.com/frostychaos144), com [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) declarada no arquivo. A integração ajusta a escala e um material, e adiciona colisão e uma miniatura.
+- O modelo [De_Dust 2 with real light](https://sketchfab.com/3d-models/de-dust-2-with-real-light-4ce74cd95c584ce9b12b5ed9dc418db5) foi publicado no Sketchfab por [Neo_minigan](https://sketchfab.com/neominigan), com [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) declarada no arquivo. A integração ajusta escala/centralização e adiciona colisão voxelizada e uma miniatura.
 
 ---
 
