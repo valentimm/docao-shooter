@@ -1610,7 +1610,7 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   }));
   const props = [];
   MAPS.push({
-    id: PIT.map, name: 'A Pocilga', course: true,
+    id: PIT.map, name: 'Pistoleiro da Pocilga', course: true,
     desc: 'Circuito solo de inverno: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada pelos fundos da largada.',
     size: [36, 56], wallH: 3.2, wallColor: ['#8d8a82', '#6d747c'],
     palette: DAY({

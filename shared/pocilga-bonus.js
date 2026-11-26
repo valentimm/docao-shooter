@@ -1,6 +1,11 @@
 // Alvo de bônus da Pocilga. Disco na parede do fundo, à frente de quem sobe a rampa.
 // Miolo pequeno tira 2 s; o anel soma 2 s. Só o primeiro acerto vale.
 // Sem DOM e sem Three.js: o cliente desenha, o ranking confere o raio.
+// O número mora em PIT.bonusCut. Aqui só espelha, para o raio e o piso usarem o mesmo 2 s.
+let bonusCut = 2;
+export function setBonusCut(n) {
+  if (Number.isFinite(n) && n >= 0) bonusCut = n;
+}
 export const BONUS_CENTER = -2;
 export const BONUS_RING = 2;
 
@@ -56,7 +61,7 @@ export function traceBonus(ox, oy, oz, dx, dy, dz, maxT = 80) {
   const dist = Math.hypot(x - BONUS.x, y - BONUS.y);
   if (dist > BONUS.outer + 1e-6) return null;
   const zone = dist <= BONUS.inner + 1e-9 ? 'center' : 'ring';
-  const delta = zone === 'center' ? BONUS_CENTER : BONUS_RING;
+  const delta = zone === 'center' ? -bonusCut : bonusCut;
   return { t, x, y, z: BONUS.z, dist, zone, delta, ox, oy, oz, dx: ux, dy: uy, dz: uz };
 }
 

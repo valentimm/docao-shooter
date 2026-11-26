@@ -56,14 +56,14 @@ function withShots(events, zones) {
 }
 
 const bull = rankedRun(withShots(scriptRun({ finish: floor }), ['center']));
-ok(bull.ranked && bull.bonusZone === 'center' && bull.bonus === -2 && near(bull.final, floor - 2), `no piso, o miolo deixa a nota ${bull.final} e o ranking aceita (piso da nota ${rankFloor(-2)})`);
-ok(bull.final + 1e-6 >= rankFloor(bull.bonus) && bull.final < floor, 'a validação do mínimo desce 2 s com o miolo');
-ok(rankFloor(0) === floor && rankFloor(2) === floor && near(rankFloor(-2), floor - 2), 'o anel não afrouxa o piso');
+ok(bull.ranked && bull.bonusZone === 'center' && bull.bonus === -PIT.bonusCut && near(bull.final, floor - PIT.bonusCut), `no mínimo físico, o miolo deixa a nota ${bull.final}`);
+ok(bull.final + 1e-6 >= rankFloor() && near(rankFloor(), floor - PIT.bonusCut), 'o piso e o miolo usam o mesmo desconto de 2 s, uma vez');
+ok(rankedRun(withShots(scriptRun({ finish: rankFloor() }), ['center'])).reason === 'rápido', 'miolo em cima do piso já descontado não tira outros 2 s');
 
 const shaved = rankedRun(withShots(scriptRun({ finish: floor - 0.05 }), ['center']));
 ok(shaved.finished && !shaved.ranked && shaved.reason === 'rápido', 'o miolo não cobre um relógio abaixo do piso físico');
-const plainFast = rankedRun(scriptRun({ finish: floor - 0.05 }));
-ok(plainFast.finished && !plainFast.ranked && plainFast.reason === 'rápido', 'sem o miolo, o piso antigo continua valendo');
+ok(rankedRun(scriptRun({ finish: floor - 0.05 })).ranked, 'sem o miolo, um relógio pouco abaixo do físico ainda cabe no piso');
+ok(!rankedRun(scriptRun({ finish: rankFloor() - 0.05 })).ranked, 'abaixo do piso único o ranking recusa');
 
 const ringRun = rankedRun(withShots(scriptRun({ finish: 40 }), ['ring']));
 ok(ringRun.ranked && ringRun.bonusZone === 'ring' && ringRun.bonus === 2 && ringRun.final === 42, `anel soma 2 s (${ringRun.final})`);

@@ -20,7 +20,14 @@ await page.addInitScript(() => { localStorage.setItem('docao.name', 'Joao'); loc
 await page.goto(SITE, { waitUntil: 'load', timeout: 60000 });
 await page.waitForSelector('#modeSel', { timeout: 20000 });
 await page.selectOption('#modeSel', PIT.mode);
-await page.waitForTimeout(300);
+await page.waitForTimeout(500);
+const menuTxt = await page.evaluate(() => ({
+  opt: document.querySelector('#modeSel option:checked')?.textContent || '',
+  note: document.getElementById('menuPit')?.innerText || '',
+  play: document.getElementById('playBtn')?.innerText || '',
+}));
+ok(/Pistoleiro da Pocilga/.test(menuTxt.opt) && /Pistoleiro da Pocilga/.test(menuTxt.note) && /Barriguinha de camisa vermelha/.test(menuTxt.note), `menu com o nome novo (${menuTxt.opt})`);
+await page.screenshot({ path: `${SHOTS}/pocilga-menu-nome.png` });
 await page.click('#playBtn');
 await page.waitForFunction(() => window.__docao && window.__docao.state === 'playing' && window.__docao.pit && window.__docao.pit.on, null, { timeout: 20000 });
 
@@ -31,6 +38,16 @@ const boot = await page.evaluate(() => ({
 }));
 ok(boot.n === 30 && boot.bonus && !boot.bonus.locked && boot.bonus.inner === 0.14 && boot.bonus.outer === 0.65, `30 alvos e o bônus solto (${JSON.stringify(boot.bonus)})`);
 ok(boot.audio <= 1, `um AudioContext no máximo antes do tiro (${boot.audio})`);
+const zedsAtStart = await page.evaluate((deck) => {
+  const ban = document.getElementById('pitBanner'); if (ban) ban.classList.add('hidden');
+  const talk = document.getElementById('pitTalk'); if (talk) talk.classList.add('hidden');
+  window.__cam = { p: [0.3, deck + 1.62, 46.6], t: [22, deck + 1.05, 50.4], fov: 58 };
+  return window.__docao.pit.targets.filter((t) => t.zombie).map((t) => ({ id: t.id, phase: t.phase, shown: t.shown, x: t.x, z: t.z }));
+}, PIT.deck);
+await page.waitForTimeout(500);
+await page.screenshot({ path: `${SHOTS}/pocilga-zumbis-patamar.png` });
+await page.evaluate(() => { window.__cam = null; });
+ok(zedsAtStart.length === 2 && zedsAtStart.every((z) => z.shown && z.phase === 'down' && z.x > 20), `zumbis visíveis e parados no fundo (${JSON.stringify(zedsAtStart)})`);
 
 const rampCam = () => page.evaluate(() => {
   const b = window.__docao.pit.bonus;
@@ -101,6 +118,15 @@ bonus = await fireAt(0.42);
 ok(bonus.locked && bonus.zone === 'ring' && bonus.text === '+2s' && bonus.delta === 2, `anel trava em +2s (${JSON.stringify(bonus)})`);
 const still = await page.evaluate(() => window.__docao.pit.targets.length);
 ok(still === 30, 'depois do anel continuam 30 alvos de circuito');
+await page.evaluate(() => window.__docao.pitRestart());
+await page.waitForTimeout(300);
+await page.evaluate(({ x, y, z }) => {
+  const p = window.__docao.player;
+  p.pos.set(x, y, z); p.vel.set(0, 0, 0);
+}, gate);
+await page.waitForTimeout(250);
+bonus = await fireAt(0);
+ok(bonus.zone === 'center' && bonus.text === '-2s', 'a corrida do cartaz acerta o miolo');
 
 const go = (x, y, z) => page.evaluate(({ x, y, z }) => {
   const p = window.__docao.player;
@@ -150,8 +176,9 @@ await go((FINISH_LINE.x0 + FINISH_LINE.x1) / 2, 0, FINISH_LINE.z);
 await page.waitForFunction(() => window.__docao.pit.card, null, { timeout: 8000 });
 const card = await page.locator('#pitCard').innerText();
 const result = await page.evaluate(() => window.__docao.pit.result);
-ok(/Alvo: \+2s/.test(card), `o modal mostra Alvo: +2s (${card.split('\n').find((line) => line.startsWith('Alvo')) || 'sem linha'})`);
-ok(result && result.bonus === 2 && result.bonusZone === 'ring' && result.down && result.down.length === 25, `o tempo final leva os +2 s (${JSON.stringify(result && { final: result.final, raw: result.raw, bonus: result.bonus, stars: result.stars, down: result.down && result.down.length })})`);
+ok(/Alvo: -2s/.test(card) && /Entre na conta para entrar no ranking/.test(card) && /Pistoleiro da Pocilga/.test(card), `o modal mostra Alvo: -2s e o aviso de conta (${card.split('\n').filter((line) => /Alvo|conta|Pistoleiro/.test(line)).join(' | ')})`);
+ok(result && result.bonus === -2 && result.bonusZone === 'center' && result.down && result.down.length === 25 && result.final === result.raw - 2, `o tempo final é o relógio menos 2 s (${JSON.stringify(result && { final: result.final, raw: result.raw, bonus: result.bonus, down: result.down && result.down.length })})`);
+await page.screenshot({ path: `${SHOTS}/pocilga-modal-menos-2.png` });
 
 const noisy = errors.filter((e) => !/WebGL|gpu|GPU|context lost|pocilga\/rank|Failed to load resource/i.test(e));
 ok(!noisy.length, 'sem erro de página' + (noisy.length ? ': ' + noisy.slice(0, 4).join(' | ') : ''));

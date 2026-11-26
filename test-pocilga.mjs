@@ -1,6 +1,6 @@
 // Regras da Pocilga: oito etapas, só a Pistolinha, faca no javali perto, tempo mínimo.
 // Uso: node test-pocilga.mjs
-import { PIT, FINISH_LINE, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate, onFinishLine } from './shared/pocilga.js';
+import { PIT, FINISH_LINE, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, rankFloor, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate, onFinishLine, fillPops, zombiesAwake } from './shared/pocilga.js';
 import { ZOMBIES } from './shared/invasion.js';
 import { KNIFE, RADIUS, SPEED, JUMP } from './shared/rules.js';
 import { getMap } from './maps.js';
@@ -70,11 +70,16 @@ ok(PIT.deck >= 4.8 && PIT.deck <= 6, `a rampa sobe até ${PIT.deck} m`);
 const knifed = rankedRun(scriptRun({ finish: 34, knife: ['e15'] }));
 ok(knifed.ranked && knifed.down.includes('e15') && knifed.stars === 3, 'a faca derruba o javali perto');
 ok(KNIFE === PIT.knife, 'a faca do circuito é a faca do jogo');
-const fast = rankedRun(scriptRun({ finish: floor - 0.05 }));
-ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'tempo impossível fica fora do ranking');
+const fast = rankedRun(scriptRun({ finish: rankFloor() - 0.05 }));
+ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'tempo abaixo do piso (mínimo físico − bônus) fica fora do ranking');
+ok(rankedRun(scriptRun({ finish: rankFloor() })).ranked, 'no piso configurável o ranking aceita');
 ok(rankedRun(scriptRun({ finish: floor })).ranked, 'no mínimo físico o ranking aceita');
+ok(PIT.bonusCut === 2 && Math.abs(rankFloor() - (floor - PIT.bonusCut)) < 1e-9, `piso = mínimo físico menos ${PIT.bonusCut} s do alvo de bônus (${rankFloor().toFixed(3)})`);
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'swap', w: 4, t: 1 }]).reason === 'diário', 'troca de arma não faz parte do diário');
-ok(inspectRun([{ k: 'start', t: 0 }, { k: 'pop', bay: 'sala', t: 1 }]).reason === 'ordem', 'pular o pátio invalida');
+{
+  const skip = inspectRun([{ k: 'start', t: 0 }, { k: 'pop', bay: 'sala', t: 1 }]);
+  ok(skip.reason !== 'ordem' && skip.pops.join(',') === 'patio,patio2,patio3,sala', `pular um gate conta os anteriores (${skip.pops.join(',')})`);
+}
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'hit', id: 'e1', w: PIT.pistol, t: 0.4 }]).down.includes('e1'), 'alvo já de pé conta o tiro sem o gatilho da subida');
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'finish', t: 1, x: 0, z: 0 }]).reason === 'linha', 'chegada fora da faixa é recusada');
 
@@ -159,6 +164,34 @@ ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou e
   ok(onFinishLine({ x: (FINISH_LINE.x0 + FINISH_LINE.x1) / 2, y: 0, z: FINISH_LINE.z }) && !onFinishLine(spawn) && !onFinishLine({ x: door.x, y: 0, z: door.z }), 'a faixa é a chegada; spawn e porta de saída não cruzam ela');
   ok(!onFinishLine({ x: 14.2, y: 0, z: -14 }) && !onFinishLine({ x: abre.x, y: 0, z: abre.z }) && !inGate(spawn, abre), 'andar na sala, antes da hora, não é a chegada nem abre o portão');
   ok(!inGate({ x: 12.25, y: 0, z: -26.2 }, abre) && inGate({ x: 12.25, y: 0, z: -24.2 }, abre), 'o portão só abre junto da boca, não no meio da disparada');
+{
+  const seen = [];
+  let awake = false;
+  for (const g of PIT.gates.filter((gate) => gate.pop && gate.x0 != null)) {
+    const wideX = g.x1 - g.x0 >= g.z1 - g.z0;
+    const midX = (g.x0 + g.x1) / 2, midZ = (g.z0 + g.z1) / 2;
+    const edges = wideX
+      ? [{ x: g.x0 + 0.9, y: g.y, z: midZ }, { x: g.x1 - 0.9, y: g.y, z: midZ }]
+      : [{ x: midX, y: g.y, z: g.z0 + 0.9 }, { x: midX, y: g.y, z: g.z1 - 0.9 }];
+    for (const q of edges) {
+      const dist = Math.hypot(q.x - g.x, q.z - g.z);
+      const span = Math.max(g.x1 - g.x0, g.z1 - g.z0);
+      const free = !P.collides(q.x, (q.y || 0) + 0.5, q.z);
+      ok(inGate(q, g) && free && (span < 8 || dist > 2.4), `${g.id} pega rente à parede a ${dist.toFixed(1)} m do centro antigo${free ? '' : ' (colide)'}`);
+    }
+    const filled = fillPops(seen, g.pop);
+    seen.length = 0;
+    for (const id of filled) seen.push(id);
+    if (zombiesAwake(seen)) awake = true;
+  }
+  ok(seen.length === PIT.bays.length && awake && zombiesAwake(seen), `correndo na parede os zumbis acordam e os grupos fecham (${seen.join(',')})`);
+  const skipped = scriptRun({ finish: 40 }).filter((e) => e.k !== 'pop');
+  const at = skipped.findIndex((e) => e.k === 'start');
+  skipped.splice(at + 1, 0, { k: 'pop', bay: 'pulo', t: 0.05 });
+  const rushed = rankedRun(skipped);
+  ok(rushed.ranked && rushed.pops.length === PIT.bays.length && zombiesAwake(rushed.pops), 'o servidor completa o gate pulado e a chegada aceita');
+  ok(!zombiesAwake(['patio', 'patio2']) && zombiesAwake(fillPops([], 'passa')), 'os zumbis só correm a partir do patamar');
+}
   ok(P.collides(12.2, 1.5, -22.15) && !Popen.collides(12.2, 1.5, -22.15), 'o portão dos fundos começa fechado e, aberto, a boca fica livre');
   ok(P.collides(7.4, 4.8, -18), 'o muro esquerdo da sala passa da altura da torre');
 {

@@ -3,14 +3,15 @@
 //  O desenho segue o percurso descrito do The Pit (pátio, fachada, sala
 //  com curva, escada, passarela, pulo e o último corredor entrando pelos
 //  fundos da sala da largada). Sem asset do COD. Só a Pistolinha Leitão; a faca, se já
-//  existir no jogo, também derruba o javali que está ao alcance.
+//  existir no jogo, também derruba o Barriguinha que está ao alcance.
 //
-//  Javali esquecido trava a chegada. Civil soma tempo e tira as 3 estrelas.
-//  O ranking recusa diário incompleto ou mais rápido que o mínimo físico.
+//  Barriguinha esquecido trava a chegada. Civil soma tempo e tira as 3 estrelas.
+//  O ranking recusa diário incompleto ou mais rápido que o piso
+//  (mínimo físico menos PIT.bonusCut, o alvo de bônus).
 //  Sem DOM e sem Three.js.
 // ============================================================
 import { SPEED, KNIFE } from './rules.js';
-import { bonusShape, readBonus } from './pocilga-bonus.js';
+import { bonusShape, readBonus, setBonusCut } from './pocilga-bonus.js';
 
 export const BOARD = { w: 1.05, h: 1.85, d: 0.12, y: 0.02 };
 const H = 2.8;
@@ -25,10 +26,13 @@ const rampY = (z) => ROUND((z - R0) / (R1 - R0) * DECK);
 export const PIT = {
   mode: 'pocilga',
   map: 'pocilga',
-  title: 'A Pocilga',
+  title: 'Pistoleiro da Pocilga',
   pistol: 4,
   knife: KNIFE,
   civPenalty: 3,
+  // Alvo de bônus tira até estes segundos do relógio. O piso do ranking
+  // é minPlausible() − bonusCut; mude só esta constante se o bônus mudar.
+  bonusCut: 2,
   zombie: { speed: 3.2, reach: 1.65, penalty: 3 },
   // Ajuste fino: rise = segundos até a placa ficar em pé; lead = metros de eixo
   // antes do grupo em que o gatilho deve armar.
@@ -64,15 +68,17 @@ export const PIT = {
     { x: 12.25, z: -19.5, y: 0, scenic: true },
   ],
   gates: [
-    { id: 'start', x: 14.2, z: -10.2, y: 0, r: 2.0, pop: 'patio' },
-    { id: 'meio', x: 14.2, z: -1.6, y: 0, r: 1.8, pop: 'patio2' },
-    { id: 'fundo', x: 14.2, z: 6.6, y: 0, r: 1.8, pop: 'patio3' },
-    { id: 'sala', x: 14.2, z: 12.4, y: 0, r: 2.2, pop: 'sala', say: 'Em cima do muro!' },
-    { id: 'escada', x: 0, z: 26.2, y: 0, r: 2.4, pop: 'escada', say: 'Sobe a escada!' },
-    { id: 'passa', x: 0.4, z: 50.5, y: DECK, r: 2.2, pop: 'passa' },
-    { id: 'passa2', x: 8.2, z: 50.5, y: DECK, r: 2.2, pop: 'passa2' },
+    // Faixa de parede a parede. x,z ficam dentro da faixa (os testes medem dali).
+    { id: 'start', x: 14.2, z: -9.4, y: 0, x0: 9.7, x1: 18.7, z0: -10.05, z1: -8.7, pop: 'patio' },
+    { id: 'meio', x: 14.2, z: -1.6, y: 0, x0: 9.65, x1: 18.85, z0: -2.3, z1: -0.9, pop: 'patio2' },
+    { id: 'fundo', x: 14.2, z: 6.6, y: 0, x0: 9.65, x1: 19.15, z0: 5.9, z1: 7.3, pop: 'patio3' },
+    { id: 'sala', x: 14.2, z: 12.4, y: 0, x0: 9.65, x1: 19.15, z0: 11.7, z1: 13.1, pop: 'sala', say: 'Em cima do muro!' },
+    { id: 'escada', x: 0, z: 26.2, y: 0, x0: -5.7, x1: 19.15, z0: 25.5, z1: 26.9, pop: 'escada', say: 'Sobe a escada!' },
+    // Patamar: a saída da rampa, na largura toda. É aqui que os zumbis começam a correr.
+    { id: 'passa', x: 0.2, z: 48.2, y: DECK, x0: -6.05, x1: 6.65, z0: 47.4, z1: 49.0, pop: 'passa' },
+    { id: 'passa2', x: 8.2, z: 50.5, y: DECK, x0: 7.5, x1: 8.9, z0: 46.2, z1: 54.8, pop: 'passa2' },
     { id: 'pulo', x: 26, z: 50.5, y: DECK, r: 2.2, say: 'Pula!' },
-    { id: 'baixo', x: 31.8, z: 42, y: 0, r: 3.4, pop: 'pulo' },
+    { id: 'baixo', x: 31.85, z: 42, y: 0, x0: 28.7, x1: 35.05, z0: 41.2, z1: 42.8, pop: 'pulo' },
     { id: 'corre', x: 31.8, z: 8, y: 0, r: 3, say: 'Corre!' },
     // O portão dos fundos só existe para quem já chegou pelo corredor. Da sala, ele continua parede.
     { id: 'abre', x: 12.25, z: -24.2, y: 0, r: 1.15, open: true },
@@ -80,53 +86,55 @@ export const PIT = {
   ],
   bays: [
     { id: 'patio', targets: [
-      { id: 'e1', kind: 'enemy', name: 'Javali da porteira', x: 11.0, z: -4.0, y: 0, face: -1 },
-      { id: 'e2', kind: 'enemy', name: 'Javali do meio', x: 17.0, z: 0.2, y: 0, face: -1, move: { axis: 'x', min: 16.0, max: 18.0, speed: 0.9, phase: 0.3 } },
+      { id: 'e1', kind: 'enemy', name: 'Barriguinha da porteira', x: 11.0, z: -4.0, y: 0, face: -1 },
+      { id: 'e2', kind: 'enemy', name: 'Barriguinha do meio', x: 17.0, z: 0.2, y: 0, face: -1, move: { axis: 'x', min: 16.0, max: 18.0, speed: 0.9, phase: 0.3 } },
     ] },
     { id: 'patio2', targets: [
       { id: 'c1', kind: 'civil', name: 'Leitão do corredor', x: 10.8, z: 4.4, y: 0, face: -1 },
-      { id: 'e3', kind: 'enemy', name: 'Javali do pátio', x: 17.2, z: 8.6, y: 0, face: -1 },
+      { id: 'e3', kind: 'enemy', name: 'Barriguinha do pátio', x: 17.2, z: 8.6, y: 0, face: -1 },
     ] },
     { id: 'patio3', targets: [
-      { id: 'e4', kind: 'enemy', name: 'Javali do trilho', x: 11.4, z: 12.6, y: 0, face: -1, move: { axis: 'x', min: 10.5, max: 12.4, speed: 0.85, phase: 0.4 } },
-      { id: 'e5', kind: 'enemy', name: 'Javali da fileira', x: 17.3, z: 16.6, y: 0, face: -1 },
+      { id: 'e4', kind: 'enemy', name: 'Barriguinha do trilho', x: 11.4, z: 12.6, y: 0, face: -1, move: { axis: 'x', min: 10.5, max: 12.4, speed: 0.85, phase: 0.4 } },
+      { id: 'e5', kind: 'enemy', name: 'Barriguinha da fileira', x: 17.3, z: 16.6, y: 0, face: -1 },
     ] },
     { id: 'sala', targets: [
-      { id: 'e6', kind: 'enemy', name: 'Javali da sala', x: 11, z: 25.5, y: 0, face: -1, move: { axis: 'x', min: 8.5, max: 13.5, speed: 0.8, phase: 0.3 } },
-      { id: 'e7', kind: 'enemy', name: 'Javali largo', x: 4.5, z: 25.5, y: 0, face: -1, move: { axis: 'x', min: 2.2, max: 7.2, speed: 0.95, phase: 1.2 } },
-      { id: 'e8', kind: 'enemy', name: 'Javali do fundo', x: -1.2, z: 25.8, y: 0, face: -1, move: { axis: 'x', min: -3.4, max: 1.2, speed: 0.85, phase: 0.6 } },
+      { id: 'e6', kind: 'enemy', name: 'Barriguinha da sala', x: 11, z: 25.5, y: 0, face: -1, move: { axis: 'x', min: 8.5, max: 13.5, speed: 0.8, phase: 0.3 } },
+      { id: 'e7', kind: 'enemy', name: 'Barriguinha largo', x: 4.5, z: 25.5, y: 0, face: -1, move: { axis: 'x', min: 2.2, max: 7.2, speed: 0.95, phase: 1.2 } },
+      { id: 'e8', kind: 'enemy', name: 'Barriguinha do fundo', x: -1.2, z: 25.8, y: 0, face: -1, move: { axis: 'x', min: -3.4, max: 1.2, speed: 0.85, phase: 0.6 } },
       { id: 'c2', kind: 'civil', name: 'Porquinho da sala', x: 7.5, z: 26.6, y: 0, face: -1, move: { axis: 'x', min: 5.2, max: 10.2, speed: 0.7, phase: 1.4 } },
-      { id: 'e9', kind: 'enemy', name: 'Javali do muro', x: -5.42, z: 26.2, y: WALLTOP, face: 'x', move: { axis: 'z', min: 24.8, max: 27.8, speed: 0.8, phase: 0.5 } },
-      { id: 'e10', kind: 'enemy', name: 'Javali em cima', x: 11.2, z: 29.42, y: WALLTOP, face: -1, move: { axis: 'x', min: 8.8, max: 13.6, speed: 0.9, phase: 1.0 } },
+      { id: 'e9', kind: 'enemy', name: 'Barriguinha do muro', x: -5.42, z: 26.2, y: WALLTOP, face: 'x', move: { axis: 'z', min: 24.8, max: 27.8, speed: 0.8, phase: 0.5 } },
+      { id: 'e10', kind: 'enemy', name: 'Barriguinha em cima', x: 11.2, z: 29.42, y: WALLTOP, face: -1, move: { axis: 'x', min: 8.8, max: 13.6, speed: 0.9, phase: 1.0 } },
     ] },
     { id: 'escada', targets: [
-      { id: 'e12', kind: 'enemy', name: 'Javali da escada', x: -3.4, z: 33.2, y: rampY(33.2), face: -1, move: { axis: 'x', min: -4.6, max: -2.2, speed: 0.8, phase: 0.2 } },
-      { id: 'e13', kind: 'enemy', name: 'Javali do meio da escada', x: 3.2, z: 39.4, y: rampY(39.4), face: -1 },
-      { id: 'e14', kind: 'enemy', name: 'Javali de cima', x: -2.8, z: 44.6, y: rampY(44.6), face: -1, move: { axis: 'x', min: -4.2, max: -1.6, speed: 0.85, phase: 1.3 } },
+      { id: 'e12', kind: 'enemy', name: 'Barriguinha da escada', x: -3.4, z: 33.2, y: rampY(33.2), face: -1, move: { axis: 'x', min: -4.6, max: -2.2, speed: 0.8, phase: 0.2 } },
+      { id: 'e13', kind: 'enemy', name: 'Barriguinha do meio da escada', x: 3.2, z: 39.4, y: rampY(39.4), face: -1 },
+      { id: 'e14', kind: 'enemy', name: 'Barriguinha de cima', x: -2.8, z: 44.6, y: rampY(44.6), face: -1, move: { axis: 'x', min: -4.2, max: -1.6, speed: 0.85, phase: 1.3 } },
     ] },
     { id: 'passa', targets: [
       { id: 'c3', kind: 'civil', name: 'Porquinha da passarela', x: 13.4, z: 47.4, y: DECK, face: '-x' },
-      { id: 'e15', kind: 'enemy', name: 'Javali do muro alto', x: 15.8, z: 54.25, y: DECK + 1.35, face: '-x' },
+      { id: 'e15', kind: 'enemy', name: 'Barriguinha do muro alto', x: 15.8, z: 54.25, y: DECK + 1.35, face: '-x' },
       { id: 'z1', kind: 'enemy', zombie: true, name: 'Podre da esquerda', x: 26.2, z: 49.1, y: DECK, face: '-x' },
       { id: 'z2', kind: 'enemy', zombie: true, name: 'Podre da direita', x: 27.1, z: 52.2, y: DECK, face: '-x' },
     ] },
     { id: 'passa2', targets: [
       { id: 'c4', kind: 'civil', name: 'Leitão da passarela', x: 19.6, z: 53.6, y: DECK, face: '-x' },
-      { id: 'e16', kind: 'enemy', name: 'Javali atrás do caixote', x: 22.5, z: 47.7, y: DECK, face: '-x', close: true },
-      { id: 'e17', kind: 'enemy', name: 'Javali que surge de lado', x: 24.6, z: 53.4, y: DECK, face: '-x', move: { axis: 'z', min: 52.2, max: 54.2, speed: 0.85, phase: 0.4 } },
+      { id: 'e16', kind: 'enemy', name: 'Barriguinha atrás do caixote', x: 22.5, z: 47.7, y: DECK, face: '-x', close: true },
+      { id: 'e17', kind: 'enemy', name: 'Barriguinha que surge de lado', x: 24.6, z: 53.4, y: DECK, face: '-x', move: { axis: 'z', min: 52.2, max: 54.2, speed: 0.85, phase: 0.4 } },
     ] },
     { id: 'pulo', targets: [
-      { id: 'e18', kind: 'enemy', name: 'Javali da queda', x: 29.8, z: 32, y: 0, face: 1 },
-      { id: 'e19', kind: 'enemy', name: 'Javali do corredor', x: 33.8, z: 26, y: 0, face: 1, move: { axis: 'x', min: 33.0, max: 34.6, speed: 0.85, phase: 0.4 } },
-      { id: 'e20', kind: 'enemy', name: 'Javali da reta', x: 29.7, z: 20, y: 0, face: 1 },
+      { id: 'e18', kind: 'enemy', name: 'Barriguinha da queda', x: 29.8, z: 32, y: 0, face: 1 },
+      { id: 'e19', kind: 'enemy', name: 'Barriguinha do corredor', x: 33.8, z: 26, y: 0, face: 1, move: { axis: 'x', min: 33.0, max: 34.6, speed: 0.85, phase: 0.4 } },
+      { id: 'e20', kind: 'enemy', name: 'Barriguinha da reta', x: 29.7, z: 20, y: 0, face: 1 },
       { id: 'c5', kind: 'civil', name: 'Vovó da reta', x: 34.0, z: 14, y: 0, face: 1, move: { axis: 'x', min: 33.2, max: 34.6, speed: 0.7, phase: 0.8 } },
-      { id: 'e21', kind: 'enemy', name: 'Javali do meio da reta', x: 29.8, z: 6, y: 0, face: 1 },
-      { id: 'e22', kind: 'enemy', name: 'Javali que cruza', x: 33.8, z: -2, y: 0, face: 1, move: { axis: 'x', min: 33.0, max: 34.6, speed: 0.9, phase: 1.1 } },
-      { id: 'e23', kind: 'enemy', name: 'Javali do fim', x: 29.8, z: -10, y: 0, face: 1 },
-      { id: 'e24', kind: 'enemy', name: 'Javali da chegada', x: 33.9, z: -18, y: 0, face: 1 },
+      { id: 'e21', kind: 'enemy', name: 'Barriguinha do meio da reta', x: 29.8, z: 6, y: 0, face: 1 },
+      { id: 'e22', kind: 'enemy', name: 'Barriguinha que cruza', x: 33.8, z: -2, y: 0, face: 1, move: { axis: 'x', min: 33.0, max: 34.6, speed: 0.9, phase: 1.1 } },
+      { id: 'e23', kind: 'enemy', name: 'Barriguinha do fim', x: 29.8, z: -10, y: 0, face: 1 },
+      { id: 'e24', kind: 'enemy', name: 'Barriguinha da chegada', x: 33.9, z: -18, y: 0, face: 1 },
     ] },
   ],
 };
+
+setBonusCut(PIT.bonusCut);
 
 export function pitTargets() {
   const out = [];
@@ -188,6 +196,13 @@ export function minPlausible() {
   return ROUND(run / SPEED + dash / (SPEED * PIT.sprint) + pitEnemies().length * 0.04);
 }
 
+// Piso do ranking. O alvo de bônus pode deixar o relógio PIT.bonusCut segundos
+// abaixo do mínimo físico; abaixo disto o servidor recusa.
+export function rankFloor() {
+  const cut = Number.isFinite(PIT.bonusCut) ? PIT.bonusCut : 0;
+  return ROUND(Math.max(0, minPlausible() - cut));
+}
+
 export function pitRescue(x, y, z) {
   let best = null, bd = 1e9;
   for (let i = 1; i < PIT.path.length; i++) {
@@ -245,8 +260,26 @@ export function onSprint(x, y, z) {
 
 export function inGate(pos, gate) {
   if (!pos || !gate) return false;
+  if (Math.abs((pos.y || 0) - gate.y) >= 2.2) return false;
+  if (gate.x0 != null) return pos.x >= gate.x0 && pos.x <= gate.x1 && pos.z >= gate.z0 && pos.z <= gate.z1;
   const dx = pos.x - gate.x, dz = pos.z - gate.z;
-  return dx * dx + dz * dz <= gate.r * gate.r && Math.abs((pos.y || 0) - gate.y) < 2.2;
+  return dx * dx + dz * dz <= gate.r * gate.r;
+}
+
+// Gate pulado conta os anteriores, na ordem do percurso. Devolve null se o bay não existe.
+export function fillPops(have, bay) {
+  const order = PIT.bays.map((b) => b.id);
+  const idx = order.indexOf(bay);
+  if (idx < 0) return null;
+  const next = Array.isArray(have) ? have.slice() : [];
+  for (let i = 0; i <= idx; i++) if (!next.includes(order[i])) next.push(order[i]);
+  return next;
+}
+
+export function zombiesAwake(pops) {
+  const order = PIT.bays.map((b) => b.id);
+  const at = order.indexOf('passa');
+  return at >= 0 && order.slice(at).some((id) => (pops || []).includes(id));
 }
 
 export function starsOf(final, civs, finished) {
@@ -257,7 +290,7 @@ export function starsOf(final, civs, finished) {
 }
 
 export function suggestion(stars) {
-  if (stars >= 3) return { id: 'javali', label: 'Javali', hint: 'pesadelo — o curral foi seu' };
+  if (stars >= 3) return { id: 'javali', label: 'Barriguinha', hint: 'pesadelo — o curral foi seu' };
   if (stars >= 2) return { id: 'ceva', label: 'Ceva', hint: 'normal — ainda dá para apertar' };
   if (stars >= 1) return { id: 'leitao', label: 'Leitão', hint: 'fácil — volta sem encostar no civil' };
   return { id: '', label: '', hint: '' };
@@ -298,8 +331,11 @@ export function inspectRun(events) {
     }
     if (!started) return empty('ordem');
     if (e.k === 'pop') {
-      if (pops.length >= bayOrder.length || e.bay !== bayOrder[pops.length]) return empty('ordem');
-      pops.push(e.bay);
+      if (typeof e.bay !== 'string' || !bayOrder.includes(e.bay)) return empty('diário');
+      if (pops.includes(e.bay)) return empty('ordem');
+      const filled = fillPops(pops, e.bay);
+      pops.length = 0;
+      for (const id of filled) pops.push(id);
       continue;
     }
     if (e.k === 'hit') {
@@ -351,17 +387,15 @@ export function inspectRun(events) {
   };
 }
 
-// O relógio físico continua o piso. O miolo abate 2 s só na nota, então a nota
-// pode ficar esses 2 s abaixo do mínimo sem ser recusada.
-export function rankFloor(bonus) {
-  return ROUND(minPlausible() + Math.min(0, Number(bonus) || 0));
-}
-
+// Um desconto só: PIT.bonusCut. O miolo já entrou em final (−cut) e o piso
+// também é o mínimo físico menos esse cut. final não pode cair mais do que cut abaixo do relógio.
 export function rankedRun(events) {
   const run = inspectRun(events);
   if (!run.finished) return run;
-  if (!(run.raw + 1e-6 >= minPlausible())) return { ...run, ranked: false, reason: 'rápido' };
-  if (!(run.final + 1e-6 >= rankFloor(run.bonus))) return { ...run, ranked: false, reason: 'rápido' };
+  const floor = rankFloor();
+  const cut = Number.isFinite(PIT.bonusCut) ? PIT.bonusCut : 0;
+  if (!(run.raw + 1e-6 >= floor) || !(run.final + 1e-6 >= floor)) return { ...run, ranked: false, reason: 'rápido' };
+  if (run.final + 1e-6 < run.raw - cut) return { ...run, ranked: false, reason: 'rápido' };
   return { ...run, ranked: true, reason: 'ok' };
 }
 

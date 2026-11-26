@@ -4,16 +4,17 @@ import * as THREE from 'three';
 import { makeDocao, setPose } from './docao.js';
 import { makeZombie, animateZombie } from './invasion-gfx.js';
 import { lookToSkin } from './shared/closet.js';
-import { PIT, BOARD, FINISH_LINE, pitTargets, boardAabb, rayAabb, inspectRun, formatPit, suggestion, moverAt, inGate, onFinishLine, onSprint, pitRescue } from './shared/pocilga.js';
+import { PIT, BOARD, FINISH_LINE, pitTargets, boardAabb, rayAabb, inspectRun, formatPit, suggestion, moverAt, inGate, onFinishLine, onSprint, pitRescue, fillPops, zombiesAwake } from './shared/pocilga.js';
 import { bonusLine } from './shared/pocilga-bonus.js';
 import { mountBonusTarget, clearBonusTarget, tickBonusTarget, offerBonus, armBonus, takeBonusShot, bonusAdjust, bonusSnap } from './pocilga-bonus.js';
-import { loadPitRank, submitPit, getAccount } from './account.js';
+import { loadPitRank, submitPit, getAccount, getToken } from './account.js';
+import { formatRankClock, GUEST_RANK_NOTE } from './pocilga-rank.js';
 
 const LOCAL_KEY = 'docao.pocilga.best';
 const LINES = [
   'Barriguinha na torre. Escuta, leitão.',
-  'Javali vermelho, de fuzil pra frente: derruba. Azul, sem arma, mão baixa: é civil.',
-  'Só a Pistolinha o percurso inteiro. Vinte e três javalis, dois zumbis, cinco civis.',
+  'Barriguinha de camisa vermelha, de fuzil pra frente: derruba. Azul, sem arma, mão baixa: é civil.',
+  'Só a Pistolinha o percurso inteiro. Vinte e três Barriguinhas, dois zumbis, cinco civis.',
   'Chega em 52 segundos, sem civil: três estrelas.',
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -37,52 +38,96 @@ function writeBest(result) {
   return row;
 }
 
+// Pintura chapada do Barriguinha clássico: pele #ee9c22, focinho #ec5c0c, camisa #d8261c com C!.
+function paintBarriguinha(g) {
+  g.fillStyle = '#f3e2b0';
+  g.fillRect(0, 0, 256, 448);
+  g.fillStyle = '#8d1a12';
+  g.fillRect(14, 14, 228, 52);
+  g.fillStyle = '#fff6e4';
+  g.font = '700 22px Fredoka, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('BARRIGUINHA', 128, 40);
+  g.fillStyle = '#ee9c22';
+  g.beginPath(); g.ellipse(78, 150, 26, 34, -0.5, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(178, 150, 26, 34, 0.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#e8682a';
+  g.beginPath(); g.ellipse(78, 154, 12, 18, -0.5, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(178, 154, 12, 18, 0.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ee9c22';
+  g.beginPath(); g.arc(128, 196, 62, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#2a1408';
+  g.lineWidth = 6;
+  g.lineCap = 'round';
+  g.beginPath(); g.moveTo(86, 168); g.lineTo(112, 180); g.stroke();
+  g.beginPath(); g.moveTo(170, 168); g.lineTo(144, 180); g.stroke();
+  g.fillStyle = '#fffaf0';
+  g.beginPath(); g.ellipse(106, 188, 14, 16, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(150, 188, 14, 16, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#5a2c12';
+  g.beginPath(); g.arc(108, 190, 7, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(152, 190, 7, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#120604';
+  g.beginPath(); g.arc(109, 191, 3.5, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(153, 191, 3.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ec5c0c';
+  g.beginPath(); g.ellipse(128, 214, 28, 20, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#3a0806';
+  g.beginPath(); g.ellipse(118, 214, 5, 7, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(138, 214, 5, 7, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#d8261c';
+  g.fillRect(78, 268, 100, 78);
+  g.fillStyle = '#1d1410';
+  g.fillRect(78, 268, 100, 8);
+  g.fillStyle = '#f5e6d0';
+  g.font = '700 36px Fredoka, sans-serif';
+  g.fillText('C!', 128, 308);
+  g.fillStyle = '#ee9c22';
+  g.fillRect(58, 278, 22, 48);
+  g.fillRect(176, 278, 22, 48);
+  g.fillStyle = '#1d1410';
+  g.fillRect(90, 346, 32, 52);
+  g.fillRect(134, 346, 32, 52);
+  g.fillStyle = '#1c140e';
+  g.fillRect(168, 300, 46, 10);
+  g.fillRect(206, 292, 8, 26);
+  g.fillStyle = '#8d1a12';
+  g.font = '700 22px Fredoka, sans-serif';
+  g.fillText('ARMADO', 128, 424);
+}
+
 function faceTexture(kind) {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 448;
   const g = c.getContext('2d');
   const enemy = kind === 'enemy';
-  g.fillStyle = enemy ? '#6b120e' : '#d9f4ea';
-  g.fillRect(0, 0, 256, 448);
-  if (!enemy) {
+  if (enemy) paintBarriguinha(g);
+  else {
+    g.fillStyle = '#d9f4ea';
+    g.fillRect(0, 0, 256, 448);
     g.fillStyle = '#f7fbff';
     for (let y = 86; y < 360; y += 28) g.fillRect(28, y, 200, 14);
-  }
-  g.fillStyle = enemy ? '#9d1c14' : '#1f7a58';
-  g.fillRect(14, 14, 228, 64);
-  g.fillStyle = '#fff6e4';
-  g.font = '700 34px Fredoka, sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(enemy ? 'JAVALI' : 'CIVIL', 128, 46);
-  g.fillStyle = enemy ? '#c45a4a' : '#f4b7c8';
-  g.beginPath(); g.ellipse(62, 168, 28, 36, -0.4, 0, Math.PI * 2); g.fill();
-  g.beginPath(); g.ellipse(194, 168, 28, 36, 0.4, 0, Math.PI * 2); g.fill();
-  g.fillStyle = enemy ? '#e07a6a' : '#f7c3d0';
-  g.beginPath(); g.ellipse(128, 214, 78, 70, 0, 0, Math.PI * 2); g.fill();
-  g.strokeStyle = '#1a100c';
-  g.lineWidth = 8;
-  g.lineCap = 'round';
-  if (enemy) {
-    g.beginPath(); g.moveTo(78, 176); g.lineTo(108, 196); g.stroke();
-    g.beginPath(); g.moveTo(178, 176); g.lineTo(148, 196); g.stroke();
-  }
-  g.fillStyle = '#1a100c';
-  g.beginPath(); g.arc(98, 204, enemy ? 9 : 6, 0, Math.PI * 2); g.fill();
-  g.beginPath(); g.arc(158, 204, enemy ? 9 : 6, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#f8d0da';
-  g.beginPath(); g.ellipse(128, 238, 34, 24, 0, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#5c2430';
-  g.beginPath(); g.arc(116, 238, 5, 0, Math.PI * 2); g.fill();
-  g.beginPath(); g.arc(140, 238, 5, 0, Math.PI * 2); g.fill();
-  if (enemy) {
-    g.strokeStyle = '#1a100c';
-    g.lineWidth = 10;
-    g.beginPath(); g.moveTo(86, 268); g.lineTo(170, 268); g.stroke();
-    g.fillStyle = '#1c140e';
-    g.fillRect(108, 292, 40, 18);
-    g.fillRect(118, 300, 20, 78);
-  } else {
+    g.fillStyle = '#1f7a58';
+    g.fillRect(14, 14, 228, 64);
+    g.fillStyle = '#fff6e4';
+    g.font = '700 34px Fredoka, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('CIVIL', 128, 46);
+    g.fillStyle = '#f4b7c8';
+    g.beginPath(); g.ellipse(62, 168, 28, 36, -0.4, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(194, 168, 28, 36, 0.4, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#f7c3d0';
+    g.beginPath(); g.ellipse(128, 214, 78, 70, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#1a100c';
+    g.beginPath(); g.arc(98, 204, 6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(158, 204, 6, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#f8d0da';
+    g.beginPath(); g.ellipse(128, 238, 34, 24, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#5c2430';
+    g.beginPath(); g.arc(116, 238, 5, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(140, 238, 5, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#1d4e38';
     g.lineWidth = 7;
     g.beginPath(); g.arc(128, 272, 16, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
@@ -90,10 +135,10 @@ function faceTexture(kind) {
     g.lineWidth = 16;
     g.beginPath(); g.moveTo(52, 250); g.lineTo(46, 390); g.stroke();
     g.beginPath(); g.moveTo(204, 250); g.lineTo(210, 390); g.stroke();
+    g.fillStyle = '#14382c';
+    g.font = '700 26px Fredoka, sans-serif';
+    g.fillText('SEM ARMA', 128, 418);
   }
-  g.fillStyle = enemy ? '#ffd0c8' : '#14382c';
-  g.font = '700 26px Fredoka, sans-serif';
-  g.fillText(enemy ? 'ARMADO' : 'SEM ARMA', 128, 418);
   const tex = new THREE.CanvasTexture(c);
   if ('colorSpace' in tex && THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
@@ -510,14 +555,17 @@ function zedBox(z) {
 }
 function makeZed(t) {
   const model = makeZombie('walker');
-  model.group.visible = false;
+  model.group.visible = true;
   model.group.position.set(t.x, t.y, t.z);
   root.add(model.group);
   return {
     ...t, model, phase: 'wait', x: t.x, z: t.z, y: t.y,
     alive: true, onGround: true, stunned: false, walk: 0, vel: { x: 0, z: 0 },
-    pos: { x: t.x, y: t.y, z: t.z }, yaw: Math.PI / 2,
+    pos: { x: t.x, y: t.y, z: t.z }, yaw: -Math.PI / 2,
   };
+}
+function wakeZeds() {
+  for (const z of zeds) if (z.phase === 'wait') z.phase = 'run';
 }
 export function pitRay(ox, oy, oz, dx, dy, dz, maxT) {
   if (!run || run.done) return null;
@@ -580,7 +628,7 @@ export function pitHit(id, weapon) {
   b.phase = 'fall'; b.anim = 0;
   if (freshCivil) { banner(`+${PIT.civPenalty.toFixed(1).replace('.', ',')} s · ${b.name}`, true, 1.8); deps.sfx.oink(); }
   else deps.sfx.hit();
-  if (freshEnemy && after.missed.length === 0) { banner('Javalis no chão. Dispara na volta!', false, 1.4); deps.sfx.pickup(); }
+  if (freshEnemy && after.missed.length === 0) { banner('Barriguinhas no chão. Dispara na volta!', false, 1.4); deps.sfx.pickup(); }
   return true;
 }
 
@@ -639,12 +687,15 @@ function paintHud() {
   const clockText = !run.started ? '0:00.00' : (run.done && run.result && run.result.final != null ? formatPit(run.result.final) : formatPit(Math.max(0, run.clock + bonusAdjust())));
   if (!run.started) timer.textContent = 'LARGADA';
   else timer.textContent = clockText;
-  let lead = 'O Barriguinha explica. Javali vermelho cai. Azul é civil.';
+  let lead = 'O Barriguinha explica. Camisa vermelha cai. Azul é civil.';
   if (run.done) lead = 'Missão cumprida. R tenta de novo.';
   else if (run.started && onSprint(deps.player().pos.x, deps.player().pos.y, deps.player().pos.z)) lead = 'CRUZE A LINHA';
-  else if (run.started) lead = view && view.missed.length ? `Faltam ${view.missed.length} javalis` : 'Javalis no chão';
+  else if (run.started) {
+    const left = view ? view.missed.length : 0;
+    lead = left ? (left === 1 ? 'Falta 1 Barriguinha' : `Faltam ${left} Barriguinhas`) : 'Barriguinhas no chão';
+  }
   if (leader) { leader.textContent = lead; leader.dataset.h = ''; }
-  if (score) score.textContent = run.started ? `Inimigos ${down}/${enemies} · civis ${civs}/${civTotal}` : 'Pistolinha · javali vermelho, civil azul';
+  if (score) score.textContent = run.started ? `Inimigos ${down}/${enemies} · civis ${civs}/${civTotal}` : 'Pistolinha · Barriguinha vermelho, civil azul';
   const cod = $('pitCod');
   if (cod) {
     cod.classList.remove('hidden');
@@ -660,7 +711,7 @@ function paintHud() {
       stars.innerHTML = [0, 1, 2].map((i) => `<i class="${i < n ? 'on' : 'off'}">★</i>`).join('');
     }
   }
-  if (lb) lb.innerHTML = `<div class="lbh"><span>A Pocilga</span><span>relógio</span></div><div class="row me"><span>1</span><span class="dot" style="background:#e07a6a"></span><span class="n">você</span><span class="k">${timer.textContent}</span></div>`;
+  if (lb) lb.innerHTML = `<div class="lbh"><span>${PIT.title}</span><span>relógio</span></div><div class="row me"><span>1</span><span class="dot" style="background:#e07a6a"></span><span class="n">você</span><span class="k">${timer.textContent}</span></div>`;
   const ban = $('pitBanner');
   if (ban && performance.now() > bannerUntil) { ban.classList.add('hidden'); bannerText = ''; }
   paintTalk(false);
@@ -669,7 +720,7 @@ function pitEnemiesCount() { return pitTargets().filter((t) => t.kind === 'enemy
 
 function rankRows(rows, meNick) {
   if (!rows || !rows.length) return '<p class="pit-empty">Ranking ainda vazio. O primeiro tempo com conta abre a lista.</p>';
-  return `<ol class="pit-rank">${rows.map((r) => `<li class="${meNick && r.nick === meNick ? 'me' : ''}"><b>${r.place}. ${esc(r.nick)}</b><span>${esc(r.clock)} ${starsTxt(r.stars | 0)}</span></li>`).join('')}</ol>`;
+  return `<ol class="pit-rank">${rows.map((r) => `<li class="${meNick && r.nick === meNick ? 'me' : ''}"><b>${r.place}. ${esc(r.nick)}</b><span>${esc(formatRankClock(r.best))} ${starsTxt(r.stars | 0)}</span></li>`).join('')}</ol>`;
 }
 
 function paintCard(result, extra) {
@@ -678,12 +729,13 @@ function paintCard(result, extra) {
   const best = readBest();
   const sug = result.suggestion || suggestion(result.stars);
   const remote = extra && extra.remote;
-  let note = 'Convidado: o melhor tempo fica neste navegador. Entre na conta para o ranking.';
-  if (getAccount() && getAccount().nick && getAccount().nick !== 'DEV local') {
+  const logged = !!(getToken() && getAccount() && !getAccount().dev);
+  let note = GUEST_RANK_NOTE;
+  if (logged) {
     if (!remote) note = 'Mandando o tempo para o ranking…';
-    else if (remote.guest) note = 'Convidado: o melhor tempo fica neste navegador.';
+    else if (remote.guest) note = GUEST_RANK_NOTE;
     else if (remote.ok && remote.saved) note = 'Este tempo entrou no ranking da conta.';
-    else if (remote.run && remote.run.reason === 'rápido') note = 'O servidor recusou o ranking: tempo abaixo do mínimo físico.';
+    else if (remote.run && remote.run.reason === 'rápido') note = 'O servidor recusou o ranking: tempo abaixo do mínimo.';
     else if (remote.error) note = esc(remote.error);
     else note = 'O servidor não guardou este tempo.';
   }
@@ -693,7 +745,7 @@ function paintCard(result, extra) {
   const hitE = result.down ? result.down.length : 0;
   card.innerHTML = `
     <button type="button" id="pitDismiss" class="pit-x" aria-label="Fechar">×</button>
-    <p class="pit-kicker">A Pocilga</p>
+    <p class="pit-kicker">${PIT.title}</p>
     <h2>${result.finished ? 'MISSÃO CUMPRIDA' : 'Incompleta'}</h2>
     <p class="pit-time">${result.finished ? formatPit(result.final) : '—'}</p>
     <p class="pit-stars" aria-label="${result.stars} estrelas">${starsTxt(result.stars || 0)}</p>
@@ -701,7 +753,7 @@ function paintCard(result, extra) {
     <p class="pit-split">Tempo ${formatPit(result.raw)} · penalidade +${(result.penalty || 0).toFixed(2)} s</p>
     <p class="pit-split">Alvo: <span style="color:${result.bonusZone === 'center' ? '#7CFF6B' : result.bonusZone === 'ring' ? '#ff4b4b' : 'inherit'}">${bonusLine(result.bonusZone)}</span></p>
     <p class="pit-sug">${result.finished ? `Sugestão do Docão: <b>${esc(sug.label)}</b> · ${esc(sug.hint)}` : 'A chegada não abriu.'}</p>
-    <p class="pit-best">Seu melhor ${getAccount() && me ? 'na conta' : 'neste navegador'}: <b>${best ? formatPit(best.final) + ' ' + starsTxt(best.stars) : '—'}</b>${me ? ` · ranking ${me.place}º (${esc(me.clock)})` : ''}</p>
+    <p class="pit-best">Seu melhor ${logged && me ? 'na conta' : 'neste navegador'}: <b>${best ? formatRankClock(best.final) + ' ' + starsTxt(best.stars) : '—'}</b>${me ? ` · ranking ${me.place}º (${esc(formatRankClock(me.best))})` : ''}</p>
     <h3>Mais rápidos</h3>
     ${rankRows(rows, me && me.nick)}
     <p class="pit-note">${note}</p>
@@ -753,11 +805,16 @@ function grabZed(z) {
   deps.sfx.oink();
 }
 function stepZeds(dt) {
-  if (!run || !run.started || run.done || !deps) return;
+  if (!run || !deps) return;
   const p = deps.player();
-  if (!p) return;
   for (const z of zeds) {
-    if (z.phase !== 'run') continue;
+    if (z.phase === 'wait') {
+      z.vel.x = 0; z.vel.z = 0;
+      z.pos.x = z.x; z.pos.y = z.y; z.pos.z = z.z;
+      animateZombie(z.model, z, dt, lineAt, false);
+      continue;
+    }
+    if (z.phase !== 'run' || !run.started || run.done || !p) continue;
     const dx = p.pos.x - z.x, dz = p.pos.z - z.z;
     const dist = Math.hypot(dx, dz) || 1;
     if (dist < PIT.zombie.reach) { grabZed(z); continue; }
@@ -824,12 +881,15 @@ export function tickCourse(dt) {
       if (arrival) arrival.opening = true;
     }
     if (gate.pop && !run.pops.has(gate.pop)) {
-      const order = PIT.bays.findIndex((b) => b.id === gate.pop);
-      if (run.pops.size === order) {
-        run.pops.add(gate.pop);
-        pushEvent('pop', { bay: gate.pop });
-        for (const z of zeds) if (z.bay === gate.pop && z.phase === 'wait') { z.phase = 'run'; z.model.group.visible = true; }
+      const before = run.pops.size;
+      const filled = fillPops([...run.pops], gate.pop);
+      if (!filled) continue;
+      for (const id of filled) {
+        if (run.pops.has(id)) continue;
+        run.pops.add(id);
+        pushEvent('pop', { bay: id });
       }
+      if (filled.length > before && zombiesAwake(filled)) wakeZeds();
     }
   }
   if (run.started && onFinishLine(pos)) {
@@ -840,7 +900,7 @@ export function tickCourse(dt) {
     } else if (!warned) {
       warned = true;
       const n = view.missed.length;
-      banner(n ? `Volta. Faltam ${n} javali${n > 1 ? 's' : ''}.` : 'Ainda falta sala.', true, 1.6);
+      banner(n ? (n === 1 ? 'Volta. Falta 1 Barriguinha.' : `Volta. Faltam ${n} Barriguinhas.`) : 'Ainda falta sala.', true, 1.6);
     }
   } else if (!onFinishLine(pos)) warned = false;
   paintHud();
@@ -946,7 +1006,7 @@ export function courseSnap() {
     missed: view ? view.missed : [],
     civs: view ? view.civs : 0,
     pops: run ? [...run.pops] : [],
-    targets: boards.map((b) => ({ id: b.id, kind: b.kind, name: b.name, x: b.x, z: b.z, y: b.y || 0, phase: b.phase, face: b.face || -1, mover: !!b.move, zombie: false })).concat(zeds.map((z) => ({ id: z.id, kind: z.kind, name: z.name, x: z.x, z: z.z, y: z.y || 0, phase: z.phase === 'run' ? 'up' : z.phase === 'dead' ? 'dead' : 'down', face: z.face || '-x', mover: false, zombie: true }))),
+    targets: boards.map((b) => ({ id: b.id, kind: b.kind, name: b.name, x: b.x, z: b.z, y: b.y || 0, phase: b.phase, face: b.face || -1, mover: !!b.move, zombie: false })).concat(zeds.map((z) => ({ id: z.id, kind: z.kind, name: z.name, x: z.x, z: z.z, y: z.y || 0, phase: z.phase === 'run' ? 'up' : z.phase === 'dead' ? 'dead' : 'down', face: z.face || '-x', mover: false, zombie: true, shown: !!(z.model && z.model.group.visible) }))),
     card: $('pitOver') ? !$('pitOver').classList.contains('hidden') : false,
     coach: !!coach,
     bonus: bonusSnap(),

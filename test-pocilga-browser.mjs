@@ -77,7 +77,7 @@ await page.screenshot({ path: `${SHOTS}/pocilga-planta.png` });
 
 const talk = await page.evaluate(() => window.__docao.pit.talk);
 const lead = await page.evaluate(() => document.getElementById('leader').textContent);
-ok(/[Bb]arriguinha|javali|civil|Pistolinha/.test(talk) && !(await page.locator('#pitTalk').evaluate((el) => el.classList.contains('hidden'))), `o Docão fala antes da largada (${talk})`);
+ok(/[Bb]arriguinha|porco|civil|Pistolinha/.test(talk) && !(await page.locator('#pitTalk').evaluate((el) => el.classList.contains('hidden'))), `o Docão fala antes da largada (${talk})`);
 ok(!/faixa|placa de direção|FRENTE|ESQUERDA/i.test(`${talk} ${lead}`), `nenhuma fala cita faixa ou placa (${lead})`);
 await page.evaluate(() => { window.__cam = { p: [14.6, 1.65, -17.2], t: [14.2, 1.15, -2], fov: 62 }; });
 await page.waitForTimeout(250);
@@ -278,6 +278,7 @@ ok(s.done && s.result && s.result.civs === 1 && s.result.stars === expectStars &
 const card = await page.locator('#pitCard').innerText();
 ok(/MISSÃO CUMPRIDA/.test(card) && /AnaPocilga/.test(card) && /Inimigos/.test(card) && /FECHAR/.test(card), 'tela final com missão, inimigos e ranking');
 ok(/Alvo: —/.test(card), 'o cartaz mostra a linha do alvo, sem acerto');
+ok(card.includes('Entre na conta para entrar no ranking'), 'deslogado vê o aviso no cartaz');
 const aberto = await page.evaluate(() => ({ state: window.__docao.state, pause: document.getElementById('pause').classList.contains('hidden'), card: window.__docao.pit.card }));
 ok(aberto.state === 'playing' && aberto.pause && aberto.card, `cartaz com o jogo rodando, sem pausa (${JSON.stringify(aberto)})`);
 await page.screenshot({ path: `${SHOTS}/pocilga-modal.png` });

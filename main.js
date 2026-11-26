@@ -46,6 +46,7 @@ import { makeZombie, makeMutant, animateZombie, dieZombie, applyHalloweenPalette
 import { TRAIN, isTraining, dummyX } from './shared/training.js';
 import { PIT } from './shared/pocilga.js';
 import { beginCourse, clearCourse, tickCourse, pitRay, pitHit, pitMelee, pitSpeedMul, pitHolding, pitResultOn, pitFinished, pitEscQuiet, dismissResult, restartCourse, courseSnap, paintPitMenu } from './pocilga.js';
+import { fillPitTab } from './pocilga-tab.js';
 import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
 import { breezeMap, buildBreezeWorld, breezeMapReady, prepareBreezeMap } from './breeze-map.js';
 import { buildNav } from './nav.js';
@@ -4272,7 +4273,7 @@ function updateHud(dt) {
   const prot = $('protmsg');
   const shielded = !!(p.alive && gameTime < p.invulnUntil && msgTimer <= 0);
   if (prot) { prot.textContent = shielded ? (spawnShielded(p) ? 'PROTEGIDO · SEM TIRO' : 'PROTEGIDO') : ''; prot.classList.toggle('hidden', !shielded); }
-  if (!$('tabboard').classList.contains('hidden')) $('tabboard').innerHTML = boardHtml();
+  if (!$('tabboard').classList.contains('hidden') && !pitMode()) $('tabboard').innerHTML = boardHtml();
   if (gfLive() && gfS) { const raw = gunfightHud(gfS, entities); gfState = normalizeGunfight(adaptGunfightHud(raw, { format: gfS.format, ents: entities })); teamScore = [gfState.score[0] | 0, gfState.score[1] | 0]; renderGunfightHud(gfState); tickGunfightBanner(); paintGfZone(); }
 }
 
@@ -7560,7 +7561,7 @@ function refreshMapUI() {
   const card = $('mapBtn');
   const story = historiaMenu();
   const pit = pitMenu();
-  card.classList.remove('locked'); card.title = story ? 'HOTMILK à Noite, mapa fixo do Modo história' : pit ? 'A Pocilga, mapa fixo do circuito' : 'Escolher mapa';
+  card.classList.remove('locked'); card.title = story ? 'HOTMILK à Noite, mapa fixo do Modo história' : pit ? 'Pistoleiro da Pocilga, mapa fixo do circuito' : 'Escolher mapa';
   card.disabled = story || pit;
   const ch = card.querySelector('.mchange'); if (ch) ch.textContent = story || pit ? 'FIXO' : '↻ TROCAR';
   if (x1Menu()) {
@@ -7727,7 +7728,7 @@ function startGame(mapId) {
       bonusBad: () => { tone('sawtooth', 196, 78, 0.2, 0.15); tone('square', 98, 52, 0.22, 0.09, 0.06); },
     },
   });
-  flashMsg(gfNotice || (armsMode() ? `Corrida Armada · time ${TEAM_NAMES[player.team]} · 2 abates por etapa · V rouba etapa` : compOn() ? `Competitivo ${normSide(+$('compSide').value)}v${normSide(+$('compSide').value)} · time ${TEAM_NAMES[player.team]} · B compra na preparação` : mode === 'bomb' ? `Bomba · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : hideMode() ? `Docão Escondido (protótipo) · time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : survOn() ? `Survival · ${currentMap.name} · pistola e faca · ${SURV.useLabel} usa a loja · E abre porta` : invMode() ? `Invasão 🎃 · horda ${diffWord} · ${currentMap.name} · ${INV.WAVES} waves · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun].short}` : exploreMode() ? `Exploração · ${currentMap.name} · N noclip · , . ou [ ] trocam a primária` : teamMode() ? `Dominação · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : training() ? 'Estande do Docão · B/N/M trocam a arma' : pitMode() ? 'A Pocilga · só a Pistolinha' : `Mapa: ${currentMap.name} · bots ${diffWord}`)); if (gfNotice) msgTimer = 4.5; refreshModeHud();
+  flashMsg(gfNotice || (armsMode() ? `Corrida Armada · time ${TEAM_NAMES[player.team]} · 2 abates por etapa · V rouba etapa` : compOn() ? `Competitivo ${normSide(+$('compSide').value)}v${normSide(+$('compSide').value)} · time ${TEAM_NAMES[player.team]} · B compra na preparação` : mode === 'bomb' ? `Bomba · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : hideMode() ? `Docão Escondido (protótipo) · time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : survOn() ? `Survival · ${currentMap.name} · pistola e faca · ${SURV.useLabel} usa a loja · E abre porta` : invMode() ? `Invasão 🎃 · horda ${diffWord} · ${currentMap.name} · ${INV.WAVES} waves · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun].short}` : exploreMode() ? `Exploração · ${currentMap.name} · N noclip · , . ou [ ] trocam a primária` : teamMode() ? `Dominação · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : training() ? 'Estande do Docão · B/N/M trocam a arma' : pitMode() ? 'Pistoleiro da Pocilga · só a Pistolinha' : `Mapa: ${currentMap.name} · bots ${diffWord}`)); if (gfNotice) msgTimer = 4.5; refreshModeHud();
   for (const ev of bombEv) onBombEvent(ev);
   for (const ev of hideEv) onHideEvent(ev);
   for (const ev of gfEv) onGfEvent(ev);
@@ -7880,7 +7881,7 @@ function activatePauseFocus() {
 }
 function fillPauseBrief() {
   const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
-  const modeLabel = gfLive() ? 'Gunfight' : armsMode() ? 'Corrida Armada' : compOn() ? 'Competitivo' : mode === 'bomb' ? 'Bomba' : survOn() ? 'Survival' : invMode() ? 'Invasão' : x1Mode() ? 'X1' : exploreMode() ? 'Exploração' : mode === 'dom' ? 'Dominação' : training() ? 'Estande' : pitMode() ? 'A Pocilga' : 'Mata-mata';
+  const modeLabel = gfLive() ? 'Gunfight' : armsMode() ? 'Corrida Armada' : compOn() ? 'Competitivo' : mode === 'bomb' ? 'Bomba' : survOn() ? 'Survival' : invMode() ? 'Invasão' : x1Mode() ? 'X1' : exploreMode() ? 'Exploração' : mode === 'dom' ? 'Dominação' : training() ? 'Estande' : pitMode() ? PIT.title : 'Mata-mata';
   set('pauseMode', modeLabel);
   set('pauseMap', currentMap ? currentMap.name : '—');
   set('pauseTime', $('timer') ? $('timer').textContent : '—');
@@ -7896,7 +7897,7 @@ function fillPauseBrief() {
   else if (mode === 'dom') obj = 'Segure a zona. O tempo do time decide.';
   else if (plantOn()) obj = compOn() ? 'Compre na preparação. Plante ou desarme.' : 'Plante o botijão ou desarme.';
   else if (training()) obj = 'Treino no estande. Sem placar.';
-  else if (pitMode()) obj = 'Derrube os javalis, poupe os civis e cruze a chegada.';
+  else if (pitMode()) obj = 'Derrube os Barriguinhas, poupe os civis e cruze a chegada.';
   else if (exploreMode()) obj = 'Passeio no mapa. N liga o noclip.';
   set('pauseObjective', obj);
   let score = p ? `${p.kills} abates` : '—';
@@ -8134,7 +8135,7 @@ document.addEventListener('keydown', (e) => {
       if (exploreMode() && player.alive && !emote.on && !e.repeat && (e.code === 'Comma' || e.code === 'Period' || e.code === 'BracketLeft' || e.code === 'BracketRight')) cycleExplorePrimary(e.code === 'Period' || e.code === 'BracketRight' ? 1 : -1);
     }
     if (!emote.on && !gfLive() && e.code === 'KeyQ' && !e.repeat && !(player && player.down)) { if (player.pokeballs > 0) { cancelUtilPress(); player.utilSel = ''; startCharge(); } else selectUtil('nade'); }
-    if (e.code === 'Tab') $('tabboard').classList.remove('hidden');
+    if (e.code === 'Tab') { $('tabboard').classList.remove('hidden'); if (pitMode() && !e.repeat) fillPitTab(); }
     if (e.code === 'Escape' || e.code === 'KeyP') pause();
     if (e.code === 'Backquote') { e.preventDefault(); softPause(); }
   } else if (state === 'paused' && softPauseOn && e.code === 'Backquote') { e.preventDefault(); resume(); }
@@ -8389,7 +8390,7 @@ const MENU_RULES = {
   dm: 'Todos contra todos · vence quem fizer 20 abates ou liderar em 5 minutos',
   dom: 'Times · capture a zona · o primeiro a completar as capturas vence',
   treino: 'Estande do Docão: alvos que não atacam e voltam em 2 s. B/N/M trocam a arma, munição infinita, sem tempo.',
-  pocilga: 'A POCILGA · Circuito solo, só a Pistolinha Leitão. O Barriguinha na torre explica e grita no caminho. A disparada volta pelos fundos da sala da largada. Javali vermelho, de fuzil, cai; civil azul, sem arma e de mão baixa, soma 3 segundos e tira as 3 estrelas. Javali esquecido trava a chegada. 3 estrelas até 0:52 sem civil, 2 estrelas até 1:06, 1 estrela ao terminar. Na chegada o jogo não pausa: Esc fecha o cartaz e R volta pra largada.',
+  pocilga: 'PISTOLEIRO DA POCILGA · Circuito solo, só a Pistolinha Leitão. O Barriguinha na torre explica e grita no caminho. A disparada volta pelos fundos da sala da largada. Barriguinha de camisa vermelha, de fuzil, cai; civil azul, sem arma e de mão baixa, soma 3 segundos e tira as 3 estrelas. Barriguinha esquecido trava a chegada. Os dois Podres correm no corredor de cima. 3 estrelas até 0:52 sem civil, 2 estrelas até 1:06, 1 estrela ao terminar. Na chegada o jogo não pausa: Esc fecha o cartaz e R volta pra largada.',
   bomb: `💣 COMO JOGAR · Bomba (protótipo, estilo Valorant)\n🔥 Ataque: leve o Botijão até o site A ou B e segure ${BOMB.KEY_LABEL} por ${BOMB.PLANT} s pra plantar. Ele explode em ${BOMB.FUSE} s.\n🛡️ Defesa: impeça a plantação ou segure ${BOMB.KEY_LABEL} por ${BOMB.DEFUSE} s perto do Botijão pra desarmar.\n🔁 ${BOMB.PREP} s de preparação por rodada (dá pra trocar de arma com 1–9) · renascimento normal · primeiro a ${BOMB.WIN} rodadas · troca de lado depois da ${BOMB.HALF}ª.`,
   comp: `COMPETITIVO · 3 a 5 por time, só em mapa de plantar o botijão.\nA grana compra arma, colete, Copo Bomba, fumaça e flashbang na preparação (B). Matar e ganhar a rodada pagam. Colete e capacete diminuem o dano e não aparecem na skin.\nSem bazuca, lança-milho, ray gun e saco de presentes. 4, 5 e 6 escolhem Copo Bomba, fumaça e flashbang (a rodinha também). Elas ficam na mão direita até soltar o clique. O esquerdo carrega a força. O direito joga na força mínima. Q escolhe o Copo Bomba.\nG joga a arma principal pra frente. X joga o botijão pra frente. Quem morre deixa a arma no chão: recolher troca com a sua, skin inclusive. A que está com você continua na rodada seguinte. Só some a que ficou no chão, sem ninguém.\nRodada de pistola no começo e sempre que troca quem planta. Primeiro a 13. 12 a 12 vai a dois, trocando o lado a cada rodada.`,
   inv: 'Invasão 🎃 · co-op contra 20 waves de Docões zumbis. 2 vidas cada, poderes caem dos zumbis (G usa, X troca) e a Névoa Assombrada fecha o mapa.',
@@ -9060,7 +9061,7 @@ function refreshMenuMode() {
   if ($('survNote')) $('survNote').classList.toggle('hidden', !inv);
   if (showDiff) paintDiffNote();
   if (inv) paintSurvNote();
-  const playTitle = story ? 'HISTÓRIA' : inv ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === PIT.mode ? 'POCILGA' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
+  const playTitle = story ? 'HISTÓRIA' : inv ? 'SOBREVIVER' : v === 'explore' ? 'EXPLORAR' : v === TRAIN.mode ? 'TREINAR' : v === PIT.mode ? 'PISTOLEIRO' : v === X1.mode ? 'X1' : '<img class="menu-lettering" src="./assets/menu/lettering-jogar.webp" alt="Jogar">';
   const playHint = story ? 'HOTMILK · NORMAL · ZUMBIS' : surv ? 'PAPADA EM TODOS OS MAPAS' : inv ? 'CLÁSSICA · 20 WAVES' : v === 'explore' ? 'SEM BOTS · SEM PRESSA' : v === TRAIN.mode ? 'ESTANDE · SEM LIMITE' : v === PIT.mode ? 'CIRCUITO · CONTRA O RELÓGIO' : v === X1.mode ? 'DUELO · PRIMEIRO A 10' : comp ? 'BOTIJÃO · ECONOMIA · PRIMEIRO A 13' : v === GF_MODE ? (GF_LIVE ? 'ROUNDS · PRIMEIRO A 6' : 'EM BREVE · CAI NO MATA-MATA') : 'SOLO · CONTRA BOTS';
   $('playBtn').innerHTML = `<span class="play-title">${playTitle}</span><small>${playHint}</small>`;
   $('menuRules').textContent = story ? MENU_RULES.historia : inv ? (surv ? 'Survival · a Papada fica em todos os mapas. A loja completa e as portas continuam na HOTMILK à Noite. Com dois ou mais jogadores, a partir da wave 5, pode nascer um Shapeshifter.' : 'Invasão clássica · 20 waves, poderes e a Névoa Assombrada. Algumas waves vêm com tema. Da wave 10 em diante, 1% da horda pode ser o Docão Mutação Macabra. Com dois ou mais jogadores, a partir da wave 5, um Shapeshifter (só um) pode nascer fora da visão, copia alguém e suga a alma de quem chega perto. Nas últimas entram zumbis ferozes. Sem vidas, a cruz fica no chão: segure E para desenterrar.') : MENU_RULES[v];
