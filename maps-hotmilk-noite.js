@@ -261,6 +261,23 @@ export function addHotmilkNoite(MAPS, kit) {
   boxes.push({ wp: [-21.2, 1.6, -34.8] }, { wp: [-21.2, 3.4, -31.8] }, { wp: [-16.6, 5.1, -35] }, { wp: [-16.6, 6.8, -33] });
   boxes.push({ wp: [0, 8.6, -18] }, { wp: [0, 10.2, -13.6] });
 
+  // Sala de vidro no meio do térreo do Bloco 02. Vão da porta no sul (+Z), sofá no fundo.
+  const gx0 = -1.8, gx1 = 1.8, gz0 = -29.05, gz1 = -25.35, gh = 2.7, frame = '#d5e8f2';
+  boxes.push(B(gx0, gz0, gx0 + 0.1, gz1, gh, frame));
+  boxes.push(B(gx1 - 0.1, gz0, gx1, gz1, gh, frame));
+  boxes.push(B(gx0, gz0, gx1, gz0 + 0.1, gh, frame));
+  boxes.push(B(gx0, gz1 - 0.1, -0.72, gz1, gh, frame));
+  boxes.push(B(0.72, gz1 - 0.1, gx1, gz1, gh, frame));
+  boxes.push(B(-0.75, -28.72, 0.75, -28.05, 0.42, wood));
+  boxes.push(B(-0.75, -28.88, 0.75, -28.55, 0.95, wood));
+  const pane = (x0, z0, x1, z1, axis) => props.push({ t: 'pane', x0, z0, x1, z1, y: 1.35, h: 2.4, axis, o: 0.34, c: '#d7eef8' });
+  pane(gx0, gz0, gx0 + 0.1, gz1, 'z');
+  pane(gx1 - 0.1, gz0, gx1, gz1, 'z');
+  pane(gx0, gz0, gx1, gz0 + 0.1, 'x');
+  pane(gx0, gz1 - 0.1, -0.72, gz1, 'x');
+  pane(0.72, gz1 - 0.1, gx1, gz1, 'x');
+  props.push({ t: 'pane', x0: gx0, z0: gz0, x1: gx1, z1: gz1, y: gh, h: 0.04, axis: 'y', o: 0.2, c: '#e7f6ff' });
+
   const built = fin(boxes);
 
   // Folhas: não entram em boxes. block é a colisão enquanto fechada.

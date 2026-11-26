@@ -4,6 +4,7 @@
 //  O servidor importa o JSON e chama setBreezeBoxes no carregamento; o cliente baixa junto com o GLB (breeze-map.js).
 //  Spawns, sites da Bomba e Gunfight saíram do grafo de navegação gerado dessa colisão (pontos com chão e teto livres).
 // ============================================================
+import { setGlbBoxes } from './glb-data.js';
 export const BREEZE_ID = 'breeze-standoff';
 
 export function breezeStandoff() {
@@ -30,8 +31,4 @@ export function breezeStandoff() {
 }
 
 // caixas cruas do JSON → formato de maps.js ({ b, c }); idempotente
-export function setBreezeBoxes(map, raw) {
-  if (!map || !Array.isArray(raw) || (map.boxes && map.boxes.length)) return map;
-  map.boxes = raw.map((b) => ({ b }));
-  return map;
-}
+export const setBreezeBoxes = setGlbBoxes;

@@ -11,6 +11,7 @@ import { START_COINS } from '../../shared/closet.js';
 import { SKINS, skinOk } from '../../skins.js';
 import { ELO_START, ELO_MODES, ELO_MODE_IDS, eloSummary, computeCompEloDeltas, computeDmEloDeltas, eloEligible } from '../../shared/elo.js';
 import { coinCreditStmt, chalUpdates, wallet, buyItem, equipSkin, equipKnife, equipSniper, equipGun, grantLoginBox, grantPromo, buyBox, openBox, spinWheel } from './shop.js';
+import { pitRank, pitSave } from './pocilga.js';
 
 const ITERS = 100000; // teto do WebCrypto do Workers
 const SESSION_TTL = 30 * 24 * 3600; // s
@@ -184,7 +185,7 @@ export async function recordCompElo(env, payload) {
 // devolve Response ou null (rota não é de conta). json(obj, status, extraHeaders)
 export async function handleAccountRoute(req, env, url, json) {
   const p = url.pathname, m = req.method;
-  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/buy' || p === '/api/lootbox/wheel' || p === '/api/rank' || p === '/api/elo')) return null;
+  if (!(p.startsWith('/api/auth/') || p === '/api/me' || p === '/api/me/skin' || p === '/api/me/knife' || p === '/api/me/sniper' || p === '/api/me/gun' || p === '/api/shop/buy' || p === '/api/lootbox/open' || p === '/api/lootbox/buy' || p === '/api/lootbox/wheel' || p === '/api/rank' || p === '/api/elo' || p === '/api/pocilga/rank' || p === '/api/pocilga/run')) return null;
   if (!env.DB) return json({ error: 'Contas indisponíveis no momento. Você pode jogar como convidado.' }, 503);
   const ip = req.headers.get('CF-Connecting-IP') || 'local';
   try {
@@ -230,6 +231,22 @@ export async function handleAccountRoute(req, env, url, json) {
       const resp = json({ mode, rows }, 200, { 'Cache-Control': 'public, max-age=60' });
       try { await caches.default.put(ck, resp.clone()); } catch (e) { /* ok */ }
       return resp;
+    }
+    if (p === '/api/pocilga/rank' && m === 'GET') {
+      const limit = Math.max(1, Math.min(20, parseInt(url.searchParams.get('limit')) || 10));
+      const a = await accountFromToken(env, tokenFrom(req));
+      try { return json(await pitRank(env, a && a.id, limit)); }
+      catch (e) { return json({ rows: [], me: null, error: 'ranking indisponível' }); }
+    }
+    if (p === '/api/pocilga/run' && m === 'POST') {
+      const a = await accountFromToken(env, tokenFrom(req));
+      if (!a) return json({ error: 'Entre na conta para entrar no ranking' }, 401);
+      if (await rlCount(env, 'pit:' + a.id, 60) >= 8) return json({ error: 'Calma. Espera um instante para mandar de novo.' }, 429);
+      const b = await readJson(req);
+      if (!b || !Array.isArray(b.events)) return json({ error: 'Pedido inválido' }, 400);
+      await rlHit(env, 'pit:' + a.id, 60);
+      try { const r = await pitSave(env, a.id, b.events); return json(r.body, r.status); }
+      catch (e) { console.error('pocilga', e && e.message); return json({ error: 'Não deu para guardar o tempo' }, 500); }
     }
     if (p === '/api/auth/register' && m === 'POST') {
       const b = await readJson(req); if (!b) return json({ error: 'Pedido inválido' }, 400);

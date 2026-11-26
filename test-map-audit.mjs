@@ -13,6 +13,7 @@ const fails = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + '
 let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 for (const id of ids) {
   const map = MAPS.find((m) => m.id === id); console.log(`\n=== ${id} (${map.name})`);
+  if (map.course) { console.log('curso solo — fora da auditoria de mapa de combate'); continue; }
   const solids = mapSolids(map), P = createPhysics(solids, map.size, map.fall || null);
   const spawns = map.spawns.map(([x, z, y = 0]) => ({ x, y: P.groundAt(x, z, y + 0.3), z }));
   const t0 = performance.now();
