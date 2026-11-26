@@ -2,17 +2,20 @@
 //  Telas de conta e ranking (menu): faixa "Convidado / Logado", janela de entrar/criar conta e ranking.
 //  Textos em pt-BR, estilo comanda. Não mexe no jogo: só avisa quem mudou via onAccount.
 // ============================================================
-import { DEV_LOCAL, getAccount, getToken, getStats, getChal, getElo, onAccount, onPromoGrant, register, login, logout, loadRank, loadEloRank, refreshStats } from './account.js';
+import { DEV_LOCAL, getAccount, getToken, getStats, getChal, getElo, onAccount, onPromoGrant, register, login, logout, loadRank, loadEloRank, loadPitRank, refreshStats } from './account.js';
 import { nickError, passError, cleanNick } from './shared/nick.js';
 import { COIN_ICON, CURRENCY } from './shared/closet.js';
 import { BOX_PRICE } from './shared/lootbox.js';
 import { TIERS } from './shared/challenges.js';
 import { ELO_START, ELO_TIERS, ELO_MODES, eloMode, eloSummary, isMaxEloTier } from './shared/elo.js';
 import { promoActive, PROMO_ID, PROMO_COINS, PROMO_TITLE, PROMO_KICKER, PROMO_CREDIT_OK, PROMO_GUEST_OK, PROMO_GUEST_SKIP, promoCreditHtml, promoGuestHtml } from './shared/promo.js';
+import { renderPitRank, PIT_RANK_LIMIT } from './pocilga-rank.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const RANK_MODES = [['all', 'Geral'], ['dm', 'Mata-mata'], ['dom', 'Dominação'], ['bomb', 'Bomba'], ['inv', 'Invasão']];
+const RANK_MODES = [['all', 'Geral'], ['dm', 'Mata-mata'], ['dom', 'Dominação'], ['bomb', 'Bomba'], ['inv', 'Invasão'], ['pocilga', 'Pistoleiro da Pocilga']];
+const RANK_NOTE = 'Só contam partidas online com conta (o Treino não vale). Atualiza ao fim de cada partida.';
+const PIT_NOTE = 'Cada conta aparece uma vez, com o melhor tempo do Pistoleiro da Pocilga. Sem login, a corrida não entra.';
 let reg = false, rankMode = 'all', rankSort = 'kills', busy = false, eloPick = 'comp';
 
 // ---------- painel "Desafios do dia" no menu principal (só leitura: vem no mesmo /api/me da conta; nada é gravado) ----------
@@ -100,9 +103,32 @@ async function submit(ev) {
   $('acctPass').value = ''; $('acctPass2').value = ''; closeAcct();
 }
 
+function rankChrome(pit) {
+  const sort = document.querySelector('#rankModal .rank-sort');
+  const note = document.querySelector('#rankModal .acct-note');
+  if (sort) sort.classList.toggle('hidden', !!pit);
+  if (note) note.textContent = pit ? PIT_NOTE : RANK_NOTE;
+}
+function pitLogged() {
+  const a = getAccount();
+  return !!(getToken() && a && !a.dev);
+}
 async function renderRank() {
   const box = $('rankBody'); box.innerHTML = '<div class="rank-empty">Carregando…</div>';
+  const asked = rankMode;
+  if (asked === 'pocilga') {
+    rankChrome(true);
+    const data = await loadPitRank(PIT_RANK_LIMIT);
+    if (rankMode !== 'pocilga') return;
+    const logged = pitLogged();
+    const nick = logged ? getAccount().nick : '';
+    if (!data) { box.innerHTML = renderPitRank(null, { nick, logged, error: true }); return; }
+    box.innerHTML = renderPitRank(data, { nick, logged });
+    return;
+  }
+  rankChrome(false);
   const rows = await loadRank(rankMode, rankSort), me = getAccount();
+  if (rankMode === 'pocilga') return;
   if (!rows) { box.innerHTML = '<div class="rank-empty">Não deu pra carregar o ranking agora.</div>'; return; }
   if (!rows.length) { box.innerHTML = '<div class="rank-empty">Ninguém no ranking ainda. Entre numa sala online com sua conta e seja o primeiro porco da lista! 🐷</div>'; return; }
   box.innerHTML = `<table><thead><tr><th>#</th><th>Apelido</th><th>Abates</th><th>Mortes</th><th>K/D</th><th>Vitórias</th></tr></thead><tbody>${rows.map((r, i) => `<tr${me && me.nick === r.nick ? ' class="me"' : ''}><td>${i + 1}</td><td>${esc(r.nick)}</td><td>${r.kills | 0}</td><td>${r.deaths | 0}</td><td>${r.deaths ? (r.kills / r.deaths).toFixed(2) : (r.kills | 0)}</td><td>${r.wins | 0}</td></tr>`).join('')}</tbody></table>`;

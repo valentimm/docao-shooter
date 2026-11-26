@@ -485,6 +485,35 @@ body.bombpick #bPrompt{display:none}
 #trainInfo{display:inline-block;margin-top:4px;background:rgba(20,10,8,.62);color:#fff;padding:4px 12px;border-radius:8px;font-size:14px;white-space:nowrap;pointer-events:none}
 #trainInfo b{color:#fff;font-size:16px}#trainInfo b.hd{color:#ffd23a}
 .trainnote{margin:6px 0;padding:6px 10px;border-radius:8px;background:rgba(242,201,76,.18);font-size:13px;line-height:1.35}
+body.pit-on #timer{visibility:hidden}
+#pitCod{position:fixed;top:16px;right:16px;z-index:6;pointer-events:none;min-width:168px;padding:8px 12px 10px;background:rgba(28,16,12,.78);color:#fff6e4;border:2px solid #2a1410;border-radius:12px;font:800 14px/1.35 Fredoka,sans-serif;text-align:right}
+#pitCod .pit-cod-time span{display:block;font-size:11px;letter-spacing:.16em;opacity:.8}
+#pitCod .pit-cod-time b{display:block;font:900 28px/1 Fredoka,sans-serif}
+#pitCod .pit-cod-stars{margin-top:2px;font-size:22px;letter-spacing:3px}
+#pitCod .pit-cod-stars .on{color:#f2c94c}
+#pitCod .pit-cod-stars .off{color:#5c4638}
+.pit-time{margin:2px 0 0;text-align:center;font:900 40px/1 Fredoka,sans-serif}
+#pitBanner{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:6;pointer-events:none;font:900 40px/1.1 Fredoka,sans-serif;color:#fff6e4;-webkit-text-stroke:2px #2a1410;text-align:center}
+#pitTalk{position:fixed;left:50%;top:78px;transform:translateX(-50%);z-index:6;max-width:min(520px,86vw);pointer-events:none;background:#fff6e4;color:#2a1410;border:3px solid #2a1410;border-radius:16px;padding:8px 14px;font:700 16px/1.3 Fredoka,sans-serif;text-align:center;box-shadow:0 4px 0 #2a1410}
+#pitBanner.bad{color:#ffd0d0}
+#pitOver{z-index:30;background:rgba(41,30,24,.38)}
+.pit-card{position:relative;width:min(520px,92vw);max-height:min(88dvh,760px);overflow:auto;background:#f6e4bd;color:#2a1410;border:3px solid #2a1410;border-radius:16px;box-shadow:0 10px 0 #2a1410;padding:16px 18px 14px}
+.pit-x{position:absolute;top:8px;right:8px;width:32px;height:32px;border:2px solid #2a1410;border-radius:8px;background:#fff6e4;color:#2a1410;font:800 20px/1 Fredoka,sans-serif;cursor:pointer}
+.pit-how{margin:8px 0 0;font:700 14px/1.35 Fredoka,sans-serif;text-align:center}
+.pit-card h2{margin:0;font:900 48px/1 Fredoka,sans-serif;text-align:center}
+.pit-kicker{margin:0;text-align:center;font:800 13px/1 Fredoka,sans-serif;letter-spacing:.14em}
+.pit-stars{margin:4px 0;text-align:center;font-size:28px;letter-spacing:4px;color:#c0392b}
+.pit-split,.pit-sug,.pit-best,.pit-note{margin:4px 0;font:700 14px/1.35 Fredoka,sans-serif;text-align:center}
+.pit-card h3{margin:10px 0 4px;font:800 14px Fredoka,sans-serif}
+.pit-rank{list-style:none;margin:0;padding:0}
+.pit-rank li{display:flex;justify-content:space-between;gap:8px;padding:4px 8px;border-radius:8px;background:#fff6e4;margin:3px 0;font:700 13px Fredoka,sans-serif}
+.pit-rank li.me{outline:2px solid #c0392b}
+.pit-empty{margin:6px 0;text-align:center;font:700 13px Fredoka,sans-serif}
+.pit-actions{display:flex;gap:8px;margin-top:10px}
+.pit-actions button{flex:1;font:800 14px Fredoka,sans-serif;padding:8px;border-radius:10px;border:2px solid #2a1410;background:#e63946;color:#fff6e4;cursor:pointer}
+.pit-actions button.secondary{background:#fff6e4;color:#2a1410}
+#pitMenuRank{margin-top:6px}
+#menuPit .pit-rank li{background:#fff6e4cc}
 
 /* Bomba + chat fixo no canto (v1.8.2): chat mais estreito e baixo, placar/tempo da bomba centrado no espaço livre entre o placar da esquerda e o chat */
 body.bombmode #socialHud{width:min(300px,32vw)}
@@ -1605,7 +1634,7 @@ body.invout #deathpick,body.invout #stamp,body.invout #centermsg{display:none!im
 #hud #medals .medal small{color:var(--wood)}
 
 #hud #tabboard{
-  background:var(--paper);color:var(--ink);border:3px solid var(--wood);border-radius:4px;
+  z-index:12;background:var(--paper);color:var(--ink);border:3px solid var(--wood);border-radius:4px;
   box-shadow:4px 5px 0 var(--shadow)
 }
 #hud #tabboard th{color:var(--wood);border-bottom:2px solid #c9ad78}
@@ -1927,7 +1956,12 @@ body.deadgray #game{filter:grayscale(.68) brightness(.72) contrast(1.06);transit
 .rank-body th:nth-child(2),.rank-body td:nth-child(2){text-align:left;width:100%}
 .rank-body td:first-child{font:900 15px var(--font);color:var(--red)}
 .rank-body tr.me td{background:#f2c9794d;font-weight:900}
+.rank-body td.stars,#hud #tabboard td.stars{color:#a56b12;letter-spacing:1px}
+.rank-body .pit-rank-warn{padding:8px 10px 12px;text-align:center;font:900 14px/1.35 var(--font);color:var(--red)}
 .rank-empty{padding:26px 10px;text-align:center;font:700 14px var(--font);color:#5b4a2c}
+#hud #tabboard .pit-tab-kicker{margin:0 0 4px;text-align:center;font:900 13px/1 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--wood)}
+#hud #tabboard .pit-rank-empty{margin:10px 0;text-align:center;font:800 14px/1.35 var(--font);color:var(--ink)}
+#hud #tabboard .pit-rank-warn{margin:10px 0 0;text-align:center;font:900 15px/1.35 var(--font);color:var(--brick)}
 @media (max-width:700px){#menu .acct-strip{flex-direction:column;align-items:stretch}#menu .acct-btns{justify-content:flex-end}.acct-stats{grid-template-columns:repeat(2,1fr)}}
 /* Fim de partida na língua da comanda (igual à pausa): prancheta de madeira, papel, tinta e tijolo. */
 #gameover{
