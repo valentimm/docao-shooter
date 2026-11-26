@@ -1,6 +1,6 @@
 // Regras da Pocilga: oito etapas, só a Pistolinha, faca no javali perto, tempo mínimo.
 // Uso: node test-pocilga.mjs
-import { PIT, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate } from './shared/pocilga.js';
+import { PIT, FINISH_LINE, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate, onFinishLine } from './shared/pocilga.js';
 import { ZOMBIES } from './shared/invasion.js';
 import { KNIFE, RADIUS, SPEED, JUMP } from './shared/rules.js';
 import { getMap } from './maps.js';
@@ -15,9 +15,11 @@ ok(PIT.bays.length === 8, 'oito gatilhos, na ordem do percurso');
 ok(pitMovers().length >= 10 && pitMovers().filter((t) => t.kind === 'civil').length >= 2, `vários no trilho, inclusive civis (${pitMovers().map((t) => t.id).join(',')})`);
 ok(pitTargets().some((t) => t.close), 'um javali fica ao alcance da faca');
 const stats = pathStats();
-const start = PIT.path[0], end = PIT.path[PIT.path.length - 1];
-const back = Math.hypot(start.x - end.x, start.z - end.z);
-ok(back < 6, `chegada colada na largada (${back.toFixed(1)} m)`);
+const timed = [...PIT.path].reverse().find((p) => !p.scenic);
+const e24 = pitTargets().find((t) => t.id === 'e24');
+const gap = e24.z - timed.z;
+ok(gap > 2 && gap < 6 && FINISH_LINE.x1 - FINISH_LINE.x0 > 5 && Math.abs(FINISH_LINE.z - timed.z) < 0.2, `linha a ${gap.toFixed(1)} m do último alvo, de parede a parede`);
+ok(onFinishLine({ x: 32, y: 0, z: FINISH_LINE.z }) && !onFinishLine({ x: PIT.spawn[0], y: 0, z: PIT.spawn[1] }), 'cruzar a faixa termina; a largada não');
 ok(stats.total > 160 && stats.dash > 25, `o caminho ficou longo (${stats.total} m, disparada ${stats.dash} m)`);
 ok(PIT.path.some((p) => p.y > 2.8) && PIT.path.some((p) => p.drop), 'sobe a escada e pula da passarela');
 ok(PIT.rise >= 0.15 && PIT.rise <= 0.25 && PIT.lead >= 10, `subida ${PIT.rise}s, gatilho pensado a ${PIT.lead} m`);
@@ -73,6 +75,8 @@ ok(fast.finished && !fast.ranked && fast.reason === 'rápido', 'tempo impossíve
 ok(rankedRun(scriptRun({ finish: floor })).ranked, 'no mínimo físico o ranking aceita');
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'swap', w: 4, t: 1 }]).reason === 'diário', 'troca de arma não faz parte do diário');
 ok(inspectRun([{ k: 'start', t: 0 }, { k: 'pop', bay: 'sala', t: 1 }]).reason === 'ordem', 'pular o pátio invalida');
+ok(inspectRun([{ k: 'start', t: 0 }, { k: 'hit', id: 'e1', w: PIT.pistol, t: 0.4 }]).down.includes('e1'), 'alvo já de pé conta o tiro sem o gatilho da subida');
+ok(inspectRun([{ k: 'start', t: 0 }, { k: 'finish', t: 1, x: 0, z: 0 }]).reason === 'linha', 'chegada fora da faixa é recusada');
 
 const moved = moverAt(pitMovers()[0], 0), later = moverAt(pitMovers()[0], 1.3);
 ok(Math.abs(moved.x - later.x) + Math.abs(moved.z - later.z) > 0.4, 'o trilho muda de lugar com o tempo');
@@ -150,12 +154,10 @@ ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou e
   }
   ok(!tight, tight || 'no primeiro corredor há pelo menos 3,4 m entre as placas');
   const spawn = { x: PIT.spawn[0], y: 0, z: PIT.spawn[1] };
-  const fin = PIT.gates.find((g) => g.id === 'finish');
   const door = PIT.gates.find((g) => g.id === 'start');
   const abre = PIT.gates.find((g) => g.id === 'abre');
-  ok(fin.z > -21.2 && fin.z < -17 && fin.x > 8 && fin.x < 16, `a chegada está dentro da sala da largada (${fin.x}, ${fin.z})`);
-  ok(!inGate(spawn, fin) && !inGate(spawn, door) && !inGate({ x: door.x, y: 0, z: door.z }, fin), 'spawn, porta de saída e chegada não se cruzam');
-  ok(!inGate({ x: 14.2, y: 0, z: -14 }, fin) && !inGate({ x: abre.x, y: 0, z: abre.z }, fin) && !inGate(spawn, abre), 'andar na sala, antes da hora, não é a chegada nem abre o portão');
+  ok(onFinishLine({ x: (FINISH_LINE.x0 + FINISH_LINE.x1) / 2, y: 0, z: FINISH_LINE.z }) && !onFinishLine(spawn) && !onFinishLine({ x: door.x, y: 0, z: door.z }), 'a faixa é a chegada; spawn e porta de saída não cruzam ela');
+  ok(!onFinishLine({ x: 14.2, y: 0, z: -14 }) && !onFinishLine({ x: abre.x, y: 0, z: abre.z }) && !inGate(spawn, abre), 'andar na sala, antes da hora, não é a chegada nem abre o portão');
   ok(!inGate({ x: 12.25, y: 0, z: -26.2 }, abre) && inGate({ x: 12.25, y: 0, z: -24.2 }, abre), 'o portão só abre junto da boca, não no meio da disparada');
   ok(P.collides(12.2, 1.5, -22.15) && !Popen.collides(12.2, 1.5, -22.15), 'o portão dos fundos começa fechado e, aberto, a boca fica livre');
   ok(P.collides(7.4, 4.8, -18), 'o muro esquerdo da sala passa da altura da torre');

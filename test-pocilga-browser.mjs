@@ -79,6 +79,10 @@ const talk = await page.evaluate(() => window.__docao.pit.talk);
 const lead = await page.evaluate(() => document.getElementById('leader').textContent);
 ok(/[Bb]arriguinha|javali|civil|Pistolinha/.test(talk) && !(await page.locator('#pitTalk').evaluate((el) => el.classList.contains('hidden'))), `o Docão fala antes da largada (${talk})`);
 ok(!/faixa|placa de direção|FRENTE|ESQUERDA/i.test(`${talk} ${lead}`), `nenhuma fala cita faixa ou placa (${lead})`);
+await page.evaluate(() => { window.__cam = { p: [14.6, 1.65, -17.2], t: [14.2, 1.15, -2], fov: 62 }; });
+await page.waitForTimeout(250);
+await page.screenshot({ path: `${SHOTS}/pocilga-alvos-em-pe.png` });
+await page.evaluate(() => { window.__cam = null; });
 
 const go = (x, y, z, yaw = Math.PI, pitch = -0.08) => page.evaluate(({ x, y, z, yaw, pitch }) => {
   const p = window.__docao.player;
@@ -142,18 +146,18 @@ const restarted = await page.evaluate(() => ({
   pause: document.getElementById('pause').classList.contains('hidden'),
   x: window.__docao.player.pos.x,
   z: window.__docao.player.pos.z,
-  down: window.__docao.pit.targets.every((t) => t.phase === 'down'),
+  up: window.__docao.pit.targets.filter((t) => !t.zombie).every((t) => t.phase === 'up') && window.__docao.pit.targets.filter((t) => t.zombie).every((t) => t.phase === 'down'),
   started: window.__docao.pit.started,
   locks: window.__lockCalls || 0,
 }));
-ok(restarted.state === 'playing' && restarted.pause && restarted.down && !restarted.started && Math.hypot(restarted.x - PIT.spawn[0], restarted.z - PIT.spawn[1]) < 0.4 && restarted.locks > locks, `Reiniciar volta pra largada e pede o ponteiro (${JSON.stringify(restarted)})`);
+ok(restarted.state === 'playing' && restarted.pause && restarted.up && !restarted.started && Math.hypot(restarted.x - PIT.spawn[0], restarted.z - PIT.spawn[1]) < 0.4 && restarted.locks > locks, `Reiniciar volta pra largada com os alvos de pé (${JSON.stringify(restarted)})`);
 
 await go(gate('start').x, gate('start').y, gate('start').z);
 await page.waitForTimeout(250);
 let s = await snap();
 const patio = s.targets.filter((t) => ['e1', 'e2'].includes(t.id));
 const later = s.targets.filter((t) => ['e3', 'e4', 'e5', 'c1'].includes(t.id));
-ok(s.started && s.pops.includes('patio') && patio.every((t) => t.phase !== 'down') && later.every((t) => t.phase === 'down'), `o primeiro grupo sobe junto e o fundo espera (${patio.map((t) => t.phase).join(',')})`);
+ok(s.started && s.pops.includes('patio') && patio.every((t) => t.phase === 'up') && later.every((t) => t.phase === 'up'), `os alvos já estão de pé, sem subida (${[...patio, ...later].map((t) => t.phase).join(',')})`);
 await page.waitForTimeout(200);
 s = await snap();
 ok(/INIMIGOS 0\/25/.test(s.cod) && /CIVIS 0\/5/.test(s.cod), `pátio no relógio (${s.cod.replace(/\s+/g, ' ')})`);
@@ -245,26 +249,23 @@ await page.waitForTimeout(250);
 ok(/Corre/.test((await snap()).banner + (await snap()).talk), 'grita pra correr');
 shot = await shoot(['e18', 'e19', 'e20', 'e21', 'e22', 'e23', 'e24']);
 for (const id of ['e18', 'e19', 'e20', 'e21', 'e22', 'e23', 'e24']) ok(shot[id].phase === 'fall', `${id} na reta${shot[id].phase !== 'fall' ? ' (' + shot[id].trace + ')' : ''}`);
-await go(12.25, 0, -27.1, Math.PI, -0.02);
-await page.waitForTimeout(2800);
 await page.evaluate(() => {
   document.getElementById('pitBanner')?.classList.add('hidden');
   document.getElementById('pitTalk')?.classList.add('hidden');
-  window.__cam = { p: [12.25, 1.55, -27.15], t: [12.25, 3.05, -22.15], fov: 60 };
+  window.__cam = { p: [33.2, 1.62, -16.2], t: [32.2, 0.55, -24], fov: 62 };
 });
 await page.waitForTimeout(250);
+await page.screenshot({ path: `${SHOTS}/pocilga-linha.png` });
 await page.screenshot({ path: `${SHOTS}/pocilga-7-final.png` });
 await page.evaluate(() => { window.__cam = null; });
 
-await go(gate('abre').x, gate('abre').y, gate('abre').z, Math.PI, 0);
-await page.waitForTimeout(200);
-await go(gate('finish').x, gate('finish').y, gate('finish').z, Math.PI, -0.12);
+await go(32, 0, -21.5, Math.PI, 0);
 await page.waitForTimeout(280);
 await page.evaluate(() => {
   document.getElementById('pitOver').classList.add('hidden');
   const talk = document.getElementById('pitTalk');
   if (talk) { talk.classList.add('hidden'); talk.style.display = 'none'; }
-  window.__cam = { p: [11.7, 1.62, -21.55], t: [11.5, 3.7, -16.6], fov: 46 };
+  window.__cam = { p: [29.6, 1.7, -19.4], t: [32.2, 1.5, -21.6], fov: 58 };
 });
 await page.waitForTimeout(200);
 await page.screenshot({ path: `${SHOTS}/pocilga-confete.png` });

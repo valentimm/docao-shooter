@@ -57,9 +57,10 @@ export const PIT = {
     { x: 26, z: 50.5, y: DECK },
     { x: 32, z: 50.5, y: 0, drop: true },
     { x: 31.8, z: 20, y: 0, sprint: true },
-    { x: 31.8, z: -26.2, y: 0, sprint: true },
-    { x: 12.25, z: -26.2, y: 0, sprint: true },
-    { x: 12.25, z: -19.5, y: 0, sprint: true },
+    { x: 31.8, z: -21.5, y: 0, sprint: true },
+    { x: 31.8, z: -26.2, y: 0, scenic: true },
+    { x: 12.25, z: -26.2, y: 0, scenic: true },
+    { x: 12.25, z: -19.5, y: 0, scenic: true },
   ],
   gates: [
     { id: 'start', x: 14.2, z: -10.2, y: 0, r: 2.0, pop: 'patio' },
@@ -174,6 +175,7 @@ function segLen(a, b) { return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z); }
 export function pathStats() {
   let run = 0, dash = 0;
   for (let i = 1; i < PIT.path.length; i++) {
+    if (PIT.path[i].scenic) continue;
     const len = segLen(PIT.path[i - 1], PIT.path[i]);
     if (PIT.path[i].sprint) dash += len; else run += len;
   }
@@ -220,9 +222,16 @@ export function samplePath(step = 0.4) {
   return out;
 }
 
+export const FINISH_LINE = { x0: 28.7, x1: 35.05, z: -21.5, depth: 0.7 };
+export function onFinishLine(pos) {
+  if (!pos) return false;
+  const L = FINISH_LINE;
+  return pos.x >= L.x0 && pos.x <= L.x1 && Math.abs((pos.z || 0) - L.z) <= L.depth && Math.abs((pos.y || 0)) < 2.2;
+}
+
 export function onSprint(x, y, z) {
   for (let i = 1; i < PIT.path.length; i++) {
-    if (!PIT.path[i].sprint) continue;
+    if (!PIT.path[i].sprint || PIT.path[i].scenic) continue;
     const a = PIT.path[i - 1], b = PIT.path[i];
     const abx = b.x - a.x, abz = b.z - a.z, ab2 = abx * abx + abz * abz || 1;
     const t = Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / ab2));
@@ -295,7 +304,6 @@ export function inspectRun(events) {
       const t = targets.get(e.id);
       if (!t) return empty('diário');
       if (!countsAsShot(e.w)) continue;
-      if (!pops.includes(t.bay)) continue;
       if (t.kind === 'enemy') {
         if (t.zombie && e.w !== PIT.pistol) continue;
         if (!down.has(t.id)) down.set(t.id, e.t);
@@ -312,6 +320,7 @@ export function inspectRun(events) {
     }
     if (e.k === 'finish') {
       if (finishT != null) return empty('ordem');
+      if (!onFinishLine({ x: e.x, y: 0, z: e.z })) return empty('linha');
       finishT = e.t;
       continue;
     }
@@ -355,7 +364,7 @@ export function scriptRun({ finish = 40, civs = [], skip = [], rifle = false, kn
       t += 0.08;
     }
   }
-  events.push({ k: 'finish', t: ROUND(Math.max(t, finish)) });
+  events.push({ k: 'finish', t: ROUND(Math.max(t, finish)), x: (FINISH_LINE.x0 + FINISH_LINE.x1) / 2, z: FINISH_LINE.z });
   return events;
 }
 
