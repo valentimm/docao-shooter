@@ -32,7 +32,7 @@ import './costumes.js';
 import { MAPS, PLAY_MAPS, INV_MAPS, BOMB_MAPS, X1_MAPS, SURVIVAL_PLAY_MAPS, getMap, BOMB_MAP } from './maps.js';
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, ZOMBIES, POWERS, POWER_KEYS, KEYS, SPIT_GRAV, InvasionCore, parseState, coreView, scaleHit, isBoss, zombieTaken, ZPOSE, BOSS_TYPES, WAVE_THEMES, normInvDiff, INV_DIFF_LABEL, INV_CROSS, mutantProfile } from './shared/invasion.js';
 import { HUPS, historiaSpot } from './shared/historia-ups.js';
-import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, platePoints } from './shared/historia-pass.js';
+import { HPASS, RANKS, passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, platePoints, stretchDur, tokenMul, tokenNote, blessCost } from './shared/historia-pass.js';
 import { createEgg, eggPrompt, eggCap, EGG_SPOTS, LINK_ROOM, linkDoorSolid } from './shared/historia-egg.js';
 import { packAdventure, applyAdventure, adventureExpired } from './shared/historia-save.js';
 import { breadBlocks } from './shared/historia-finale.js';
@@ -2505,6 +2505,7 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (t.zt) amount = zombieTaken(t, amount, wIdx === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
   if (!online && !t.zt && t.hImmuneUntil > gameTime) return false;
   if (!online && attacker && attacker.hDmgUntil > gameTime && t.zt) amount *= 1.25;
+  if (!online && isHistoria(mode) && t.zt && !t.friendly && attacker && !attacker.zt && attacker.isPlayer) amount *= tokenMul(attacker);
   if (!online && !t.zt && t.hShieldUntil > gameTime && t.hShield > 0) {
     const use = Math.min(t.hShield, amount); t.hShield -= use; amount -= use;
     if (amount <= 0) { if (t.isPlayer) hurtFlash(); return false; }
@@ -2517,6 +2518,8 @@ function damage(t, amount, attacker, wIdx, head, back = false, fx = 0, origin = 
   if (!online && survOn() && t.zt && attacker && attacker.isPlayer) { const add = t.hp <= 0 ? grantKill(attacker, t.zt, head) : grantHit(attacker, t.id); if (add) { survPop(add); paintSurvPurse(); } }
   if (t.isPlayer) { hurtFlash(); noteHit(origin); if (attacker && attacker !== t) noteFlinch(amount); sfx.oink(0.8, 1.15); }
   else { if (attacker && attacker !== t && !t.target) { t.target = attacker; t.aim = t.reaction * 0.5; } if (Math.random() < 0.3) sfx.oink(distVol(t.pos) * 0.6, 1.3); }
+  if (!online && isHistoria(mode) && !t.zt && attacker && attacker.zt && attacker.zt !== 'fog' && !attacker.fog && amount > 0 && t.isPlayer) tokenNote(t, 'hit');
+  if (!online && isHistoria(mode) && t.zt && !t.friendly && t.hp <= 0 && attacker && attacker.isPlayer) tokenNote(attacker, 'kill');
   if (!online && isHistoria(mode) && !t.zt && attacker && attacker.alive && attacker.zt && attacker.zt !== 'fog' && !attacker.fog && amount > 0) {
     const back = pimentaDmg(t);
     if (back > 0) { puff(center(attacker, attacker.size || 1), 0xff4a1a); damage(attacker, back, t, W_NADE, false); }
@@ -7472,9 +7475,10 @@ function survivalPrompt() {
   const near = nearestClosedDoor(currentMap, surv, player.pos);
   if (!near) { el.classList.add('hidden'); return; }
   const d = near.door, have = (player.pts != null ? player.pts : player.points) | 0;
-  el.classList.remove('hidden'); el.className = have >= d.price ? 'hot' : 'soft';
+  const doorPrice = blessCost(player, d.price);
+  el.classList.remove('hidden'); el.className = have >= doorPrice ? 'hot' : 'soft';
   el.querySelector('.bp1').innerHTML = `Aperte <kbd>E</kbd> · ${d.prompt}`;
-  el.querySelector('.bp2').textContent = have >= d.price ? `${fmtPts(d.price)} pts` : `${fmtPts(d.price)} pts · falta ${fmtPts(d.price - have)}`;
+  el.querySelector('.bp2').textContent = have >= doorPrice ? `${fmtPts(doorPrice)} pts` : `${fmtPts(doorPrice)} pts · falta ${fmtPts(doorPrice - have)}`;
 }
 function tickNight(dt) {
   const calm = typeof reducedAnims === 'function' && reducedAnims();
@@ -10197,7 +10201,7 @@ function invEvent(ev) {
   else if (k === 'hcast') { historiaCastFx(ev); }
   else if (k === 'hbuff') {
     const e = isMe(ev[1]) ? player : (online ? entOf(ev[1]) : null);
-    if (e && ev[2] === 'dmg') { e.hDmgUntil = gameTime + HUPS.bencao.dur; invRing(e.pos, '#ffe38a', 0.3, 2.4, 0.4); }
+    if (e && ev[2] === 'dmg') { e.hDmgUntil = gameTime + stretchDur(e, HUPS.bencao.dur); invRing(e.pos, '#ffe38a', 0.3, 2.4, 0.4); }
   }
   else if (k === 'hsh') { const e = isMe(ev[1]) ? player : (online ? entOf(ev[1]) : null); if (e) e.hShield = ev[2] | 0; }
   else if (k === 'zh') {
@@ -11063,17 +11067,17 @@ function survPrompt(hit) {
     else if (why === 'lamina') { p1 = PAPADA_NAME; p2 = 'lâmina não entra'; }
     else if (why) { p1 = PAPADA_NAME; p2 = 'essa arma não entra'; }
     else if (tier >= 3) { p1 = `${PAPADA_NAME} · tier 3`; p2 = statLine(w, 2, 3).text; }
-    else { const cost = [10000, 25000, 50000][tier], line = statLine(w, tier, tier + 1); p1 = `${PAPADA_NAME} ${tier ? '· tier ' + tier : ''} · ${fmtPts(cost)} pts`; p2 = `${line.text}${player.pts < cost ? ` · falta ${fmtPts(cost - (player.pts | 0))}` : ` · ${segure}`}`; }
+    else { const cost = blessCost(player, [10000, 25000, 50000][tier]), line = statLine(w, tier, tier + 1); p1 = `${PAPADA_NAME} ${tier ? '· tier ' + tier : ''} · ${fmtPts(cost)} pts`; p2 = `${line.text}${player.pts < cost ? ` · falta ${fmtPts(cost - (player.pts | 0))}` : ` · ${segure}`}`; }
   } else if (hit.kind === 'box') {
     if (survBox.phase === 'spin') { p1 = BOX_NAME; p2 = 'girando…'; }
     else if (survBox.phase === 'offer') { p1 = `${BOX_NAME} · ${WEAPONS[survBox.weapon] ? WEAPONS[survBox.weapon].short : ''}`; p2 = survBox.owner === (online ? online.myId : player.id) ? `${segure} pra pegar` : 'esperando quem girou'; }
-    else { p1 = `${BOX_NAME} · ${fmtPts(SURV.boxPrice)} pts`; p2 = (player.pts | 0) < SURV.boxPrice ? `falta ${fmtPts(SURV.boxPrice - (player.pts | 0))}` : segure; }
+    else { const boxCost = blessCost(player, SURV.boxPrice); p1 = `${BOX_NAME} · ${fmtPts(boxCost)} pts`; p2 = (player.pts | 0) < boxCost ? `falta ${fmtPts(boxCost - (player.pts | 0))}` : segure; }
   } else {
     const wall = hit.p, name = WEAPONS[wall.w] ? WEAPONS[wall.w].name : 'Arma';
     const on = player.slotOn || [1, 1, 1];
     const owns = player.slots && ((on[0] && player.slots[0] === wall.w) || (on[1] && player.slots[1] === wall.w));
     const need = owns && needsAmmo(player, wall.w);
-    const cost = owns ? wall.ammo : wall.price;
+    const cost = blessCost(player, owns ? wall.ammo : wall.price);
     p1 = owns && !need ? name : `${name} · ${fmtPts(cost)} pts`;
     p2 = !owns ? ((player.pts | 0) < cost ? `falta ${fmtPts(cost - (player.pts | 0))}` : segure) : need ? ((player.pts | 0) < cost ? `munição · falta ${fmtPts(cost - (player.pts | 0))}` : `munição · ${segure}`) : 'munição cheia';
   }
@@ -11179,6 +11183,15 @@ function storyShockPulse(p) {
 function storyEggEvent(ev) {
   const book = eggBook(), kind = ev[1];
   if (kind === 'msg') { flashMsg(ev[2]); msgTimer = 4.2; return; }
+  if (kind === 'cagas') {
+    const e = storyWho(ev[2]);
+    if (e && e.pos) {
+      const good = (ev[3] | 0) === 1;
+      historiaRing(e.pos, good ? '#b7f3a0' : '#c4a574', 3.4);
+      puff(center(e, 0.35), good ? 0xb7f3a0 : 0x8d6b3a);
+    }
+    return;
+  }
   if (kind === 'cap') { storyCapN = ev[2] | 0; return; }
   if (kind === 'step' && book) { book.steps[ev[2]] = true; return; }
   if (kind === 'fridge' && book) { book.fridge = true; return; }
@@ -11635,11 +11648,12 @@ function historiaUse(id, extra) {
       const T = gameTime;
       if (!player.hCd) player.hCd = {};
       player.hPend = id; player.hCd[id] = T + ult.cd;
-      if (ult.dur > 0) { player.ultForm = id; player.ultUntil = T + ult.dur; }
-      if (id === 'ceo') player.hPhaseUntil = T + ult.dur;
-      else if (id === 'vampiro') { player.fly = 1; player.hHopUntil = T + ult.dur; }
-      else if (id === 'bebado') { player.hImmuneUntil = T + ult.dur; player.ultAnchor = { x: player.pos.x, z: player.pos.z }; player.ultAng = 0; }
-      else if (id === 'vendedor') player.hImmuneUntil = T + ult.dur;
+      const udur = stretchDur(player, ult.dur);
+      if (udur > 0) { player.ultForm = id; player.ultUntil = T + udur; }
+      if (id === 'ceo') player.hPhaseUntil = T + udur;
+      else if (id === 'vampiro') { player.fly = 1; player.hHopUntil = T + udur; }
+      else if (id === 'bebado') { player.hImmuneUntil = T + udur; player.ultAnchor = { x: player.pos.x, z: player.pos.z }; player.ultAng = 0; }
+      else if (id === 'vendedor') player.hImmuneUntil = T + udur;
       const d = historiaAim();
       netEv(['hu', id, x, z, d.x, d.y, d.z]);
       return;
@@ -11772,7 +11786,7 @@ function historiaCastFx(ev) {
       if (player.hPend === id) player.hPend = null;
       if (!player.hCd) player.hCd = {};
       player.hCd[id] = gameTime + u.cd;
-      if (u.dur > 0) { player.ultForm = id; player.ultUntil = gameTime + u.dur; }
+      if (u.dur > 0) { player.ultForm = id; player.ultUntil = gameTime + stretchDur(player, u.dur); }
       flashMsg(`${u.icon} ${u.name}`);
     }
     return;
@@ -11791,12 +11805,13 @@ function historiaCastFx(ev) {
   if (Number.isFinite(+ev[3])) player.hp = +ev[3];
   player.hShield = ev[4] | 0;
   const T = gameTime;
-  if (id === 'monster') player.hSpeedUntil = T + u.dur;
-  else if (id === 'torta') player.hShieldUntil = T + u.dur;
-  else if (id === 'bencao') player.hDmgUntil = T + u.dur;
-  else if (id === 'cachaca') player.hImmuneUntil = T + u.dur;
-  else if (id === 'grokbot') player.hAimUntil = T + u.dur;
-  else if (id === 'integra') player.hReflectUntil = T + u.dur;
+  const buff = stretchDur(player, u.dur);
+  if (id === 'monster') player.hSpeedUntil = T + buff;
+  else if (id === 'torta') player.hShieldUntil = T + buff;
+  else if (id === 'bencao') player.hDmgUntil = T + buff;
+  else if (id === 'cachaca') player.hImmuneUntil = T + buff;
+  else if (id === 'grokbot') player.hAimUntil = T + buff;
+  else if (id === 'integra') player.hReflectUntil = T + buff;
   else if (id === 'cheers') { player.hRootUntil = T + 3; player.hShieldUntil = 0; }
   flashMsg(`${u.icon} ${u.name}`);
   if (id === 'grok') closeHMap();

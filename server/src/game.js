@@ -12,7 +12,7 @@ setBreezeBoxes(getMap(BREEZE_ID), BREEZE_BOXES); // Breeze Standoff: a colisão 
 import { INV, INV_AMMO, DROP_KEYS, invRefillAmmo, isInvasion, isHistoria, HISTORIA, InvasionCore, POWER_KEYS, modelAim, isBoss, ZOMBIES, zombieTaken, ZPOSE, normInvDiff, invasionFriends } from '../../shared/invasion.js';
 import { packAdventure, applyAdventure, adventureExpired } from '../../shared/historia-save.js';
 import { linkDoorSolid } from '../../shared/historia-egg.js';
-import { passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto } from '../../shared/historia-pass.js';
+import { passLv, passoMul, molaMul, portaTime, cascaTime, pimentaDmg, coveiroScale, passHp, caldoTune, estaloRoll, ESTALO_R, withEspeto, tokenMul, tokenNote } from '../../shared/historia-pass.js';
 import { breadBlocks } from '../../shared/historia-finale.js';
 import { frenzyTaken } from '../../shared/historia-ult.js';
 import { MAP_BOX_TOP, MAP_BOX_MIN_HUMANS } from '../../shared/lootbox.js';
@@ -1498,9 +1498,10 @@ startMsg() {
     if (t.zt) amount = zombieTaken(t, amount, w === W_FALL); // Chorona chorando apanha menos; aos 25% entra no frenesi extremo
     if (this.compMode) amount = mitigate(t, amount, head);
     if (t.down && !t.zt) return false; // já está caído: o sangramento finaliza, dano extra não cria outra morte
-    if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a)) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou.
+    if (this.invasion && !t.zt && a && !a.zt && !a.fog && !(w === RAY && t === a) && !(isHistoria(this.cfg.mode) && (t.soul || a.soul))) return false; // Invasão: jogador não machuca jogador. A Ray Gun é a exceção leve: o splash pega em quem atirou. Na história, quem está com a alma sugada toma o tiro dos outros.
     if (!t.zt && t.hImmuneUntil > this.T) return false; // Modo história: Cachaçado
     if (a && a.hDmgUntil > this.T && t.zt) amount *= 1.25; // Benção do Docão
+    if (isHistoria(this.cfg.mode) && t.zt && !t.friendly && a && !a.zt && !a.bot) amount *= tokenMul(a);
     if (!t.zt && t.hShieldUntil > this.T && t.hShield > 0) {
       const use = Math.min(t.hShield, amount); t.hShield -= use; amount -= use;
       this.events.push(['hsh', t.id, Math.round(t.hShield)]);
@@ -1509,6 +1510,8 @@ startMsg() {
     amount = subidoTaken(t, amount); // SUBIDO: 25% menos dano, nesta vida
     amount = frenzyTaken(amount, t, this.T);
     t.hp -= amount; t.lastAttacker = a ? a.id : 0; noteHurt(t, a, this.T); if (a && a !== t && a.fun) notePodiumHurt(a.fun, amount); // regen só com dano de outro
+    if (isHistoria(this.cfg.mode) && !t.zt && !t.bot && a && a.zt && a.zt !== 'fog' && !a.fog && amount > 0) tokenNote(t, 'hit');
+    if (isHistoria(this.cfg.mode) && t.zt && !t.friendly && t.hp <= 0 && a && !a.zt && !a.bot) tokenNote(a, 'kill');
     if (isHistoria(this.cfg.mode) && !t.zt && a && a.alive && a.zt && a.zt !== 'fog' && !a.fog && amount > 0) {
       const back = pimentaDmg(t);
       if (back > 0) { this.events.push(['hpi', a.id]); this.damage(a, back, t, W_NADE, false); }

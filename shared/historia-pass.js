@@ -14,6 +14,10 @@ export const HPASS = {
   pimenta: { id: 'pimenta', name: 'Pele de Pimenta', icon: '🌶️', pose: 'barriga', line: (lv) => `O zumbi que te morde ainda te machuca, e leva ${[0, 14, 26, 40][lv]} de dano de volta.` },
   coveiro: { id: 'coveiro', name: 'Agilidade de Coveiro', icon: '⚰️', pose: 'bencao', line: (lv) => `Levantar um aliado caído fica ${[0, 22, 43, 62][lv]}% mais rápido.` },
   casca: { id: 'casca', name: 'Casca Grossa', icon: '🛡️', pose: 'cachaca', line: (lv) => `Depois de um golpe de zumbi, ${[0, '0,45', '0,7', '1'][lv]} s sem levar outro.` },
+  cagas: { id: 'cagas', name: 'Comida do cagas', icon: '💨', pose: 'tosse', line: (lv) => `De vez em quando um peido afasta os zumbis perto. ${[0, 18, 28, 40][lv]}% das vezes ele é do bem e cura aliados.` },
+  anabol: { id: 'anabol', name: 'Anabolizante', icon: '💉', pose: 'monster', line: (lv) => `Poderes e itens com tempo duram ${[0, 12, 22, 35][lv]}% a mais.` },
+  token: { id: 'token', name: 'Tokens de IA', icon: '🪙', pose: 'grok', line: (lv) => `Cada abate soma ${[0, '0,4', '0,55', '0,7'][lv]}% de dano. Cada golpe sofrido tira o mesmo tanto. A wave nova zera. Teto de ${[0, 8, 11, 14][lv]}%.` },
+  porca: { id: 'porca', name: 'Benção da Porca Véia', icon: '🐷', pose: 'bencao', line: (lv) => `Papada, barraca e arma de parede ficam ${[0, 10, 18, 28][lv]}% mais baratas.` },
 };
 export const HPASS_IDS = Object.keys(HPASS);
 const lv3 = (n) => (n >= 1 && n <= 3 ? n : 0);
@@ -65,6 +69,48 @@ export function platePoints(p, T) {
     out.push({ x: p.pos.x + Math.cos(a) * rad, y: p.pos.y + 1.05, z: p.pos.z + Math.sin(a) * rad });
   }
   return out;
+}
+export function cagasTune(lv) {
+  const n = lv3(lv);
+  if (!n) return null;
+  return {
+    every: [0, 14, 11, 8][n],
+    r: [0, 3.2, 3.7, 4.3][n],
+    knock: [0, 4.2, 5.4, 6.6][n],
+    good: [0, 0.18, 0.28, 0.4][n],
+    heal: [0, 8, 12, 18][n],
+  };
+}
+export function anabolMul(p) { return [1, 1.12, 1.22, 1.35][passLv(p, 'anabol')] || 1; }
+export function stretchDur(p, dur) {
+  const d = +dur || 0;
+  if (!(d > 0)) return 0;
+  return d * anabolMul(p);
+}
+const TOKEN_STEP = [0, 0.004, 0.0055, 0.007];
+const TOKEN_CAP = [0, 0.08, 0.11, 0.14];
+const TOKEN_STACK = [0, 20, 20, 20];
+export function tokenMul(p) {
+  const n = passLv(p, 'token');
+  if (!n) return 1;
+  const bonus = Math.max(-0.06, Math.min(TOKEN_CAP[n], (p.tok | 0) * TOKEN_STEP[n]));
+  return 1 + bonus;
+}
+export function tokenNote(p, kind) {
+  const n = passLv(p, 'token');
+  if (!n || !p) return 0;
+  let s = (p.tok | 0) + (kind === 'kill' ? 1 : kind === 'hit' ? -1 : 0);
+  s = Math.max(-12, Math.min(TOKEN_STACK[n], s));
+  p.tok = s;
+  return s;
+}
+export function porcaOff(p) { return [0, 0.1, 0.18, 0.28][passLv(p, 'porca')] || 0; }
+export function blessCost(p, price) {
+  const n = price | 0;
+  if (!(n > 0)) return 0;
+  const off = porcaOff(p);
+  if (!(off > 0)) return n;
+  return Math.max(1, Math.round(n * (1 - off)));
 }
 export function plateBlocks(p, pos, T, reach = 0.5) {
   if (!pos) return false;

@@ -25,7 +25,7 @@
 import { zombieTune } from './bot-difficulty.js';
 import { fellOff } from './physics.js';
 import { HUPS, rollOffer, takeOffer, hReady, historiaSpot } from './historia-ups.js';
-import { rollPass, takePass, enqueueHistoria, nextHistoria, passLv, passHp, brasaStats, plateBlocks, coveiroScale } from './historia-pass.js';
+import { rollPass, takePass, enqueueHistoria, nextHistoria, passLv, passHp, brasaStats, plateBlocks, coveiroScale, cagasTune, stretchDur } from './historia-pass.js';
 import { createEgg, stepRitual, notePool, eggAfterWave, claimMuro, EGG_SPOTS, nearSpot, LINK_ROOM, LINK_SIT, LINK_SPAWN, linkLocks, linkLine } from './historia-egg.js';
 import { storyPlan, STORY_ZTS, praisesTable } from './historia-finale.js';
 import { ULTS, rollUltimate } from './historia-ult.js';
@@ -516,6 +516,7 @@ export class InvasionCore {
     this.planFog(w);
     this.clusterId = ''; this.clusterWave = -1;
     const bossN = this.spec.boss ? BOSS_TYPES.indexOf(this.spec.bossKind) + 1 : 0;
+    for (const p of this.A.players()) if (p) p.tok = 0;
     this.A.emit(['wv', 1, w, bossN, this.spec.boss ? 1 : 0, this.queue.length + (this.spec.boss ? 1 : 0) + ((this.drip && this.drip.length) || 0), themeIndex(this.spec.theme)]);
     if (this.storyName) this.A.emit(['qe', 'wv', this.storyName, this.storyBlurb || '']);
     if (this.egg) this.A.emit(['qe', 'nar', w, this.storyName || '', this.storyBlurb || '']);
@@ -1745,16 +1746,17 @@ export class InvasionCore {
     this.embers = (this.embers || []).filter((em) => em.until > T);
     for (const p of this.A.players()) {
       if (!p || !p.alive || p.down || p.bot) continue;
-      const lv = passLv(p, 'brasa');
-      const st = brasaStats(lv);
-      if (!st || !p.pos) continue;
-      const x = p.pos.x, z = p.pos.z;
-      if (p._brx == null || Math.hypot(x - p._brx, z - p._brz) >= st.step) {
-        p._brx = x; p._brz = z;
-        const y = p.pos.y || 0;
-        this.embers.push({ x, y, z, until: T + st.life, r: st.r, dps: st.dps, owner: p });
-        this.A.emit(['hem', r2(x), r2(z), r2(y), r2(st.r), r2(st.life)]);
+      const st = brasaStats(passLv(p, 'brasa'));
+      if (st && p.pos) {
+        const x = p.pos.x, z = p.pos.z;
+        if (p._brx == null || Math.hypot(x - p._brx, z - p._brz) >= st.step) {
+          p._brx = x; p._brz = z;
+          const y = p.pos.y || 0;
+          this.embers.push({ x, y, z, until: T + st.life, r: st.r, dps: st.dps, owner: p });
+          this.A.emit(['hem', r2(x), r2(z), r2(y), r2(st.r), r2(st.life)]);
+        }
       }
+      this.stepCagas(p, T);
     }
     for (const em of this.embers) {
       for (const z of this.zombies) {
@@ -1764,6 +1766,31 @@ export class InvasionCore {
         this.A.hurtZombie(z, em.dps * dt * (isBoss(z.zt) ? 0.5 : 1), em.owner, 'brasa');
       }
     }
+  }
+  stepCagas(p, T) {
+    const st = cagasTune(passLv(p, 'cagas'));
+    if (!st || !p.pos || p.eggTrap || p.eggHideUntil > T) return;
+    if (!(p.cagasAt > 0)) p.cagasAt = T + st.every * 0.65;
+    if (T < p.cagasAt) return;
+    p.cagasAt = T + st.every;
+    const good = this.rnd() < st.good;
+    for (const z of this.zombies) {
+      if (!z.alive || z.friendly || !z.pos) continue;
+      const dx = z.pos.x - p.pos.x, dz = z.pos.z - p.pos.z, d = hyp(dx, dz);
+      if (d > st.r || Math.abs((z.pos.y || 0) - (p.pos.y || 0)) > 2.2) continue;
+      const k = 1 - d / st.r, L = d || 1;
+      const push = st.knock * (0.45 + 0.55 * k) * (isBoss(z.zt) ? 0.35 : 1);
+      this.A.knock(z, { x: dx / L * push, y: 1.1 * k, z: dz / L * push });
+    }
+    if (good) {
+      for (const q of this.A.players()) {
+        if (!q || q === p || !q.alive || q.down || q.zt || !q.pos) continue;
+        const d = hyp(q.pos.x - p.pos.x, q.pos.z - p.pos.z);
+        if (d > st.r || Math.abs((q.pos.y || 0) - (p.pos.y || 0)) > 2.2) continue;
+        this.A.heal(q, st.heal);
+      }
+    }
+    this.A.emit(['qe', 'cagas', p.id, good ? 1 : 0]);
   }
   useHistoria(p, id, extra = {}) {
     if (ULTS[id]) return this.useUltimate(p, id);
@@ -1779,8 +1806,9 @@ export class InvasionCore {
     if (!p.hCd) p.hCd = {};
     p.hCd[id] = T + u.cd;
     p.hAnim = id; p.hAnimUntil = T + u.anim;
-    if (id === 'monster') p.hSpeedUntil = T + u.dur;
-    else if (id === 'torta') { A.heal(p, 50); p.hShield = 50; p.hShieldUntil = T + u.dur; }
+    const dur = (who) => stretchDur(who, u.dur);
+    if (id === 'monster') p.hSpeedUntil = T + dur(p);
+    else if (id === 'torta') { A.heal(p, 50); p.hShield = 50; p.hShieldUntil = T + dur(p); }
     else if (id === 'tosse') this.spitCough(p, extra);
     else if (id === 'barriga') {
       for (const z of this.zombies) {
@@ -1795,12 +1823,12 @@ export class InvasionCore {
         if (!q || !q.alive || q.down) continue;
         const d = hyp(q.pos.x - p.pos.x, q.pos.z - p.pos.z);
         if (q !== p && (d > 8 || Math.abs((q.pos.y || 0) - p.pos.y) > 3.2)) continue;
-        q.hDmgUntil = T + u.dur;
+        q.hDmgUntil = T + dur(q);
         if (q !== p) A.emit(['hbuff', q.id, 'dmg']);
       }
-    } else if (id === 'cachaca') p.hImmuneUntil = T + u.dur;
-    else if (id === 'grokbot') p.hAimUntil = T + u.dur;
-    else if (id === 'integra') p.hReflectUntil = T + u.dur;
+    } else if (id === 'cachaca') p.hImmuneUntil = T + dur(p);
+    else if (id === 'grokbot') p.hAimUntil = T + dur(p);
+    else if (id === 'integra') p.hReflectUntil = T + dur(p);
     else if (id === 'cheers') {
       const c = { x: p.pos.x, y: p.pos.y + 1, z: p.pos.z };
       for (const z of this.zombies) {
@@ -1859,9 +1887,9 @@ export class InvasionCore {
       const W = POWERS.potion;
       for (const q of A.players()) if (q.alive && d3(q.pos, at) <= W.radius) A.heal(q, W.heal);
     } else if (kind === 'lantern') {
-      this.lanterns = this.lanterns.filter((l) => l.owner !== p); this.lanterns.push({ owner: p, until: T + POWERS.lantern.dur });
+      this.lanterns = this.lanterns.filter((l) => l.owner !== p); this.lanterns.push({ owner: p, until: T + stretchDur(p, POWERS.lantern.dur) });
     } else if (kind === 'ghost') {
-      p.ghostUntil = T + POWERS.ghost.dur; for (const z of this.zombies) if (z.target === p) z.target = null;
+      p.ghostUntil = T + stretchDur(p, POWERS.ghost.dur); for (const z of this.zombies) if (z.target === p) z.target = null;
     } else if (kind === 'revive') {
       let n = 0; for (const q of A.players()) if (!q.alive && q !== p) { q.out = false; q.lives = Math.max(1, q.lives || 0); A.revive(q, at); n++; }
       ev.push(n);
@@ -2196,16 +2224,16 @@ export class InvasionCore {
     if (!p.hCd) p.hCd = {};
     p.hCd[id] = this.T + u.cd;
     p.hAnim = id; p.hAnimUntil = this.T + (u.anim || 0.6);
-    const T = this.T;
-    if (u.dur > 0) { p.ultForm = id; p.ultUntil = T + u.dur; }
-    if (id === 'frenesi') this.A.emit(['qe', 'form', p.id, 'frenesi', u.dur]);
+    const T = this.T, dur = stretchDur(p, u.dur);
+    if (dur > 0) { p.ultForm = id; p.ultUntil = T + dur; }
+    if (id === 'frenesi') this.A.emit(['qe', 'form', p.id, 'frenesi', dur]);
     else if (id === 'sinuca') this.cueSmash(p);
-    else if (id === 'vendedor') { p.hImmuneUntil = T + u.dur; this.lureNear(p, u.dur); }
-    else if (id === 'rei') { this.ensureAlly(p); const z = this.livingAlly(p); if (z) this.bossAlly(z, u.dur); }
-    else if (id === 'vampiro') { p.fly = true; p.hHopUntil = T + u.dur; }
-    else if (id === 'bebado') { p.hImmuneUntil = T + u.dur; p.hSpeedUntil = T + u.dur; p.ultAnchor = { x: p.pos.x, z: p.pos.z }; p.ultAng = 0; }
-    else if (id === 'discipulo') this.dropPuddle(p, u.dur);
-    else if (id === 'ceo') { p.hPhaseUntil = T + u.dur; p.ultForm = 'ceo'; p.ultUntil = T + u.dur; }
+    else if (id === 'vendedor') { p.hImmuneUntil = T + dur; this.lureNear(p, dur); }
+    else if (id === 'rei') { this.ensureAlly(p); const z = this.livingAlly(p); if (z) this.bossAlly(z, dur); }
+    else if (id === 'vampiro') { p.fly = true; p.hHopUntil = T + dur; }
+    else if (id === 'bebado') { p.hImmuneUntil = T + dur; p.hSpeedUntil = T + dur; p.ultAnchor = { x: p.pos.x, z: p.pos.z }; p.ultAng = 0; }
+    else if (id === 'discipulo') this.dropPuddle(p, dur);
+    else if (id === 'ceo') { p.hPhaseUntil = T + dur; p.ultForm = 'ceo'; p.ultUntil = T + dur; }
     this.A.emit(['hcast', p.id, id, Math.round(p.hp || 0), 0]);
     return id;
   }
