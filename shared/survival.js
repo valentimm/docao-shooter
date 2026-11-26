@@ -20,6 +20,7 @@
 //  doors não é simulado aqui: fica no layout pra quem implementa a porta.
 // ============================================================
 import { INV_AMMO, waveSpec } from './invasion.js';
+import { blessCost } from './historia-pass.js';
 import { WEAPONS, PISTOL, KNIFE, UZI, P90, NAIL, SEMI, BOW, CORN_W, TAMPA, RAY, GIFT_W, PRIMARIES, SECONDARIES } from './rules.js';
 
 export const PAPADA_NAME = 'Papada';
@@ -339,7 +340,7 @@ export function tryPap(e, weapons = WEAPONS, now = 0) {
   if ((e.papUntil || 0) > now && e.papGun === w) return { ok: false, reason: 'cozinha' };
   const cur = papTierOf(e, w);
   if (cur >= 3) return { ok: false, reason: 'max', tier: 3 };
-  const cost = PAP_COST[cur];
+  const cost = blessCost(e, PAP_COST[cur]);
   const have = syncPurse(e);
   if (have < cost) return { ok: false, reason: 'pontos', cost, have, tier: cur };
   const line = statLine(base, cur, cur + 1);
@@ -352,9 +353,10 @@ export function tryPap(e, weapons = WEAPONS, now = 0) {
 export function tryBoxPay(e) {
   ensurePurse(e);
   const have = syncPurse(e);
-  if (have < SURV.boxPrice) return { ok: false, reason: 'pontos', cost: SURV.boxPrice, have };
-  setPurse(e, have - SURV.boxPrice);
-  return { ok: true, cost: SURV.boxPrice, pts: e.pts | 0 };
+  const cost = blessCost(e, SURV.boxPrice);
+  if (have < cost) return { ok: false, reason: 'pontos', cost, have };
+  setPurse(e, have - cost);
+  return { ok: true, cost, pts: e.pts | 0 };
 }
 export function rollBox(rng, avoid = -1) {
   const rnd = rng || Math.random;
@@ -406,13 +408,13 @@ export function tryWall(e, wall, weapons = WEAPONS) {
   const owns = (on[0] && e.slots[0] === w) || (on[1] && e.slots[1] === w);
   if (owns) {
     if (!needsAmmo(e, w, weapons)) return { ok: false, reason: 'cheia', weapon: w };
-    const cost = wall.ammo | 0;
+    const cost = blessCost(e, wall.ammo);
     const haveAmmo = syncPurse(e);
     if (haveAmmo < cost) return { ok: false, reason: 'pontos', cost, have: haveAmmo, weapon: w, kind: 'ammo' };
     setPurse(e, haveAmmo - cost); fillGun(e, w, weapons);
     return { ok: true, kind: 'ammo', cost, pts: e.pts | 0, weapon: w };
   }
-  const cost = wall.price | 0;
+  const cost = blessCost(e, wall.price);
   const have = syncPurse(e);
   if (have < cost) return { ok: false, reason: 'pontos', cost, have, weapon: w, kind: 'buy' };
   setPurse(e, have - cost);
@@ -873,12 +875,13 @@ export function evaluateDoorBuy(map, state, ent, doorId) {
   if (!door.areas.some((a) => state.areas.has(a))) return { ok: false, reason: 'locked', door };
   if (doorDist(door, ent.pos) > SURVIVAL.USE_R) return { ok: false, reason: 'far', door };
   const have = syncPurse(ent);
-  if (have < door.price) return { ok: false, reason: 'points', door, price: door.price, have };
-  return { ok: true, door, price: door.price, unlock: door.areas.filter((a) => !state.areas.has(a)) };
+  const price = blessCost(ent, door.price);
+  if (have < price) return { ok: false, reason: 'points', door, price, have };
+  return { ok: true, door, price, unlock: door.areas.filter((a) => !state.areas.has(a)) };
 }
 
 export function commitDoorBuy(state, ent, door) {
-  setPurse(ent, syncPurse(ent) - door.price);
+  setPurse(ent, syncPurse(ent) - blessCost(ent, door.price));
   state.open.add(door.id);
   const unlocked = [];
   for (const id of door.areas) if (!state.areas.has(id)) { state.areas.add(id); unlocked.push(id); }

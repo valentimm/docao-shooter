@@ -19,10 +19,30 @@ export const EGG_SPOTS = {
   ],
 };
 
+// Sala de vidro no meio do térreo do Bloco 02. A porta olha para a entrada (+Z).
+export const LINK_ROOM = {
+  sofa: { x: 0, y: 0, z: -27.45 },
+  door: { x: 0, y: 0, z: -25.4 },
+  rush: { x: 0, y: 0, z: -24.35 },
+  sitYaw: Math.PI,
+};
+export const LINK_SIT = 15;
+export const LINK_SPAWN = 30;
+export function linkDoorSolid() {
+  return { min: { x: -0.72, y: 0, z: -25.5 }, max: { x: 0.72, y: 2.7, z: -25.28 }, ramp: null };
+}
+export function linkLocks(humans) { return (humans | 0) > 1; }
+export function linkLine(name) {
+  return `O player ${name || 'Docão'} ficou trancado na sala da link! Ajudem ele!`;
+}
+
 export function createEgg(rnd = Math.random) {
   const roll = rnd();
   return {
     steps: { cria: false, lanche: false, refri: false, muro: false },
+    chavi: null,
+    chaviDone: false,
+    wave: 0,
     secret: false,
     extra: false,
     sodaWave: 1 + Math.floor(roll * EGG_BASE),
@@ -117,11 +137,12 @@ export function claimMuro(book) {
 
 export function eggPrompt(p, egg) {
   if (!p || !p.pos || !egg || !p.alive) return null;
-  if (!egg.steps.cria && !egg.criaLeft && nearestUrinal(p.pos)) return { id: 'urina', text: 'Agache 3 vezes, dance com N e vire de costas' };
-  if (!egg.steps.lanche && nearSpot(p.pos, EGG_SPOTS.pool, 2.3)) return { id: 'pool', text: 'E · encaçapar a bola (2 s)' };
-  if (egg.fridge && !egg.drunk[p.id] && nearSpot(p.pos, EGG_SPOTS.fridge, 1.8)) return { id: 'fridge', text: 'E · beber o refrigerante da promo' };
+  if ((egg.wave | 0) >= 21 && !egg.chavi && !egg.chaviDone && !p.eggTrap && nearSpot(p.pos, LINK_ROOM.sofa, 1.6)) return { id: 'sofa', text: '' };
+  if (!egg.steps.cria && !egg.criaLeft && nearestUrinal(p.pos)) return { id: 'urina', text: '' };
+  if (!egg.steps.lanche && nearSpot(p.pos, EGG_SPOTS.pool, 2.3)) return { id: 'pool', text: '' };
+  if (egg.fridge && !egg.drunk[p.id] && nearSpot(p.pos, EGG_SPOTS.fridge, 1.8)) return { id: 'fridge', text: '' };
   if (!egg.muroTaken && !egg.steps.muro && !p.eggShockNext && !p.eggShock) {
-    for (const w of EGG_SPOTS.walls) if (nearSpot(p.pos, w, 1.8)) return { id: w.id, text: 'E · pular o muro' };
+    for (const w of EGG_SPOTS.walls) if (nearSpot(p.pos, w, 1.8)) return { id: w.id, text: '' };
   }
   return null;
 }
