@@ -65,6 +65,10 @@ ok(shaved.finished && !shaved.ranked && shaved.reason === 'rápido', 'o miolo n�
 ok(rankedRun(scriptRun({ finish: floor - 0.05 })).ranked, 'sem o miolo, um relógio pouco abaixo do físico ainda cabe no piso');
 ok(!rankedRun(scriptRun({ finish: rankFloor() - 0.05 })).ranked, 'abaixo do piso único o ranking recusa');
 
+const moving = 24.56; // pouco abaixo do mínimo antigo (deslocamento + 0,04 s × 25 alvos)
+ok(rankedRun(withShots(scriptRun({ finish: moving }), ['center'])).ranked, 'atirar andando e acertar o miolo ainda entra no ranking');
+ok(rankedRun(scriptRun({ finish: moving })).ranked, 'o mesmo relógio, sem miolo, também entra');
+
 const ringRun = rankedRun(withShots(scriptRun({ finish: 40 }), ['ring']));
 ok(ringRun.ranked && ringRun.bonusZone === 'ring' && ringRun.bonus === 2 && ringRun.final === 42, `anel soma 2 s (${ringRun.final})`);
 const first = rankedRun(withShots(scriptRun({ finish: 40 }), ['ring', 'center']));

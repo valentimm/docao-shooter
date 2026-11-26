@@ -191,9 +191,12 @@ export function pathStats() {
   return { run: ROUND(run), dash: ROUND(dash), total: ROUND(run + dash) };
 }
 
+// Só o deslocamento: no circuito o jogador atira andando, então o piso
+// não reserva 0,04 s parado por alvo. Sem isso, um relógio justo menos o
+// miolo de bônus caía abaixo do piso e o servidor recusava a corrida.
 export function minPlausible() {
   const { run, dash } = pathStats();
-  return ROUND(run / SPEED + dash / (SPEED * PIT.sprint) + pitEnemies().length * 0.04);
+  return ROUND(run / SPEED + dash / (SPEED * PIT.sprint));
 }
 
 // Piso do ranking. O alvo de bônus pode deixar o relógio PIT.bonusCut segundos
