@@ -8,12 +8,12 @@ import { scriptRun, PIT, starsOf } from './shared/pocilga.js';
 const SITE = process.env.SITE || 'http://127.0.0.1:8140/index.html?server=ws://127.0.0.1:8787&devSkins=0';
 const API = process.env.API || 'http://127.0.0.1:8787';
 const SHOTS = process.env.SHOTS || '/opt/cursor/artifacts';
+const password = process.env.POCILGA_TEST_PASSWORD || crypto.randomUUID();
 mkdirSync(SHOTS, { recursive: true });
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 
 async function account(nick) {
-  const password = 'pocilga-teste';
   const post = (path, body) => fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   let data = await (await post('/api/auth/register', { nick, password })).json();
   if (!data.token) data = await (await post('/api/auth/login', { nick, password })).json();
