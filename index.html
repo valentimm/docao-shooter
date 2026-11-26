@@ -90,7 +90,7 @@
     <div id="invBoss" class="hidden"><span id="invBossName">🎃 DOCÃO ABÓBORA</span><div class="ibar"><i id="invBossFill"></i></div></div>
   <div id="invBanner" class="hidden"></div>
   <div id="invPowers" class="hidden"><div id="invSlots"></div><div class="ikeys"><kbd>G</kbd> usa · <kbd>X</kbd> troca</div></div>
-  <div id="hBar" class="hidden"><div id="hPips" class="hidden"></div><div id="hSlots"></div><div id="hShield" class="hidden"></div><span class="hkey"><kbd>L</kbd> usa o escolhido · clique usa esse</span></div>
+  <div id="hBar" class="hidden"><div id="hPips" class="hidden"></div><div id="hSlots"></div><div id="hShield" class="hidden"></div><span class="hkey"><kbd>Z</kbd> usa o escolhido · clique usa esse</span></div>
   <div id="hOffer" class="hidden"><div class="hcard"><h3>O chefão caiu</h3><p>Escolhe 1 upgrade. Ele fica com você até o fim da partida.</p><div id="hOfferCards"></div></div></div>
   <div id="hMap" class="hidden"><div class="hcard"><h3>Help do Grok</h3><p>Clica num ponto verde do mapa. O PC te leva até lá.</p><canvas id="hMapCvs" width="720" height="420"></canvas><div class="hrow"><span>verde = chão · vermelho = zumbi · ciano = você</span><button type="button" id="hMapClose">Cancelar</button></div></div></div>
   <div id="invFogArrow" class="hidden"><i>⬆</i><span>Fora da área segura! <b id="invFogDist"></b></span></div>
@@ -630,6 +630,7 @@
       <p id="lobbyEloNote" class="elo-lock hidden">Competitivo: o Elo sempre conta. Sem bots, sem killstreak e sem código do chat.</p>
       <div id="lobbyLimits" class="room-limits"></div>
       <button id="startOnline">INICIAR PARTIDA</button>
+      <button type="button" id="dropAdvBtn" class="secondary hidden">Apagar jogo salvo</button>
     </div>
     <div id="lobbyWait" class="sub">Aguardando o anfitrião iniciar a partida…</div>
     <div id="lobbyStatus" class="err"></div>
@@ -645,6 +646,7 @@
       <nav class="pause-nav" id="pauseNav" aria-label="Ações da pausa">
         <button type="button" id="resumeBtn" class="pause-act is-focus" data-pause-act>Continuar</button>
         <button type="button" id="pauseRestartBtn" class="pause-act hidden" data-pause-act>Reiniciar</button>
+        <button type="button" id="saveAdvBtn" class="pause-act hidden" data-pause-act>Salvar aventura</button>
         <button type="button" id="pauseClassBtn" class="pause-act hidden" data-pause-act>Trocar classe</button>
         <button type="button" id="pauseOptBtn" class="pause-act" data-pause-act>Opções</button>
         <div id="pauseClasses" class="pause-classes">
