@@ -1598,18 +1598,20 @@ addHotmilkNoite(MAPS, { B, R, building, fin, slab, crate });
   });
 }
 
-// ---------- A Pocilga: pátio, fachada, sala, escada, passarela, pulo e chegada ao lado da largada. ----------
+// ---------- A Pocilga: pátio, fachada, sala, escada, passarela, pulo e chegada pelos fundos da largada. ----------
 {
   const TONE = { concrete: '#8d8a82', metal: '#d5dee6', bag: '#c6b48a', fence: '#6a5648', wood: '#8d6240', ramp: '#b5793e', snow: '#f7fbff' };
   const boxes = pitPieces().map((p) => ({
     b: p.b,
     c: p.ramp ? TONE.ramp : p.floor ? (p.tone === 'metal' ? '#d5dee6' : p.tone === 'snow' ? TONE.snow : p.tone === 'wood' ? '#c4a574' : '#b7b3ac') : (TONE[p.tone] || TONE.wood),
     ramp: p.ramp,
+    hide: p.hide || undefined,
+    door: p.door || undefined,
   }));
   const props = [];
   MAPS.push({
     id: PIT.map, name: 'A Pocilga', course: true,
-    desc: 'Circuito solo de inverno: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada ao lado da largada.',
+    desc: 'Circuito solo de inverno: só a Pistolinha. Pátio, sala, escada, passarela, pulo e a chegada pelos fundos da largada.',
     size: [36, 56], wallH: 3.2, wallColor: ['#8d8a82', '#6d747c'],
     palette: DAY({
       sky: '#24344d', fog: ['#3e5168', 55, 210],

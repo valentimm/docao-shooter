@@ -467,7 +467,7 @@ export function buildWorld(map) {
   const voff = visualOffsets(shown);
   for (const o of vis) if (o.hide) {
     const [x0, y0, z0, x1, y1, z1] = o.b;
-    solids.push({ min: new V3(x0, y0, z0), max: new V3(x1, y1, z1), ramp: o.ramp || null });
+    solids.push({ min: new V3(x0, y0, z0), max: new V3(x1, y1, z1), ramp: o.ramp || null, door: !!o.door });
     proxies.push(boxGeo(x0, y0, z0, x1, y1, z1, o.ramp || null));
   }
   for (const o of vis) if (o.flat) {

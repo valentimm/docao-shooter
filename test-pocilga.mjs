@@ -1,6 +1,6 @@
 // Regras da Pocilga: oito etapas, só a Pistolinha, faca no javali perto, tempo mínimo.
 // Uso: node test-pocilga.mjs
-import { PIT, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt } from './shared/pocilga.js';
+import { PIT, pitEnemies, pitTargets, pitCivils, pitMovers, boardAabb, rayAabb, minPlausible, starsOf, suggestion, formatPit, inspectRun, rankedRun, scriptRun, pathStats, samplePath, moverAt, inGate } from './shared/pocilga.js';
 import { KNIFE, RADIUS, SPEED, JUMP } from './shared/rules.js';
 import { getMap } from './maps.js';
 import { mapSolids, createPhysics } from './shared/physics.js';
@@ -9,7 +9,7 @@ const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
 
 ok(pitEnemies().length === 23 && pitCivils().length === 5, `23 javalis e 5 civis (${pitEnemies().length}/${pitCivils().length})`);
-ok(PIT.bays.length === 5, 'cinco etapas, na ordem do percurso');
+ok(PIT.bays.length === 8, 'oito gatilhos, na ordem do percurso');
 ok(pitMovers().length >= 10 && pitMovers().filter((t) => t.kind === 'civil').length >= 2, `vários no trilho, inclusive civis (${pitMovers().map((t) => t.id).join(',')})`);
 ok(pitTargets().some((t) => t.close), 'um javali fica ao alcance da faca');
 const stats = pathStats();
@@ -23,11 +23,11 @@ const floor = minPlausible();
 ok(floor > 18 && floor + 18 < PIT.star3, `mínimo físico ${floor.toFixed(3)} s, folgado abaixo das 3 estrelas`);
 ok(starsOf(PIT.star3, 0, true) === 3 && starsOf(PIT.star3 + 0.01, 0, true) === 2 && starsOf(PIT.star2, 1, true) === 2 && starsOf(PIT.star2 + 0.01, 0, true) === 1, `faixas ${formatPit(PIT.star3)} e ${formatPit(PIT.star2)}`);
 ok(starsOf(32, 1, true) === 2 && suggestion(3).id === 'javali', 'civil tira a 3ª estrela; sugestão Javali');
-ok(formatPit(PIT.star3) === '0:47.00' && formatPit(PIT.star2) === '1:00.00', 'relógio');
+ok(formatPit(PIT.star3) === '0:52.00' && formatPit(PIT.star2) === '1:06.00', 'relógio');
 for (const g of PIT.gates) {
   if (!g.pop) continue;
   const far = Math.min(...pitTargets().filter((t) => t.bay === g.pop).map((t) => Math.hypot(t.x - g.x, t.z - g.z)));
-  ok(far >= 8, `${g.id} arma a ${far.toFixed(1)} m do grupo`);
+  ok(far >= 5, `${g.id} arma a ${far.toFixed(1)} m do grupo`);
 }
 for (const t of pitTargets()) {
   let near = 99;
@@ -72,11 +72,13 @@ ok(side.maxZ - side.minZ > side.maxX - side.minX, 'no muro a placa fica de lado,
 const map = getMap(PIT.map);
 ok(map && map.course && map.boxes.some((b) => b.ramp), 'o mapa tem a escada de verdade');
 const solids = mapSolids(map), P = createPhysics(solids, map.size, null);
+const openMap = { ...map, boxes: map.boxes.filter((b) => !b.door) };
+const Popen = createPhysics(mapSolids(openMap), map.size, null);
 let stuck = null, hi = 0, lo = 99;
 for (const q of samplePath(0.35)) {
-  const g = P.groundAt(q.x, q.z, q.y + 0.5);
+  const g = Popen.groundAt(q.x, q.z, q.y + 0.5);
   hi = Math.max(hi, g); lo = Math.min(lo, g);
-  if (Math.abs(g - q.y) > 0.55 || P.collides(q.x, g + 0.02, q.z)) { stuck = { ...q, g, hit: P.collides(q.x, g + 0.02, q.z) }; break; }
+  if (Math.abs(g - q.y) > 0.55 || Popen.collides(q.x, g + 0.02, q.z)) { stuck = { ...q, g, hit: Popen.collides(q.x, g + 0.02, q.z) }; break; }
 }
 ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou em ${stuck.x.toFixed(1)},${stuck.z.toFixed(1)} y=${stuck.y.toFixed(2)} chão=${stuck.g.toFixed(2)} colide=${stuck.hit})` : ` (alto ${hi.toFixed(2)} m)`}`);
 
@@ -94,8 +96,8 @@ ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou e
       const x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t, y = a.y + (b.y - a.y) * t;
       let left = 12, right = 12;
       for (let d = 0.2; d <= 12; d += 0.2) {
-        if (left === 12 && P.collides(x - uz * d, y + 0.05, z + ux * d)) left = d;
-        if (right === 12 && P.collides(x + uz * d, y + 0.05, z - ux * d)) right = d;
+        if (left === 12 && Popen.collides(x - uz * d, y + 0.05, z + ux * d)) left = d;
+        if (right === 12 && Popen.collides(x + uz * d, y + 0.05, z - ux * d)) right = d;
         if (left < 12 && right < 12) break;
       }
       const clear = left + right + RADIUS * 2;
@@ -116,10 +118,37 @@ ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou e
   const doors = narrow.filter((r) => !(r.s1 - r.s0 > 2 || r.clear < 3));
   console.log('largura: trechos abaixo de 5 m:', narrow.map((r) => `${r.clear.toFixed(1)} m por ${(r.s1 - r.s0).toFixed(1)} m em (${r.x.toFixed(1)},${r.z.toFixed(1)})`).join(' | ') || 'nenhum');
   ok(!bad.length, `largura útil ≥ 5 m, porta curta ≥ 3 m${bad.length ? ' · ' + bad.map((r) => `${r.clear.toFixed(1)} m / ${(r.s1 - r.s0).toFixed(1)} m`).join(', ') : ` (${doors.length} porta)`}`);
-  const patio = pitTargets().filter((t) => t.bay === 'patio');
-  const gate = PIT.gates.find((g) => g.pop === 'patio');
-  const dists = patio.map((t) => Math.hypot(t.x - gate.x, t.z - gate.z));
-  ok(Math.min(...dists) >= 8 && Math.max(...dists) <= 15, `alvos do primeiro corredor a ${Math.min(...dists).toFixed(1)}–${Math.max(...dists).toFixed(1)} m da porta`);
+  const corridorBays = ['patio', 'patio2', 'patio3'];
+  const zs = pitTargets().filter((t) => corridorBays.includes(t.bay)).map((t) => t.z).sort((a, b) => a - b);
+  ok(zs[zs.length - 1] - zs[0] > 16, `o primeiro corredor espalha os alvos por ${(zs[zs.length - 1] - zs[0]).toFixed(1)} m`);
+  let tight = null;
+  const crowd = pitTargets().filter((t) => corridorBays.includes(t.bay));
+  for (let i = 0; i < crowd.length; i++) for (let j = i + 1; j < crowd.length; j++) {
+    const d = Math.hypot(crowd[i].x - crowd[j].x, crowd[i].z - crowd[j].z);
+    if (d < 3.4) tight = `${crowd[i].id}–${crowd[j].id} a ${d.toFixed(1)} m`;
+  }
+  ok(!tight, tight || 'no primeiro corredor há pelo menos 3,4 m entre as placas');
+  const spawn = { x: PIT.spawn[0], y: 0, z: PIT.spawn[1] };
+  const fin = PIT.gates.find((g) => g.id === 'finish');
+  const door = PIT.gates.find((g) => g.id === 'start');
+  const abre = PIT.gates.find((g) => g.id === 'abre');
+  ok(fin.z > -21.2 && fin.z < -17 && fin.x > 8 && fin.x < 16, `a chegada está dentro da sala da largada (${fin.x}, ${fin.z})`);
+  ok(!inGate(spawn, fin) && !inGate(spawn, door) && !inGate({ x: door.x, y: 0, z: door.z }, fin), 'spawn, porta de saída e chegada não se cruzam');
+  ok(!inGate({ x: 14.2, y: 0, z: -14 }, fin) && !inGate({ x: abre.x, y: 0, z: abre.z }, fin) && !inGate(spawn, abre), 'andar na sala, antes da hora, não é a chegada nem abre o portão');
+  ok(!inGate({ x: 12.25, y: 0, z: -26.2 }, abre) && inGate({ x: 12.25, y: 0, z: -24.2 }, abre), 'o portão só abre junto da boca, não no meio da disparada');
+  ok(P.collides(12.2, 1.5, -22.15) && !Popen.collides(12.2, 1.5, -22.15), 'o portão dos fundos começa fechado e, aberto, a boca fica livre');
+  ok(P.collides(7.4, 4.8, -18), 'o muro esquerdo da sala passa da altura da torre');
+{
+  const aim = (x, z, y) => {
+    const dx = 11.4 - x, dy = 4.9 - y, dz = -16.9 - z;
+    const L = Math.hypot(dx, dy, dz);
+    return P.rayWorld({ x, y, z }, { x: dx / L, y: dy / L, z: dz / L }, 40);
+  };
+  const far = aim(31.8, -26.2, 1.6);
+  const near = aim(13.2, -25.6, 1.6);
+  ok(typeof far === 'number' && far < 14 && typeof near === 'number' && near < 6, `da disparada o muro e o portão tapam a torre (${typeof far === 'number' ? far.toFixed(1) : '—'}/${typeof near === 'number' ? near.toFixed(1) : '—'})`);
+  ok(Popen.losClear({ x: 12.2, y: 1.6, z: -20.6 }, { x: 11.4, y: 4.6, z: -16.9 }), 'já dentro da sala, de frente, a torre fica à vista');
+}
   let blocked = null;
   for (const t of pitTargets()) {
     if ((t.y || 0) > 1.2) continue;
@@ -149,12 +178,13 @@ ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou e
 
 {
   const inside = (x, y, z) => {
-    if (y > 2.2 && x > -7 && x < 20.6 && z > 44.4 && z < 55.2) return true;
-    if (y < 1.5 && x > 19.9 && x < 32.1 && z > 45.6 && z < 55.2) return true;
-    if (y < 1.5 && x > 17.4 && x < 27.3 && z > -19.7 && z < 46.2) return true;
+    if (y > 2.2 && z > 44.4 && z < 55.6 && x > -7 && x < 28.4) return true;
+    if (y < 1.6 && x > 27.8 && x < 36.2 && z > 45.4 && z < 55.6) return true;
+    if (y < 1.6 && x > 28.4 && x < 35.4 && z > -29.4 && z < 46) return true;
+    if (y < 1.6 && z < -21.6 && z > -29.4 && x > 7.8 && x < 35.8) return true;
     let b = 99;
     for (const q of samplePath(0.8)) b = Math.min(b, Math.hypot(q.x - x, q.z - z));
-    return b < 6.2 && y < 4.2;
+    return b < 7.5 && y < 4.5;
   };
   const fly = (x, z, y, vx, vz, vy) => {
     const e = { pos: { x, y, z }, vel: { x: vx, y: vy, z: vz }, onGround: false, bodyH: 2, bodyR: RADIUS };
@@ -167,8 +197,8 @@ ok(!stuck, `eixo andável na escada, na passarela e no pulo${stuck ? ` (travou e
     return e.pos;
   };
   const lip = [];
-  for (const z of [46.4, 48.2, 50.5, 52.8, 54.4]) lip.push([19.6, z, PIT.deck]);
-  lip.push([12, 46.4, PIT.deck], [12, 54.4, PIT.deck], [8, 50.5, PIT.deck]);
+  for (const z of [46.4, 48.5, 50.5, 52.8, 54.5]) lip.push([27.6, z, PIT.deck]);
+  lip.push([14, 46.5, PIT.deck], [14, 54.4, PIT.deck], [20, 50.5, PIT.deck]);
   let escaped = null, n = 0;
   for (const [x, z, y] of lip) {
     for (const speed of [0, SPEED, SPEED * PIT.sprint]) {

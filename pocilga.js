@@ -11,13 +11,13 @@ const LINES = [
   'Barriguinha na torre. Escuta, leitão.',
   'Javali vermelho, de fuzil pra frente: derruba. Azul, sem arma, mão baixa: é civil.',
   'Só a Pistolinha o percurso inteiro. Vinte e três javalis, cinco civis.',
-  'Chega em 47 segundos, sem civil: três estrelas.',
+  'Chega em 52 segundos, sem civil: três estrelas.',
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const starsTxt = (n) => '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
 const ease = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k * (3 - 2 * k); };
 
-let deps = null, root = null, boards = [], run = null, coach = null, natal = null;
+let deps = null, root = null, boards = [], run = null, coach = null, natal = null, bits = null, arrival = null;
 let bannerUntil = 0, bannerText = '', warned = false, gen = 0, lineAt = 0;
 let shout = '', shoutUntil = 0;
 
@@ -194,8 +194,9 @@ function paintTalk(force) {
   const el = $('pitTalk');
   if (!el) return;
   const yelling = performance.now() < shoutUntil && !!shout;
-  const show = run && !run.done && (!run.started || yelling);
+  const show = !!(run && (yelling || (!run.done && !run.started)));
   el.classList.toggle('hidden', !show);
+  if (coach && coach.bubble) coach.bubble.visible = !!show;
   if (!show) return;
   const i = Math.floor(lineAt / 3.1) % LINES.length;
   const text = yelling ? shout : LINES[i];
@@ -210,17 +211,23 @@ function paintTalk(force) {
     ctx.lineWidth = 8;
     ctx.strokeRect(6, 6, w - 12, h - 12);
     ctx.fillStyle = '#2a1410';
-    ctx.font = '700 28px Fredoka, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    let size = 32;
     const words = text.split(' ');
     let line = '', rows = [];
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (ctx.measureText(next).width > w * 0.86) { rows.push(line); line = word; } else line = next;
-    }
-    if (line) rows.push(line);
-    rows.forEach((row, k) => ctx.fillText(row, w / 2, h / 2 + (k - (rows.length - 1) / 2) * 36));
+    const layout = () => {
+      ctx.font = `700 ${size}px Fredoka, sans-serif`;
+      line = ''; rows = [];
+      for (const word of words) {
+        const next = line ? `${line} ${word}` : word;
+        if (ctx.measureText(next).width > w * 0.84) { if (line) rows.push(line); line = word; } else line = next;
+      }
+      if (line) rows.push(line);
+    };
+    layout();
+    while (size > 20 && (rows.length > 2 || rows.some((row) => ctx.measureText(row).width > w * 0.9))) { size -= 2; layout(); }
+    rows.forEach((row, k) => ctx.fillText(row, w / 2, h / 2 + (k - (rows.length - 1) / 2) * (size + 8)));
     coach.tex.needsUpdate = true;
   }
 }
@@ -239,8 +246,7 @@ function placeCoach() {
   setPose(model, 'idle');
   if (model.arms && model.arms[0]) model.arms[0].rotation.set(-0.9, 0.35, -0.7);
   const tw = PIT.tower;
-  const dx = PIT.spawn[0] - tw.x, dz = PIT.spawn[1] - tw.z;
-  const yaw = Math.atan2(dx, dz);
+  const yaw = Math.PI;
   model.group.position.set(tw.x, tw.y, tw.z + 0.15);
   model.group.rotation.y = yaw;
   const felt = new THREE.MeshBasicMaterial({ color: 0xc4364a });
@@ -262,8 +268,7 @@ function placeCoach() {
   const tex = new THREE.CanvasTexture(canvas);
   if ('colorSpace' in tex && THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
   const bubble = own(new THREE.Mesh(new THREE.PlaneGeometry(3.1, 0.88), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })));
-  const len = Math.hypot(dx, dz) || 1;
-  bubble.position.set(tw.x + dx / len * 0.15, tw.y + 2.2, tw.z + dz / len * 0.15);
+  bubble.position.set(tw.x, tw.y + 2.35, tw.z - 0.2);
   bubble.rotation.y = yaw;
   root.add(bubble);
   coach = { model, bubble, canvas, ctx: canvas.getContext('2d'), tex };
@@ -286,7 +291,6 @@ function mountNatal() {
   push([[16.2, -21.5], [16.2, -11]], 2.35);
   push([[9.4, -9.6], [9.4, 3.2]], 2.35);
   push([[19.0, -9.6], [19.0, 3.2]], 2.35);
-  push([[8, 50.2], [18, 50.2]], 5.5);
   push([[-5.9, 20], [-5.9, 29]], 2.45);
   push([[17.4, 4], [17.4, 36]], 2.35);
   push([[24.5, 4], [24.5, 36]], 2.35);
@@ -329,19 +333,78 @@ function mountNatal() {
   tree.position.set(9.4, 0, -17.5);
   root.add(tree);
   const arch = new THREE.Group();
-  const postGeo = new THREE.BoxGeometry(0.28, 2.7, 0.28);
-  const beamGeo = new THREE.BoxGeometry(3.4, 0.22, 0.28);
   const woodArch = new THREE.MeshBasicMaterial({ color: 0x6a4a32 });
-  const glow = new THREE.MeshBasicMaterial({ color: 0xffd27a });
-  for (const x of [18.7, 21.8]) {
-    const post = own(new THREE.Mesh(postGeo, woodArch));
-    post.position.set(x, 1.35, -18.75);
+  const leafMat = new THREE.MeshBasicMaterial({ color: 0x8d6238 });
+  const brace = new THREE.MeshBasicMaterial({ color: 0x4e3424 });
+  const holly = new THREE.MeshBasicMaterial({ color: 0x1f6b45 });
+  const zLeaf = -22.28;
+  for (const x of [9.15, 15.35]) {
+    const post = own(new THREE.Mesh(new THREE.BoxGeometry(0.42, 4.7, 0.42), woodArch));
+    post.position.set(x, 2.35, -22.72);
     arch.add(post);
   }
-  const beam = own(new THREE.Mesh(beamGeo, glow));
-  beam.position.set(20.25, 2.62, -18.75);
+  const beam = own(new THREE.Mesh(new THREE.BoxGeometry(6.7, 0.36, 0.48), warm));
+  beam.position.set(12.25, 4.35, -22.72);
   arch.add(beam);
+  const berry = new THREE.MeshBasicMaterial({ color: 0xc4364a });
+  for (let i = 0; i < 11; i++) {
+    const ball = own(new THREE.Mesh(new THREE.SphereGeometry(i === 5 ? 0.16 : 0.11, 7, 6), i === 5 ? berry : holly));
+    ball.position.set(9.55 + i * 0.54, 4.62, -23.02);
+    arch.add(ball);
+  }
+  const sign = document.createElement('canvas');
+  sign.width = 512; sign.height = 128;
+  const sg = sign.getContext('2d');
+  sg.fillStyle = '#6a2430';
+  sg.fillRect(0, 0, 512, 128);
+  sg.strokeStyle = '#ffd27a';
+  sg.lineWidth = 10;
+  sg.strokeRect(8, 8, 496, 112);
+  sg.fillStyle = '#ffd27a';
+  sg.font = '700 72px Fredoka, sans-serif';
+  sg.textAlign = 'center';
+  sg.textBaseline = 'middle';
+  sg.fillText('CHEGADA', 256, 68);
+  const signTex = new THREE.CanvasTexture(sign);
+  if ('colorSpace' in signTex && THREE.SRGBColorSpace) signTex.colorSpace = THREE.SRGBColorSpace;
+  const signMat = new THREE.MeshBasicMaterial({ map: signTex });
+  const bannerSign = own(new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.9), signMat));
+  bannerSign.position.set(12.25, 4.95, -22.95);
+  bannerSign.rotation.y = Math.PI;
+  arch.add(bannerSign);
+  const bannerIn = own(new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.9), signMat.clone()));
+  bannerIn.position.set(12.25, 4.95, -21.5);
+  arch.add(bannerIn);
+  const bulbGeo = new THREE.SphereGeometry(0.075, 6, 4);
+  for (let i = 0; i < 16; i++) {
+    const along = i / 15;
+    const bulb = own(new THREE.Mesh(bulbGeo, i % 2 ? warm : cool));
+    bulb.position.set(9.35 + along * 5.8, 4.62, -22.95);
+    arch.add(bulb);
+  }
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5; i++) {
+      const bulb = own(new THREE.Mesh(bulbGeo, i % 2 ? cool : warm));
+      bulb.position.set(12.25 + side * 3.05, 1.15 + i * 0.72, -22.95);
+      arch.add(bulb);
+    }
+  }
+  const leafW = 2.85, leafH = 3.82;
+  const makeLeaf = (hingeX, signX) => {
+    const g = new THREE.Group();
+    g.position.set(hingeX, 0, zLeaf);
+    const plank = own(new THREE.Mesh(new THREE.BoxGeometry(leafW, leafH, 0.12), leafMat));
+    plank.position.set(signX * leafW / 2, leafH / 2, 0);
+    const bar = own(new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.86, 0.14, 0.16), brace));
+    bar.position.set(signX * leafW / 2, leafH * 0.55, 0.04);
+    g.add(plank, bar);
+    arch.add(g);
+    return g;
+  };
+  const left = makeLeaf(9.4, 1);
+  const right = makeLeaf(15.1, -1);
   root.add(arch);
+  arrival = { left, right, opening: false, t: 0 };
   const wraps = [0xf4efe4, 0xe6b325, 0x24344d, 0x6b3040];
   [[8.7, -18.2, 0.28, 0.2], [10.2, -18.4, 0.22, 0.16], [9.8, -16.7, 0.3, 0.2], [8.4, -16.6, 0.24, 0.16]].forEach(([x, z, w, h], i) => {
     const box = own(new THREE.Mesh(new THREE.BoxGeometry(w, h, w * 0.82), new THREE.MeshBasicMaterial({ color: wraps[i] })));
@@ -351,6 +414,56 @@ function mountNatal() {
     root.add(box);
   });
   natal = { warm, cool };
+}
+
+function burstConfetti() {
+  if (!root) return;
+  const specs = [
+    { color: 0xffd56a, n: 72, origin: [12.1, 3.4, -20.0] },
+    { color: 0xfff4dc, n: 36, origin: [11.6, 3.9, -18.2] },
+  ];
+  const list = [];
+  for (const spec of specs) {
+    const pos = new Float32Array(spec.n * 3);
+    const vel = [];
+    for (let i = 0; i < spec.n; i++) {
+      pos[i * 3] = spec.origin[0] + (Math.random() - 0.5) * 3.6;
+      pos[i * 3 + 1] = spec.origin[1] + (Math.random() - 0.5) * 1.8;
+      pos[i * 3 + 2] = spec.origin[2] + (Math.random() - 0.5) * 2.2;
+      vel.push([(Math.random() - 0.5) * 2.2, 1.8 + Math.random() * 2.6, (Math.random() - 0.5) * 2.0]);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = own(new THREE.Points(geo, new THREE.PointsMaterial({ color: spec.color, size: 0.16, transparent: true, opacity: 0.95 })));
+    root.add(pts);
+    list.push({ pts, vel });
+  }
+  bits = { list, age: 0 };
+}
+function tickBits(dt) {
+  if (!bits) return;
+  bits.age += dt;
+  for (const item of bits.list) {
+    const arr = item.pts.geometry.attributes.position.array;
+    for (let i = 0; i < item.vel.length; i++) {
+      item.vel[i][1] -= 4.2 * dt;
+      arr[i * 3] += item.vel[i][0] * dt;
+      arr[i * 3 + 1] += item.vel[i][1] * dt;
+      arr[i * 3 + 2] += item.vel[i][2] * dt;
+    }
+    item.pts.geometry.attributes.position.needsUpdate = true;
+  }
+  if (bits.age > 2.8 && root) {
+    for (const item of bits.list) root.remove(item.pts);
+    bits = null;
+  }
+}
+function tickGate(dt) {
+  if (!arrival || !arrival.opening || arrival.t >= 1) return;
+  arrival.t = Math.min(1, arrival.t + dt / 0.42);
+  const a = ease(arrival.t) * 1.5;
+  arrival.left.rotation.y = -a;
+  arrival.right.rotation.y = a;
 }
 
 function tickNatal(t) {
@@ -529,7 +642,10 @@ async function closeRun() {
   run.done = true;
   run.result = inspectRun(run.events);
   writeBest(run.result);
-  banner('CHEGADA', false, 2.2);
+  shout = 'ISSO, PORQUINHO!';
+  shoutUntil = performance.now() + 3200;
+  if (coach && coach.model) setPose(coach.model, 'wave');
+  burstConfetti();
   deps.sfx.fanfare();
   showResult(run.result, { remote: null, rank: null });
   const [remote, rank] = await Promise.all([
@@ -554,6 +670,8 @@ export function tickCourse(dt) {
   if (!run || !deps) return;
   lineAt += dt;
   tickNatal(lineAt);
+  tickBits(dt);
+  tickGate(dt);
   stepMovers(dt);
   if (coach) coach.model.group.position.y = PIT.tower.y + Math.sin(lineAt * 1.7) * 0.04;
   for (const b of boards) {
@@ -583,6 +701,11 @@ export function tickCourse(dt) {
   for (const gate of PIT.gates) {
     if (!inGate(pos, gate)) continue;
     if (gate.say && !run.said.has(gate.id)) { run.said.add(gate.id); yell(gate.say); }
+    if (gate.open && !run.opened) {
+      run.opened = true;
+      if (deps.openDoor) deps.openDoor();
+      if (arrival) arrival.opening = true;
+    }
     if (!gate.pop || run.pops.has(gate.pop)) continue;
     if (run.pops.size !== PIT.bays.findIndex((b) => b.id === gate.pop)) continue;
     run.pops.add(gate.pop);
@@ -614,7 +737,7 @@ export function beginCourse(next) {
   for (const b of boards) pose(b);
   placeCoach();
   mountNatal();
-  run = { clock: 0, moverT: 0, started: false, done: false, events: [], pops: new Set(), said: new Set(), result: null };
+  run = { clock: 0, moverT: 0, started: false, done: false, opened: false, events: [], pops: new Set(), said: new Set(), result: null };
   gen++;
   lineAt = 0;
   deps.armPistol();
@@ -645,6 +768,8 @@ export function clearCourse() {
   run = null;
   coach = null;
   natal = null;
+  arrival = null;
+  bits = null;
   deps = null;
   hideBanner();
   shout = ''; shoutUntil = 0;
