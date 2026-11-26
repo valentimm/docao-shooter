@@ -49,7 +49,7 @@ import { PIT } from './shared/pocilga.js';
 import { beginCourse, clearCourse, tickCourse, pitRay, pitHit, pitMelee, pitSpeedMul, pitHolding, pitResultOn, pitFinished, pitEscQuiet, dismissResult, restartCourse, courseSnap, paintPitMenu } from './pocilga.js';
 import { fillPitTab } from './pocilga-tab.js';
 import { buildWorld, disposeWorld, applyPalette, renderThumb, buildPropMesh, updateWeather } from './world.js';
-import { breezeMap, buildBreezeWorld, breezeMapReady, prepareBreezeMap } from './breeze-map.js';
+import { buildGlbWorld, glbMapReady, prepareGlbMap, glbThumbs, glbSizeLabel } from './glb-maps.js';
 import { buildNav } from './nav.js';
 import { initBacon, spawnBacon, updateBacon, clearBacon, popModel, baconStats, activeBacons, edibleBacons, eatBacon, BACON } from './bacon.js';
 import { Net, createRoom, roomInfo } from './net.js';
@@ -7409,12 +7409,12 @@ function splashGasClient(pos, owner, o) {
 }
 function loadMap(id, inv = false) { // inv: Invasão tem mais caixas de munição (map.invPickups)
   let map = getMap(id);
-  if (map.glb && !breezeMapReady()) { prepareBreezeMap().catch(() => {}); console.warn('mapa ainda baixando', id); map = currentMap || MAPS[0]; id = map.id; } // quem chama espera o download (mapReady); aqui é só a rede de segurança
+  if (map.glb && !glbMapReady(id)) { prepareGlbMap(id).catch(() => {}); console.warn('mapa ainda baixando', id); map = currentMap || MAPS[0]; id = map.id; } // quem chama espera o download (mapReady); aqui é só a rede de segurança
   const local = !!map.glb;
   if (currentMap === map && worldGroup) { bindGas(map.id); return map; }
   if (worldGroup) { scene.remove(worldGroup); disposeWorld(worldGroup); }
   for (const p of pickups) scene.remove(p.mesh); pickups.length = 0;
-  const w = local ? buildBreezeWorld() : buildWorld(map); worldGroup = w.group; scene.add(worldGroup);
+  const w = local ? buildGlbWorld(id) : buildWorld(map); worldGroup = w.group; scene.add(worldGroup);
   nevascaShow = map.id === 'posto-nevasca' ? mountNevasca(worldGroup, map) : null;
   doorGroups = new Map(); for (const g of w.doors || []) doorGroups.set(g.userData.doorId, g);
   nightLights = w.nightLights || []; nightAmb.stop();
@@ -7529,15 +7529,15 @@ const mapKey = () => (bombMenu() || compMenu() ? 'docao.bombMap' : invMenu() ? '
 const x1Menu = () => $('modeSel').value === X1.mode;
 const mapPool = () => menuPool($('modeSel').value, menuSurvival());
 const menuMap = (id) => getMap(id);
-let breezeStatus = '';
-// mapa GLB (Breeze): baixa uma vez (32 MB) e só depois carrega. Online, a sala avisa antes (lobby) pra todo mundo já ir baixando.
-const mapReady = (id) => { const m = getMap(id); return !m.glb || breezeMapReady(); };
+const glbStatus = new Map();
+// mapas GLB (Breeze, Dust 2…): baixam uma vez sob demanda e só depois carregam. Online, a sala avisa antes (lobby) pra todo mundo já ir baixando.
+const mapReady = (id) => { const m = getMap(id); return !m.glb || glbMapReady(m.id); };
 function fetchMap(id, onReady) {
   const m = getMap(id); if (!m.glb) { onReady && onReady(); return; }
-  if (breezeMapReady()) { breezeStatus = ''; onReady && onReady(); return; }
-  breezeStatus = 'Baixando o Breeze Standoff…'; refreshMapUI();
-  prepareBreezeMap().then(() => { breezeStatus = ''; refreshMapUI(); onReady && onReady(); }).catch((error) => {
-    breezeStatus = 'Falha ao baixar o Breeze. Escolha de novo para tentar.'; console.warn('Breeze Standoff', error); refreshMapUI();
+  if (glbMapReady(m.id)) { glbStatus.delete(m.id); onReady && onReady(); return; }
+  glbStatus.set(m.id, `Baixando ${m.name}…`); refreshMapUI();
+  prepareGlbMap(m.id).then(() => { glbStatus.delete(m.id); refreshMapUI(); onReady && onReady(); }).catch((error) => {
+    glbStatus.set(m.id, `Falha ao baixar ${m.name}. Escolha de novo para tentar.`); console.warn(m.name, error); refreshMapUI();
   });
 }
 function storedMap() { let v = null; try { v = localStorage.getItem(mapKey()); } catch (e) { /* */ } return v === 'random' || mapPool().some((m) => m.id === v) ? v : (bombMenu() || compMenu()) ? BOMB_MAP : isSurvivalMode($('modeSel').value) ? SURVIVAL.DEFAULT_MAP : invMenu() ? INV.DEFAULT_MAP : MAPS[0].id; }
@@ -7568,7 +7568,7 @@ function syncMapForMode() {
   if (x1Menu()) { selectedMap = 'random'; if (!currentMap || !currentMap.x1) loadMap(X1_MAPS[0].id); buildMapGrid(); return; }
   const v = storedMap(); if (v !== selectedMap) { selectedMap = v; previewSelectedMap(); } buildMapGrid();
 }
-const thumbs = { [breezeMap.id]: breezeMap.thumbUrl };
+const thumbs = glbThumbs();
 function mapCard(id) {
   const b = document.createElement('button'); b.className = 'mapcard' + (id === 'random' ? ' random' : ''); b.dataset.map = id;
   const m = id === 'random' ? null : menuMap(id);
@@ -7592,7 +7592,7 @@ function refreshMapUI() {
   }
   const m = selectedMap === 'random' ? null : menuMap(selectedMap);
   $('mapName').textContent = m ? m.name : 'Aleatório';
-  $('mapDesc').textContent = story ? 'Campus da HOTMILK à noite, com Papada, barraca, parede e portas. Sempre este mapa.' : m && m.glb && breezeStatus ? breezeStatus : m ? m.desc : 'Um mapa diferente sorteado a cada partida.';
+  $('mapDesc').textContent = story ? 'Campus da HOTMILK à noite, com Papada, barraca, parede e portas. Sempre este mapa.' : m && m.glb && glbStatus.get(m.id) ? glbStatus.get(m.id) : m ? m.desc : 'Um mapa diferente sorteado a cada partida.';
   const th = $('mapBtn').querySelector('.thumb'); th.textContent = m ? '' : '?'; th.style.backgroundImage = m && thumbs[m.id] ? `url(${thumbs[m.id]})` : '';
   th.classList.toggle('rnd', !m);
   document.querySelectorAll('#mapGrid .mapcard').forEach((c) => c.classList.toggle('active', c.dataset.map === selectedMap));
@@ -9549,9 +9549,10 @@ function removeEnt(id) {
   scene.remove(e.model.group); if (e.soulMesh) scene.remove(e.soulMesh.group); o.ents.delete(id); entities = entities.filter((x) => x !== e); forgetNemesis(e);
 }
 function startOnlineMatch(m) {
-  if (!mapReady(m.map)) { // Breeze ainda baixando: guarda o início e os snapshots, entra quando o GLB chegar
+  if (!mapReady(m.map)) { // mapa GLB ainda baixando: guarda o início e os snapshots, entra quando o GLB chegar
     const o = online; o.pendingStart = m; o.snapBuf = o.snapBuf || [];
-    if ($('lobbyInfo')) $('lobbyInfo').textContent = 'Baixando o Breeze Standoff (32 MB)… a partida começa assim que terminar.';
+    const targetMap = getMap(m.map), sizeTag = glbSizeLabel(targetMap.id);
+    if ($('lobbyInfo')) $('lobbyInfo').textContent = `Baixando ${targetMap.name}${sizeTag ? ` (${sizeTag})` : ''}… a partida começa assim que terminar.`;
     fetchMap(m.map, () => {
       if (online !== o || !o.pendingStart) return;
       const pm = o.pendingStart, buf = o.snapBuf || []; o.pendingStart = null; o.snapBuf = null;

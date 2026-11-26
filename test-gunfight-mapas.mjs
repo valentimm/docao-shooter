@@ -3,9 +3,13 @@ import { MAPS } from './maps.js';
 import { GF_MAP_POOL, GF_MAPS, gfSpawns } from './shared/gunfight-maps.js';
 import { mapSolids, createPhysics, resolveFall, killFloorY } from './shared/physics.js';
 import { EYE, RADIUS } from './shared/rules.js';
-import { BREEZE_ID, setBreezeBoxes } from './breeze-data.js';
+import { setGlbBoxes } from './glb-data.js';
+import { BREEZE_ID } from './breeze-data.js';
+import { DUST2_ID } from './dust2-data.js';
 import BREEZE_BOXES from './assets/maps/breeze/breeze-collision.json' with { type: 'json' };
-setBreezeBoxes(MAPS.find((m) => m.id === BREEZE_ID), BREEZE_BOXES); // Breeze: colisão vem do JSON (igual ao servidor)
+import DUST2_BOXES from './assets/maps/dust2/dust2-collision.json' with { type: 'json' };
+setGlbBoxes(MAPS.find((m) => m.id === BREEZE_ID), BREEZE_BOXES); // Breeze: colisão vem do JSON (igual ao servidor)
+setGlbBoxes(MAPS.find((m) => m.id === DUST2_ID), DUST2_BOXES); // Dust 2: colisão vem do JSON (igual ao servidor)
 
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
