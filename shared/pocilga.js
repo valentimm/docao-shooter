@@ -10,6 +10,7 @@
 //  Sem DOM e sem Three.js.
 // ============================================================
 import { SPEED, KNIFE } from './rules.js';
+import { bonusShape, readBonus } from './pocilga-bonus.js';
 
 export const BOARD = { w: 1.05, h: 1.85, d: 0.12, y: 0.02 };
 const H = 2.8;
@@ -275,6 +276,7 @@ const empty = (reason) => ({
   ok: false, ranked: false, reason, started: false, finished: false,
   raw: null, penalty: 0, final: null, civs: 0, stars: 0, missed: pitEnemies().map((t) => t.id),
   down: [], pops: [], suggestion: suggestion(0), blocked3: false,
+  bonus: 0, bonusZone: null,
 });
 
 function countsAsShot(w) { return w === PIT.pistol || w === PIT.knife; }
@@ -324,6 +326,10 @@ export function inspectRun(events) {
       finishT = e.t;
       continue;
     }
+    if (e.k === 'bonus') {
+      if (!bonusShape(e)) return empty('diário');
+      continue;
+    }
     return empty('diário');
   }
   const missed = pitEnemies().filter((t) => !down.has(t.id)).map((t) => t.id);
@@ -332,7 +338,8 @@ export function inspectRun(events) {
   const grabN = grabs.size;
   const penalty = civs * PIT.civPenalty + grabN * PIT.zombie.penalty;
   const scars = civs + grabN;
-  const final = finished ? ROUND(finishT + penalty) : null;
+  const bonus = readBonus(events, PIT.pistol);
+  const final = finished ? ROUND(finishT + penalty + bonus.delta) : null;
   const stars = starsOf(final, scars, finished);
   const reason = !started ? 'largada' : finishT == null ? 'andamento' : missed.length ? 'alvo' : pops.length < PIT.bays.length ? 'sala' : 'ok';
   return {
@@ -340,13 +347,21 @@ export function inspectRun(events) {
     raw: finished ? finishT : null, penalty: finished ? penalty : scars * PIT.civPenalty,
     final, civs, grabs: grabN, stars, missed, down: [...down.keys()], pops: pops.slice(),
     suggestion: suggestion(stars), blocked3: scars > 0,
+    bonus: bonus.delta, bonusZone: bonus.zone,
   };
+}
+
+// O relógio físico continua o piso. O miolo abate 2 s só na nota, então a nota
+// pode ficar esses 2 s abaixo do mínimo sem ser recusada.
+export function rankFloor(bonus) {
+  return ROUND(minPlausible() + Math.min(0, Number(bonus) || 0));
 }
 
 export function rankedRun(events) {
   const run = inspectRun(events);
   if (!run.finished) return run;
   if (!(run.raw + 1e-6 >= minPlausible())) return { ...run, ranked: false, reason: 'rápido' };
+  if (!(run.final + 1e-6 >= rankFloor(run.bonus))) return { ...run, ranked: false, reason: 'rápido' };
   return { ...run, ranked: true, reason: 'ok' };
 }
 

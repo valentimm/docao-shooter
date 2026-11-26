@@ -1,5 +1,6 @@
 // Ranking da Pocilga no D1. A conta do tempo é shared/pocilga.js; aqui só grava o que já passou.
 import { rankedRun, formatPit } from '../../shared/pocilga.js';
+import { bonusLine } from '../../shared/pocilga-bonus.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 const ms = (sec) => Math.round(sec * 1000);
@@ -10,6 +11,7 @@ export function publicRun(run) {
     ok: !!run.finished, ranked: !!run.ranked, reason: run.reason,
     raw: run.raw, penalty: run.penalty, final: run.final, civs: run.civs, stars: run.stars,
     missed: run.missed, suggestion: run.suggestion, clock: run.final != null ? formatPit(run.final) : null,
+    bonus: run.bonus || 0, alvo: bonusLine(run.bonusZone),
   };
 }
 

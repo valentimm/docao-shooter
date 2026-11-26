@@ -5,6 +5,8 @@ import { makeDocao, setPose } from './docao.js';
 import { makeZombie, animateZombie } from './invasion-gfx.js';
 import { lookToSkin } from './shared/closet.js';
 import { PIT, BOARD, FINISH_LINE, pitTargets, boardAabb, rayAabb, inspectRun, formatPit, suggestion, moverAt, inGate, onFinishLine, onSprint, pitRescue } from './shared/pocilga.js';
+import { bonusLine } from './shared/pocilga-bonus.js';
+import { mountBonusTarget, clearBonusTarget, tickBonusTarget, offerBonus, armBonus, takeBonusShot, bonusAdjust, bonusSnap } from './pocilga-bonus.js';
 import { loadPitRank, submitPit, getAccount } from './account.js';
 
 const LOCAL_KEY = 'docao.pocilga.best';
@@ -532,11 +534,26 @@ export function pitRay(ox, oy, oz, dx, dy, dz, maxT) {
     if (t == null) continue;
     if (!best || t < best.t) best = { t, id: b.id };
   }
+  const bonus = offerBonus(ox, oy, oz, dx, dy, dz, maxT);
+  if (bonus && (!best || bonus.t < best.t)) {
+    armBonus(bonus.shot);
+    return { t: bonus.t, id: bonus.id };
+  }
+  armBonus(null);
   return best;
 }
 
 export function pitHit(id, weapon) {
   if (!run || !run.started || run.done) return false;
+  if (id === 'bonus') {
+    return takeBonusShot(weapon, {
+      started: true, done: false,
+      push: (extra) => pushEvent('bonus', extra),
+      events: () => run.events,
+      pop: () => run.events.pop(),
+      sfx: deps && deps.sfx,
+    });
+  }
   const zed = zeds.find((x) => x.id === id);
   if (zed) {
     if (zed.phase !== 'run' || weapon !== PIT.pistol) return false;
@@ -605,7 +622,7 @@ export const pitActive = () => !!run;
 
 function liveStars(clock, civs, started) {
   if (!started) return 0;
-  const final = clock + civs * PIT.civPenalty;
+  const final = clock + civs * PIT.civPenalty + bonusAdjust();
   if (final <= PIT.star3 && civs === 0) return 3;
   if (final <= PIT.star2) return 2;
   return 1;
@@ -619,7 +636,7 @@ function paintHud() {
   const civTotal = pitTargets().filter((t) => t.kind === 'civil').length;
   const down = view ? view.down.length : 0;
   const civs = view ? view.civs : 0;
-  const clockText = !run.started ? '0:00.00' : (run.done && run.result && run.result.final != null ? formatPit(run.result.final) : formatPit(run.clock));
+  const clockText = !run.started ? '0:00.00' : (run.done && run.result && run.result.final != null ? formatPit(run.result.final) : formatPit(Math.max(0, run.clock + bonusAdjust())));
   if (!run.started) timer.textContent = 'LARGADA';
   else timer.textContent = clockText;
   let lead = 'O Barriguinha explica. Javali vermelho cai. Azul é civil.';
@@ -682,6 +699,7 @@ function paintCard(result, extra) {
     <p class="pit-stars" aria-label="${result.stars} estrelas">${starsTxt(result.stars || 0)}</p>
     <p class="pit-split">Inimigos ${hitE}/${enemies} · Civis ${result.civs || 0}/${pitTargets().filter((t) => t.kind === 'civil').length}</p>
     <p class="pit-split">Tempo ${formatPit(result.raw)} · penalidade +${(result.penalty || 0).toFixed(2)} s</p>
+    <p class="pit-split">Alvo: <span style="color:${result.bonusZone === 'center' ? '#7CFF6B' : result.bonusZone === 'ring' ? '#ff4b4b' : 'inherit'}">${bonusLine(result.bonusZone)}</span></p>
     <p class="pit-sug">${result.finished ? `Sugestão do Docão: <b>${esc(sug.label)}</b> · ${esc(sug.hint)}` : 'A chegada não abriu.'}</p>
     <p class="pit-best">Seu melhor ${getAccount() && me ? 'na conta' : 'neste navegador'}: <b>${best ? formatPit(best.final) + ' ' + starsTxt(best.stars) : '—'}</b>${me ? ` · ranking ${me.place}º (${esc(me.clock)})` : ''}</p>
     <h3>Mais rápidos</h3>
@@ -766,6 +784,7 @@ function stepMovers(dt) {
 export function tickCourse(dt) {
   if (!run || !deps) return;
   lineAt += dt;
+  tickBonusTarget(dt);
   tickNatal(lineAt);
   tickBits(dt);
   tickGate(dt);
@@ -843,6 +862,7 @@ export function beginCourse(next) {
   placeCoach();
   mountNatal();
   mountFinish();
+  mountBonusTarget(root);
   run = { clock: 0, moverT: 0, started: false, done: false, opened: false, events: [], pops: new Set(), said: new Set(), result: null };
   gen++;
   lineAt = 0;
@@ -883,6 +903,7 @@ export function clearCourse() {
   run = null;
   coach = null;
   natal = null;
+  clearBonusTarget();
   arrival = null;
   bits = null;
   deps = null;
@@ -928,6 +949,7 @@ export function courseSnap() {
     targets: boards.map((b) => ({ id: b.id, kind: b.kind, name: b.name, x: b.x, z: b.z, y: b.y || 0, phase: b.phase, face: b.face || -1, mover: !!b.move, zombie: false })).concat(zeds.map((z) => ({ id: z.id, kind: z.kind, name: z.name, x: z.x, z: z.z, y: z.y || 0, phase: z.phase === 'run' ? 'up' : z.phase === 'dead' ? 'dead' : 'down', face: z.face || '-x', mover: false, zombie: true }))),
     card: $('pitOver') ? !$('pitOver').classList.contains('hidden') : false,
     coach: !!coach,
+    bonus: bonusSnap(),
   };
 }
 

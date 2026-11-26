@@ -7721,7 +7721,11 @@ function startGame(mapId) {
     lock: lockPointer, unlock: () => { if (document.pointerLockElement) document.exitPointerLock(); },
     menu: toMenu,
     openDoor: () => { if (!solids.some((s) => s.door)) return; solids = solids.filter((s) => !s.door); indexSolids(); },
-    sfx: { hit: () => sfx.hit(), oink: () => sfx.oink(0.9, 1.25), pickup: () => sfx.pickup(), fanfare: () => sfx.kill() },
+    sfx: {
+      hit: () => sfx.hit(), oink: () => sfx.oink(0.9, 1.25), pickup: () => sfx.pickup(), fanfare: () => sfx.kill(),
+      bonusGood: () => { tone('sine', 784, 1318, 0.11, 0.16); tone('triangle', 1568, 2093, 0.16, 0.11, 0.08); },
+      bonusBad: () => { tone('sawtooth', 196, 78, 0.2, 0.15); tone('square', 98, 52, 0.22, 0.09, 0.06); },
+    },
   });
   flashMsg(gfNotice || (armsMode() ? `Corrida Armada · time ${TEAM_NAMES[player.team]} · 2 abates por etapa · V rouba etapa` : compOn() ? `Competitivo ${normSide(+$('compSide').value)}v${normSide(+$('compSide').value)} · time ${TEAM_NAMES[player.team]} · B compra na preparação` : mode === 'bomb' ? `Bomba · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : hideMode() ? `Docão Escondido (protótipo) · time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : survOn() ? `Survival · ${currentMap.name} · pistola e faca · ${SURV.useLabel} usa a loja · E abre porta` : invMode() ? `Invasão 🎃 · horda ${diffWord} · ${currentMap.name} · ${INV.WAVES} waves · ${KEYS.useLabel} usa poder · ${KEYS.cycleLabel} troca` : x1Mode() ? `X1 · ${currentMap.name} · primeiro a ${X1.KILLS} · ${WEAPONS[x1Gun].short}` : exploreMode() ? `Exploração · ${currentMap.name} · N noclip · , . ou [ ] trocam a primária` : teamMode() ? `Dominação · você é do time ${TEAM_NAMES[player.team]} · bots ${diffWord}` : training() ? 'Estande do Docão · B/N/M trocam a arma' : pitMode() ? 'A Pocilga · só a Pistolinha' : `Mapa: ${currentMap.name} · bots ${diffWord}`)); if (gfNotice) msgTimer = 4.5; refreshModeHud();
   for (const ev of bombEv) onBombEvent(ev);

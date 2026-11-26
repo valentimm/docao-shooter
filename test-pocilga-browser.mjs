@@ -277,6 +277,7 @@ const expectStars = s.result ? starsOf(s.result.final, s.result.civs, true) : -1
 ok(s.done && s.result && s.result.civs === 1 && s.result.stars === expectStars && s.result.stars < 3, `estrelas com um civil (${JSON.stringify(s.result && { stars: s.result.stars, final: s.result.final, civs: s.result.civs })})`);
 const card = await page.locator('#pitCard').innerText();
 ok(/MISSÃO CUMPRIDA/.test(card) && /AnaPocilga/.test(card) && /Inimigos/.test(card) && /FECHAR/.test(card), 'tela final com missão, inimigos e ranking');
+ok(/Alvo: —/.test(card), 'o cartaz mostra a linha do alvo, sem acerto');
 const aberto = await page.evaluate(() => ({ state: window.__docao.state, pause: document.getElementById('pause').classList.contains('hidden'), card: window.__docao.pit.card }));
 ok(aberto.state === 'playing' && aberto.pause && aberto.card, `cartaz com o jogo rodando, sem pausa (${JSON.stringify(aberto)})`);
 await page.screenshot({ path: `${SHOTS}/pocilga-modal.png` });
