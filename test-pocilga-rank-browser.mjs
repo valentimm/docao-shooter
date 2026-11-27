@@ -13,6 +13,7 @@ const ROOT = new URL('.', import.meta.url).pathname;
 const API_PORT = 8787;
 const SITE_PORT = 8140;
 const SHOTS = process.env.SHOTS || '/opt/cursor/artifacts';
+const password = process.env.POCILGA_TEST_PASSWORD || crypto.randomUUID();
 const SITE = `http://127.0.0.1:${SITE_PORT}/index.html?server=${encodeURIComponent(`ws://127.0.0.1:${API_PORT}`)}&devSkins=0`;
 const fails = [], missing = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + ' ' + m); if (!c) fails.push(m); };
@@ -86,7 +87,6 @@ await new Promise((r) => api.listen(API_PORT, '127.0.0.1', r));
 await new Promise((r) => site.listen(SITE_PORT, '127.0.0.1', r));
 
 async function account(nick) {
-  const password = 'pocilga-teste';
   const post = (path, body, token) => fetch(`http://127.0.0.1:${API_PORT}` + path, {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body),
   });
@@ -125,7 +125,7 @@ await page.goto(SITE, { waitUntil: 'load', timeout: 60000 });
 await page.waitForSelector('#rankBtn', { timeout: 20000 });
 await page.click('#acctBtn');
 await page.fill('#acctNick', 'BetoPocilga');
-await page.fill('#acctPass', 'pocilga-teste');
+await page.fill('#acctPass', password);
 await page.click('#acctSubmit');
 await page.waitForFunction(() => document.getElementById('acctBtn').textContent.includes('MINHA'), null, { timeout: 10000 });
 await page.click('#rankBtn');
