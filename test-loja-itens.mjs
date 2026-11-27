@@ -99,8 +99,8 @@ ok(parseLook('x1.0.c.c23.h1') && parseLook('x1.0.c.c23.h1').items.h === 'h1' && 
 
 const c24 = itemById('c24');
 const c24Parts = ['orcaHead', 'orcaGloves', 'orcaLegs', 'hideTail', 'shoes'];
-ok(c24 && c24.name === 'Thalao' && c24.emoji === '🐋' && c24.price === 1200 && c24.slot === 'c' && !isFreeItem('c24') && c24.line && c24.costume.shirt.pattern && c24.costume.shirt.details.some((d) => d.type === 'crest' && d.letter === 'T') && c24Parts.every((tp) => c24.costume.parts.some((p) => p.type === tp)), 'Thalao é a fantasia c24, 1200 Docoins, capuz de orca, camisa listrada e escudinho com T');
-ok(priceOfLook('x1.0.c.c24', []) === 1200, 'Thalao custa 1200 mesmo com a mochila vazia');
+ok(c24 && c24.name === 'Thalao' && c24.emoji === '🐋' && c24.price === 0 && c24.free === true && c24.slot === 'c' && isFreeItem('c24') && c24.line && c24.costume.shirt.pattern && c24.costume.shirt.details.some((d) => d.type === 'crest' && d.letter === 'T') && c24Parts.every((tp) => c24.costume.parts.some((p) => p.type === tp)), 'Thalao é a fantasia c24, de graça, capuz de orca, camisa listrada e escudinho com T');
+ok(priceOfLook('x1.0.c.c24', []) === 0 && itemPrice('c24') === 0, 'Thalao é grátis no Brechó, mesmo com a mochila vazia');
 const sk24 = lookToSkin('x1.0.c.c24');
 ok(sk24 && sk24.name === 'Thalao' && sk24.custom === true && sk24.parts.some((p) => p.type === 'orcaHead') && sk24.shirt.details.some((d) => d.type === 'crest'), 'código x1.0.c.c24 vira a fantasia completa');
 ok(parseLook('x1.0.c.c24.h1') && parseLook('x1.0.c.c24.h1').items.h === 'h1' && encodeLook({ shirt: 0, pants: 12, items: { c: 'c24' } }) === 'x1.0.c.c24', 'Thalao mistura com outras partes e sozinho continua o mesmo código');
