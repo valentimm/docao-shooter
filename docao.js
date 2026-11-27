@@ -286,6 +286,25 @@ export const SHIRT_DETAILS = {
     const c = d.color || '#7a4a1c';
     for (const y of d.ys || [0.95, 0.78]) { const yy = PT(0, y)[1]; x.fillStyle = c; for (const [x0, x1] of [[0, W * 0.1], [W * 0.9, W]]) { x.beginPath(); x.roundRect ? x.roundRect(x0 - 20, yy - 16, x1 - x0 + 40, 32, 16) : x.rect(x0, yy - 16, x1 - x0, 32); x.fill(); } }
   },
+  crest(x, d, PT) { // escudinho genérico no peito (letra, sem marca oficial)
+    const p = PT(d.x == null ? -0.52 : d.x, d.y || 0.84);
+    const s = d.size || 44;
+    x.save(); x.translate(p[0], p[1]);
+    x.beginPath();
+    x.moveTo(-s * 0.42, -s * 0.42);
+    x.lineTo(-s * 0.42, s * 0.02);
+    x.quadraticCurveTo(-s * 0.4, s * 0.4, 0, s * 0.58);
+    x.quadraticCurveTo(s * 0.4, s * 0.4, s * 0.42, s * 0.02);
+    x.lineTo(s * 0.42, -s * 0.42);
+    x.closePath();
+    x.fillStyle = d.fill || '#141418'; x.fill();
+    x.strokeStyle = d.edge || '#d8d8d8'; x.lineWidth = Math.max(3, s * 0.08); x.stroke();
+    x.fillStyle = d.color || '#f4f4f4';
+    x.font = `900 ${Math.round(s * 0.62)}px Impact, "Arial Black", Arial, sans-serif`;
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(d.letter || 'T', 0, -s * 0.06);
+    x.restore();
+  },
 };
 
 // ---------- peças de skin (chapéus/acessórios) ----------

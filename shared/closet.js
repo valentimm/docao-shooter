@@ -254,6 +254,21 @@ ITEMS.push(
       { type: 'shoes', color: '#15151a', sole: '#2a2a2e', strap: '#d4a82a' },
     ] } },
 );
+// Docão Thalao: porquinho na fantasia inflada de orca, camisa listrada e escudinho genérico (sem marca). Fantasia paga do Brechó.
+ITEMS.push(
+  { id: 'c24', name: 'Thalao', emoji: '🐋', price: 1200, line: 'Capuz de orca inflado, camisa listrada e luvas pretas de vinil', costume: {
+    shirt: { color: '#141418', trim: '#f4f4f4', sleeves: 'long', sleeveColor: '#141418',
+      pattern: { type: 'stripes', colors: ['#141418', '#f4f4f4'], count: 10 },
+      details: [{ type: 'crest', letter: 'T', fill: '#141418', color: '#f4f4f4', edge: '#d8d8d8', x: -0.5, y: 0.8, size: 62 }] },
+    pants: '#f4f4f4',
+    parts: [
+      { type: 'orcaHead', color: '#141418', white: '#f6f6f4', mouth: '#c81e28' },
+      { type: 'orcaGloves', color: '#141418' },
+      { type: 'orcaLegs', dark: '#141418', light: '#f6f6f4' },
+      { type: 'hideTail' },
+      { type: 'shoes', color: '#f6f6f4', sole: '#e8e8e6', strap: '#141418' },
+    ] } },
+);
 // ---------- DANÇAS (espaço "d"): não entram no visual (código), vão pra mochila e a escolhida é a do botão B. As 3 de sempre continuam grátis. ----------
 ITEMS.push(
   { id: 'd1', name: 'Escovinha', emoji: '🪥', price: 400, dance: 'floss', line: 'Braços varrendo o quadril' },

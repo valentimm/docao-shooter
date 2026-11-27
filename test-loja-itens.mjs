@@ -8,7 +8,7 @@ const fails = []; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALHA') + '
 ok(new Set(ITEMS.map((i) => i.id)).size === ITEMS.length, 'ids únicos');
 ok(ITEMS.filter((i) => !i.free && !i.loot).every((i) => i.price > 0 && Number.isInteger(i.price)), 'item pago tem preço inteiro (os de graça e os do caixote ficam de fora)');
 ok(ITEMS.filter((i) => i.loot).every((i) => i.weight > 0 && Number.isInteger(i.weight) && !(i.price > 0) && !isFreeItem(i.id)), 'skin de caixote tem peso inteiro, sem preço, e não conta como grátis');
-ok(SLOTS[0][0] === 'c' && ITEMS.filter((i) => i.slot === 'c').length === 23, '23 fantasias completas no slot c');
+ok(SLOTS[0][0] === 'c' && ITEMS.filter((i) => i.slot === 'c').length === 24, '24 fantasias completas no slot c');
 const paid = { h1: 60, c1: 900, c8: 1500, d8: 400, b3: 100 };
 ok(Object.entries(paid).every(([id, p]) => itemPrice(id) === p), 'preço dos itens que já existiam não mudou');
 ok(isFreeItem('c9') && itemPrice('c9') === 0 && itemById('c9').name === 'Faixa Presidencial' && itemById('c9').free === true && !isFreeItem('c1') && !isFreeItem('c10') && !isFreeItem('h1'), 'Faixa Presidencial (c9) é grátis; Barriguinha e as outras continuam pagas');
@@ -96,4 +96,12 @@ ok(priceOfLook('x1.0.c.c23', []) === 1200, 'Papai Noel custa 1200 mesmo com a mo
 const sk23 = lookToSkin('x1.0.c.c23');
 ok(sk23 && sk23.name === 'Papai Noel' && sk23.custom === true && sk23.shirt.color === '#c41e3a' && sk23.pants === '#c41e3a' && sk23.parts.length === c23Parts.length && sk23.parts.some((p) => p.type === 'giftSack') && sk23.parts.some((p) => p.type === 'santaHat'), 'código x1.0.c.c23 vira a fantasia completa, com saco nas costas');
 ok(parseLook('x1.0.c.c23.h1') && parseLook('x1.0.c.c23.h1').items.h === 'h1' && encodeLook({ shirt: 0, pants: 12, items: { c: 'c23' } }) === 'x1.0.c.c23', 'Papai Noel mistura com outras partes e sozinho continua o mesmo código');
+
+const c24 = itemById('c24');
+const c24Parts = ['orcaHead', 'orcaGloves', 'orcaLegs', 'hideTail', 'shoes'];
+ok(c24 && c24.name === 'Thalao' && c24.emoji === '🐋' && c24.price === 1200 && c24.slot === 'c' && !isFreeItem('c24') && c24.line && c24.costume.shirt.pattern && c24.costume.shirt.details.some((d) => d.type === 'crest' && d.letter === 'T') && c24Parts.every((tp) => c24.costume.parts.some((p) => p.type === tp)), 'Thalao é a fantasia c24, 1200 Docoins, capuz de orca, camisa listrada e escudinho com T');
+ok(priceOfLook('x1.0.c.c24', []) === 1200, 'Thalao custa 1200 mesmo com a mochila vazia');
+const sk24 = lookToSkin('x1.0.c.c24');
+ok(sk24 && sk24.name === 'Thalao' && sk24.custom === true && sk24.parts.some((p) => p.type === 'orcaHead') && sk24.shirt.details.some((d) => d.type === 'crest'), 'código x1.0.c.c24 vira a fantasia completa');
+ok(parseLook('x1.0.c.c24.h1') && parseLook('x1.0.c.c24.h1').items.h === 'h1' && encodeLook({ shirt: 0, pants: 12, items: { c: 'c24' } }) === 'x1.0.c.c24', 'Thalao mistura com outras partes e sozinho continua o mesmo código');
 console.log(fails.length ? `\n${fails.length} FALHA(S)` : '\nTUDO OK'); process.exit(fails.length ? 1 : 0);

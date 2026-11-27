@@ -1078,3 +1078,71 @@ Object.assign(PARTS, {
     g.position.set(0, 0.7, -0.58); g.rotation.x = -0.2; return g;
   },
 });
+
+// ---------- Docão Thalao: capuz de orca inflado (nadadeira, focinho, boca vermelha), luvas e pernas bicolores ----------
+Object.assign(PARTS, {
+  orcaHead(o, rig) { // capuz lustroso de orca: abertura pro rosto do Docão, faixa branca, focinho redondo, boca vermelha e nadadeira nas costas
+    hideTuft(rig); if (rig.ears) rig.ears.forEach((e) => (e.visible = false));
+    const g = new THREE.Group();
+    const ink = toonWarm(o.color || '#141418', 0.22, { side: THREE.DoubleSide });
+    const snow = toonWarm(o.white || '#f6f6f4', 0.18, { side: THREE.DoubleSide });
+    const lip = toon(o.mouth || '#c81e28');
+    const shell = M(new THREE.SphereGeometry(0.7, 48, 32, 0, TAU, 1.02, Math.PI - 1.02), ink, g, 0.012);
+    shell.rotation.x = Math.PI / 2 - 0.36; shell.scale.set(1.12, 1.08, 1.1);
+    // manchas brancas nas laterais do capuz (não no meio do rosto)
+    for (const s of [-1, 1]) {
+      const patch = M(new THREE.SphereGeometry(0.2, 18, 12), snow, g, 0);
+      patch.position.set(s * 0.58, 0.08, 0.18); patch.scale.set(0.55, 0.85, 0.35); patch.rotation.y = s * -0.55;
+    }
+    // garganta branca, colada no capuz
+    const throat = M(new THREE.SphereGeometry(0.28, 22, 14), snow, g, 0);
+    throat.position.set(0, -0.34, 0.42); throat.scale.set(0.85, 0.45, 0.55);
+    if (rig.snout) rig.snout.material = ink;
+    const head = new THREE.Group(); head.position.set(0, -1.52, 0.02); g.add(head);
+    const sp = headPoint(0, 1.47);
+    // focinho preto envolvendo o do Docão; queixo branco cobre a boca pintada na cara
+    const muzzle = M(new THREE.SphereGeometry(0.26, 24, 18), ink, head, 0.01);
+    muzzle.position.set(0, 1.41, sp.z + 0.10); muzzle.scale.set(1.5, 1.15, 1.35);
+    const chin = M(new THREE.SphereGeometry(0.22, 20, 14), snow, head, 0);
+    chin.position.set(0, 1.22, sp.z + 0.14); chin.scale.set(1.25, 0.9, 0.9);
+    // fenda vermelha na frente do focinho, na junta com o queixo branco
+    const zLip = sp.z + 0.43;
+    const smile = new THREE.QuadraticBezierCurve3(new V3(-0.2, 1.325, zLip - 0.05), new V3(0, 1.285, zLip + 0.02), new V3(0.2, 1.325, zLip - 0.05));
+    M(new THREE.TubeGeometry(smile, 18, 0.024, 8, false), lip, head, 0.003);
+    const inner = new THREE.QuadraticBezierCurve3(new V3(-0.15, 1.32, zLip - 0.04), new V3(0, 1.295, zLip + 0.015), new V3(0.15, 1.32, zLip - 0.04));
+    M(new THREE.TubeGeometry(inner, 16, 0.01, 6, false), basic('#2a0808'), head, 0);
+    // nadadeira no alto das costas do capuz, quase vertical pra silhueta caber atrás
+    const fin = new THREE.Group(); fin.position.set(0, 0.62, -0.36); fin.rotation.set(-0.22, 0, 0); g.add(fin);
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0); shape.lineTo(0.11, 0); shape.quadraticCurveTo(0.26, 0.2, 0.05, 0.58); shape.lineTo(0, 0.48); shape.closePath();
+    const blade = M(new THREE.ExtrudeGeometry(shape, { depth: 0.14, bevelEnabled: true, bevelThickness: 0.016, bevelSize: 0.016, bevelSegments: 2 }), ink, fin, 0.01);
+    blade.rotation.y = Math.PI / 2; blade.position.z = -0.07;
+    const base = M(new THREE.SphereGeometry(0.14, 14, 10), ink, fin, 0); base.position.set(0, 0.04, 0.02); base.scale.set(0.7, 0.45, 1.1);
+    g.position.set(0, 1.52, -0.02); return onHead(g);
+  },
+  orcaGloves(o, rig) { // luvas pretas grandes e arredondadas, cara de vinil inflado
+    const ink = toonWarm(o.color || '#141418', 0.22);
+    for (const i of [0, 1]) {
+      const { fist, thumb } = rig.fists[i];
+      fist.material = ink; thumb.material = ink;
+      fist.scale.multiplyScalar(1.32); thumb.scale.multiplyScalar(1.22);
+      const puff = M(new THREE.SphereGeometry(0.17, 18, 14), ink, fist, 0.01);
+      puff.position.set(0, 0.02, 0.03); puff.scale.set(1.2, 1.0, 1.25);
+      const cuff = M(new THREE.TorusGeometry(0.15, 0.05, 8, 18), ink, rig.arms[i], 0.008);
+      cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.45;
+    }
+    return null;
+  },
+  orcaLegs(o, rig) { // pernas curtas e grossas: brancas por dentro, pretas por fora
+    const dark = toonWarm(o.dark || '#141418', 0.18);
+    const light = toonWarm(o.light || '#f6f6f4', 0.16);
+    for (let i = 0; i < rig.legs.length; i++) {
+      const leg = rig.legs[i];
+      M(new THREE.CapsuleGeometry(0.185, 0.2, 4, 14), light, leg, 0.008).position.y = -0.16;
+      // capinha preta deslocada pra fora (legs[0] em −x)
+      const pad = M(new THREE.CapsuleGeometry(0.16, 0.2, 4, 14), dark, leg, 0.01);
+      pad.position.set(i === 0 ? -0.09 : 0.09, -0.16, 0); pad.scale.set(0.85, 1.05, 1.05);
+    }
+    return null;
+  },
+});
