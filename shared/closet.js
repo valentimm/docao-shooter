@@ -254,9 +254,9 @@ ITEMS.push(
       { type: 'shoes', color: '#15151a', sole: '#2a2a2e', strap: '#d4a82a' },
     ] } },
 );
-// Docão Thalao: porquinho na fantasia inflada de orca, camisa listrada e escudinho genérico (sem marca). Fantasia paga do Brechó.
+// Docão Thalao: porquinho na fantasia inflada de orca, camisa listrada e escudinho genérico (sem marca). Fantasia de graça no Brechó.
 ITEMS.push(
-  { id: 'c24', name: 'Thalao', emoji: '🐋', price: 1200, line: 'Capuz de orca inflado, camisa listrada e luvas pretas de vinil', costume: {
+  { id: 'c24', name: 'Thalao', emoji: '🐋', price: 0, free: true, line: 'Capuz de orca inflado, camisa listrada e luvas pretas de vinil', costume: {
     shirt: { color: '#141418', trim: '#f4f4f4', sleeves: 'long', sleeveColor: '#141418',
       pattern: { type: 'stripes', colors: ['#141418', '#f4f4f4'], count: 10 },
       details: [{ type: 'crest', letter: 'T', fill: '#141418', color: '#f4f4f4', edge: '#d8d8d8', x: -0.5, y: 0.8, size: 62 }] },
